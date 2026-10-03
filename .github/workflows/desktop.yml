@@ -1,4 +1,5 @@
-# Builds the desktop app (the Steam version) for Windows, Mac and Linux.
+# Builds the desktop app (the Steam version) for Windows, Mac and Linux, and the browser zip for
+# game portals (itch.io, Newgrounds, Game Jolt, CrazyGames).
 # Runs when the game or the desktop wrapper changes, or by hand from the Actions tab.
 # The finished zips are attached to each run under "Artifacts" (download from the run's page).
 name: Desktop builds
@@ -6,7 +7,7 @@ name: Desktop builds
 on:
   push:
     branches: [main, claude/chicken-self-steer]
-    paths: ['public/**', 'desktop/**', '.github/workflows/desktop.yml']
+    paths: ['public/**', 'desktop/**', 'tools/**', '.github/workflows/desktop.yml']
   workflow_dispatch:
 
 concurrency:
@@ -14,6 +15,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/build-web.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kumite-web
+          path: Kumite-web.zip
+
   build:
     strategy:
       fail-fast: false
