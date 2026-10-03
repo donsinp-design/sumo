@@ -919,7 +919,7 @@
           if (I.grab.pressed && w === this.b && this.t < (m.techWin || 0.38) && !this.rear) { m.grabTech(this.a, this.b); return; }
           // one rule: while K is held you are in MOVE mode (swing, throw, trip, spin); with K up the stick pushes and drags.
           // A quick tap of K while locked (pressed and let go, no aim) is a lift.
-          if (I.grab.pressed) { w.kArm = true; w.kPressT = this.t; }
+          if (I.grab.pressed) { w.kArm = true; w.kPressT = this.t >= 0.45 ? this.t : -9; } // a press in the first moment is still the grab (mashing K), never a lift
           else if (I.grab.held && !w.kArm) { w.kArm = true; w.kPressT = -9; } // still holding from the grab: move mode, not a tap
           // SWING: keep K held and point somewhere: they swing round you to that side
           if (w.kArm && I.grab.held && Math.hypot(I.mx, I.mz) > 0.4) {

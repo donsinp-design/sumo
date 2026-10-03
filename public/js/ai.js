@@ -394,6 +394,7 @@
       const thresh = 0.3 + (1 - L.skill) * 0.18;
       const cands = [];
       for (const k of ['throw', 'trip', 'spin', 'lift']) {
+        if (k === 'lift' && c.t < 0.5) continue; // a lift tap only counts once the hold has settled
         const ev = c.evalTech(me, k);
         if (ev.ok && ev.sc > thresh) cands.push([k, ev.sc]);
       }
