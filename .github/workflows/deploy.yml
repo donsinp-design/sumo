@@ -1,0 +1,30 @@
+# Puts the game live at looktwicestudio.com/kumite/ (Cloudflare Workers, see wrangler.jsonc).
+# Runs on every push to main or the working branch, or by hand from the Actions tab.
+# Needs one repository secret: CLOUDFLARE_API_TOKEN (Cloudflare "Edit Cloudflare Workers" token).
+# CLOUDFLARE_ACCOUNT_ID is only needed if your Cloudflare login has more than one account.
+name: Deploy Kumite
+
+on:
+  push:
+    branches: [main, claude/chicken-self-steer]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-kumite
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
