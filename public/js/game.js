@@ -7,7 +7,7 @@
 
   class Game {
     constructor() {
-      this.settings = { difficulty: 'normal', debug: false, hints: true, sound: true };
+      this.settings = { difficulty: 'normal', debug: false, hints: true, sound: true, endless: false };
       this.seenTut = false;
       try {
         const sv = JSON.parse(localStorage.getItem('hakkeyoi') || '{}');
@@ -29,7 +29,7 @@
       document.getElementById('shopUi').addEventListener('pointerdown', (e) => { const b = e.target.closest('[data-shop]'); if (b) { e.preventDefault(); this.shopAction(b.dataset.shop); } });
       document.getElementById('trainPanel').addEventListener('click', (e) => {
         const b = e.target.closest('[data-train]'); if (!b || this.kind !== 'training') return;
-        ({ gacha: () => this.trainGacha(), back: () => this.trainSkill(-1), next: () => this.trainSkill(1), partner: () => this.cycleTrain(), reset: () => this.trainReset(), stage: () => this.trainStage(1) })[b.dataset.train]();
+        ({ gacha: () => this.trainGacha(), back: () => this.trainSkill(-1), next: () => this.trainSkill(1), partner: () => this.cycleTrain(), reset: () => this.trainReset(), rec: () => this.trainRec(), stage: () => this.trainStage(1) })[b.dataset.train]();
       });
       document.getElementById('screen').addEventListener('click', (e) => {
         const tab = e.target.closest('[data-cat]');
@@ -82,7 +82,7 @@
           this.dummy = new S.Dummy(); this.dummy.me = m.w[1];
           const ai = new S.AI(m.w[1], m, this.settings.difficulty, { noLearn: true }); this.ais.push(ai);
           this.trainAI = ai;
-          const g = this; src = { sample: () => (g.trainMode === 'cpu' ? ai.sample() : g.dummy.sample()) };
+          const g = this; src = { sample: () => g.trainSample(ai) };
         } else if (kind === 'tutorial' && k === 1) {
           src = this.dummy = new S.Dummy(); this.dummy.me = m.w[1];
         } else src = new S.KeySource(kind === 'pvp' ? (k === 0 ? S.MAPS.p1 : S.MAPS.p2) : S.MAPS.solo, k);
@@ -130,11 +130,12 @@
       this.ui.showHud(false); this.ui.hint('');
     }
     startGame() {
+      this.nsStreak = 0;
       this.mode = 'game'; this.paused = false; this.endTutorial(); this.ui.training(null);
       this.ui.hide(); this.ui.showHud(true);
-      this.ui.hint('Esc pause');
+      this.ui.hint(this.sel.mode === 'cpu' && this.settings.endless ? 'Non-stop · Esc pause to stop' : 'Esc pause');
       this.stake = 0;
-      if (this.sel.mode === 'cpu') { this.stake = S.profile.betNow(); if (this.stake) { S.profile.earn(-this.stake); this.ui.setYen(); } }
+      if (this.sel.mode === 'cpu' && !this.settings.endless) { this.stake = S.profile.betNow(); if (this.stake) { S.profile.earn(-this.stake); this.ui.setYen(); } }
       this.setupMatch(this.sel.c1, this.sel.c2, this.sel.mode);
     }
     startTutorial() {
@@ -247,15 +248,34 @@
     updateHints() {
       const m = this.match;
       let show = false, x = 0, y = 0, html = '';
-      if (m && this.settings.hints && this.mode === 'game' && !this.paused && m.clinch && !m.clinch.tech && m.phase === 'fight') {
-        const human = m.w.find((w, i) => this.kind === 'tutorial' ? i === 0 : this.kind === 'pvp' ? false : i === 0);
-        if (human && human.clinch) {
-          const p = this.R.project(human.x, 0, human.z);
-          show = true; x = p.x; y = p.y + 40;
-          html = this.clinchTip(m.clinch, human);
+      const hi = this.kind === 'pvp' || this.kind === 'attract' || this.kind === 'showcase' ? -1 : this.kind === 'online' ? this.slot : 0;
+      const human = m && hi >= 0 ? m.w[hi] : null;
+      if (human && this.settings.hints && this.mode === 'game' && !this.paused && m.phase === 'fight') {
+        if (m.clinch && human.clinch && !m.clinch.tech) html = this.clinchTip(m.clinch, human);
+        else if (!m.clinch) {
+          // outside the grapple: a counter tip for what they are doing right now, held a moment so it can be read
+          const t = this.counterTip(m, human);
+          if (t) { this.ctTip = t; this.ctUntil = m.time + 0.8; }
+          if (this.ctTip && m.time < this.ctUntil) html = this.ctTip; else this.ctTip = null;
         }
-      }
+        if (html) { const p = this.R.project(human.x, 0, human.z); show = true; x = p.x; y = p.y + 40; }
+      } else this.ctTip = null;
       this.ui.clinchHint(show, x, y, html);
+    }
+
+    // what to press against what they are doing (outside the grapple)
+    counterTip(m, me) {
+      const o = me.opp, J = '<kbd>J</kbd>', K = '<kbd>K</kbd>', Lk = '<kbd>L</kbd>';
+      const dx = o.x - me.x, dz = o.z - me.z, d = Math.hypot(dx, dz) || 1, gap = d - me.r - o.r;
+      const toMe = -(o.vx * dx + o.vz * dz) / d;
+      if (o.fxs && (o.fxs.chicken > 0 || o.fxs.ball > 0)) return null;
+      if ((o.st === 'charge' || (o.st === 'dash' && toMe > 3)) && gap < 3) return '<b>CHARGE!</b> Hold away + ' + J + ' slap down &nbsp;·&nbsp; side + ' + Lk + ' dodge';
+      if (o.st === 'palm' && (o.flurry || 0) >= 3 && gap < 1) return '<b>FLURRY!</b> ' + Lk + ' (no direction) parry &nbsp;·&nbsp; away + ' + J + ' slap down';
+      if (o.st === 'wind' && gap < 1.2) return '<b>WIND-UP!</b> ' + J + ' now to interrupt';
+      if (['recover', 'overrun', 'stun', 'stumble'].includes(o.st) && gap < 1.4) return '<b>OPEN!</b> ' + J + ' push &nbsp;·&nbsp; ' + K + ' grab';
+      const edge = S.RING_R - Math.hypot(me.x, me.z);
+      if (edge < 1.0 && o.contact && o.fwdIn > 0.5) return '<b>ON THE EDGE!</b> Side + ' + Lk + ' to slip out';
+      return null;
     }
 
     // one tip at a time, picked for the situation
@@ -271,8 +291,13 @@
       if (c.rear === me) return 'You are behind them! ' + J + ' shove them out';
       if (c.rear) return 'They are behind you! Hold any direction to turn around';
       // being grabbed: how to get out, first
-      const oArmed = (o.kArm && o.input && o.input.grab && o.input.grab.held) || (c.swing && c.swing.w === o);
-      if (oArmed) return '<b>THROW COMING!</b> ' + Lk + ' slip out &nbsp;·&nbsp; ' + J + ' shove off';
+      // only when they are really aiming a move (K held and pointing) or already swinging you
+      const oI = o.input, oAim = o.kArm && oI && oI.grab && oI.grab.held ? c.inputDir(o) : null;
+      const swinging = c.swing && c.swing.w === o && c.swing.swept > 0.15;
+      if (swinging || (oAim && (Math.abs(oAim[0]) > 0.35 || Math.abs(oAim[1]) > 0.35))) {
+        const what = swinging || !oAim || Math.abs(oAim[1]) > 0.35 || oAim[0] < -0.35 ? 'THROW' : 'LEG TRIP';
+        return '<b>' + what + ' COMING!</b> ' + Lk + ' slip out &nbsp;·&nbsp; ' + J + ' shove off';
+      }
       if (c.b === me && c.t < (this.match.techWin || 0.38)) return '<b>GRABBED!</b> Tap ' + K + ' now to break the grip';
       const myEdge = S.RING_R - Math.hypot(me.x, me.z), oEdge = S.RING_R - Math.hypot(o.x, o.z);
       const pushedBack = -s * c.v > 0.3;
@@ -280,7 +305,8 @@
       if (pushedBack || c.tow[o.idx] > 0.3) return 'They are pushing: hold ' + K + ' and <b>point behind you</b> to swing them past';
       if (oEdge < 1.6) return '<b>Hold toward them</b> to drive them out';
       const tips = ['<b>Hold toward them</b> to drive them back', 'Hold ' + K + ' and <b>point</b>: they swing round you · let go to throw', 'Hold ' + K + ', point <b>at them</b>, let go: leg trip', 'Tap ' + K + ' alone to lift',
-        'Want out? ' + J + ' shove off &nbsp;·&nbsp; ' + Lk + ' slip back'];
+        'Want out? ' + J + ' shove off &nbsp;·&nbsp; ' + Lk + ' slip back',
+        (c.b === me ? 'They grabbed you, but you can fight back: ' : '') + 'tap ' + K + ' alone to lift, or hold ' + K + ' and point to throw'];
       return tips[Math.floor(c.t / 2.5) % tips.length];
     }
 
@@ -412,7 +438,9 @@
       }
     }
     // match over? with a third wrestler, three single points (three rounds) is a draw
+    endless() { return this.kind === 'cpu' && this.settings.endless; }
     matchEnd(m) {
+      if (this.endless()) return null; // non-stop: bouts keep coming until you quit
       const t3 = m.third ? m.third.wins : 0;
       if (m.wins[0] >= this.need) return { wi: 0 };
       if (m.wins[1] >= this.need) return { wi: 1 };
@@ -453,7 +481,12 @@
           this.ui.hideBanner();
           this.audio.roar();
         } else {
-          if (best >= this.need) { m.wins = [0, 0]; m.history = []; m.third = null; this.ui.setWins(m.wins, this.need); }
+          if (this.endless()) {
+            // non-stop: every bout you win pays out, and the streak runs on
+            if (!r.draw && !r.third && r.winner.idx === 0) { S.profile.earn(50000); this.ui.setYen(); this.nsStreak = (this.nsStreak || 0) + 1; this.nsBest = Math.max(this.nsBest || 0, this.nsStreak); }
+            else if (!r.draw) this.nsStreak = 0;
+            this.ui.setWins(m.wins, this.need);
+          } else if (best >= this.need) { m.wins = [0, 0]; m.history = []; m.third = null; this.ui.setWins(m.wins, this.need); }
           if (r.draw) m.round--; // fought again
           m.newRound();
           this.handleEvents();
@@ -837,6 +870,7 @@
       if (this.kind === 'training' && !ui.name && !this.paused) {
         if (c === 'Tab') { this.cycleTrain(); return; }
         if (c === 'KeyR') { this.trainReset(); return; }
+        if (c === 'KeyT') { this.trainRec(); return; }
         if (c === 'KeyG') { this.trainSkill(1); return; }
         if (c === 'KeyB') { this.trainSkill(-1); return; }
         if (c === 'KeyO') { this.trainGacha(); return; }
@@ -875,6 +909,7 @@
     }
     // ---- training: endless practice ring
     startTraining() {
+      if (this.rec) { this.rec = null; if (this.recKeys) this.ctrls[0].src = this.recKeys; }
       if (!S.Banners.busy) S.Banners.wall({ hold: 0.12, speed: 1.1 });
       this.mode = 'game'; this.paused = false; this.endTutorial();
       this.ui.hide(); this.ui.showHud(false); this.ui.hint('');
@@ -891,16 +926,49 @@
       m.phase = 'fight'; m.sinceGo = 5; m.time = 0; m.events = [];
       for (const w of m.w) w.set('free');
       m.skills = [this.trainOn ? keep || (this.trainSkillI >= 0 ? S.Skills.LIST[this.trainSkillI].id : null) : null, null];
-      this.dummy.set(this.trainMode === 'cpu' ? 'idle' : this.trainMode, [1.5, 0]);
+      this.dummy.set(this.trainMode === 'cpu' || this.trainMode === 'replay' ? 'idle' : this.trainMode, [1.5, 0]);
+      this.repI = 0; // a recording replays from the top on every reset
       this.R.fx.clearDecals(); this.R.clearThrown(); this.ui.hideKimarite(); this.ui.hideBanner(); this.ui.vhs(false); this.overT = 0; this.kmShown = false;
       this.trainPanel();
     }
     cycleTrain() {
-      const order = ['idle', 'charge', 'palm', 'drive', 'cpu'];
+      if (this.rec) this.trainRec(); // switching partner ends a recording
+      const order = ['idle', 'charge', 'palm', 'drive', 'cpu'].concat(this.recFrames ? ['replay'] : []);
       this.trainMode = order[(order.indexOf(this.trainMode) + 1) % order.length];
-      this.dummy.set(this.trainMode === 'cpu' ? 'idle' : this.trainMode, [1.5, 0]);
+      this.dummy.set(this.trainMode === 'cpu' || this.trainMode === 'replay' ? 'idle' : this.trainMode, [1.5, 0]);
+      this.repI = 0;
       this.audio.blip(true); this.trainPanel();
     }
+    // the training partner's input: a live recording, a replay, the CPU, or a scripted dummy
+    trainSample(ai) {
+      const N0 = { mx: 0, mz: 0, push: false, grab: false, dash: false, skill: false };
+      if (this.rec) {
+        const r = this.recKeys.sample();
+        const f = { mx: r.mx, mz: r.mz, push: r.push, grab: r.grab, dash: r.dash, skill: false };
+        this.rec.frames.push(f);
+        if (this.rec.frames.length >= this.rec.max) setTimeout(() => { if (this.rec) this.trainRec(); }, 0);
+        return f;
+      }
+      if (this.trainMode === 'replay' && this.recFrames) return this.recFrames[this.repI++] || N0;
+      return this.trainMode === 'cpu' ? ai.sample() : this.dummy.sample();
+    }
+    // T: record the partner. Your keys drive them while recording; T again (or 10s) stops and they replay it on every reset.
+    trainRec() {
+      const m = this.match; if (!m || this.kind !== 'training') return;
+      if (!this.rec) {
+        this.recKeys = this.ctrls[0].src;
+        this.ctrls[0].src = { sample: () => ({ mx: 0, mz: 0, push: false, grab: false, dash: false, skill: false }) };
+        this.trainReset();
+        this.rec = { frames: [], max: Math.round(10 / S.DT) };
+        this.audio.blip(true); this.trainPanel();
+      } else {
+        const fr = this.rec.frames; this.rec = null;
+        this.ctrls[0].src = this.recKeys;
+        if (fr.length > 10) { this.recFrames = fr; this.trainMode = 'replay'; }
+        this.audio.blip(true); this.trainReset();
+      }
+    }
+
     // gacha practice: step forward or back through every skill; a used skill comes back so it can be tried again
     trainSkill(d) {
       const L = S.Skills.LIST, n = L.length;
@@ -926,15 +994,22 @@
       this.R.fx.clearDecals(); this.audio.blip(true); this.trainPanel();
     }
     trainPanel() {
-      const names = { idle: 'STANDS STILL', charge: 'CHARGES AT YOU', palm: 'SLAPS AT YOU', drive: 'PUSHES BACK WHEN GRABBED', cpu: 'FIGHTS (CPU ' + this.settings.difficulty.toUpperCase() + ')' };
+      const names = { idle: 'STANDS STILL', charge: 'CHARGES AT YOU', palm: 'SLAPS AT YOU', drive: 'PUSHES BACK WHEN GRABBED', cpu: 'FIGHTS (CPU ' + this.settings.difficulty.toUpperCase() + ')',
+        replay: 'REPLAYS YOUR RECORDING (' + (this.recFrames ? (this.recFrames.length * S.DT).toFixed(1) : 0) + 's)' };
       const L = S.Skills.LIST, cur = this.trainOn && this.trainSkillI >= 0 ? L[this.trainSkillI] : null;
       const ready = this.match && this.match.skills[0];
       const touch = S.touch && S.touch.on;
       const k = (key, act, label) => '<span class="tp-btn" data-train="' + act + '">' + (touch ? '' : '<kbd>' + key + '</kbd> ') + label + '</span>';
+      if (this.rec) {
+        this.ui.training('<div class="tp-head"><span class="tp-rec">● REC</span>You are the partner</div>' +
+          '<div class="tp-text">Your keys move the partner now. Do the move you want to practise against. Up to 10s.</div>' +
+          '<div class="tp-skip">' + k('T', 'rec', 'stop recording') + '</div>');
+        return;
+      }
       this.ui.training('<div class="tp-head"><span>TRAINING</span>Partner ' + names[this.trainMode] + '</div>' +
         '<div class="tp-text">Stage <b>' + ((S.STAGES.find((s) => s.id === (this.match && this.match.stage)) || {}).name || 'DOHYO') + '</b> · ' + (cur ? 'Gacha ON · <b>' + cur.name + '</b> (' + (this.trainSkillI + 1) + '/' + L.length + ') · ' + (ready ? (touch ? 'tap SKILL' : 'Space') + ' to use' : 'coming back…') : 'Gacha OFF · pure sumo') + '</div>' +
         (cur ? '<div class="tp-desc">' + cur.desc + '</div>' : '') +
-        '<div class="tp-skip">' + k('O', 'gacha', this.trainOn ? 'gacha off' : 'gacha on') + k('B', 'back', 'back') + k('G', 'next', 'next skill') + k('Tab', 'partner', 'partner') + k('M', 'stage', 'stage') + k('R', 'reset', 'reset') + (touch ? '' : ' · Esc menu') + '</div>');
+        '<div class="tp-skip">' + k('O', 'gacha', this.trainOn ? 'gacha off' : 'gacha on') + k('B', 'back', 'back') + k('G', 'next', 'next skill') + k('Tab', 'partner', 'partner') + k('T', 'rec', 'record partner') + k('M', 'stage', 'stage') + k('R', 'reset', 'reset') + (touch ? '' : ' · Esc menu') + '</div>');
     }
     trainFlow(dt) {
       const m = this.match;
@@ -1168,7 +1243,7 @@
       }
     }
 
-    isOption(a) { return a === 'diff' || a === 'hints' || a === 'sound' || a === 'debug' || a === 'pstage'; }
+    isOption(a) { return a === 'diff' || a === 'endless' || a === 'hints' || a === 'sound' || a === 'debug' || a === 'pstage'; }
     toggleRules() {
       const P = S.profile; P.rules = P.rules === 'gacha' ? 'pure' : 'gacha'; P.save();
       this.audio.blip(true); this.ui.show('select', this.sel);
@@ -1320,6 +1395,7 @@
           break;
         }
         case 'hints': st.hints = !st.hints; this.save(); refresh(); break;
+        case 'endless': st.endless = !st.endless; this.save(); refresh(); break;
         case 'sound': st.sound = !st.sound; this.audio.muted = !st.sound; this.save(); refresh(); break;
         case 'debug': this.toggleDebug(); break;
         case 'controls': ui.show('controls'); break;

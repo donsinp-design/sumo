@@ -23,6 +23,16 @@ html, body { width: 100%; height: 100%; height: 100dvh; overflow: hidden; oversc
 .plate { --acc: #fff; display: flex; align-items: center; gap: 12px; filter: drop-shadow(0 4px 0 rgba(0,0,0,0.45)); }
 .plate .meta { display: flex; flex-direction: column; gap: 4px; }
 .plate.p2 .meta { align-items: flex-end; }
+/* stamina: drains with flurries, charges, bracing and long grapples; refills when you ease off */
+#rounds .tally { font-family: var(--ui); font-weight: 800; font-style: italic; font-size: 30px; letter-spacing: 2px; color: var(--paper); text-shadow: 0 3px 0 rgba(0,0,0,0.5); }
+#rounds:has(.tally) { flex-direction: column; align-items: center; gap: 0; }
+#rounds .streak { display: block; font-family: var(--ui); font-weight: 700; font-size: 13px; letter-spacing: 2px; color: #f0c35a; text-align: center; }
+.plate .stam { width: 180px; height: 6px; background: rgba(0,0,0,0.55); border-radius: 3px; overflow: hidden; }
+.plate .stam i { display: block; height: 100%; width: 100%; background: var(--acc); transition: width 0.08s linear; }
+.plate.p2 .stam i { margin-left: auto; }
+.plate .stam.low i { background: #e5533d; animation: stamlow 0.5s steps(2) infinite; }
+@keyframes stamlow { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .plate .stam.low i { animation: none; } }
 .plate .name { font-family: var(--ui); font-weight: 800; font-style: italic; font-size: 28px; letter-spacing: 2px; background: var(--ink);
   border-left: 6px solid var(--acc); padding: 0 14px 0 10px; transform: skewX(-12deg); }
 .plate.p2 .name { border-left: none; border-right: 6px solid var(--acc); }
@@ -359,7 +369,7 @@ html.touch body.playing #tpad { display: block; }
 html.touch #hint, html.touch #clinchHint { display: none; }
 /* small landscape screens */
 @media (max-height: 500px) {
-  #hud { top: 6px; padding: 0 12px; } .plate .name { font-size: 18px; } #rounds i { width: 16px; height: 16px; border-width: 2.5px; } #rounds { gap: 7px; } .round { font-size: 13px; }
+  #hud { top: 6px; padding: 0 12px; } .plate .stam { width: 110px; height: 4px; } .plate .name { font-size: 18px; } #rounds i { width: 16px; height: 16px; border-width: 2.5px; } #rounds { gap: 7px; } .round { font-size: 13px; }
   #banner .jp { font-size: 46px; } #kimarite .kj { font-size: 40px; } #kimarite .ro { font-size: 16px; }
   .callout { font-size: 20px; } .callout.big { font-size: 28px; }
   .logo-img { width: min(300px, 50vw); } .title-wrap .menu button, .menu button { font-size: 18px; padding: 2px 12px; } .menu { gap: 4px; margin-top: 8px; }
@@ -395,3 +405,5 @@ html.touch .rules b, html.touch .bet b, html.touch .foot { display: none; }
 
 .res-wrap .streak { font-family: var(--heavy); font-size: 22px; letter-spacing: 2px; color: #ff9a4a; margin-top: 4px; text-shadow: 0 0 6px rgba(0,0,0,0.85), 2px 2px 0 rgba(0,0,0,0.9); }
 .res-wrap .streak span { font-family: var(--ui); font-size: 14px; color: #fff8ec; margin-left: 12px; letter-spacing: 1px; }
+#trainPanel .tp-rec { color: #e5533d; animation: stamlow 0.8s steps(2) infinite; }
+@media (prefers-reduced-motion: reduce) { #trainPanel .tp-rec { animation: none; } }

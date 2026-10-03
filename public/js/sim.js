@@ -43,7 +43,7 @@
       this.sdx = 0; this.sdz = 0; this.fallX = 0; this.fallZ = 0;
       this.down = false; this.out = false; this.clinch = null; this.lifted = false;
       this.squash = 0; this.slideT = 0; this.pressT = 0; this.ghostT = 0;
-      this.parryAt = -9; this.gripCD = 0; this.flurry = 0; this.lastPalmAt = -9; this.teeter = false; this.crouchT = 0; this.feint = 0; this.feintAt = -9; this.feintBtn = null; this.buf = null;
+      this.parryAt = -9; this.gripCD = 0; this.hariteUsed = false; this.flurry = 0; this.lastPalmAt = -9; this.teeter = false; this.crouchT = 0; this.feint = 0; this.feintAt = -9; this.feintBtn = null; this.buf = null;
       this.pre = null; this.preT = 9; this.stomped = false; this.power = 0; this.tachiPow = 0;
       this.lastTech = null; this.lastBy = null; this.lastT = -99;
       this.fxs = {}; this.str = 1; this.szCur = 1; this.charges = 0; this.torpedo = false; this.trapped = false;
@@ -502,7 +502,7 @@
       let special = null;
       // harite: an open-hand slap to the face right off the start dazes them
       // (works on someone charging at you too: a slap in the face stops the charge dead)
-      if (kind === 'palm' && zone === 'front' && this.sinceGo < 2 && !braced) { special = 'harite'; o.set('stun', 0.4); bal += 0.06; if (armored) { imp /= 0.3; bal /= 0.3; recoil = 0.15; } }
+      if (kind === 'palm' && zone === 'front' && this.sinceGo < 1.2 && !w.hariteUsed && !braced) { w.hariteUsed = true; special = 'harite'; o.set('stun', 0.4); bal += 0.06; if (armored) { imp /= 0.3; bal /= 0.3; recoil = 0.15; } }
       // nodowa: a heavy shove to the throat stands them up; they can't drive for a moment
       if (kind === 'heavy' && w.throat && zone !== 'rear' && !braced) { w.throat = false; special = 'nodowa'; o.uprightT = 0.7; o.set('stun', 0.15); o.throatT = 0.45; w.thrHand = 0.45; imp *= 0.8; }
       if (w.charges > 0) { const bst = 1 + w.charges * 1.1; imp *= bst; bal *= bst; this.emit('boost', { w, n: w.charges }); w.charges = 0; }
@@ -856,8 +856,8 @@
           let sd = (I.mx * px + I.mz * pz) * s;
           if (this.lift) {
             if (this.lift.o === w) {
-              if (I.push.pressed || I.grab.pressed || I.dash.pressed) { this.lift.w.stam -= 0.06; m.emit('struggle', { w }); }
-            } else if (I.grab.pressed && this.lift.t > 0.25) { w.kArm = false; this.setDown(true); if (this.done) return; }
+              if (I.push.pressed || I.grab.pressed || I.dash.pressed) { this.lift.w.stam -= 0.08; m.emit('struggle', { w }); }
+            } else if (I.grab.pressed && this.lift.t > 0.6) { w.kArm = false; this.setDown(true); if (this.done) return; } // a slam needs a proper heave first: time to wriggle
             continue;
           }
           if (this.rear && this.rear !== w) { // facing away: can only turn around
@@ -1307,7 +1307,7 @@
       const [nx, nz] = this.axis();
       if (slam) {
         this.m.tag(L.o, L.w, 'lift');
-        this.m.hurt(L.o, 0.35 + (1 - L.o.bal) * 0.5, s * nx, s * nz);
+        this.m.hurt(L.o, (0.35 + (1 - L.o.bal) * 0.5) * (0.45 + 0.55 * Math.max(0, Math.min(1, L.w.stam))), s * nx, s * nz); // a tired lifter slams softly
         this.m.emit('slam', { w: L.w, o: L.o, x: L.o.x, z: L.o.z });
         // slammed down: you let go, they bounce off you dazed
         this.end('slam');
@@ -1341,13 +1341,15 @@
       const [nx, nz] = this.axis();
       {
         this.end('break');
-        const imp = 4.6 * w.a.power * (this.grip[i] >= this.grip[j] - 0.35 || o.bal < 0.45 ? 1 : 0.65);
+        const esc = o === this.a; // shoving out of THEIR grip: it frees you, it is not an attack
+        const imp = 4.6 * w.a.power * (this.grip[i] >= this.grip[j] - 0.35 || o.bal < 0.45 ? 1 : 0.65) * (esc ? 0.55 : 1);
+        if (esc) w.stam = Math.max(0, w.stam - 0.12);
         o.vx += s * nx * imp / o.m; o.vz += s * nz * imp / o.m;
         w.vx -= s * nx * imp * 0.25 / w.m; w.vz -= s * nz * imp * 0.25 / w.m;
         o.slideT = 0.2;
         this.m.tag(o, w, 'break');
-        this.m.hurt(o, 0.1, s * nx, s * nz);
-        w.set('recover', 0.16); o.set('recover', 0.2);
+        this.m.hurt(o, esc ? 0.03 : 0.1, s * nx, s * nz);
+        w.set('recover', esc ? 0.2 : 0.16); o.set('recover', esc ? 0.14 : 0.2);
         this.m.emit('hit', { kind: 'palm', x: (w.x + o.x) / 2, z: (w.z + o.z) / 2, nx: s * nx, nz: s * nz, power: imp, zone: 'front', w, o });
       }
       void i; void j;

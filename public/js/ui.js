@@ -37,6 +37,11 @@
     // one circle per possible round, filled in the winner's colour as rounds are won
     setWins(w, need) {
       const m = this.g.match, hist = (m && m.history) || [], n = need * 2 - 1;
+      if (this.g.endless && this.g.endless()) { // non-stop: a running tally instead of round circles
+        const g = this.g;
+        $('rounds').innerHTML = '<span class="tally">' + w[0] + ' – ' + w[1] + '</span>' + (g.nsStreak > 1 ? '<span class="streak">' + g.nsStreak + ' IN A ROW</span>' : '');
+        this.histN = hist.length; return;
+      }
       let h = '';
       for (let k = 0; k < n; k++) {
         const wi = hist[k];
@@ -160,6 +165,11 @@
 
     draw(dt) {
       const c = this.cx, W = innerWidth, H = innerHeight;
+      const mm = this.g.match;
+      if (mm) for (let i = 0; i < 2; i++) {
+        const el = this.stEl || (this.stEl = [$('st1'), $('st2')]), v = Math.max(0, Math.min(1, mm.w[i].stam));
+        if (el[i]) { el[i].firstChild.style.width = Math.round(v * 100) + '%'; el[i].classList.toggle('low', v < 0.25); }
+      }
       c.clearRect(0, 0, W, H);
       const L = this.lines;
       if (L) {
@@ -266,8 +276,9 @@
       } else if (n === 'settings') {
         h = '<div class="pause-wrap"><div class="ptitle">SETTINGS</div><div class="menu">' +
           btn('CPU DIFFICULTY', 'diff', st.difficulty.toUpperCase()) +
+          btn('VS CPU MATCH', 'endless', st.endless ? 'NON-STOP' : 'BEST OF 3') +
           btn('STAGE', 'pstage', (S.STAGES.find((x) => x.id === S.profile.stage) || S.STAGES[0]).name) +
-          btn('MOVE HINTS', 'hints', st.hints ? 'ON' : 'OFF') +
+          btn('COUNTER TIPS', 'hints', st.hints ? 'ON' : 'OFF') +
           btn('SOUND', 'sound', st.sound ? 'ON' : 'OFF') +
           btn('DEBUG VIEW', 'debug', st.debug ? 'ON' : 'OFF') + btn('CONTROLS', 'controls') +
           btn('YOUR NAME', 'name1', P.names[0]) +

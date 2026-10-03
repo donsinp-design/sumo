@@ -321,7 +321,13 @@
       if (oArmed && this.armT > L.react && this.rnd() < L.skill * (0.2 + danger + 0.05 * Math.min(2, HAB.grab))) { this.escape(c); return; }
       if (c.lift) {
         if (c.lift.w === me) { const ol = Math.hypot(o.x, o.z) || 1; this.dir(o.x / ol, o.z / ol); this.state = 'carry'; }
-        else { this.dir(this.rnd() - 0.5, this.rnd() - 0.5); this.tap(['push', 'grab', 'dash'][(this.rnd() * 3) | 0], 0.04); this.state = 'struggle'; }
+        else {
+          // lifted: wriggle like a human mashing. Better players mash harder.
+          this.dir(this.rnd() - 0.5, this.rnd() - 0.5);
+          this.wrig = ((this.wrig || 0) + 1) % 3;
+          if (this.rnd() < 0.35 + 0.6 * L.skill) this.tap(['push', 'grab', 'dash'][this.wrig], 0.03);
+          this.state = 'struggle';
+        }
         return;
       }
       const myD = Math.hypot(me.x, me.z) || 1, oD = Math.hypot(o.x, o.z) || 1;
