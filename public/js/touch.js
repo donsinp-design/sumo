@@ -36,7 +36,7 @@
   };
   // every tap tries again, so leaving full screen by accident is fixed by the next tap
   document.addEventListener('pointerdown', () => { if (!standalone) goFull(); });
-  const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone;
+  const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone || S.APP !== 'web'; // the apps are always full screen
   const canFull = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
   const iOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (!standalone && (iOS || !canFull)) {
