@@ -8,5 +8,10 @@
     "scrollEnabled": false,
     "backgroundColor": "#000000",
     "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SystemBars": {
+      "hidden": true
+    }
   }
 }
