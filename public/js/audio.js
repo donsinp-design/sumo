@@ -80,6 +80,13 @@
       this.tone(t, 'triangle', 180, 80, 0.2, 0.2);
       this.noiseHit(t, 'lowpass', 300, 0.6, 0.5, 0.25);
     }
+    // hyoshigi: one sharp strike of the wooden clappers, right on the start call
+    hyoshigi() {
+      if (!this.ok) return; const t = this.ctx.currentTime;
+      this.noiseHit(t, 'bandpass', 2600, 16, 1.0, 0.06);
+      this.noiseHit(t, 'bandpass', 1500, 10, 0.6, 0.05);
+      this.tone(t, 'square', 2100, 2000, 0.07, 0.03);
+    }
     clack() {
       if (!this.ok) return; const t = this.ctx.currentTime;
       for (const dt of [0, 0.13]) {

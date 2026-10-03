@@ -43,7 +43,7 @@
       this.sdx = 0; this.sdz = 0; this.fallX = 0; this.fallZ = 0;
       this.down = false; this.out = false; this.clinch = null; this.lifted = false;
       this.squash = 0; this.slideT = 0; this.pressT = 0; this.ghostT = 0;
-      this.parryAt = -9; this.matta = 0; this.mattaPen = false; this.dashAt = -9; this.lean = 0; this.teeterEnd = -9; this.gripCD = 0; this.hariteUsed = false; this.flurry = 0; this.lastPalmAt = -9; this.teeter = false; this.crouchT = 0; this.feint = 0; this.feintAt = -9; this.feintBtn = null; this.buf = null;
+      this.parryAt = -9; this.matta = 0; this.mattaPen = false; this.dashAt = -9; this.lean = 0; this.teeterEnd = -9; this.gripCD = 0; this.hariteUsed = false; this.hariteQ = false; this.flurry = 0; this.lastPalmAt = -9; this.teeter = false; this.crouchT = 0; this.feint = 0; this.feintAt = -9; this.feintBtn = null; this.buf = null;
       this.pre = null; this.preT = 9; this.stomped = false; this.power = 0; this.tachiPow = 0;
       this.lastTech = null; this.lastBy = null; this.lastT = -99;
       this.fxs = {}; this.str = 1; this.szCur = 1; this.charges = 0; this.torpedo = false; this.trapped = false;
@@ -284,6 +284,7 @@
           else if (w.t >= 0.17 && pr('dash') && w.dashCD <= 0 && mag > 0.35) { w.throat = false; this.startDash(w, ix / mag, iz / mag); }
           break;
         case 'charge':
+          if (pr('push') && !w.chargeHit && !w.hariteUsed) w.hariteQ = true; // J again mid-charge: slap the face as you hit
           if (pr('dash') && w.t > 0.08 && !w.chargeHit) { // pull up short: counter to an expected sidestep
             w.set('brace'); w.braceT = 0.3; w.vx *= 0.35; w.vz *= 0.35;
             this.hurt(w, 0.08, w.fx, w.fz, true);
@@ -746,6 +747,11 @@
       let dmg = 0.032 * closing * Math.sqrt(At.m / T.m) * zm * (braced ? 0.35 : 1) * (agg ? 1.15 : At.st === 'free' ? 0.6 : 0.8) * ((At.st === 'dash' || this.time - (At.dashAt === undefined ? -9 : At.dashAt) < 0.45) && zone === 'front' ? 0.35 : 1);
       if (T.bal < 0.4 && zone !== 'rear') dmg *= 1.3;
       if (closing > 1.5) this.tag(T, At, zone === 'rear' ? 'rear' : zone === 'side' ? 'side' : At.st === 'charge' ? 'charge' : 'heavy');
+      // harite: a face slap queued during the charge lands with the hit and dazes them
+      if (At.st === 'charge' && At.hariteQ && zone === 'front' && !At.hariteUsed && T.st !== 'brace') {
+        At.hariteQ = false; At.hariteUsed = true; T.set('stun', 0.4); dmg += 0.06;
+        this.emit('hit', { kind: 'palm', x: T.x, z: T.z, nx, nz, power: 4, zone, w: At, o: T, special: 'harite' });
+      }
       this.hurt(T, dmg, nx, nz);
       // a badly angled charge leaves the attacker off balance
       const af = At.fx * nx + At.fz * nz;

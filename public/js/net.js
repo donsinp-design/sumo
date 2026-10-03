@@ -99,7 +99,7 @@
   // ---- state snapshot used to repair the rare desync
   const WF = ['x', 'z', 'vx', 'vz', 'f', 'fw', 'y', 'bal', 'tx', 'tz', 'stam', 'st', 't', 'dur', 'hitDone', 'hand', 'windPow', 'cspd', 'chargeHit',
     'tachiai', 'braceT', 'dashCD', 'ddx', 'ddz', 'dpow', 'sdx', 'sdz', 'fallX', 'fallZ', 'down', 'out', 'slideT', 'pressT', 'ghostT', 'charges',
-    'pre', 'preT', 'crouchT', 'tachiPow', 'ignoreDash', 'uprightT', 'parryAt', 'teeter', 'szCur', 'boomT', 'swallowed', 'gulpI', 'sk', 'trail', 'trailT', 'rwTrail', 'gulpT', 'qT', 'hyN', 'hyHits', 'dq', 'carried', 'inShop', 'chkBy', 'ballCD', 'ballHitT', 'ballRoll', 'chkA', 'chkT', 'throatT', 'thrHand', 'throat', 'throatCD', 'flurry', 'lastPalmAt', 'gripCD', 'hariteUsed', 'dashAt', 'lean', 'teeterEnd', 'matta', 'mattaPen'];
+    'pre', 'preT', 'crouchT', 'tachiPow', 'ignoreDash', 'uprightT', 'parryAt', 'teeter', 'szCur', 'boomT', 'swallowed', 'gulpI', 'sk', 'trail', 'trailT', 'rwTrail', 'gulpT', 'qT', 'hyN', 'hyHits', 'dq', 'carried', 'inShop', 'chkBy', 'ballCD', 'ballHitT', 'ballRoll', 'chkA', 'chkT', 'throatT', 'thrHand', 'throat', 'throatCD', 'flurry', 'lastPalmAt', 'gripCD', 'hariteUsed', 'hariteQ', 'dashAt', 'lean', 'teeterEnd', 'matta', 'mattaPen'];
   const MF = ['phase', 'phaseT', 'goAt', 'sinceGo', 'time', 'overT', 'round', 'deadT', 'lastContactT', 'stage', 'stageA'];
   S.netSnapshot = (m) => ({
     w: m.w.map((w) => { const o = {}; for (const k of WF) o[k] = w[k]; o.fxs = Object.assign({}, w.fxs); return o; }),

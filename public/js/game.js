@@ -253,7 +253,7 @@
       if (human && this.settings.hints && this.mode === 'game' && !this.paused && m.phase === 'fight') {
         if (m.clinch && human.clinch && !m.clinch.tech) {
           const c = m.clinch, gi = c.grip[human.idx], go = c.grip[human.opp.idx], pct = Math.round(100 * gi / Math.max(0.01, gi + go));
-          html = '<span class="gripm"><em>GRIP</em><span class="wbar"><i style="width:' + pct + '%"></i></span><em>' + (c.type[human.idx] === 'inside' ? 'INSIDE' : 'OUTSIDE') + '</em></span>' + this.clinchTip(c, human);
+          html = '<span class="gripm"><em>YOUR GRIP</em><span class="wbar"><i style="width:' + pct + '%"></i></span><em>THEIRS</em>' + (c.type[human.idx] === 'inside' ? '<b>INSIDE</b>' : '') + '</span>' + this.clinchTip(c, human);
         }
         else if (!m.clinch) {
           // outside the grapple: a counter tip for what they are doing right now, held a moment so it can be read
@@ -521,7 +521,7 @@
             this.overT = 0; this.kmShown = false; this.palmChain = [0, 0];
             fx.clearDecals();
             R.ref.set('ready');
-            if (!quiet) { ui.setRound(e.round); if (!S.Banners.busy) ui.banner('READY', 'ready'); A.clack(); }
+            if (!quiet) { ui.setRound(e.round); if (!S.Banners.busy) ui.banner('READY', 'ready'); }
             break;
           case 'clap': {
             const w = e.w; A.clap(); R.views[w.idx] && (R.views[w.idx].clapT = 0);
@@ -634,7 +634,7 @@
           case 'go':
             R.ref.set('go');
             if (!quiet) { ui.banner(tut ? 'PRESS J!' : 'HAKKEYOI!', 'go', tut ? 1.2 : 0.75); }
-            if (!quiet) A.taiko();
+            if (!quiet) { A.hyoshigi(); setTimeout(() => A.taiko(), 90); } // the clappers mark the exact moment to go
             this.excite = 0.6;
             for (const w of m.w) if (w.tachiPow > 0.5) fx.dust(w.x, 0.05, w.z, 8, 0.4, 0.6, 0.35);
             break;
