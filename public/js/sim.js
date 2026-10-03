@@ -100,8 +100,6 @@
       }
       // CONTROLLER DISCONNECTED or stage fright under the spotlight: nothing gets through
       if (f.unplug > 0 || f.stagefright > 0) { mx = 0; mz = 0; c = { mx: 0, mz: 0, push: S.NULL_IN.push, grab: S.NULL_IN.grab, dash: S.NULL_IN.dash, skill: S.NULL_IN.skill }; }
-      // steering a chicken: your own body stands still
-      if (w.opp.fxs.chicken > 0 && w.opp.chkBy === w.idx) { mx = 0; mz = 0; }
       // CHICKEN: no hands to push or grab with
       if (f.chicken > 0) c = { mx, mz, push: S.NULL_IN.push, grab: S.NULL_IN.grab, dash: S.NULL_IN.dash, skill: S.NULL_IN.skill };
       if (f.dizzy > 0) {

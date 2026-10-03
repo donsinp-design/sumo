@@ -24,9 +24,16 @@
     }
     sample() {
       const T = this.time, b = this.btn;
-      // steering a chicken: run it for the nearest edge
-      const o = this.me.opp;
-      if (o && o.fxs.chicken > 0 && o.chkBy === this.me.idx) { let x = o.x, z = o.z, l = Math.hypot(x, z); if (l < 0.3) { x = o.x - this.me.x; z = o.z - this.me.z; l = Math.hypot(x, z) || 1; } return { mx: x / l, mz: z / l, push: false, grab: false, dash: false, skill: false }; }
+      // I am the chicken: no attacking, just run. Keep away from them and stay off the edge.
+      const me = this.me, o = me.opp;
+      if (me.fxs.chicken > 0 && o) {
+        let ax = me.x - o.x, az = me.z - o.z; const al = Math.hypot(ax, az) || 1; ax /= al; az /= al;
+        const rl = Math.hypot(me.x, me.z), edge = Math.max(0, (rl - 2.2) / 2.4); // 0 in the middle, 1 at the rim
+        let mx = ax * (1 - edge) - (me.x / (rl || 1)) * edge * 1.4 + Math.cos(T * 2.1) * 0.35 * (1 - edge);
+        let mz = az * (1 - edge) - (me.z / (rl || 1)) * edge * 1.4 + Math.sin(T * 2.1) * 0.35 * (1 - edge);
+        const ml = Math.hypot(mx, mz) || 1;
+        return { mx: mx / ml, mz: mz / ml, push: false, grab: false, dash: false, skill: false };
+      }
       return { mx: this.mx, mz: this.mz, push: T < b.push.until, grab: T < b.grab.until, dash: T < b.dash.until, skill: T < b.skill.until };
     }
     tap(n, dur) {

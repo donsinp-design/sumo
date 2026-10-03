@@ -42,7 +42,7 @@
     { id: 'possess', name: 'POSSESSION', desc: 'For 1.2s their body runs for the nearest edge, whatever they press.', kind: 'any' },
     { id: 'fish', name: 'LIVE FISH', desc: 'Throw a giant tuna into the ring. It flops around wildly for 7s and knocks over anyone it hits.', kind: 'any' },
     { id: 'bomb', name: 'BOMB', desc: 'A bomb lands in the middle and blows in 5s. Shove it toward them. Hit it too often and it goes off early.', kind: 'any' },
-    { id: 'chicken', name: 'CHICKEN', desc: 'Turn them into a tiny, very fast chicken for 3s, and steer it yourself with the stick. You stand still while you steer. Run it out of the ring!', kind: 'any' },
+    { id: 'chicken', name: 'CHICKEN', desc: 'Turn them into a tiny, very fast chicken for 3s. They can only run, no pushing, grabbing or skills. Catch them, or let them tire themselves out.', kind: 'any' },
     { id: 'shock', name: 'SHOCKWAVE STOMP', desc: 'A huge stomp (half-second wind-up) sends a shockwave rolling across the ring. They can parry it or dash through it.', kind: 'atk' },
     { id: 'potato', name: 'HOT POTATO', desc: 'Stick a flashing bomb on them. It blows in 6s and floors whoever holds it. Touch the other wrestler to pass it on.', kind: 'any' },
     { id: 'claw', name: 'CLAW MACHINE', desc: 'A crane claw hunts overhead for 7s. Whoever it catches gets carried somewhere random and dropped, maybe outside the ring.', kind: 'any' },
@@ -194,7 +194,7 @@
           break;
         }
         case 'bomb': m.objs.push({ type: 'bomb', x: 0, z: 0, vx: 0, vz: 0, t: 0, dur: 5, hits: 0, cd: [0, 0], owner: w }); break;
-        case 'chicken': of.chicken = 3; if (o.clinch) o.clinch.end('skill'); o.chkA = S.rand() * 6.28; o.chkT = 0; o.chkBy = w.idx; break;
+        case 'chicken': of.chicken = 3; if (o.clinch) o.clinch.end('skill'); o.chkA = S.rand() * 6.28; o.chkT = 0; o.chkBy = -1; break;
         case 'shock': w.set('bigstomp', 0.5); break;
         case 'triplets': {
           // poof: you and two clones appear around them; which one is real is random
@@ -282,10 +282,10 @@
         return true;
       }
       if (f.chicken > 0) {
-        // a tiny chicken: frantic, fast, and only loosely where you point
-        // steered by whoever cast it, with a bit of chicken panic mixed in
+        // a tiny chicken: frantic and fast. The chicken's own player (or CPU) steers it with their own stick,
+        // with a bit of chicken panic mixed in. It cannot attack, only run.
         w.chkT -= dt; if (w.chkT <= 0) { w.chkT = 0.12 + S.rand() * 0.2; w.chkA += (S.rand() - 0.5) * 3.2; }
-        const C = m.w[w.chkBy >= 0 ? w.chkBy : 1 - w.idx].ctrl || S.NULL_IN, cm = Math.hypot(C.mx || 0, C.mz || 0);
+        const C = I || S.NULL_IN, cm = Math.hypot(C.mx || 0, C.mz || 0);
         const ax = (C.mx || 0) + Math.cos(w.chkA) * 0.25 * (cm > 0.1 ? 1 : 2), az = (C.mz || 0) + Math.sin(w.chkA) * 0.25 * (cm > 0.1 ? 1 : 2);
         w.vx += ax * 34 * dt; w.vz += az * 34 * dt;
         const k = Math.exp(-dt * 2.2); w.vx *= k; w.vz *= k;
