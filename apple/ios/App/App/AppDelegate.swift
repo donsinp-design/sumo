@@ -46,11 +46,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 /// The game's screen: full screen with no status bar, the home bar hides, and swipes from the edges go to the
 /// game first (a second swipe still reaches iOS). The page never scrolls or bounces.
 class GameViewController: CAPBridgeViewController {
-    override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
     override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
     override func viewDidLoad() {
         super.viewDidLoad()
+        isStatusBarVisible = false
+        setNeedsStatusBarAppearanceUpdate()
         webView?.scrollView.bounces = false
         webView?.scrollView.isScrollEnabled = false
         webView?.isOpaque = false
