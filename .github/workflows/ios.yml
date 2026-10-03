@@ -35,19 +35,21 @@ jobs:
       - name: Launch on iPhone and iPad, take screenshots
         run: |
           mkdir -p shots
-          for dev in "iPhone 16 Pro" "iPad Pro 13-inch (M4)"; do
-            id=$(xcrun simctl list devices available | grep -m1 "$dev (" | grep -oE '[0-9A-F-]{36}') || true
-            if [ -z "$id" ]; then id=$(xcrun simctl list devices available | grep -m1 "${dev%% *}" | grep -oE '[0-9A-F-]{36}'); fi
-            echo "device $dev -> $id"
+          # newest available iPhone and iPad simulators on this Mac
+          for kind in iPhone iPad; do
+            id=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];r=[(k,x) for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('$kind')];r.sort(key=lambda t:t[0]);print(r[-1][1]['udid'] if r else '')")
+            echo "$kind -> $id"; [ -z "$id" ] && continue
             xcrun simctl boot "$id" || true
             xcrun simctl bootstatus "$id" -b
             xcrun simctl install "$id" build/Build/Products/Debug-iphonesimulator/App.app
             xcrun simctl launch "$id" com.looktwicestudio.kumite
-            sleep 25
-            xcrun simctl io "$id" screenshot "shots/${dev// /-}.png"
+            sleep 30
+            xcrun simctl io "$id" screenshot "shots/$kind.png"
             xcrun simctl shutdown "$id" || true
           done
+          ls -la shots
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: iOS-simulator-screenshots
           path: apple/shots/*.png

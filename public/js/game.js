@@ -314,9 +314,9 @@
       const tr = c.evalTech(me, 'trip');
       if (tr.ok && tr.sc > 0.34) return '<b>TRIP READY!</b> Hold ' + K + ', point at them, let go';
       if (oEdge < 1.6) return '<b>Hold toward them</b> to drive them out';
-      const tips = ['K up: <b>hold toward them</b> to drive them back and win the grip', '<b>Hold ' + K + '</b> = move mode (throw, spin, trip) · K up = push and drag', 'Let go of the stick to keep your elbows tight: their grip stops growing', 'Hold ' + K + ' and <b>point</b>: they swing round you · let go to throw', 'Hold ' + K + ', point <b>at them</b>, let go: leg trip', 'Tap ' + K + ' alone to lift',
+      const tips = ['K up: <b>hold toward them</b> to drive them back and win the grip', '<b>Hold ' + K + '</b> = move mode (throw, spin, trip) · K up = push and drag', 'Let go of the stick to keep your elbows tight: their grip stops growing', 'Hold ' + K + ' and <b>point</b>: they swing round you · let go to throw', 'Hold ' + K + ', point <b>at them</b>, let go: leg trip', 'Hold ' + K + ' a moment, no aim, let go: lift',
         'Want out? ' + J + ' shove off &nbsp;·&nbsp; ' + Lk + ' slip back',
-        (c.b === me ? 'They grabbed you, but you can fight back: ' : '') + 'tap ' + K + ' alone to lift, or hold ' + K + ' and point to throw'];
+        (c.b === me ? 'They grabbed you, but you can fight back: ' : '') + 'hold ' + K + ' with no aim to lift, or hold ' + K + ' and point to throw'];
       return tips[Math.floor(c.t / 2.5) % tips.length];
     }
 

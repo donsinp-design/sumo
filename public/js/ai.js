@@ -384,7 +384,7 @@
       // fighting for survival on the bales
       if (c.utchariOk(me)) {
         const ev = c.evalTech(me, 'utchari');
-        if (ev.ok && this.clT > this.nextTech && this.rnd() < L.skill * 0.35) { this.rel(c, -0.7, this.rnd() < 0.5 ? 0.7 : -0.7); this.tap('grab'); this.state = 'UTCHARI'; return; }
+        if (ev.ok && this.clT > this.nextTech && this.rnd() < L.skill * 0.35) { this.rel(c, -0.7, this.rnd() < 0.5 ? 0.7 : -0.7); this.hold('grab', 0.2); this.state = 'UTCHARI'; return; }
         if (ev.ok) this.nextTech = this.clT + 0.3;
         if (this.rnd() < 0.55) { this.rel(c, 0.2, this.bestSide(c)); this.state = 'edge-rotate'; }
         else { this.rel(c, 1, 0); this.state = 'edge-pushback'; }
@@ -394,7 +394,6 @@
       const thresh = 0.3 + (1 - L.skill) * 0.18;
       const cands = [];
       for (const k of ['throw', 'trip', 'spin', 'lift']) {
-        if (k === 'lift' && c.t < 0.5) continue; // a lift tap only counts once the hold has settled
         const ev = c.evalTech(me, k);
         if (ev.ok && ev.sc > thresh) cands.push([k, ev.sc]);
       }
@@ -408,7 +407,7 @@
         else if (k === 'spin') this.rel(c, -1, 0);
         else this.dir(0, 0);
         // hold K and point for a moment before letting go, like a human does: it can be read and escaped
-        const wind = k === 'lift' ? 0.05 : 0.5 - 0.22 * L.skill + this.rnd() * 0.15;
+        const wind = k === 'lift' ? 0.25 : 0.5 - 0.22 * L.skill + this.rnd() * 0.15;
         this.hold('grab', wind); this.aimHold = { until: this.time + wind, mx: this.mx, mz: this.mz };
         // hard: show one throw, then switch to another halfway through the wind-up
         if (L.tricky > 0.25 && (k === 'throw' || k === 'trip') && this.rnd() < L.tricky * 0.8) {

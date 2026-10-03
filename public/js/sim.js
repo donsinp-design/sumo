@@ -917,9 +917,8 @@
           }
           if (this.rear === w && I.push.pressed) { this.rearShove(w); return; }
           if (I.grab.pressed && w === this.b && this.t < (m.techWin || 0.38) && !this.rear) { m.grabTech(this.a, this.b); return; }
-          // one rule: while K is held you are in MOVE mode (swing, throw, trip, spin); with K up the stick pushes and drags.
-          // A quick tap of K while locked (pressed and let go, no aim) is a lift.
-          if (I.grab.pressed) { w.kArm = true; w.kPressT = this.t >= 0.45 ? this.t : -9; } // a press in the first moment is still the grab (mashing K), never a lift
+          // one rule: while K is held you are in MOVE mode (swing, throw, trip, spin, lift); with K up the stick pushes and drags.
+          if (I.grab.pressed) { w.kArm = true; w.kPressT = this.t; }
           else if (I.grab.held && !w.kArm) { w.kArm = true; w.kPressT = -9; } // still holding from the grab: move mode, not a tap
           // SWING: keep K held and point somewhere: they swing round you to that side
           if (w.kArm && I.grab.held && Math.hypot(I.mx, I.mz) > 0.4) {
@@ -934,9 +933,12 @@
             if (this.swing && this.swing.w === w) { if (this.releaseSwing()) return; }
             if (Math.abs(tw) <= 0.35 && Math.abs(sd) <= 0.35 && w.kAimAt !== undefined && this.t - w.kAimAt < 0.2) { tw = w.kAimTw; sd = w.kAimSd; }
             // a quick tap that only grabbed should not fire a move by itself
-            const aimed = Math.abs(tw) > 0.35 || Math.abs(sd) > 0.35, tap = this.t - (w.kPressT ?? -9) < 0.35;
-            const meant = w.kPressT >= 0 || this.t > 0.35; // letting go of the grab's own K straight away, still walking in, is not a move
-            if ((aimed && meant) || tap) { this.attempt(w, aimed ? tw : 0, aimed ? sd : 0); if (this.done || this.tech) return; }
+            // every move is: hold K a moment, aim (or not, for a lift), let go. A quick press does nothing, so a
+            // stray K (grabbing again, or pressing as they grab you) never lifts or trips by accident.
+            const aimed = Math.abs(tw) > 0.35 || Math.abs(sd) > 0.35;
+            const heldFor = w.kPressT >= 0 ? this.t - w.kPressT : this.t; // pressed while locked, or held since the grab
+            const fresh = w.kPressT >= 0; // K pressed again after locking up; the grab's own K can aim a move but never lifts
+            if (fresh ? heldFor >= 0.15 : (aimed && this.t >= 0.35)) { this.attempt(w, aimed ? tw : 0, aimed ? sd : 0); if (this.done || this.tech) return; }
           }
           else if (I.push.pressed) { this.tryBreak(w); if (this.done) return; }
           else if (I.dash.pressed) { this.tryDisengage(w); if (this.done) return; }
