@@ -334,11 +334,12 @@
         const P = S.phones, row = (i) => '<div class="ph-row"><b>PLAYER ' + (i + 1) + '</b><span class="' + (P.connected(i) ? 'ok' : '') + '">' + (P.connected(i) ? 'PHONE CONNECTED' : 'waiting for a phone…') + '</span></div>';
         h = '<div class="pause-wrap"><div class="ptitle">PHONE CONTROLLERS</div>' +
           (P.err ? '<div class="neterr">' + P.err + '</div>' : '') +
+          (P.connecting ? '<div class="lb-wait">Connecting to the game server…</div>' : '') +
           (P.on ? '<div class="ph-box"><div class="ph-qr">' + P.qrSvg() + '</div><div class="ph-info">' +
             '<p>Scan with your phone camera. The first phone is Player 1, the second Player 2.</p>' +
             '<p class="ph-code">or open <span>' + P.padUrl().replace(/^https?:\/\//, '') + '</span></p>' + row(0) + row(1) +
             '<p class="ph-small">Phones work in the menus too: J is OK, K is back, ❚❚ pauses. PS5 and Xbox controllers work as well: just connect them to this computer.</p></div></div>' : '') +
-          '<div class="menu">' + (P.on ? btn('PLAY', 'play') + btn('DISCONNECT PHONES', 'phonesOff') : btn('CONNECT PHONES', 'phonesOn')) + btn('BACK', 'back') + '</div>' + foot('Pick PLAY, then Versus for two phones, or vs CPU for one · Esc back') + '</div>';
+          '<div class="menu">' + (P.on ? btn('PLAY', 'play') + btn('DISCONNECT PHONES', 'phonesOff') : P.connecting ? '' : btn('TRY AGAIN', 'phonesOn')) + btn('BACK', 'back') + '</div>' + foot('Pick PLAY, then Versus for two phones, or vs CPU for one · Esc back') + '</div>';
       } else if (n === 'lobby') {
         const r = d.room, me = r ? r.you : null;
         if (d.searching) { // Quick Match queue

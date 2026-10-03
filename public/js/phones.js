@@ -9,22 +9,38 @@
   class Phones {
     constructor() { this.ws = null; this.code = null; this.slots = [null, null]; this.state = [null, null]; this.err = ''; this.onChange = null; }
 
-    get on() { return !!this.ws; }
-    start() {
+    get on() { return !!this.ws && this.opened; }
+    get connecting() { return !!this.ws && !this.opened; }
+    start(again) {
       if (this.ws) return;
       if (!(location.protocol === 'http:' || location.protocol === 'https:')) { this.err = 'Phone controllers need the online version of the game.'; this.changed(); return; }
-      this.code = 'PD' + Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, 'X');
-      this.slots = [null, null]; this.state = [null, null]; this.err = '';
+      if (!again || !this.code) this.code = 'PD' + Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, 'X');
+      if (!again) { this.slots = [null, null]; this.state = [null, null]; }
+      this.err = ''; this.opened = false;
       const u = new URL('ws', location.href); u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; u.search = '?room=' + this.code; u.hash = '';
       let ws; try { ws = this.ws = new WebSocket(u.toString()); } catch (e) { this.ws = null; this.err = 'Could not reach the game server.'; this.changed(); return; }
+      ws.onopen = () => { this.opened = true; this.tries = 0; this.changed(); };
       ws.onmessage = (e) => { if (e.data === 'pong') return; let m; try { m = JSON.parse(e.data); } catch (er) { return; } this.onMsg(m); };
-      ws.onclose = () => { if (this.ws === ws) { this.ws = null; this.slots = [null, null]; this.state = [null, null]; this.err = 'Lost the connection to the game server.'; this.changed(); } };
+      ws.onclose = () => {
+        if (this.ws !== ws) return;
+        this.ws = null;
+        if (!this.opened && !again) { // never connected: this copy of the game has no server (for example the preview link)
+          this.code = null; this.slots = [null, null]; this.state = [null, null];
+          this.err = 'Phone controllers need the online version of the game, at looktwicestudio.com/kumite. This copy cannot connect phones.';
+          this.changed(); return;
+        }
+        // dropped after working: reconnect with the same code; the phones keep their seats
+        this.tries = (this.tries || 0) + 1;
+        if (this.tries > 10) { this.code = null; this.slots = [null, null]; this.state = [null, null]; this.err = 'Lost the connection to the game server.'; this.changed(); return; }
+        this.err = 'Reconnecting…'; this.changed();
+        clearTimeout(this.retryT); this.retryT = setTimeout(() => this.start(true), 1500);
+      };
       ws.onerror = () => {};
       clearInterval(this.keep); this.keep = setInterval(() => { if (this.ws && this.ws.readyState === 1) this.ws.send('ping'); }, 20000);
       this.changed();
     }
     stop() {
-      clearInterval(this.keep);
+      clearInterval(this.keep); clearTimeout(this.retryT); this.tries = 0;
       if (this.ws) { const w = this.ws; this.ws = null; try { w.close(); } catch (e) { /* ignore */ } }
       this.slots = [null, null]; this.state = [null, null]; this.code = null; this.changed();
     }
@@ -34,7 +50,8 @@
       else if (m.t === 'hi') this.send({ t: 'slot', to: m.from, slot: this.slots.indexOf(m.from) });
       else if (m.t === 'pleave') { const i = this.slots.indexOf(m.id); if (i >= 0) { this.slots[i] = null; this.state[i] = null; this.changed(); } }
       else if (m.t === 'st') {
-        const i = this.slots.indexOf(m.from); if (i < 0) return;
+        let i = this.slots.indexOf(m.from);
+        if (i < 0) { this.assign(m.from); i = this.slots.indexOf(m.from); if (i < 0) return; } // a phone we lost track of (after a reconnect)
         const b = m.b || [];
         this.state[i] = { mx: +m.mx || 0, mz: +m.mz || 0, push: !!b[0], grab: !!b[1], dash: !!b[2], skill: !!b[3], start: !!b[4], at: performance.now() };
       }
