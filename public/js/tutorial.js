@@ -77,7 +77,7 @@
     L('GRAB', 'Get close and tap K to grab their belt. You are now locked together.', { ev: (e, p) => e.type === 'clinch' && e.w === p }),
     L('GRIP', 'Once you are locked together, the bar under you is the grip battle: the filled part is YOUR share of the grip. Holding toward them and driving them back wins grip; being driven back loses it. Let go of the stick and you keep your elbows tight, so theirs stops growing. Win it clearly and you get an INSIDE grip. A stronger grip means a stronger drive and throws that work; a weak grip makes throws fail. Press J or Enter.', { check: 'info' }),
     L('UP CLOSE', 'You have to close the distance to win, but once you are close, they can act too. Each answer beats one other: a push (J) beats a grab, knocking their reaching hands away. A grab (K) beats a brace, since someone planted cannot stop you taking the belt. A brace or parry (L) beats a push: holding L soaks it up, and tapping L right as their hand arrives (a parry) knocks it aside and leaves them stunned for a free attack. Do not stroll into their hand range and stand there: step in and act, or let them come to you, then pick the answer to what they like doing. Press J or Enter.', { check: 'info' }),
-    L('GRAB BREAK', 'They will grab you. Tap K the instant they grab (or grab at the same moment) to break free. You both bounce apart.', { dummy: 'grab', ev: (e, p) => e.type === 'grabTech' }),
+    L('GRAB BREAK', 'They will grab you. Tap K the instant they grab (or grab at the same moment) to break free. You both bounce apart. Watch the count over your head: tap K on NOW.', { cue: 'grab', dummy: 'grab', ev: (e, p) => e.type === 'grabTech' }),
     L('DRIVE', 'Grab them with K, then just hold toward them. You walk them backwards and out.', { pos: [[0.4, 0], [2.6, 0]], win: true }),
     L('THROW', 'Grab with K and KEEP HOLDING it. Point sideways: they swing round you. The longer you swing, the harder the throw, but the more time they have to escape. Let go of K to throw them.', { dummy: 'drive', ev: (e, p) => (e.type === 'throw' && e.w === p && e.name !== 'hikiotoshi' && !/gake/.test(e.name)) || (e.type === 'decided' && e.winner === p && /nage|katasukashi/.test(e.km)) }),
     L('SPIN', 'They lean into you. Grab and keep holding K, then point behind you: they swing all the way round. Let go to send them flying.', { dummy: 'drive', ev: (e, p) => (e.type === 'throw' && e.w === p && (e.name === 'katasukashi' || e.swept > 2.2)) || (e.type === 'decided' && e.winner === p && e.km === 'katasukashi') }),
@@ -96,7 +96,7 @@
     L('STAY IN', 'Stumble at the edge and you teeter on the straw, arms windmilling. Hold toward the MIDDLE of the ring to win your balance back. Do nothing, or lean out, and you fall.', { setup: 'teeter', pos: [[-(S.RING_R - 0.35), 0], [1.6, 0]], ev: (e, p) => e.type === 'teeterSave' && e.w === p }),
     L('SLAP DOWN', 'As they charge in, hold away from them and tap J. You step back and slap them down with their own speed. It also works on someone flurrying at you. Miss and you are left open.', { dummy: 'charge', pos: [[-1.2, 0], [2.6, 0]], ev: (e, p) => e.type === 'hit' && e.w === p && e.kind === 'slap' }),
     L('BRACE', 'They will charge again. Hold L (no direction) to brace and take the hit. Time it just before impact for a perfect STOP.', { dummy: 'charge', pos: [[-1.2, 0], [2.6, 0]], ev: (e, p) => (e.type === 'braceCounter' && e.w === p) || (e.type === 'impact' && e.t === p && e.braced) }),
-    L('PARRY', 'They will slap at you. Tap L (no direction) right as their hand arrives. Their push is knocked aside and does nothing, and THEY are stunned and lose balance for a moment: a free push or grab for you. Too early or too late and you just take the hit.', { dummy: 'palm', ev: (e, p) => e.type === 'parry' && e.w === p }),
+    L('PARRY', 'They will slap at you. Tap L (no direction) right as their hand arrives. Their push is knocked aside and does nothing, and THEY are stunned and lose balance for a moment: a free push or grab for you. Too early or too late and you just take the hit. Watch the count over your head and tap L on NOW.', { cue: 'parry', dummy: 'palm', ev: (e, p) => e.type === 'parry' && e.w === p }),
     L('CATCH', 'One more charge. Tap K right as they crash into you to catch them and spin them away.', { dummy: 'charge', pos: [[-1.2, 0], [2.6, 0]], ev: (e, p) => e.type === 'catch' && e.w === p }),
     L('FACE-OFF', 'Show off first: J clap, K stomp (W A S D more taunts). Then hold L to crouch and KEEP holding. When you hear the wooden clappers and PRESS J! appears, press J to charge. Tap J once more while charging and you slap their face as you hit (harite): they are dazed for a moment. Charge before the call and it is a false start (matta): the face-off restarts, and a second one makes you start late.', { setup: 'faceoff', check: 'faceoff' }),
     L('GACHA MODE', 'Two ways to play: PURE (just sumo) or GACHA, picked with Tab on character select. In Gacha, both of you draw a random one-shot skill at the start of every round. Use it or lose it. Try some: Space uses it, G draws another. Press Enter when you are done.', { setup: 'gacha', check: 'gacha' }),
@@ -135,6 +135,22 @@
       g.ui.hideKimarite();
       this.render();
     }
+    // count down to the exact moment over your head: 3, 2, 1 (ticks), NOW (the clappers)
+    countIn(cue) {
+      const d = this.g.dummy, me = d.me, p = this.p; if (!me) return;
+      const gap = Math.hypot(p.x - me.x, p.z - me.z) - me.r - p.r;
+      let toNow = null;
+      if (cue === 'parry' && gap < 0.45 && me.spd < 1.5 && !me.clinch) toNow = 1.1 - (d.t % 1.1);  // their hand arrives on the beat
+      if (cue === 'grab' && gap <= 0.42 && (d.wait || 0) >= 0 && !me.clinch) toNow = 0.9 - d.wait; // they reach for you on the beat
+      if (cue === 'grab' && (d.wait || 0) < -0.4 && this.beat !== null && this.beat !== 0) toNow = 0; // they just reached (their timer resets as they grab): NOW
+      if (toNow === null || toNow > 0.85) { this.beat = null; return; }
+      const idx = toNow <= 0.03 ? 0 : Math.ceil(toNow / 0.25);
+      if (idx > 3 || idx === this.beat) return;
+      this.beat = idx;
+      const s = this.g.scr(p.x, p.z, 2.6), A = this.g.audio;
+      this.g.ui.callout(idx === 0 ? 'NOW!' : String(idx), s.x, s.y, idx === 0 ? 'big' : 'gold');
+      if (idx === 0) A.hyoshigi(); else A.tick();
+    }
     render() {
       const Ls = LESSONS[this.i];
       if (!Ls) return;
@@ -171,6 +187,7 @@
     update(dt) {
       const Ls = LESSONS[this.i]; if (!Ls) return;
       const p = this.p, m = this.g.match;
+      if (Ls.cue && !this.done && m.phase === 'fight') this.countIn(Ls.cue);
       if (Ls.check === 'marker' && !this.done && Math.hypot(p.x - this.mk[0], p.z - this.mk[1]) < 0.6) this.complete();
       if (Ls.check === 'faceoff' && this.flags.clap && this.flags.stomp && (p.crouchT || 0) > 0.4 && !this.flags.go) {
         this.flags.go = true; m.goAt = m.phaseT + 0.8 + Math.random() * 0.8;

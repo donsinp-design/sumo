@@ -80,6 +80,8 @@
       this.tone(t, 'triangle', 180, 80, 0.2, 0.2);
       this.noiseHit(t, 'lowpass', 300, 0.6, 0.5, 0.25);
     }
+    // a soft wood tick for counting in
+    tick() { if (!this.ok) return; const t = this.ctx.currentTime; this.noiseHit(t, 'bandpass', 1900, 12, 0.35, 0.04); }
     // hyoshigi: one sharp strike of the wooden clappers, right on the start call
     hyoshigi() {
       if (!this.ok) return; const t = this.ctx.currentTime;
