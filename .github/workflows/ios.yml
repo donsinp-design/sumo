@@ -58,9 +58,9 @@ jobs:
             sleep 30
             run xcrun simctl io "$id" screenshot "shots/$kind.png"
             # a small copy as a run note, so it can be checked without downloading
-            sips -Z 300 -s format jpeg -s formatOptions 35 "shots/$kind.png" --out "shots/$kind-small.jpg" >/dev/null 2>&1
+            sips -Z 260 -s format jpeg -s formatOptions 30 "shots/$kind.png" --out "shots/$kind-small.jpg" >/dev/null 2>&1
             b=$(base64 -i "shots/$kind-small.jpg" | tr -d '\n'); n=0
-            while [ -n "$b" ] && [ $n -lt 8 ]; do echo "::notice title=shot-$kind-$n::${b:0:3900}"; b=${b:3900}; n=$((n+1)); done
+            while [ -n "$b" ] && [ $n -lt 5 ]; do echo "::notice title=shot-$kind-$n::${b:0:3900}"; b=${b:3900}; n=$((n+1)); done
             run xcrun simctl shutdown "$id"
           done
           ls shots/*.png >/dev/null 2>&1 || { echo "::error::no screenshots taken"; exit 1; }
