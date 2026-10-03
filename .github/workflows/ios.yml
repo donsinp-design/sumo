@@ -40,6 +40,9 @@ jobs:
           note() { echo "::warning::$1"; }   # shows up on the run page as a note
           run() { out=$("$@" 2>&1); c=$?; [ $c -ne 0 ] && note "$* -> exit $c: $(echo "$out" | tail -n 3 | tr '\n' ' ')"; return 0; }
           xcrun simctl list runtimes | tail -n 5
+          APP=build/Build/Products/Debug-iphonesimulator/App.app
+          note "app contents: $(ls $APP | head -n 12 | tr '\n' ' ')"
+          note "app plist: $(plutil -p $APP/Info.plist 2>&1 | grep -E 'CFBundle(Identifier|Executable|Name)' | tr '\n' ' ')"
           for kind in iPhone iPad; do
             id=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];r=[(k,x) for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('$kind')];r.sort(key=lambda t:t[0]);print(r[-1][1]['udid']+' '+r[-1][1]['name'] if r else '')")
             note "$kind simulator: ${id:-none found}"; [ -z "$id" ] && continue
