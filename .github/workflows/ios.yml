@@ -35,6 +35,7 @@ jobs:
       - name: Launch on iPhone and iPad, take screenshots
         shell: bash
         run: |
+          set +e
           mkdir -p shots
           note() { echo "::warning::$1"; }   # shows up on the run page as a note
           run() { out=$("$@" 2>&1); c=$?; [ $c -ne 0 ] && note "$* -> exit $c: $(echo "$out" | tail -n 3 | tr '\n' ' ')"; return 0; }
