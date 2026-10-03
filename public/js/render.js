@@ -1319,6 +1319,43 @@
       }
     }
 
+    // ---- anime fire pieces (made once, shared)
+    flameTextures() {
+      if (this._flameTex) return this._flameTex;
+      const tongue = (g, w, h, lean, sc) => { // a flame tongue rooted at the bottom middle
+        const cx = w / 2, b = h * 0.97, t = h * (1 - sc) + h * 0.03, hw = w * 0.42 * sc;
+        g.beginPath(); g.moveTo(cx, b);
+        g.bezierCurveTo(cx - hw * 1.15, b - h * 0.06, cx - hw * 1.05, b - (b - t) * 0.55, cx - hw * 0.2 + lean * 0.4, b - (b - t) * 0.78);
+        g.quadraticCurveTo(cx + lean * 0.6, b - (b - t) * 0.86, cx + lean, t);
+        g.quadraticCurveTo(cx + hw * 0.55 + lean * 0.3, b - (b - t) * 0.7, cx + hw * 0.45, b - (b - t) * 0.55);
+        g.bezierCurveTo(cx + hw * 1.2, b - (b - t) * 0.35, cx + hw * 1.1, b - h * 0.05, cx, b);
+        g.closePath();
+      };
+      this._flameTex = [-18, 6, 22].map((lean) => canvasTex(128, 256, (g) => {
+        g.lineJoin = 'round';
+        tongue(g, 128, 256, lean, 1); g.fillStyle = '#d8261a'; g.fill(); g.lineWidth = 7; g.strokeStyle = '#2a0806'; g.stroke(); // ink outline
+        tongue(g, 128, 256, lean * 0.8, 0.74); g.fillStyle = '#ff7a1c'; g.fill();
+        tongue(g, 128, 256, lean * 0.6, 0.48); g.fillStyle = '#ffd34a'; g.fill();
+        tongue(g, 128, 256, lean * 0.4, 0.24); g.fillStyle = '#fff6d2'; g.fill();
+      }));
+      return this._flameTex;
+    }
+    scorchTexture() {
+      if (this._scorch) return this._scorch;
+      this._scorch = canvasTex(256, 256, (g) => {
+        const c = 128, gr = g.createRadialGradient(c, c, 10, c, c, 126);
+        gr.addColorStop(0, 'rgba(26,8,4,0.85)'); gr.addColorStop(0.7, 'rgba(40,12,4,0.7)'); gr.addColorStop(0.86, 'rgba(255,110,20,0.75)'); gr.addColorStop(1, 'rgba(255,110,20,0)');
+        g.fillStyle = gr; g.beginPath(); g.arc(c, c, 126, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = 'rgba(255,150,40,0.8)'; g.lineWidth = 2.5; // glowing cracks
+        for (let k = 0; k < 11; k++) { let a = k / 11 * Math.PI * 2, r = 20; g.beginPath(); g.moveTo(c + Math.cos(a) * r, c + Math.sin(a) * r); while (r < 104) { r += 12 + Math.random() * 10; a += (Math.random() - 0.5) * 0.5; g.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r); } g.stroke(); }
+      });
+      return this._scorch;
+    }
+    glowTexture() {
+      if (this._glow) return this._glow;
+      this._glow = canvasTex(128, 128, (g) => { const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); });
+      return this._glow;
+    }
     // ---- gacha skill objects
     clearObjs() { if (this.objMeshes) for (const [, me] of this.objMeshes) { this.scene.remove(me); if (me.userData.views) for (const v of me.userData.views) v.dispose(this.scene); } this.objMeshes = new Map(); }
     cloudTex() {
@@ -1361,20 +1398,35 @@
         const mat = new THREE.MeshBasicMaterial({ color: 0xeefaff }), glow = new THREE.MeshBasicMaterial({ color: 0x6ac8ff, transparent: true, opacity: 0.45, depthWrite: false });
         me.userData.boltMats = [mat, glow];
       } else if (ob.type === 'molotov') {
+        // anime fire: ink-outlined flame tongues in red / orange / yellow bands, rising embers, a scorched glowing floor
         me = new THREE.Group();
+        const FT = this.flameTextures();
         const bottle = new THREE.Group(); me.add(bottle); me.userData.bottle = bottle;
-        const glass = mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.3, 10), toon(0x3e8a4a, { shade: 0x1a4a24, spec: 0.8 }), 0.012); bottle.add(glass);
-        const neck = mesh(new THREE.CylinderGeometry(0.04, 0.07, 0.16, 8), toon(0x3e8a4a, { shade: 0x1a4a24 }), 0.01); neck.position.y = 0.23; bottle.add(neck);
-        const rag = mesh(new THREE.ConeGeometry(0.05, 0.14, 6), toon(0xf0e6d0), 0.008); rag.position.y = 0.36; bottle.add(rag);
-        const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.fx.sparks[0].sp.material.map, color: 0xff9a2a, depthTest: false })); flame.scale.setScalar(0.35); flame.position.y = 0.48; flame.renderOrder = 11; bottle.add(flame);
-        // the fire patch: a scorched glow and a ring of flickering flames
+        const glassM = toon(0x2f9a52, { shade: 0x0f4a24, spec: 0.9 });
+        const glass = mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.32, 14), glassM, 0.014); bottle.add(glass);
+        const shoulder = mesh(new THREE.SphereGeometry(0.12, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), glassM, 0.012); shoulder.position.y = 0.16; bottle.add(shoulder);
+        const neck = mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.16, 10), glassM, 0.01); neck.position.y = 0.3; bottle.add(neck);
+        const label = mesh(new THREE.CylinderGeometry(0.123, 0.123, 0.12, 14, 1, true), toon(0xf2e6c8, { shade: 0xb0a080 }), 0); bottle.add(label);
+        const rag = mesh(new THREE.ConeGeometry(0.07, 0.2, 7), toon(0xe8dcc0, { shade: 0x9a8a6a }), 0.01); rag.position.y = 0.46; rag.rotation.z = 0.3; bottle.add(rag);
+        const tf = new THREE.Sprite(new THREE.SpriteMaterial({ map: FT[0], transparent: true, depthWrite: false })); tf.center.set(0.5, 0.05); tf.scale.set(0.32, 0.55, 1); tf.position.y = 0.52; tf.renderOrder = 11; bottle.add(tf); me.userData.torch = tf;
+        // the fire patch
         const patch = new THREE.Group(); me.add(patch); me.userData.patch = patch;
-        const glow = new THREE.Mesh(new THREE.CircleGeometry(1.4, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a0d04, transparent: true, opacity: 0.55, depthWrite: false })); // scorched floor glow.position.y = 0.03; patch.add(glow);
+        const scorch = new THREE.Mesh(new THREE.CircleGeometry(1.75, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: this.scorchTexture(), transparent: true, depthWrite: false }));
+        scorch.position.y = 0.025; patch.add(scorch);
+        const glow = new THREE.Mesh(new THREE.CircleGeometry(2.2, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: this.glowTexture(), color: 0xff7a1a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+        glow.position.y = 0.04; patch.add(glow); me.userData.glow = glow;
         me.userData.flames = [];
-        for (let k = 0; k < 20; k++) {
-          const a = k / 20 * Math.PI * 2 + Math.random() * 0.3, r = 0.3 + Math.random() * 1.0;
-          const fl = new THREE.Mesh(new THREE.ConeGeometry(0.2 + Math.random() * 0.14, 1.0, 7, 1, true), new THREE.MeshBasicMaterial({ color: [0xe2321a, 0xff7a1a, 0xffc030][k % 3], transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
-          fl.position.set(Math.cos(a) * r, 0.35, Math.sin(a) * r); fl.userData.ph = Math.random() * 6; patch.add(fl); me.userData.flames.push(fl);
+        for (let k = 0; k < 22; k++) {
+          const a = k * 2.399 + Math.random() * 0.4, r = Math.sqrt((k + 0.5) / 22) * 1.3; // spread evenly over the patch
+          const fl = new THREE.Sprite(new THREE.SpriteMaterial({ map: FT[k % FT.length], transparent: true, depthWrite: false }));
+          fl.center.set(0.5, 0.04);
+          const big = 1 - r / 1.6; fl.userData = { x: Math.cos(a) * r, z: Math.sin(a) * r, w: 0.55 + 0.4 * big + Math.random() * 0.15, h: 1.0 + 1.2 * big + Math.random() * 0.35, ph: Math.random() * 6, v: k % FT.length };
+          fl.position.set(fl.userData.x, 0.02, fl.userData.z); fl.renderOrder = 6; patch.add(fl); me.userData.flames.push(fl);
+        }
+        me.userData.embers = [];
+        for (let k = 0; k < 16; k++) {
+          const e = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.fx.sparks[0].sp.material.map, color: k % 2 ? 0xffd25a : 0xff8a2a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+          e.userData = { a: Math.random() * 6.28, r: Math.random() * 1.2, ph: Math.random(), sp: 0.7 + Math.random() * 0.6 }; e.renderOrder = 12; patch.add(e); me.userData.embers.push(e);
         }
       } else if (ob.type === 'konbini') {
         me = new THREE.Group();
@@ -1397,12 +1449,31 @@
         const spark = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.fx.sparks[0].sp.material.map, color: 0xffc040, depthTest: false })); spark.scale.setScalar(0.3); spark.position.y = 0.32; spark.renderOrder = 11; me.add(spark);
         me.userData.body = b;
       } else if (ob.type === 'claw') {
+        // an arcade crane claw: chrome hub with a candy band and a blinking lamp, three jointed hooked fingers,
+        // a shiny cable, and a pulsing target on the floor so you can see where it will drop
         me = new THREE.Group();
-        const steel = toon(0xb8bec8, { shade: 0x5a606c, spec: 0.8 });
-        const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1, 5), new THREE.MeshBasicMaterial({ color: 0x222222 })); me.add(cable); me.userData.cable = cable;
-        const head = new THREE.Group(); me.add(head); me.userData.head = head;
-        const hub = mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.3, 12), steel, 0.015); head.add(hub);
-        me.userData.prongs = [0, 1, 2].map((k) => { const pg = new THREE.Group(); pg.rotation.y = k * 2.094; head.add(pg); const p = mesh(new THREE.BoxGeometry(0.06, 0.7, 0.08), steel, 0.01); p.position.set(0.25, -0.35, 0); pg.add(p); return pg; });
+        const chrome = toon(0xdfe5ee, { shade: 0x5d6574, spec: 1 }), band = toon(0xff4fa3, { shade: 0x9a1e5c, spec: 0.6 });
+        const cable = mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 8), toon(0xc8ced8, { shade: 0x4a505c, spec: 1 }), 0); me.add(cable); me.userData.cable = cable;
+        const head = new THREE.Group(); head.scale.setScalar(1.7); me.add(head); me.userData.head = head;
+        const cap = mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.22, 20), chrome, 0.016); cap.position.y = 0.12; head.add(cap);
+        const ring = mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.09, 20), band, 0.014); head.add(ring);
+        const base = mesh(new THREE.CylinderGeometry(0.3, 0.16, 0.2, 20), chrome, 0.016); base.position.y = -0.14; head.add(base);
+        const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffd23a })); lamp.position.y = 0.27; head.add(lamp); me.userData.lamp = lamp;
+        me.userData.prongs = [0, 1, 2].map((k) => {
+          const pg = new THREE.Group(); pg.rotation.y = k * 2.094 + 0.5; pg.position.y = -0.2; head.add(pg);
+          const knuckle = mesh(new THREE.SphereGeometry(0.075, 12, 8), chrome, 0.012); knuckle.position.set(0.2, -0.02, 0); pg.add(knuckle); // children[0]: sits on the outside
+          const upper = mesh(new THREE.BoxGeometry(0.075, 0.5, 0.1), chrome, 0.012); upper.position.set(0.29, -0.25, 0); upper.rotation.z = 0.28; pg.add(upper);
+          const joint = mesh(new THREE.SphereGeometry(0.06, 10, 8), band, 0.01); joint.position.set(0.36, -0.49, 0); pg.add(joint);
+          const lower = mesh(new THREE.BoxGeometry(0.07, 0.4, 0.09), chrome, 0.012); lower.position.set(0.27, -0.66, 0); lower.rotation.z = -0.62; pg.add(lower);
+          const hook = mesh(new THREE.ConeGeometry(0.06, 0.16, 8), chrome, 0.01); hook.position.set(0.15, -0.82, 0); hook.rotation.z = -2.1; pg.add(hook);
+          return pg;
+        });
+        const tgt = new THREE.Group(); me.add(tgt); me.userData.tgt = tgt; tgt.position.y = 0.03;
+        const r1 = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.16, 56).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff3b5c, transparent: true, opacity: 0.85, depthWrite: false }));
+        const r2 = new THREE.Mesh(new THREE.RingGeometry(0.34, 0.42, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff3b5c, transparent: true, opacity: 0.85, depthWrite: false }));
+        tgt.add(r1); tgt.add(r2);
+        for (let k = 0; k < 4; k++) { const tick = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.09).rotateX(-Math.PI / 2), r1.material); tick.rotation.y = -k * Math.PI / 2; tick.position.set(Math.cos(k * Math.PI / 2) * 1.36, 0, Math.sin(k * Math.PI / 2) * 1.36); tgt.add(tick); }
+        me.userData.tgtMat = r1.material;
       } else if (ob.type === 'doors') {
         me = new THREE.Group();
         const red = toon(0xc2302a, { shade: 0x6a1410 }), dark = new THREE.MeshBasicMaterial({ color: 0x0a0408 });
@@ -1544,13 +1615,28 @@
             bolt.visible = Math.random() > 0.15; me.userData.boltMats[1].opacity = 0.45 * ob.flash;
           } else bolt.visible = false;
         } else if (ob.type === 'molotov') {
-          me.userData.bottle.visible = !ob.landed; me.userData.patch.visible = ob.landed;
-          if (!ob.landed) { me.userData.bottle.position.set(ob.x, ob.y + 0.2, ob.z); me.userData.bottle.rotation.z += dt * 14; }
-          else {
-            const g = Math.min(1, (ob.dur - ob.t) / 0.5);
-            me.userData.patch.position.set(ob.x, 0, ob.z); me.userData.patch.scale.setScalar(Math.max(0.01, g));
-            for (const fl of me.userData.flames) { const k = 0.7 + 0.5 * Math.abs(Math.sin(this.time * 9 + fl.userData.ph)); fl.scale.set(1, k, 1); fl.position.y = 0.5 * k; }
-            if (Math.random() < 0.4) this.fx.dust(ob.x + (Math.random() - 0.5) * 2, 0.8, ob.z + (Math.random() - 0.5) * 2, 1, 0.05, 0.8, 0.2);
+          const U = me.userData, FT = this.flameTextures();
+          U.bottle.visible = !ob.landed; U.patch.visible = ob.landed;
+          if (!ob.landed) {
+            U.bottle.position.set(ob.x, ob.y + 0.2, ob.z); U.bottle.rotation.z += dt * 14; U.bottle.rotation.x += dt * 5;
+            U.torch.material.map = FT[Math.floor(this.time * 14) % FT.length]; U.torch.scale.set(0.32, 0.5 + 0.15 * Math.sin(this.time * 30), 1);
+            if (Math.random() < 0.7) this.fx.spark(ob.x, ob.y + 0.5, ob.z, 0.5);
+          } else {
+            const life = Math.min(1, ob.t / 0.18) * Math.min(1, (ob.dur - ob.t) / 0.6);
+            U.patch.position.set(ob.x, 0, ob.z);
+            U.glow.material.opacity = (0.55 + 0.25 * Math.sin(this.time * 11)) * life;
+            for (const fl of U.flames) {
+              const d = fl.userData, k = 0.78 + 0.32 * Math.abs(Math.sin(this.time * 8.5 + d.ph)) + 0.1 * Math.sin(this.time * 23 + d.ph * 3);
+              fl.scale.set(d.w * life * (0.9 + 0.1 * Math.sin(this.time * 13 + d.ph)), d.h * k * life + 0.01, 1);
+              fl.material.rotation = Math.sin(this.time * 5 + d.ph) * 0.14; // flames lean and sway
+              if (Math.random() < 0.08) { d.v = (d.v + 1) % FT.length; fl.material.map = FT[d.v]; }
+            }
+            for (const e of U.embers) {
+              const d = e.userData, f = (this.time * 0.6 * d.sp + d.ph) % 1;
+              e.position.set(Math.cos(d.a + f * 2) * (d.r + f * 0.3), 0.3 + f * 2.4, Math.sin(d.a + f * 2) * (d.r + f * 0.3));
+              e.scale.setScalar(0.12 * (1 - f) * life + 0.001); e.material.opacity = (1 - f) * life;
+            }
+            if (Math.random() < 0.25) this.fx.dust(ob.x + (Math.random() - 0.5) * 2, 1.4, ob.z + (Math.random() - 0.5) * 2, 1, 0.05, 0.9, 0.35); // smoke
           }
         } else if (ob.type === 'konbini') {
           const sh = ob.shake * 0.08;
@@ -1568,11 +1654,16 @@
           me.visible = !H.swallowed;
         } else if (ob.type === 'claw') {
           me.position.set(ob.x, 0, ob.z);
-          const top = 9, hy = ob.h + 1.75;
-          me.userData.head.position.y = hy;
-          me.userData.cable.position.y = (top + hy) / 2; me.userData.cable.scale.y = top - hy;
-          const open = ob.mode === 'hunt' || ob.mode === 'drop' || ob.mode === 'release' ? 0.5 : 0.05;
-          for (const p of me.userData.prongs) p.rotation.z += ((p.children[0].position.x > 0 ? -open : open) - p.rotation.z) * Math.min(1, dt * 10);
+          const U = me.userData, top = 9, hy = ob.h + 1.75;
+          U.head.position.y = hy; U.head.rotation.y += dt * (ob.mode === 'hunt' ? 1.2 : 0.3);
+          U.cable.position.y = (top + hy) / 2; U.cable.scale.y = top - hy;
+          const open = ob.mode === 'hunt' || ob.mode === 'drop' || ob.mode === 'release' ? 0.55 : -0.05;
+          for (const p of U.prongs) p.rotation.z += ((p.children[0].position.x > 0 ? -open : open) - p.rotation.z) * Math.min(1, dt * 10);
+          const hunting = ob.mode === 'hunt' || ob.mode === 'drop';
+          U.lamp.material.color.setHex(Math.sin(this.time * (hunting ? 14 : 5)) > 0 ? 0xffd23a : 0xff4fa3);
+          U.tgt.visible = ob.mode !== 'carry' && ob.mode !== 'release';
+          U.tgtMat.color.setHex(ob.mode === 'drop' ? 0xffd23a : 0xff3b5c);
+          const pul = 1 + 0.08 * Math.sin(this.time * 9); U.tgt.scale.set(pul, 1, pul); U.tgt.rotation.y = this.time * 0.8;
         } else if (ob.type === 'doors') {
           const D = [[Math.cos(ob.a) * (R - 0.9), Math.sin(ob.a) * (R - 0.9)], [-Math.cos(ob.a) * (R - 0.9), -Math.sin(ob.a) * (R - 0.9)]];
           const g = Math.min(1, ob.t / 0.3) * Math.min(1, (ob.dur - ob.t) / 0.3);
