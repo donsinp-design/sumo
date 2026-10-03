@@ -332,7 +332,16 @@
           '<div class="menu">' + btn('QUICK MATCH', 'quickMatch') + btn('CREATE ROOM', 'createRoom') + btn('JOIN ROOM', 'joinRoom') + btn('BACK', 'back') + '</div>' + foot('Pure rules online · Esc back') + '</div>';
       } else if (n === 'lobby') {
         const r = d.room, me = r ? r.you : null;
-        h = '<div class="lobby">' + (/^QM\d+$/.test(d.code || '') ? '<div class="lb-code"><span>ONLINE</span>QUICK MATCH</div>' : '<div class="lb-code"><span>ROOM CODE</span>' + (d.code || '…') + '</div>');
+        if (d.searching) { // Quick Match queue
+          const s = d.me;
+          h = '<div class="lobby"><div class="lb-code"><span>ONLINE</span>QUICK MATCH</div>' +
+            '<div class="lb-wait">Looking for an opponent at your level…</div>' +
+            (s ? '<div class="lb-q">Rating <b>' + s.r + '</b> · ' + s.w + ' wins · ' + s.l + ' losses · ' + s.g + ' games' + (s.g < 10 ? ' · still placing you (first 10 games)' : '') + '</div>' : '') +
+            '<div class="lb-q">If nobody close to your rating is around, the search widens. After 30 seconds you face whoever is waiting.</div>' +
+            '<div class="menu">' + btn('LEAVE', 'leaveRoom') + '</div></div>';
+          this.screen.className = 'show ' + n; this.screen.innerHTML = h; return;
+        }
+        h = '<div class="lobby">' + (/^QM[A-Z0-9]+$/.test(d.code || '') ? '<div class="lb-code"><span>ONLINE</span>QUICK MATCH</div>' : '<div class="lb-code"><span>ROOM CODE</span>' + (d.code || '…') + '</div>');
         if (!r) h += '<div class="lb-wait">Connecting…</div>';
         else {
           const nm = (x) => x ? x.name + (x.id === me ? ' (YOU)' : '') + (x.id === r.host ? ' ★' : '') : '<em>waiting…</em>';

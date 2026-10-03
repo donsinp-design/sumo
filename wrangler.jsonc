@@ -14,7 +14,7 @@
   ],
   "vars": { "BASE_PATH": "/kumite" },
 
-  // One Durable Object per online room
-  "durable_objects": { "bindings": [ { "name": "ROOMS", "class_name": "Room" } ] },
-  "migrations": [ { "tag": "v1", "new_sqlite_classes": ["Room"] } ]
+  // One Durable Object per online room, plus one matchmaker that keeps Quick Match ratings
+  "durable_objects": { "bindings": [ { "name": "ROOMS", "class_name": "Room" }, { "name": "MM", "class_name": "Matchmaker" } ] },
+  "migrations": [ { "tag": "v1", "new_sqlite_classes": ["Room"] }, { "tag": "v2", "new_sqlite_classes": ["Matchmaker"] } ]
 }

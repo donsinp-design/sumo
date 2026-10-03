@@ -51,7 +51,7 @@
       try { ws = this.ws = new WebSocket(this.url() + '?room=' + encodeURIComponent(code)); }
       catch (e) { this.g.onNetClosed('Could not reach the game server.'); return; }
       const g = this.g;
-      ws.onopen = () => this.send({ t: 'hello', name: S.profile.names[0], arch: g.sel.c1 || 0, lo: S.profile.loadout() });
+      ws.onopen = () => this.send({ t: 'hello', name: S.profile.names[0], arch: g.sel.c1 || 0, lo: S.profile.loadout(), pid: S.profile.pid });
       ws.onmessage = (e) => {
         if (e.data === 'pong') { if (!this.pingWait) return; this.pingWait = false; this.rtts.push(performance.now() - this.pingAt); if (this.rtts.length > 12) this.rtts.shift(); this.rtt = this.rtts[this.rtts.length - 1]; return; }
         let m; try { m = JSON.parse(e.data); } catch (er) { return; } this.onMsg(m);
@@ -59,6 +59,22 @@
       ws.onclose = () => { if (this.ws === ws) { this.ws = null; this.room = null; g.onNetClosed('Disconnected from the room.'); } };
       ws.onerror = () => {};
     }
+    // Quick Match: wait in the matchmaker queue until it pairs us with a similar player
+    findMatch() {
+      this.stopFind();
+      const u = new URL('mm', location.href); u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; u.search = ''; u.hash = '';
+      let ws; try { ws = this.mm = new WebSocket(u.toString()); } catch (e) { this.g.onNetClosed('Could not reach the game server.'); return; }
+      const g = this.g;
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'find', pid: S.profile.pid }));
+      ws.onmessage = (e) => {
+        let m; try { m = JSON.parse(e.data); } catch (er) { return; }
+        if (m.t === 'you') { this.me = m; g.onQueueStats(m); }
+        else if (m.t === 'match') { this.stopFind(); g.onMatchFound(m.code); }
+      };
+      ws.onclose = () => { if (this.mm === ws) { this.mm = null; g.onNetClosed('Lost the connection while looking for a match.'); } };
+      ws.onerror = () => {};
+    }
+    stopFind() { if (this.mm) { const w = this.mm; this.mm = null; try { w.close(); } catch (e) { /* ignore */ } } }
     close() { if (this.ws) { const w = this.ws; this.ws = null; try { w.close(); } catch (e) { /* ignore */ } } this.room = null; }
     get open() { return !!this.ws && this.ws.readyState === 1; }
     send(m) { if (this.open) this.ws.send(JSON.stringify(m)); }
@@ -74,7 +90,7 @@
         case 'need': g.onNetNeed(m); break;
         case 'snap': g.onNetSnap(m); break;
         case 'abort': g.onNetAbort(m); break;
-        case 'full': g.onQuickFull(); break;
+        case 'full': g.onQuickFull(); break; // the matched room was taken: queue again
       }
     }
   }

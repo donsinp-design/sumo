@@ -117,13 +117,16 @@
         if (d.binds) this.binds = d.binds;
         this.streak = d.streak || 0; this.bestStreak = d.bestStreak || 0; if (d.stage) this.stage = d.stage;
         if (d.landed) this.landed = d.landed;
+        if (d.pid) this.pid = d.pid;
         // Tuna was taken out of the shop: refund anyone who bought it
         if (this.owned.th_fish) { delete this.owned.th_fish; this.yen += 250000; }
         if (this.eq.throw === 'th_fish') this.eq.throw = DEF_EQ.throw;
       } catch (e) { /* storage blocked */ }
       for (const c of S.CAT) for (const it of c.items) if (it.price === 0) this.owned[it.id] = true;
+      // anonymous id for online ratings (no account needed); kept in this browser
+      if (!this.pid) { this.pid = 'p' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36); this.save(); }
     }
-    save() { try { localStorage.setItem(K, JSON.stringify({ yen: this.yen, owned: this.owned, eq: this.eq, names: this.names, rules: this.rules, landed: this.landed, bet: this.bet, binds: this.binds, streak: this.streak, bestStreak: this.bestStreak, stage: this.stage })); } catch (e) { /* ignore */ } }
+    save() { try { localStorage.setItem(K, JSON.stringify({ yen: this.yen, owned: this.owned, eq: this.eq, names: this.names, rules: this.rules, landed: this.landed, bet: this.bet, binds: this.binds, streak: this.streak, bestStreak: this.bestStreak, stage: this.stage, pid: this.pid })); } catch (e) { /* ignore */ } }
     has(id) { return !!this.owned[id]; }
     buy(id) {
       const it = S.item(id); if (!it || this.has(id) || this.yen < it.price) return false;

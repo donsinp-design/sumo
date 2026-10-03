@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RoomCore } from './room-core.mjs';
+import { MatchCore } from './match-core.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const PORT = +(process.argv[2] || process.env.PORT || 8732);
@@ -14,7 +15,14 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/jav
   '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 
 const rooms = new Map();
-const roomFor = (code) => { if (!rooms.has(code)) rooms.set(code, new RoomCore(code)); return rooms.get(code); };
+// Quick Match queue and ratings (kept in memory here; on Cloudflare they are stored for good)
+const ratings = new Map();
+const mm = new MatchCore({ get: async (k) => ratings.get(k), put: async (k, v) => { ratings.set(k, v); } });
+setInterval(() => mm.tryMatch(), 2000); // the allowed rating gap grows while people wait
+const roomFor = (code) => {
+  if (!rooms.has(code)) { const r = new RoomCore(code); r.onResult = (w, l) => mm.result(w, l); rooms.set(code, r); }
+  return rooms.get(code);
+};
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -38,13 +46,14 @@ const server = http.createServer((req, res) => {
 // ---- minimal WebSocket (RFC 6455): text frames, ping/pong, close
 server.on('upgrade', (req, sock) => {
   const url = new URL(req.url, 'http://x');
-  if (!url.pathname.endsWith('/ws')) { sock.destroy(); return; }
-  const code = (url.searchParams.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-  if (!code) { sock.destroy(); return; }
+  const isMM = url.pathname.endsWith('/mm');
+  if (!url.pathname.endsWith('/ws') && !isMM) { sock.destroy(); return; }
+  const code = isMM ? '' : (url.searchParams.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  if (!code && !isMM) { sock.destroy(); return; }
   const accept = crypto.createHash('sha1').update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
   sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
   sock.setNoDelay(true);
-  const room = roomFor(code);
+  const room = isMM ? mm : roomFor(code);
   const LAG = +(process.env.LAG || 0);
   const conn = {
     send(str) { if (LAG) { setTimeout(() => conn.sendNow(str), LAG + Math.random() * LAG * 0.3); return; } conn.sendNow(str); },
@@ -59,7 +68,7 @@ server.on('upgrade', (req, sock) => {
   };
   room.join(conn);
   let buf = Buffer.alloc(0), closed = false;
-  const close = () => { if (closed) return; closed = true; room.leave(conn); if (!room.members.size) rooms.delete(code); sock.destroy(); };
+  const close = () => { if (closed) return; closed = true; room.leave(conn); if (room.members && !room.members.size) rooms.delete(code); sock.destroy(); };
   sock.on('data', (d) => {
     buf = Buffer.concat([buf, d]);
     while (buf.length >= 2) {

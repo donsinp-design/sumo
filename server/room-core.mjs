@@ -12,7 +12,7 @@ export class RoomCore {
     this.playing = false;
     this.match = null;        // { p: [id, id] }
     this.nextId = 1;
-    this.auto = /^QM\d+$/.test(code); // quick match: one-on-one, bouts start by themselves
+    this.auto = /^QM[A-Z0-9]+$/.test(code); // quick match: one-on-one, bouts start by themselves
     this.cap = this.auto ? 2 : Infinity; // private rooms take anyone (the rest watch and queue)
     this.autoTimer = null;
   }
@@ -32,11 +32,15 @@ export class RoomCore {
   leave(conn) {
     const id = conn.id;
     if (!this.members.has(id)) return;
+    this.goneMember = this.members.get(id);
     this.members.delete(id);
     this.order = this.order.filter((x) => x !== id);
     if (this.host === id) this.host = this.order[0] || null;
     if (this.autoTimer && this.order.length < 2) { clearTimeout(this.autoTimer); this.autoTimer = null; }
     if (this.playing && this.match && this.match.p.includes(id)) {
+      // walking out of a quick-match bout counts as a loss
+      const other = this.match.p.find((x) => x !== id), gone = this.goneMember;
+      if (this.auto && this.onResult && other && this.members.has(other) && gone && gone.pid && this.members.get(other).pid) this.onResult(this.members.get(other).pid, gone.pid);
       this.playing = false; this.match = null;
       this.broadcast({ t: 'abort', reason: 'A player left the ring.' });
     }
@@ -53,7 +57,7 @@ export class RoomCore {
     switch (m.t) {
       case 'hello':
         me.name = String(m.name || 'PLAYER').slice(0, 12).toUpperCase();
-        me.arch = (m.arch | 0) % 4; me.lo = m.lo || null;
+        me.arch = (m.arch | 0) % 4; me.lo = m.lo || null; me.pid = String(m.pid || '').slice(0, 40);
         this.broadcastRoom(); break;
       case 'ping': this.send(conn, { t: 'pong', id: m.id }); break;
       case 'arch':
@@ -73,6 +77,8 @@ export class RoomCore {
         if (!this.members.has(loser)) { this.playing = false; this.match = null; this.broadcastRoom(); this.maybeAuto(); break; }
         this.order = this.order.filter((x) => x !== loser); this.order.push(loser);
         const winner = this.match.p[m.winner === 0 ? 0 : 1];
+        // quick match: the result moves both players' ratings
+        if (this.auto && this.onResult && this.members.has(winner)) { const wp = this.members.get(winner).pid, lp = this.members.get(loser).pid; if (wp && lp) this.onResult(wp, lp); }
         this.order = [winner].concat(this.order.filter((x) => x !== winner));
         this.playing = false; this.match = null;
         this.broadcastRoom(); this.maybeAuto(); break;
@@ -113,7 +119,7 @@ export class RoomCore {
     list.sort((a, b) => a.pos - b.pos);
     for (const e of list) {
       e.conn.id = e.id;
-      this.members.set(e.id, { conn: e.conn, name: e.name || 'PLAYER', arch: e.arch | 0, lo: e.lo || null });
+      this.members.set(e.id, { conn: e.conn, name: e.name || 'PLAYER', arch: e.arch | 0, lo: e.lo || null, pid: e.pid || '' });
       this.order.push(e.id);
       this.nextId = Math.max(this.nextId, (parseInt(String(e.id).slice(1), 10) || 0) + 1);
       if (e.host) this.host = e.id;

@@ -1044,12 +1044,20 @@
       return '';
     }
     // ---- online
-    // that quick-match room already has two people: try the next one (two people waiting always meet in the lowest free room)
-    onQuickFull() {
-      this.net.close();
-      if ((this.qmN || 1) >= 500) { this.onNetClosed('Quick Match is busy. Please try again.'); return; }
-      this.qmN = (this.qmN || 1) + 1; this.enterRoom('QM' + this.qmN);
+    // Quick Match: queue for a similar-rated opponent, then meet them in a fresh one-on-one room
+    startFind() { this.net.close(); this.qmCode = null; this.ui.show('lobby', { searching: true, me: this.net.me || null }); this.net.findMatch(); }
+    onQueueStats(m) { if (this.ui.name === 'lobby' && !this.qmCode) this.ui.show('lobby', { searching: true, me: m }); }
+    onMatchFound(code) {
+      this.qmCode = code; this.enterRoom(code);
+      // if the other player never shows up, go back in the queue
+      clearTimeout(this.qmT); this.qmT = setTimeout(() => this.qmCheck(), 12000);
     }
+    qmCheck() {
+      const r = this.net.room;
+      if (!this.qmCode || this.net.code !== this.qmCode || this.kind === 'online') return;
+      if (!r || r.order.length < 2) this.startFind();
+    }
+    onQuickFull() { this.startFind(); }
     enterRoom(code) {
       this.net.connect(code);
       this.ui.show('lobby', { room: null, code });
@@ -1067,12 +1075,18 @@
       inp.addEventListener('blur', () => { if (this.ui.name === 'online') this.ui.render(); }, { once: true });
     }
     leaveRoom() {
+      this.net.stopFind(); clearTimeout(this.qmT); this.qmCode = null;
       this.net.close(); this.kind = 'title';
       this.ui.hint(''); this.ui.showHud(false); this.ui.hideKimarite();
       this.ui.show('title'); this.startAttract();
     }
     onRoom(m) {
       this.roomState = m;
+      // quick match: opponent gone after a bout? go back in the queue
+      if (this.qmCode && m.code === this.qmCode) {
+        if (m.order.length >= 2) this.qmHad2 = true;
+        else if (this.qmHad2) { this.qmHad2 = false; clearTimeout(this.qmT); this.qmT = setTimeout(() => { const r = this.net.room; if (this.net.code === this.qmCode && r && r.order.length < 2) this.startFind(); }, 3000); }
+      }
       if (this.kind === 'online' && this.match && !this.matchOver && m.playing) return; // mid-bout: keep fighting
       if (this.kind === 'online' && this.resultUntil > performance.now()) return; // let the result show first
       if (this.ui.name === 'lobby' || this.kind === 'online' || this.ui.name === 'online') {
@@ -1414,7 +1428,7 @@
         case 'online': ui.show('online', { err: this.net.available() ? '' : 'Online needs the game server. Start it with: node server/local.mjs' }); break;
         case 'createRoom': { const L = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; let c = ''; for (let i = 0; i < 4; i++) c += L[(Math.random() * L.length) | 0]; this.enterRoom(c); break; }
         case 'joinRoom': this.askRoomCode(); break;
-        case 'quickMatch': this.qmN = 1; this.enterRoom('QM1'); break;
+        case 'quickMatch': this.startFind(); break;
         case 'leaveRoom': this.leaveRoom(); break;
         case 'startBout': this.net.send({ t: 'start' }); break;
         case 'soonRanked': ui.show('soon', { title: 'RANKED', lines: ['Coming soon.', 'Online matches against players of your level.', 'Climb the banzuke: from Jonokuchi to Yokozuna.', 'Pure rules only.'] }); break;
