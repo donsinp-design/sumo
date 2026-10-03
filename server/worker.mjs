@@ -25,7 +25,16 @@ export default {
       const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
       return stub.fetch(request);
     }
-    return env.ASSETS.fetch(request);
+    const res = await env.ASSETS.fetch(request);
+    // Cloudflare tidies addresses (pad.html -> pad) with a redirect to a root path; keep the game's subpage in it
+    if (base && res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get('Location');
+      if (loc && loc.startsWith('/') && !loc.startsWith(base + '/')) {
+        const h = new Headers(res.headers); h.set('Location', base + loc);
+        return new Response(res.body, { status: res.status, headers: h });
+      }
+    }
+    return res;
   },
 };
 
