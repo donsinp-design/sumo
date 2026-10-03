@@ -11,6 +11,20 @@
       const o = me.opp;
       this.t += S.DT;
       const dir = (x, z) => { const l = Math.hypot(x, z); if (l > 1e-3) { r.mx = x / l; r.mz = z / l; } };
+      if (this.mode === 'thrower') { // grabs you, then holds K and points sideways for a slow, readable throw
+        if (me.clinch) {
+          this.ct = (this.ct || 0) + S.DT;
+          const px = -(o.z - me.z), pz = o.x - me.x;
+          if (this.ct > 0.5 && this.ct < 1.4) { dir(px, pz); r.grab = true; }
+          return r;
+        }
+        this.ct = 0;
+        dir(o.x - me.x, o.z - me.z);
+        const gap = Math.hypot(o.x - me.x, o.z - me.z) - me.r - o.r;
+        if (gap > 0.4) { r.mx *= 0.4; r.mz *= 0.4; this.wait = 0; }
+        else { r.mx *= 0.05; r.mz *= 0.05; this.wait = (this.wait || 0) + S.DT; if (this.wait > 0.7) { r.grab = true; this.wait = -0.6; } }
+        return r;
+      }
       if (me.clinch && this.mode !== 'lifter') {
         if (this.mode === 'drive') dir(o.x - me.x, o.z - me.z);
         return r;
@@ -57,14 +71,14 @@
     L('FLURRY', 'Tap J again and again, fast, to rain open-hand slaps (tsuppari). Land 5 in a row. A long flurry tires you out, and slapping at air leaves you open.', { need: 5, ev: (e, p) => e.type === 'hit' && e.w === p && e.kind === 'palm' }),
     L('HEAVY SHOVE', 'Stand still and hold J to wind up. Keep holding while you walk up to them, then let go for a big shove. (Pressing J while running is a charge instead.)', { ev: (e, p) => e.type === 'hit' && e.kind === 'heavy' && e.w === p }),
     L('THROAT PUSH', 'Get up close, hold L to plant your feet, then tap J: your hand goes up to their throat and stands them up, so they cannot push back for a moment.', { ev: (e, p) => e.type === 'hit' && e.w === p && e.special === 'nodowa' }),
-    L('CHARGE', 'Run at them and press J just before you reach them. Speed is power.', { pos: [[-2.6, 0], [2.0, 0]], ev: (e, p) => e.type === 'impact' && e.a === p && e.agg }),
+    L('CHARGE', 'Run at them and press J about a body-length before you reach them. Too close and it is just a push. Speed is power.', { pos: [[-2.6, 0], [2.0, 0]], ev: (e, p) => e.type === 'impact' && e.a === p && e.agg }),
     L('RING OUT', 'Push them out of the ring. Watch their feet near the straw.', { pos: [[-0.4, 0], [3.0, 0]], win: true }),
     L('GRAB', 'Get close and tap K to grab their belt. You are now locked together.', { ev: (e, p) => e.type === 'clinch' && e.w === p }),
     L('GRAB BREAK', 'They will grab you. Tap K the instant they grab (or grab at the same moment) to break free. You both bounce apart.', { dummy: 'grab', ev: (e, p) => e.type === 'grabTech' }),
     L('DRIVE', 'Grab them with K, then just hold toward them. You walk them backwards and out.', { pos: [[0.4, 0], [2.6, 0]], win: true }),
     L('THROW', 'Grab with K and KEEP HOLDING it. Point sideways: they swing round you. The longer you swing, the harder the throw, but the more time they have to escape. Let go of K to throw them.', { dummy: 'drive', ev: (e, p) => (e.type === 'throw' && e.w === p && e.name !== 'hikiotoshi' && !/gake/.test(e.name)) || (e.type === 'decided' && e.winner === p && /nage|katasukashi/.test(e.km)) }),
     L('SPIN', 'They lean into you. Grab and keep holding K, then point behind you: they swing all the way round. Let go to send them flying.', { dummy: 'drive', ev: (e, p) => (e.type === 'throw' && e.w === p && (e.name === 'katasukashi' || e.swept > 2.2)) || (e.type === 'decided' && e.winner === p && e.km === 'katasukashi') }),
-    L('LEG TRIP', 'Grab and keep holding K. Point straight at them, then let go of K to hook their leg.', { dummy: 'drive', ev: (e, p) => (e.type === 'throw' && e.w === p && /gake/.test(e.name)) || (e.type === 'decided' && e.winner === p && /gake/.test(e.km)) }),
+    L('LEG TRIP', 'A trip only works on someone who is moving or off balance, never on someone planted. Grab, hold toward them to walk them back a step, then hold K, point straight at them and let go. Watch for TRIP READY. Someone bracing with L cannot be tripped.', { dummy: 'drive', ev: (e, p) => (e.type === 'throw' && e.w === p && /gake/.test(e.name)) || (e.type === 'decided' && e.winner === p && /gake/.test(e.km)) }),
     L('LIFT', 'Grab them, then tap K without aiming anywhere to lift them off their feet. Walk them out of the ring!', { pos: [[0.6, 0], [2.0, 0]], ev: (e, p) => (e.type === 'decided' && e.winner === p && e.km.indexOf('tsuri') === 0) }),
     L('SLAM', 'Grab them, tap K to lift them, then tap K again to slam them down. You let go and they are left dizzy.', { pos: [[0.6, 0], [2.0, 0]], ev: (e, p) => e.type === 'slam' && e.o && e.w === p }),
     L('WRIGGLE FREE', 'Now they lift YOU. Mash any button as fast as you can to wriggle free before they carry you out.', { dummy: 'lifter', pos: [[-0.4, 0], [1.0, 0]], ev: (e, p) => e.type === 'liftEnd' && e.o === p }),
@@ -74,11 +88,13 @@
     L('STOP SHORT', 'Run at them and press J to charge, then tap L mid-charge to stop dead. Great when you think they will sidestep.', { pos: [[-2.6, 0], [2.0, 0]], ev: (e, p) => e.type === 'chargeCancel' && e.w === p }),
     L('SIDESTEP', 'They will charge at you. Hold a direction to the side and tap L to dodge.', { dummy: 'charge', pos: [[-1.2, 0], [2.6, 0]], ev: (e, p) => (e.type === 'perfectDodge' && e.w === p) || (e.type === 'whiff' && e.w !== p && !e.grab) }),
     L('FROM BEHIND', 'Dodge their charge, then chase them and hit their side or back with J. Pushes from behind are much stronger.', { dummy: 'charge', pos: [[-1.2, 0], [2.6, 0]], ev: (e, p) => (e.type === 'hit' && e.w === p && e.zone !== 'front') || (e.type === 'impact' && e.a === p && e.zone !== 'front') }),
+    L('ESCAPE A THROW', 'They will grab you and wind up a throw. The moment THROW COMING shows, tap L to slip out (or J to shove off).', { dummy: 'thrower', ev: (e, p) => (e.type === 'disengage' && e.w === p) || (e.type === 'techEscape' && e.w === p) || (e.type === 'clinchEnd' && e.reason === 'break') }),
+    L('STAY IN', 'Stumble at the edge and you teeter on the straw, arms windmilling. Hold toward the MIDDLE of the ring to win your balance back. Do nothing, or lean out, and you fall.', { setup: 'teeter', pos: [[-(S.RING_R - 0.35), 0], [1.6, 0]], ev: (e, p) => e.type === 'teeterSave' && e.w === p }),
     L('SLAP DOWN', 'As they charge in, hold away from them and tap J. You step back and slap them down with their own speed. It also works on someone flurrying at you. Miss and you are left open.', { dummy: 'charge', pos: [[-1.2, 0], [2.6, 0]], ev: (e, p) => e.type === 'hit' && e.w === p && e.kind === 'slap' }),
     L('BRACE', 'They will charge again. Hold L (no direction) to brace and take the hit. Time it just before impact for a perfect STOP.', { dummy: 'charge', pos: [[-1.2, 0], [2.6, 0]], ev: (e, p) => (e.type === 'braceCounter' && e.w === p) || (e.type === 'impact' && e.t === p && e.braced) }),
     L('PARRY', 'They will slap at you. Tap L (no direction) right as their hand arrives to knock it aside. They are left wide open.', { dummy: 'palm', ev: (e, p) => e.type === 'parry' && e.w === p }),
     L('CATCH', 'One more charge. Tap K right as they crash into you to catch them and spin them away.', { dummy: 'charge', pos: [[-1.2, 0], [2.6, 0]], ev: (e, p) => e.type === 'catch' && e.w === p }),
-    L('FACE-OFF', 'Show off first: J clap, K stomp (W A S D more taunts). Then hold L to crouch and KEEP holding. When PRESS J! appears, press J to charge.', { setup: 'faceoff', check: 'faceoff' }),
+    L('FACE-OFF', 'Show off first: J clap, K stomp (W A S D more taunts). Then hold L to crouch and KEEP holding. When PRESS J! appears, press J to charge. Charge before the call and it is a false start (matta): the face-off restarts, and a second one makes you start late.', { setup: 'faceoff', check: 'faceoff' }),
     L('FACE SLAP', 'Charge at the start (J when PRESS J! appears), then tap J again as you hit: an open-hand slap to the face (harite) dazes them.', { setup: 'quickstart', check: 'quickstart', ev: (e, p) => e.type === 'hit' && e.w === p && e.special === 'harite' }),
     L('GACHA MODE', 'Two ways to play: PURE (just sumo) or GACHA, picked with Tab on character select. In Gacha, both of you draw a random one-shot skill at the start of every round. Use it or lose it. Try some: Space uses it, G draws another. Press Enter when you are done.', { setup: 'gacha', check: 'gacha' }),
   ];
@@ -107,6 +123,7 @@
       else { m.phase = 'fight'; m.sinceGo = 5; for (const w of m.w) w.set('free'); }
       m.time = 0; m.events = [];
       if (Ls.clinch) m.clinch = new S.Clinch(m, m.w[0], m.w[1], {});
+      if (Ls.setup === 'teeter') { const P = m.w[0]; P.set('teeter', 1.6); P.lean = 0.5; P.teeter = true; m.emit('teeter', { w: P }); }
       this.g.dummy.set(Ls.dummy || 'idle', pos[1]);
       this.g.match.techWin = Ls.dummy === 'grab' ? 0.5 : 0; // more time to break the hold while learning it
       g.R.fx.clearDecals();

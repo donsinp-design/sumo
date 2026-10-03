@@ -12,7 +12,7 @@
   // remembers how the human opens, across rounds and matches
   const MEM = { charge: 1, brace: 0.6, henka: 0.4, wait: 0.6 };
   // remembers what the human leans on mid-bout, so it can stop falling for it
-  const HAB = { flurry: 0.3, slap: 0.3, grab: 0.3, dodge: 0.3, charge: 0.3 };
+  const HAB = { flurry: 0.3, slap: 0.3, grab: 0.3, dodge: 0.3, charge: 0.3, poke: 0.3 };
 
   class AI {
     constructor(me, match, level, opts) {
@@ -91,6 +91,7 @@
       else if (o.st === 'dash' && (me.st === 'charge' || me.spd > me.a.maxSpeed * 0.6)) HAB.dodge += 0.5;
       else if (o.st === 'charge') HAB.charge += 0.3;
       else if (o.st === 'palm' && (o.flurry || 0) === 4) HAB.flurry += 0.6;
+      else if (o.st === 'palm' && (o.flurry || 0) === 1) HAB.poke += 0.15;
       else if (o.st === 'clinch' && m.clinch && m.clinch.a === o) HAB.grab += 0.5;
     }
     perceive() {
@@ -181,12 +182,18 @@
       // they keep grabbing: running into them just hands them a catch
       const grabWary = L.skill * Math.min(2, HAB.grab) > 0.7;
 
+      if (me.st === 'teeter') { // win the balance back: lean in toward the middle (the weaker ones flail)
+        if (this.rnd() < 0.45 + 0.55 * L.skill) this.dir(-me.x, -me.z); else this.dir(this.rnd() - 0.5, this.rnd() - 0.5);
+        this.state = 'teeter'; return;
+      }
       if (me.st === 'stumble' || me.st === 'overrun' || (me.st === 'recover' && RR - Math.hypot(me.x, me.z) < 1.2)) { this.steer(nx, nz, 0, 0); this.state = 'recovering'; return; }
 
       // 1. threats: incoming charge / heavy
-      const oCharging = P.st === 'charge' || (P.st === 'heavy' && P.t < 0.17) || oSpeedToMe > 3.4;
+      const oCharging = P.st === 'charge' || (P.st === 'heavy' && P.t < 0.17) || (oSpeedToMe > 3.4 && P.st !== 'dash');
       if (oCharging && gap < Math.max(0.45, oSpeedToMe * 0.32) && canAct) {
         if (gap < 0.9 && canAct && this.rnd() < L.skill * 0.3) { this.dir(nx, nz); this.tap('grab', 0.05); this.state = 'catch'; return; }
+        // the classic answer to a charge: step back and slap them down with their own speed
+        if (P.st === 'charge' && gap < 1.1 && myEdge > 1.4 && this.rnd() < L.tricky * (0.8 + 0.5 * Math.min(2, HAB.charge))) { this.dir(-nx, -nz); this.tap('push'); this.state = 'slapdown-charge'; return; }
         const preferDodge = myEdge < 1.8 || this.rnd() < L.dodge;
         if (preferDodge && me.dashCD <= 0) {
           let lx = -P.vz, lz = P.vx; const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
@@ -197,13 +204,19 @@
       }
       if (me.st === 'brace' && this.holding('dash')) { this.dir(0, 0); this.state = 'bracing'; return; }
 
+      // a dash straight at me is not a charge: stand my ground (they bump and stall), then punish
+      if (P.st === 'dash' && oSpeedToMe > 2 && gap < 1.4 && canAct && myEdge > 1.5) { this.dir(0, 0); this.state = 'hold-ground'; return; }
       // 2. punish an opponent who is stuck in recovery / off balance
       const oVuln = ['recover', 'stun', 'overrun', 'stumble'].includes(P.st) || (P.st === 'heavy' && P.t > 0.2) || (P.st === 'grab' && P.t > 0.12) || (P.st === 'slap' && P.t > 0.24);
       if (oVuln && gap < 1.4 && canAct) {
         const behind = (o.fx * -nx + o.fz * -nz) < -0.2;
         this.dir(nx, nz);
         if (gap < 0.45) {
-          if (behind || P.bal < 0.45 || this.rnd() < 0.5) this.tap('push'); else this.tap('grab');
+          // a long opening is worth more than a single hand: take the belt (unless they love grabbing)
+          const longOpen = (o.st === 'recover' || o.st === 'stun' || o.st === 'overrun') && o.dur - o.t > 0.22; // only grab into a long opening; a hand beats a grab otherwise
+          if (behind || P.bal < 0.3) this.tap('push');
+          else if (longOpen && !(o.gripCD > 0) && this.rnd() < 0.65 - 0.15 * Math.min(2, HAB.grab)) this.tap('grab');
+          else if (P.bal < 0.45 || this.rnd() < 0.5) this.tap('push'); else this.tap('grab');
         }
         this.state = 'punish'; return;
       }
@@ -227,6 +240,18 @@
         if (r < ad * 0.3) { this.dir(0, 0); this.tap('dash', 0.04); this.state = 'parry'; return; }
         if (r < ad * 0.65 && myEdge > 1.3) { this.dir(-nx, -nz); this.tap('push'); this.state = 'slapdown-flurry'; return; }
         if (r < ad && me.dashCD <= 0) { let lx = -nz, lz = nx; if (lx * -me.x + lz * -me.z < 0) { lx = -lx; lz = -lz; } this.dir(lx, lz); this.tap('dash'); this.state = 'sidestep-flurry'; return; }
+      }
+      // poke range (a hand reaches a bit further than a grab): don't walk into their hand, use yours
+      if (this.mode === 'bait') {
+        if (this.modeT < 0.25) { this.dir(-nx, -nz); this.state = 'bait-step'; return; }
+        this.mode = null;
+        if ((P.st === 'palm' && P.t > 0.1) || P.st === 'recover') { this.dir(nx, nz); this.tap(gap < 0.45 ? 'grab' : 'push'); this.state = 'whiff-punish'; return; }
+      }
+      if (gap >= 0.45 && gap < 0.62 && canAct && L.tricky > 0.25 && myEdge > 2 && HAB.poke > HAB.flurry + 0.5 && this.time > (this.baitCD || 0) && this.rnd() < L.tricky) {
+        this.baitCD = this.time + 2.5; this.mode = 'bait'; this.modeT = 0; this.dir(-nx, -nz); this.state = 'bait-step'; return; // step out of their reach to make them whiff
+      }
+      if (gap >= 0.45 && gap < 0.62 && canAct && P.st !== 'brace' && this.rnd() < 0.35 + 0.5 * L.aggr) {
+        this.dir(nx, nz); this.tap('push'); this.state = 'poke'; return;
       }
       if (gap < 0.45) {
         if (!canAct) { this.dir(nx, nz); return; }
@@ -265,6 +290,8 @@
         }
       }
 
+      // hard: back on the rope, stand and invite the lunge (the threat branch pivots away when it comes)
+      if (L.tricky > 0.25 && myEdge < 1.3 && gap > 0.62 && gap < 2.2 && oSpeedToMe > 0.8 && HAB.charge + HAB.dodge > 1.2 && this.rnd() < 0.55) { this.dir(0, 0); this.state = 'rim-bait'; return; }
       // 5. mid range
       const quiet = m.time - m.lastContactT;
       if (gap < 2.6) {
@@ -304,21 +331,23 @@
       const [nx, nz] = c.axis();
       // winding up my own throw: keep K held and keep pointing until it goes
       if (this.aimHold && !c.tech && !c.lift) {
-        if (this.time < this.aimHold.until) { this.mx = this.aimHold.mx; this.mz = this.aimHold.mz; this.state = 'windup'; return; }
+        const A = this.aimHold;
+        if (A.alt && this.time > A.switchAt) { A.mx = A.alt[0]; A.mz = A.alt[1]; A.alt = null; this.state = 'windup-switch'; }
+        if (this.time < A.until) { this.mx = A.mx; this.mz = A.mz; if (this.state !== 'windup-switch') this.state = 'windup'; return; }
         this.aimHold = null;
       }
       // just been grabbed: counter-grab
       if (c.b === me && c.t < 0.3 && !c.rear && !this.techTried) { this.techTried = true; if (this.rnd() < L.skill * (0.35 + 0.1 * Math.min(2, HAB.grab))) { this.tap('grab', 0.04); this.state = 'grab-break'; return; } }
       if (c.tech) {
         // their throw has only just started: slip it
-        if (c.tech.o === me && c.tech.t < 0.2 && this.escFor !== c.tech) { this.escFor = c.tech; if (this.rnd() < L.skill * 0.5) { this.escape(c); return; } }
+        if (c.tech.o === me && c.tech.t < 0.2 && this.escFor !== c.tech) { this.escFor = c.tech; if (this.rnd() < L.skill * 0.35) { this.escape(c); return; } }
         this.dir(0, 0); this.state = 'tech'; return;
       }
       // they are winding up (K held and aiming) or already swinging me: get out
       const oArmed = (o.kArm && o.input && o.input.grab && o.input.grab.held) || (c.swing && c.swing.w === o);
       this.armT = oArmed ? (this.armT || 0) + this.L.think : 0;
-      const danger = RR - Math.hypot(me.x, me.z) < 1.6 ? 0.15 : 0;
-      if (oArmed && this.armT > L.react && this.rnd() < L.skill * (0.2 + danger + 0.05 * Math.min(2, HAB.grab))) { this.escape(c); return; }
+      const danger = RR - Math.hypot(me.x, me.z) < 1.6 ? 0.1 : 0;
+      if (oArmed && this.armT > L.react && this.rnd() < L.skill * (0.11 + danger + 0.05 * Math.min(2, HAB.grab))) { this.escape(c); return; }
       if (c.lift) {
         if (c.lift.w === me) { const ol = Math.hypot(o.x, o.z) || 1; this.dir(o.x / ol, o.z / ol); this.state = 'carry'; }
         else {
@@ -337,6 +366,21 @@
       if (c.rear === me) { this.rel(c, 1, 0); if (oEdge < 1.6 || this.rnd() < 0.25) this.tap('push'); this.state = 'rear'; return; }
       if (c.rear === o) { this.rel(c, 0, 1); this.state = 'turning'; return; }
 
+      // being driven back toward my edge: use their drive against them, or get off the line
+      const drivenBack = c.tow[j] > 0.3 || -s * c.v > 0.3;
+      if (drivenBack && myEdge < 1.6 && myBack > 0.2 && !c.utchariOk(me) && this.rnd() < 0.2 + 0.35 * L.skill) {
+        const sp = c.evalTech(me, 'spin'), th = c.evalTech(me, 'throw');
+        const best = sp.ok && sp.sc > 0.55 && sp.sc >= th.sc ? 'spin' : th.ok && th.sc > 0.55 ? 'throw' : null;
+        if (best) {
+          const side = this.bestSide(c);
+          if (best === 'spin') this.rel(c, -1, 0); else this.rel(c, 0, side);
+          const wind = 0.12 + 0.1 * (1 - L.skill); // no time for a long wind-up with your heels on the straw
+          this.hold('grab', wind); this.aimHold = { until: this.time + wind, mx: this.mx, mz: this.mz };
+          this.state = 'edge-' + best; return;
+        }
+        if (myEdge < 1.2) { this.dir(0, 0); this.tap('push'); this.state = 'edge-shove'; return; }
+        this.rel(c, 1, 0); this.state = 'edge-pushback'; return;
+      }
       // fighting for survival on the bales
       if (c.utchariOk(me)) {
         const ev = c.evalTech(me, 'utchari');
@@ -365,6 +409,13 @@
         // hold K and point for a moment before letting go, like a human does: it can be read and escaped
         const wind = k === 'lift' ? 0.05 : 0.5 - 0.22 * L.skill + this.rnd() * 0.15;
         this.hold('grab', wind); this.aimHold = { until: this.time + wind, mx: this.mx, mz: this.mz };
+        // hard: show one throw, then switch to another halfway through the wind-up
+        if (L.tricky > 0.25 && (k === 'throw' || k === 'trip') && this.rnd() < L.tricky * 0.8) {
+          const mx0 = this.mx, mz0 = this.mz;
+          if (k === 'throw') this.rel(c, 1, 0); else this.rel(c, 0, this.bestSide(c));
+          this.aimHold.alt = [this.mx, this.mz]; this.aimHold.switchAt = this.time + wind * 0.5; this.aimHold.until += 0.1; this.hold('grab', wind + 0.1);
+          this.mx = mx0; this.mz = mz0;
+        }
         this.state = k; return;
       }
       if (me.stam < 0.18 && c.tow[j] < 0.3 && this.rnd() < 0.5) { this.dir(0, 0); this.state = 'rest'; return; }

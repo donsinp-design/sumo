@@ -43,7 +43,7 @@
       this.sdx = 0; this.sdz = 0; this.fallX = 0; this.fallZ = 0;
       this.down = false; this.out = false; this.clinch = null; this.lifted = false;
       this.squash = 0; this.slideT = 0; this.pressT = 0; this.ghostT = 0;
-      this.parryAt = -9; this.gripCD = 0; this.hariteUsed = false; this.flurry = 0; this.lastPalmAt = -9; this.teeter = false; this.crouchT = 0; this.feint = 0; this.feintAt = -9; this.feintBtn = null; this.buf = null;
+      this.parryAt = -9; this.matta = 0; this.mattaPen = false; this.dashAt = -9; this.lean = 0; this.teeterEnd = -9; this.gripCD = 0; this.hariteUsed = false; this.flurry = 0; this.lastPalmAt = -9; this.teeter = false; this.crouchT = 0; this.feint = 0; this.feintAt = -9; this.feintBtn = null; this.buf = null;
       this.pre = null; this.preT = 9; this.stomped = false; this.power = 0; this.tachiPow = 0;
       this.lastTech = null; this.lastBy = null; this.lastT = -99;
       this.fxs = {}; this.str = 1; this.szCur = 1; this.charges = 0; this.torpedo = false; this.trapped = false;
@@ -126,6 +126,15 @@
           const I = w.input;
           w.feint -= dt; w.preT += dt;
           for (const b of ['push', 'grab', 'dash']) if (I[b].pressed) { w.feintAt = this.phaseT; w.feintBtn = b; }
+          // MATTA: jumping the gun (charging forward just before the call) restarts the face-off
+          const odx = w.opp.x - w.x, odz = w.opp.z - w.z, odl = Math.hypot(odx, odz) || 1;
+          if (I.push.pressed && (I.mx * odx + I.mz * odz) / odl > 0.5 && this.phaseT > Math.max(1.0, this.goAt - 0.6) && this.phaseT < this.goAt - 0.13 && !w.mattaPen) { // after two, no more restarts: you just go late
+            w.matta = (w.matta || 0) + 1; if (w.matta >= 2) w.mattaPen = true;
+            this.phaseT = 0.6; this.goAt = 1.6 + S.rand() * 1.1;
+            for (const v of this.w) { v.pre = null; v.crouchT = 0; v.feintAt = -9; }
+            this.emit('matta', { w, n: w.matta });
+            return;
+          }
           w.crouchT = I.dash.held ? (w.crouchT || 0) + dt : 0;
           // direction taps: W salt, A arms spread, S face slap, D belt slap
           const src = I.wd || { mx: I.mx, mz: I.mz };
@@ -165,6 +174,7 @@
             // caught mid-stomp: you start late. That's the price of showing off.
             const pd = S.PRE_DUR[w.pre] || 0;
             if (pd >= 0.7 && w.preT < pd) { w.set('recover', pd - w.preT); w.buf = null; }
+            if (w.mattaPen) { w.mattaPen = false; w.set('recover', 0.35); w.buf = null; w.tachiPow = 0; } // second false start: you go late
           }
           this.emit('go');
         }
@@ -295,7 +305,11 @@
           if (w.t >= 0.17) { w.set('recover', 0.3); this.emit('whiff', { w, grab: true }); }
           break;
         case 'dash':
-          if (w.t >= w.dur) { if (I.dash.held) { w.set('brace'); w.braceT = 0.3; } else w.set('recover', 0.06); }
+          if (w.t >= w.dur) {
+            // dashing straight at them commits you; sidesteps and retreats recover quickly
+            const dx0 = w.opp.x - w.x, dz0 = w.opp.z - w.z, dl0 = Math.hypot(dx0, dz0) || 1, fwd = (w.ddx * dx0 + w.ddz * dz0) / dl0;
+            if (I.dash.held && fwd < 0.5) { w.set('brace'); w.braceT = 0.3; } else w.set('recover', fwd > 0.5 ? 0.2 : 0.06);
+          }
           break;
         case 'recover': case 'stun': case 'overrun':
           if (w.t >= w.dur) w.set('free');
@@ -347,10 +361,21 @@
         const outV = w.vx * ox + w.vz * oz;
         if (outV > 0 && vdx * ox + vdz * oz < 0.5) F *= 1.7;
         // sent stumbling at the straw: dig in and teeter, slow ones survive
-        if ((w.st === 'overrun' || w.st === 'stumble') && outV > 0) {
-          vdx = w.vx - ox * outV; vdz = w.vz - oz * outV; F = a.moveForce * 2.2;
-          if (!w.teeter) { w.teeter = true; this.emit('teeter', { w }); }
+        if ((w.st === 'overrun' || w.st === 'stumble') && outV > 0 && !w.clinch && this.time - w.teeterEnd > 0.8) {
+          // heels on the straw, arms windmilling: hold toward the middle to win your balance back
+          w.vx -= ox * outV * 0.85; w.vz -= oz * outV * 0.85;
+          w.lean = Math.min(0.85, 0.4 + outV * 0.07 + (1 - w.bal) * 0.25);
+          w.set('teeter', 1.2); w.teeter = true;
+          this.emit('teeter', { w });
         }
+      }
+      if (w.st === 'teeter') {
+        const tx = w.x / (dc || 1), tz = w.z / (dc || 1);
+        vdx = 0; vdz = 0; F = a.moveForce * 3; face = false;
+        const inward = mag > 0.2 ? -(ix * tx + iz * tz) / mag : 0; // pushing toward the middle (+) or out (-)
+        w.lean += dt * (1.0 - 2.1 * Math.max(0, inward) + 1.2 * Math.max(0, -inward) + (w.contact ? 1.0 : 0)) / (0.8 + 0.2 * a.stability);
+        if (w.lean <= 0) { w.set('recover', 0.15); w.vx = -tx * 1.6; w.vz = -tz * 1.6; w.bal = Math.max(w.bal, 0.5); this.emit('teeterSave', { w }); w.teeterEnd = this.time; }
+        else if (w.lean >= 1 || w.t >= w.dur) { w.set('stumble'); w.sdx = tx; w.sdz = tz; w.vx = tx * 2.2; w.vz = tz * 2.2; this.emit('teeterFall', { w }); w.teeterEnd = this.time; }
       }
       let ax = (vdx - w.vx) * 16, az = (vdz - w.vz) * 16;
       const amax = F / w.m, al = Math.hypot(ax, az);
@@ -406,7 +431,7 @@
     // --------------------------------------------------------------- actions
     startBrace(w) { w.set('brace'); w.braceT = 0; w.parryAt = this.time; this.emit('brace', { w }); }
 
-    startDash(w, dx, dz) {
+    startDash(w, dx, dz) { w.dashAt = this.time;
       w.ddx = dx; w.ddz = dz;
       w.dpow = w.stam > 0.15 ? 1 : 0.6;
       w.set('dash', w.a.dashTime);
@@ -441,7 +466,7 @@
         this.emit('charge', { w, tachiai: true }); return;
       }
       const gapNow = Math.hypot(w.opp.x - w.x, w.opp.z - w.z) - w.r - w.opp.r;
-      if (vf > ms * 0.45 && w.fwdIn > 0.5 && gapNow > 0.2) { // running at them from a distance: charge (up close it's a slap)
+      if (vf > ms * 0.45 && w.fwdIn > 0.5 && gapNow > 0.7) { // needs a real run-up; up close it's a hand // running at them from a distance: charge (up close it's a slap)
         w.cspd = Math.max(vf, ms) * 1.2; w.set('charge', 0.4);
         w.stam = Math.max(0, w.stam - 0.12);
         this.emit('charge', { w }); return;
@@ -488,7 +513,7 @@
       if (w.fxs.thiefT > 0 && S.Skills) S.Skills.knockSkill(this, w, o, nx, nz);
       const P = w.a.power * (w.str || 1);
       let imp, bal, tag;
-      if (kind === 'palm') { const k = 0.45 + 0.55 * w.stam; imp = 2.3 * P * k; bal = 0.04 * k; tag = 'palm'; }
+      if (kind === 'palm') { const k = 0.65 + 0.35 * w.stam; imp = 2.3 * P * k; bal = 0.04 * k; tag = 'palm'; }
       else { imp = (3.2 + 3.4 * w.windPow) * P; bal = 0.08 + 0.16 * w.windPow; tag = 'heavy'; }
       const braced = o.st === 'brace' && zone === 'front' && o.stam > 0.05;
       if (zone === 'side') { imp *= 1.2; bal *= 1.8; tag = 'side'; }
@@ -499,6 +524,7 @@
       if (armored && kind === 'palm') { imp *= 0.3; bal *= 0.3; recoil = 0.5; }
       if (o.st === 'wind' || (o.st === 'grab' && o.t < 0.17)) { o.set('stun', 0.22); this.emit('interrupt', { w: o }); }
       if (o.bal < 0.35 && zone !== 'rear') bal += kind === 'heavy' ? 0.22 : 0.06;
+      if (o.st === 'stumble' || o.st === 'teeter') { bal += 0.08; imp *= 1.3; } // already reeling: finish them
       let special = null;
       // harite: an open-hand slap to the face right off the start dazes them
       // (works on someone charging at you too: a slap in the face stops the charge dead)
@@ -531,7 +557,7 @@
       const ov = o.spd || 1;
       if (oIn > Math.max(2.0, o.a.maxSpeed * 1.05) || o.st === 'charge' || o.pressT > 0.15 || o.st === 'heavy' || ((o.st === 'palm' || o.st === 'recover') && (o.flurry || 0) >= 3 && this.time - o.lastPalmAt < 0.6)) {
         // Hatakikomi: their own momentum slams them down
-        const dmg = 0.32 + 0.11 * Math.max(0, oIn) + (o.st === 'charge' ? 0.25 : 0);
+        const dmg = 0.32 + 0.11 * Math.max(0, oIn) + (o.st === 'charge' ? 0.25 : 0) + ((o.flurry || 0) >= 3 && this.time - o.lastPalmAt < 0.6 ? 0.3 : 0); // flurrying = leaning in
         this.tag(o, w, 'slap');
         const fx = o.spd > 0.5 ? o.vx / ov : -nx, fz = o.spd > 0.5 ? o.vz / ov : -nz;
         o.vx += fx * 1.2; o.vz += fz * 1.2;
@@ -633,6 +659,12 @@
       const ia = 1 / ma, ib = 1 / mb, pen = min - d;
       A.x -= nx * pen * ia / (ia + ib); A.z -= nz * pen * ia / (ia + ib);
       B.x += nx * pen * ib / (ia + ib); B.z += nz * pen * ib / (ia + ib);
+      // a dash into someone's chest carries no more weight than walking into them
+      for (const [D, T, sx, sz] of [[A, B, nx, nz], [B, A, -nx, -nz]]) {
+        if (!(D.st === 'dash' || (D.st === 'recover' && this.time - D.dashAt < 0.45))) continue;
+        if (this.zoneOf(T, sx, sz) !== 'front' || (D.ddx * sx + D.ddz * sz) < 0.5) continue;
+        const vin = D.vx * sx + D.vz * sz; if (vin > 2) { D.vx -= sx * (vin - 2); D.vz -= sz * (vin - 2); }
+      }
       const rv = (B.vx - A.vx) * nx + (B.vz - A.vz) * nz;
       if (rv >= 0) return;
       const closing = -rv;
@@ -654,6 +686,12 @@
       if (aAgg && bAgg && aIn > 1.6 && bIn > 1.6) { this.deadlock(A, B, nx, nz, closing); return; }
       if (aIn >= bIn) this.bodyHit(A, B, nx, nz, closing, aAgg);
       else this.bodyHit(B, A, -nx, -nz, closing, bAgg);
+      // a dash is footwork, not a battering ram: running one into someone's chest stops you dead, and leaves you open
+      for (const [D, T, sx, sz] of [[A, B, nx, nz], [B, A, -nx, -nz]]) {
+        if (!(D.st === 'dash' || (D.st === 'recover' && this.time - D.dashAt < 0.45)) || this.zoneOf(T, sx, sz) !== 'front' || (D.ddx * sx + D.ddz * sz) < 0.5) continue;
+        D.vx *= 0.15; D.vz *= 0.15; D.set('recover', 0.28);
+        this.emit('dashBump', { w: D, o: T, x: (D.x + T.x) / 2, z: (D.z + T.z) / 2 });
+      }
     }
 
     // Grab timed against an incoming charge: catch them and spin them round with their own momentum.
@@ -705,7 +743,7 @@
       const zone = this.zoneOf(T, nx, nz);
       const zm = zone === 'front' ? 1 : zone === 'side' ? 1.7 : 2.4;
       const braced = T.st === 'brace' && zone === 'front';
-      let dmg = 0.032 * closing * Math.sqrt(At.m / T.m) * zm * (braced ? 0.35 : 1) * (agg ? 1.15 : 0.8);
+      let dmg = 0.032 * closing * Math.sqrt(At.m / T.m) * zm * (braced ? 0.35 : 1) * (agg ? 1.15 : At.st === 'free' ? 0.6 : 0.8) * ((At.st === 'dash' || this.time - (At.dashAt === undefined ? -9 : At.dashAt) < 0.45) && zone === 'front' ? 0.35 : 1);
       if (T.bal < 0.4 && zone !== 'rear') dmg *= 1.3;
       if (closing > 1.5) this.tag(T, At, zone === 'rear' ? 'rear' : zone === 'side' ? 'side' : At.st === 'charge' ? 'charge' : 'heavy');
       this.hurt(T, dmg, nx, nz);
@@ -969,7 +1007,15 @@
             m.hurt(w, dt * 0.3 * (1 + Math.abs(this.v) * 0.4), s * nx, s * nz);
           }
           const back = -s * this.v;
-          if (-back > 0.35 && tow[i] > 0.3) this.grip[i] = Math.min(3, this.grip[i] + dt * 0.12);
+          // elbows tight (no stick input, not being driven): their grip stops growing and yours creeps back
+          const oI = live ? o.input : S.NULL_IN, oTight = Math.hypot(oI.mx, oI.mz) < 0.2 && this.tow[j] > -0.3;
+          const myI = live ? w.input : S.NULL_IN;
+          if (Math.hypot(myI.mx, myI.mz) < 0.2 && back < 0.35) this.grip[i] = Math.min(1.6, this.grip[i] + dt * 0.05);
+          if (-back > 0.35 && tow[i] > 0.3) this.grip[i] = Math.min(3, this.grip[i] + dt * (oTight ? 0.04 : 0.14));
+          // won the grip battle: work your hand inside the belt for better throws
+          if (live && this.type[i] === 'outside' && this.grip[i] - this.grip[j] > 0.6 && !this.rear) {
+            this.type[i] = 'inside'; this.type[j] = 'outside'; m.emit('gripWin', { w, o });
+          }
           if (back > 0.35 && tow[i] > -0.3) {
             m.tag(w, o, this.rear === o ? 'rearDrive' : 'drive');
             m.hurt(w, dt * 0.04 * back, -s * nx, -s * nz);

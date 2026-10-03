@@ -534,6 +534,11 @@
         }
         case 'recover': c = 0.35; p = 0.02; Rh = [0.55, 0.3, 0.38]; Lh = mir(Rh); break;
         case 'stun': c = 0.3; p = -0.22 + 0.06 * Math.sin(T * 30); Rh = [0.68, 0.42, 0.18]; Lh = mir(Rh); break;
+        case 'teeter': { // heels on the straw, arms windmilling
+          const L = Math.max(0, Math.min(1, w.lean || 0));
+          c = 0.25; rate = 28; p = -0.15 - 0.35 * L;
+          Rh = [0.85, 0.9 + 0.35 * Math.sin(T * 26), 0.1]; Lh = [-0.85, 0.9 + 0.35 * Math.sin(T * 26 + 3), 0.1]; break;
+        }
         case 'stumble': {
           c = 0.3; rate = 20;
           Rh = [0.8, 0.75 + 0.28 * Math.sin(T * 18), 0.15]; Lh = [-0.8, 0.75 + 0.28 * Math.sin(T * 18 + 2), 0.15]; break;

@@ -251,7 +251,10 @@
       const hi = this.kind === 'pvp' || this.kind === 'attract' || this.kind === 'showcase' ? -1 : this.kind === 'online' ? this.slot : 0;
       const human = m && hi >= 0 ? m.w[hi] : null;
       if (human && this.settings.hints && this.mode === 'game' && !this.paused && m.phase === 'fight') {
-        if (m.clinch && human.clinch && !m.clinch.tech) html = this.clinchTip(m.clinch, human);
+        if (m.clinch && human.clinch && !m.clinch.tech) {
+          const c = m.clinch, gi = c.grip[human.idx], go = c.grip[human.opp.idx], pct = Math.round(100 * gi / Math.max(0.01, gi + go));
+          html = '<span class="gripm"><em>GRIP</em><span class="wbar"><i style="width:' + pct + '%"></i></span><em>' + (c.type[human.idx] === 'inside' ? 'INSIDE' : 'OUTSIDE') + '</em></span>' + this.clinchTip(c, human);
+        }
         else if (!m.clinch) {
           // outside the grapple: a counter tip for what they are doing right now, held a moment so it can be read
           const t = this.counterTip(m, human);
@@ -266,6 +269,8 @@
     // what to press against what they are doing (outside the grapple)
     counterTip(m, me) {
       const o = me.opp, J = '<kbd>J</kbd>', K = '<kbd>K</kbd>', Lk = '<kbd>L</kbd>';
+      if (me.st === 'teeter') return '<b>TEETERING!</b> Hold toward the <b>middle</b> of the ring to stay in';
+      if (o.st === 'teeter') return '<b>THEY ARE TEETERING!</b> Give them a push ' + J + ' before they recover';
       const dx = o.x - me.x, dz = o.z - me.z, d = Math.hypot(dx, dz) || 1, gap = d - me.r - o.r;
       const toMe = -(o.vx * dx + o.vz * dz) / d;
       if (o.fxs && (o.fxs.chicken > 0 || o.fxs.ball > 0)) return null;
@@ -303,8 +308,10 @@
       const pushedBack = -s * c.v > 0.3;
       if (pushedBack && myEdge < 1.3) return 'Near the edge! Hold ' + K + ' and <b>point behind you</b> to swing them out';
       if (pushedBack || c.tow[o.idx] > 0.3) return 'They are pushing: hold ' + K + ' and <b>point behind you</b> to swing them past';
+      const tr = c.evalTech(me, 'trip');
+      if (tr.ok && tr.sc > 0.38) return '<b>TRIP READY!</b> Hold ' + K + ', point at them, let go';
       if (oEdge < 1.6) return '<b>Hold toward them</b> to drive them out';
-      const tips = ['<b>Hold toward them</b> to drive them back', 'Hold ' + K + ' and <b>point</b>: they swing round you · let go to throw', 'Hold ' + K + ', point <b>at them</b>, let go: leg trip', 'Tap ' + K + ' alone to lift',
+      const tips = ['<b>Hold toward them</b> to drive them back and win the grip', 'Let go of the stick to keep your elbows tight: their grip stops growing', 'Hold ' + K + ' and <b>point</b>: they swing round you · let go to throw', 'Hold ' + K + ', point <b>at them</b>, let go: leg trip', 'Tap ' + K + ' alone to lift',
         'Want out? ' + J + ' shove off &nbsp;·&nbsp; ' + Lk + ' slip back',
         (c.b === me ? 'They grabbed you, but you can fight back: ' : '') + 'tap ' + K + ' alone to lift, or hold ' + K + ' and point to throw'];
       return tips[Math.floor(c.t / 2.5) % tips.length];
@@ -699,6 +706,9 @@
           case 'regrip': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout(e.level >= 2.25 ? 'STRONG GRIP' : 'GRIP +', p.x, p.y - 70, e.level >= 2.25 ? 'gold' : 'small'); A.grab(); break; }
           case 'burst': R.shake(0.15); fx.burst(e.x, e.z, 6); A.thump(5); break;
           case 'teeter': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout('TEETERING!', p.x, p.y - 80, 'gold'); A.scuff(); A.cheer(0.6, 1); this.excite = 1; break; }
+          case 'gripWin': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout('INSIDE GRIP!', p.x, p.y - 80, 'teal'); A.thump && A.thump(2); break; }
+          case 'matta': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout(e.n >= 2 ? 'MATTA! You start late' : 'MATTA! False start', p.x, p.y - 80, 'gold'); A.whoosh(0.3); break; }
+          case 'teeterSave': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout('SAVED!', p.x, p.y - 80, 'teal'); A.cheer(0.9, 1.3); fx.dust(e.w.x, 0.05, e.w.z, 8, 0.4, 0.6, 0.35); break; }
           case 'chargeCancel': fx.dust(e.w.x, 0.05, e.w.z, 6, 0.3, 0.5, 0.3); A.scuff(); break;
           case 'swap': A.whoosh(0.3); fx.dust(e.x, 0.05, e.z, 6, 0.4, 0.5, 0.3); break;
           case 'liftFail': { const p = this.scr(e.x, e.z); if (!quiet) ui.callout(e.heavy ? 'TOO HEAVY!' : 'NO GRIP YET', p.x, p.y - 90, 'small'); A.scuff(); break; }
