@@ -57,6 +57,8 @@ jobs:
             run xcrun simctl launch "$id" com.looktwicestudio.kumite
             sleep 30
             run xcrun simctl io "$id" screenshot "shots/$kind.png"
+            # a small copy as a run note, so it can be checked without downloading
+            sips -Z 360 -s format jpeg -s formatOptions 45 "shots/$kind.png" --out "shots/$kind-small.jpg" >/dev/null 2>&1 && echo "::notice title=shot-$kind::$(base64 -i shots/$kind-small.jpg | tr -d '\n')"
             run xcrun simctl shutdown "$id"
           done
           ls shots/*.png >/dev/null 2>&1 || { echo "::error::no screenshots taken"; exit 1; }
