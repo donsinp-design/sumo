@@ -184,7 +184,7 @@ kbd { font-family: var(--ui); font-weight: 800; font-size: 22px; padding: 4px 12
 .menu button .tagsoon { font-style: normal; font-size: 13px; margin-left: 10px; padding: 1px 6px; background: var(--teal); color: var(--ink); letter-spacing: 1px; }
 
 /* ---------- HUD extras ---------- */
-#record { font-size: 14px; letter-spacing: 2px; color: var(--gold); margin-top: 2px; font-style: normal; }
+#record { white-space: pre; font-size: 14px; letter-spacing: 2px; color: var(--gold); margin-top: 2px; font-style: normal; }
 .skslot { display: none; margin-top: 6px; font-size: 15px; font-weight: 700; letter-spacing: 1px; background: rgba(12,5,10,0.85); padding: 3px 10px; border: 2px solid var(--teal); color: #fff8ec; }
 .skslot.on { display: inline-flex; align-items: center; gap: 8px; animation: pop .6s both; }
 .skslot b { font-size: 18px; } .skslot kbd { font-size: 12px; padding: 0 6px; box-shadow: none; }
@@ -304,7 +304,7 @@ html.touch #trainPanel .tp-btn { padding: 4px 10px; border: 1px solid rgba(246,2
   background: #000 !important; backdrop-filter: none !important; }
 #screen.title { justify-content: center; }
 .title-wrap { padding: 0; display: flex; flex-direction: column; align-items: center; text-align: center; }
-.logo-img { width: min(560px, 78vw); height: auto; display: block; margin-top: -2vh; }
+.logo-img { width: min(660px, 84vw); height: auto; display: block; margin-top: -2vh; overflow: visible; filter: drop-shadow(0 6px 0 rgba(0,0,0,0.55)) drop-shadow(0 10px 24px rgba(0,0,0,0.6)); }
 .title-wrap .menu { align-items: center; margin-top: 10px; gap: 6px; }
 .title-wrap .menu button { font-size: 24px; }
 .title-wrap .menu button.on { transform: skewX(-10deg); }
@@ -409,6 +409,14 @@ html.touch .rules b, html.touch .bet b, html.touch .foot { display: none; }
 @media (prefers-reduced-motion: reduce) { #trainPanel .tp-rec { animation: none; } }
 .gripm { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 11px; letter-spacing: 1.5px; opacity: 0.85; }
 .gripm em { font-style: normal; }
+.gbar { position: relative; display: inline-block; width: 150px; height: 12px; background: #2a5d8f; border: 2px solid rgba(255,255,255,0.8); border-radius: 7px; overflow: hidden; vertical-align: middle; }
+.gbar i { display: block; height: 100%; background: linear-gradient(#ff6b5a, #d8342a); transition: width 0.15s linear; }
+.gbar u { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: #fff; text-decoration: none; }
+.gbar.win { box-shadow: 0 0 10px #ffd34d; border-color: #ffd34d; }
+.gbar.lose { box-shadow: 0 0 10px #4da3ff; }
+.ready { display: flex; justify-content: center; gap: 6px; margin-bottom: 4px; }
+.ready s { text-decoration: none; font-size: 11px; letter-spacing: 1.5px; padding: 1px 8px; border-radius: 9px; background: rgba(0,0,0,0.35); color: rgba(255,255,255,0.35); }
+.ready s.on { background: #2fbf71; color: #fff; box-shadow: 0 0 8px #2fbf71; }
 /* phone controllers screen */
 .ph-box { display: flex; gap: 28px; align-items: center; justify-content: center; flex-wrap: wrap; margin: 10px auto 18px; max-width: 760px; }
 .ph-qr { width: 220px; max-width: 60vw; background: #fff; padding: 8px; border-radius: 6px; }

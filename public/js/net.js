@@ -105,7 +105,7 @@
     w: m.w.map((w) => { const o = {}; for (const k of WF) o[k] = w[k]; o.fxs = Object.assign({}, w.fxs); return o; }),
     m: Object.fromEntries(MF.map((k) => [k, m[k]])), wins: m.wins.slice(), hist: (m.history || []).slice(),
     cl: m.clinch ? { a: m.clinch.a.idx, ang: m.clinch.ang, cx: m.clinch.cx, cz: m.clinch.cz, d: m.clinch.d, v: m.clinch.v, vl: m.clinch.vl, w: m.clinch.w,
-      grip: m.clinch.grip.slice(), type: m.clinch.type.slice(), t: m.clinch.t } : null,
+      grip: m.clinch.grip.slice(), type: m.clinch.type.slice(), won: (m.clinch.won || [false, false]).slice(), t: m.clinch.t } : null,
     res: m.result ? { l: m.result.loser.idx, cause: m.result.cause, km: m.result.km, draw: !!m.result.draw } : null,
   });
   S.netApply = (m, d) => {
@@ -116,7 +116,7 @@
     if (d.cl) {
       const a = m.w[d.cl.a], b = a.opp;
       const c = new S.Clinch(m, a, b, {});
-      Object.assign(c, { ang: d.cl.ang, cx: d.cl.cx, cz: d.cl.cz, d: d.cl.d, dT: d.cl.d, v: d.cl.v, vl: d.cl.vl, w: d.cl.w, grip: d.cl.grip, type: d.cl.type, t: d.cl.t });
+      Object.assign(c, { ang: d.cl.ang, cx: d.cl.cx, cz: d.cl.cz, d: d.cl.d, dT: d.cl.d, v: d.cl.v, vl: d.cl.vl, w: d.cl.w, grip: d.cl.grip, type: d.cl.type, won: d.cl.won || [false, false], t: d.cl.t });
       m.clinch = c; for (let i = 0; i < 2; i++) { m.w[i].st = d.w[i].st; m.w[i].t = d.w[i].t; }
     }
     m.result = d.res ? { loser: m.w[d.res.l], winner: m.w[d.res.l].opp, cause: d.res.cause, km: d.res.km, draw: d.res.draw } : null;

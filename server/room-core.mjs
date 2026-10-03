@@ -14,7 +14,7 @@ export class RoomCore {
     this.nextId = 1;
     this.auto = /^QM[A-Z0-9]+$/.test(code); // quick match: one-on-one, bouts start by themselves
     this.relay = /^PD[A-Z0-9]+$/.test(code); // phone controllers: the game plus up to two phones, messages passed straight through
-    this.cap = this.auto ? 2 : this.relay ? 3 : Infinity; // private rooms take anyone (the rest watch and queue)
+    this.cap = this.auto ? 2 : this.relay ? 6 : Infinity; // phones: the game, two players, and room for stale copies (a closed tab, a home-screen icon) the game hands seats over from
     this.autoTimer = null;
   }
 

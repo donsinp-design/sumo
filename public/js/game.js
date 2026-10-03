@@ -252,8 +252,11 @@
       const human = m && hi >= 0 ? m.w[hi] : null;
       if (human && this.settings.hints && this.mode === 'game' && !this.paused && m.phase === 'fight') {
         if (m.clinch && human.clinch && !m.clinch.tech) {
-          const c = m.clinch, gi = c.grip[human.idx], go = c.grip[human.opp.idx], pct = Math.round(100 * gi / Math.max(0.01, gi + go));
-          html = '<span class="gripm"><em>YOUR GRIP</em><span class="wbar"><i style="width:' + pct + '%"></i></span><em>THEIRS</em>' + (c.type[human.idx] === 'inside' ? '<b>INSIDE</b>' : '') + '</span>' + this.clinchTip(c, human);
+          // tug-of-war: the marker sits in the middle when the grips are even and slides your way as you win
+          const c = m.clinch, gi = c.grip[human.idx], go = c.grip[human.opp.idx], pct = Math.round(Math.max(4, Math.min(96, 50 + 38 * (gi - go))));
+          const ready = (k) => { const e = c.evalTech(human, k); return e.ok && e.sc > 0.34; };
+          html = '<span class="gripm"><em>YOU</em><span class="gbar' + (gi - go > 0.6 ? ' win' : gi - go < -0.6 ? ' lose' : '') + '"><i style="width:' + pct + '%"></i><u></u></span><em>THEM</em>' +
+            (c.type[human.idx] === 'inside' ? '<b>INSIDE</b>' : '') + '</span><span class="ready"><s' + (ready('trip') ? ' class="on"' : '') + '>TRIP</s><s' + (ready('throw') ? ' class="on"' : '') + '>THROW</s></span>' + this.clinchTip(c, human);
         }
         else if (!m.clinch) {
           // outside the grapple: a counter tip for what they are doing right now, held a moment so it can be read
@@ -309,7 +312,7 @@
       if (pushedBack && myEdge < 1.3) return 'Near the edge! Hold ' + K + ' and <b>point behind you</b> to swing them out';
       if (pushedBack || c.tow[o.idx] > 0.3) return 'They are pushing: hold ' + K + ' and <b>point behind you</b> to swing them past';
       const tr = c.evalTech(me, 'trip');
-      if (tr.ok && tr.sc > 0.38) return '<b>TRIP READY!</b> Hold ' + K + ', point at them, let go';
+      if (tr.ok && tr.sc > 0.34) return '<b>TRIP READY!</b> Hold ' + K + ', point at them, let go';
       if (oEdge < 1.6) return '<b>Hold toward them</b> to drive them out';
       const tips = ['<b>Hold toward them</b> to drive them back and win the grip', 'Let go of the stick to keep your elbows tight: their grip stops growing', 'Hold ' + K + ' and <b>point</b>: they swing round you · let go to throw', 'Hold ' + K + ', point <b>at them</b>, let go: leg trip', 'Tap ' + K + ' alone to lift',
         'Want out? ' + J + ' shove off &nbsp;·&nbsp; ' + Lk + ' slip back',
@@ -319,7 +322,7 @@
 
     recordText() {
       const r = S.profile.record(this.names[0], this.names[1]);
-      return this.names[0] + ' ' + r[0] + ' – ' + r[1] + ' ' + this.names[1];
+      return r[0] + '  –  ' + r[1]; // just the score: names next to numbers read as "PLAYER 1 1"
     }
     contKey(i) { return this.kind === 'pvp' && i === 1 ? '1 or Enter' : 'J or Enter'; }
     confirmGacha() {
@@ -706,7 +709,7 @@
           case 'regrip': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout(e.level >= 2.25 ? 'STRONG GRIP' : 'GRIP +', p.x, p.y - 70, e.level >= 2.25 ? 'gold' : 'small'); A.grab(); break; }
           case 'burst': R.shake(0.15); fx.burst(e.x, e.z, 6); A.thump(5); break;
           case 'teeter': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout('TEETERING!', p.x, p.y - 80, 'gold'); A.scuff(); A.cheer(0.6, 1); this.excite = 1; break; }
-          case 'gripWin': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout('INSIDE GRIP!', p.x, p.y - 80, 'teal'); A.thump && A.thump(2); break; }
+          case 'gripWin': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout('GRIP WON!', p.x, p.y - 80, 'teal'); A.thump && A.thump(2); break; }
           case 'matta': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout(e.n >= 2 ? 'MATTA! You start late' : 'MATTA! False start', p.x, p.y - 80, 'gold'); A.whoosh(0.3); break; }
           case 'teeterSave': { const p = this.scr(e.w.x, e.w.z); if (!quiet) ui.callout('SAVED!', p.x, p.y - 80, 'teal'); A.cheer(0.9, 1.3); fx.dust(e.w.x, 0.05, e.w.z, 8, 0.4, 0.6, 0.35); break; }
           case 'chargeCancel': fx.dust(e.w.x, 0.05, e.w.z, 6, 0.3, 0.5, 0.3); A.scuff(); break;

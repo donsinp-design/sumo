@@ -597,7 +597,8 @@
           const k = Math.min(1, Math.pow(t / 0.22, 2)); // gravity: slow to tip, then slammed flat
           const ff = w.fallX * w.fx + w.fallZ * w.fz, fs = w.fallX * w.fz - w.fallZ * w.fx;
           p = ff * 1.38 * k; r = -fs * 1.38 * k; c = 0.3 + 0.5 * k; drop = k;
-          Rh = [0.8, 0.2, 0.7]; Lh = mir(Rh); rate = 20; break;
+          // arms fling out as they tip, then lie tucked along the body so the four limbs don't read as four legs
+          Rh = k < 1 ? [0.8, 0.2, 0.7] : [0.62, -0.25, 0.12]; Lh = mir(Rh); rate = k < 1 ? 20 : 8; break;
         }
         case 'win': {
           c = 0.05; p = -0.06; Rh = [0.68, 0.05, 0.2]; Lh = mir(Rh);
@@ -731,8 +732,9 @@
         const hip = this.v1.set(Lg.sd * 0.3 * s, -0.1 * s, 0).applyMatrix4(this.body.matrix);
         let foot;
         const downed = w.st === 'fall' || w.down;
-        if (downed) { // lying on the clay: legs stay straight along the body instead of stepping
-          foot = this.v2.set(Lg.sd * 0.32 * s, -0.92 * s, 0.1 * s).applyMatrix4(this.body.matrix);
+        if (downed) { // lying on the clay: legs straight out along the body, fully reached so no knee pokes up
+          const hb = this.v2.set(Lg.sd * 0.3 * s, -0.1 * s, 0), len = (Lg.l1 + Lg.l2) * 0.995;
+          foot = hb.add(this.v3.set(Lg.sd * 0.06, -1, 0.05).normalize().multiplyScalar(len)).applyMatrix4(this.body.matrix);
         } else if (w.lifted || w.y > 0.12) {
           foot = this.v2.set(Lg.sd * 0.34 * s, hip.y - 0.74 * s, 0.05 * s + Math.sin(T * 14 + Lg.sd) * 0.12 * s);
         } else {
@@ -742,6 +744,7 @@
         if (this.hook > 0 && Lg.sd > 0) foot.lerp(this.v3.set(0.1 * s, 0.25 * s, 0.75 * s), this.hook);
         if (this.stompLift > 0 && Lg.sd < 0) foot.lerp(this.v3.set(-0.85 * s, 0.25 * s + 0.75 * s * this.stompLift, 0.12 * s), Math.min(1, this.stompLift * 1.5));
         const pole = this.v3.set(Lg.sd * 0.75, 0.1, 1);
+        if (downed) pole.set(Lg.sd * 0.3, 0, 1).transformDirection(this.body.matrix); // knees bend the way the body faces, not the old standing way
         if (w.st === 'air' || w.torpedo) foot.set(Lg.sd * 0.45 * s, hip.y - 0.6 * s, -0.5 * s);
         ik(hip, foot, Lg.l1, Lg.l2, pole, this.v4);
         seg(Lg.thigh, hip, this.v4); seg(Lg.calf, this.v4, foot);

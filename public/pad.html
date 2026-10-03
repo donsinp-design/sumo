@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Kumite Pad">
 <meta name="theme-color" content="#0f0a0e">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
 <title>Kumite Controller</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Barlow+Condensed:wght@600;800&display=swap" rel="stylesheet">
@@ -41,30 +42,39 @@
   main { position: relative; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
   .zone { position: relative; min-width: 0; min-height: 0; }
 
-  /* stick */
-  #base { position: absolute; width: calc(var(--S) * 0.62); height: calc(var(--S) * 0.62); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
-          background: radial-gradient(circle, rgba(0,0,0,0.45) 0 55%, rgba(0,0,0,0.25) 70%, transparent 71%);
-          box-shadow: inset 0 0 0 calc(var(--u) * 1.4) #c9a86a, inset 0 0 0 calc(var(--u) * 2.4) rgba(0,0,0,0.5), 0 calc(var(--u) * 1.5) calc(var(--u) * 5) rgba(0,0,0,0.5);
-          opacity: 0.55; transition: opacity 0.15s; }
-  #base.live { opacity: 1; }
-  #base::before { content: ""; position: absolute; inset: 18%; border-radius: 50%; border: 1px dashed rgba(246, 237, 220, 0.18); }
-  #knob { position: absolute; width: calc(var(--S) * 0.30); height: calc(var(--S) * 0.30); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
-          background: radial-gradient(circle at 38% 32%, #fffaf0 0%, #e9dcc4 38%, #b9a88c 72%, #8a7a62 100%);
-          box-shadow: 0 calc(var(--u) * 1.8) calc(var(--u) * 4) rgba(0,0,0,0.6), inset 0 0 0 calc(var(--u) * 1.2) rgba(0,0,0,0.18); }
-  #knob::after { content: ""; position: absolute; inset: 22%; border-radius: 50%; background: repeating-radial-gradient(circle, rgba(0,0,0,0.10) 0 1px, transparent 1px 4px); }
-  #hintL { position: absolute; left: 0; right: 0; bottom: calc(var(--u) * 2); text-align: center; font-size: calc(var(--u) * 3.6); letter-spacing: 0.18em; color: var(--dim); pointer-events: none; }
+  main { position: relative; min-height: 0; }
 
-  /* face buttons */
-  .b { position: absolute; width: var(--d); height: var(--d); border-radius: 50%; transform: translate(-50%, -50%); color: var(--c);
-       background: radial-gradient(circle at 35% 28%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 32%), radial-gradient(circle at 50% 60%, var(--c) 0%, color-mix(in srgb, var(--c) 70%, #000) 100%);
-       box-shadow: 0 calc(var(--u) * 1.6) 0 color-mix(in srgb, var(--c) 45%, #000), 0 calc(var(--u) * 3) calc(var(--u) * 6) rgba(0,0,0,0.55), inset 0 0 0 calc(var(--u) * 0.8) rgba(255,255,255,0.18);
-       display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform 0.05s, box-shadow 0.05s, filter 0.05s; }
-  .b span { font-family: var(--display); font-size: calc(var(--d) * 0.36); line-height: 1; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.35); }
-  .b small { font-weight: 800; font-size: calc(var(--d) * 0.15); letter-spacing: 0.12em; color: rgba(255,255,255,0.85); margin-top: 2%; }
-  .b.on { transform: translate(-50%, -46%) scale(0.95); filter: brightness(1.15);
-          box-shadow: 0 0 0 color-mix(in srgb, var(--c) 45%, #000), 0 0 calc(var(--u) * 8) var(--c), inset 0 0 0 calc(var(--u) * 0.8) rgba(255,255,255,0.3); }
-  #bJ { --c: var(--red); } #bK { --c: var(--gold); } #bL { --c: var(--teal); } #bS { --c: var(--blue); }
-  #bS span { font-family: var(--ui); font-weight: 800; }
+  /* stick: flat rings, no gradients */
+  #base { position: absolute; width: calc(var(--S) * 0.62 * var(--k)); height: calc(var(--S) * 0.62 * var(--k)); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
+          background: rgba(0,0,0,0.35); border: calc(var(--u) * 1.2) solid #c9a86a; opacity: 0.55; transition: opacity 0.15s; }
+  #base.live { opacity: 1; }
+  #base::before { content: ""; position: absolute; inset: 18%; border-radius: 50%; border: 1px dashed rgba(246, 237, 220, 0.22); }
+  #knob { position: absolute; width: calc(var(--S) * 0.30 * var(--k)); height: calc(var(--S) * 0.30 * var(--k)); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
+          background: #e9dcc4; border-bottom: calc(var(--u) * 1.4) solid #a8977b; }
+  #hintL { position: absolute; transform: translate(-50%, 0); font-size: calc(var(--u) * 3.6); letter-spacing: 0.18em; color: var(--dim); pointer-events: none; white-space: nowrap; }
+
+  /* face buttons: flat colour, a solid lip underneath that disappears when pressed */
+  .b { position: absolute; width: var(--d); height: var(--d); border-radius: 50%; transform: translate(-50%, -50%); background: var(--c);
+       border-bottom: calc(var(--d) * 0.06) solid color-mix(in srgb, var(--c) 55%, #000);
+       display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform 0.05s; z-index: 2; }
+  .b span { font-family: var(--display); font-size: calc(var(--d) * 0.36); line-height: 1; color: #fff; }
+  .b small { font-weight: 800; font-size: calc(var(--d) * 0.15); letter-spacing: 0.12em; color: rgba(255,255,255,0.9); margin-top: 2%; }
+  .b.on { transform: translate(-50%, -47%) scale(0.94); border-bottom-width: 0; filter: brightness(1.18); }
+  .b.a0 { --c: var(--red); } .b.a1 { --c: #d9a21f; } .b.a2 { --c: #26a596; } .b.a3 { --c: var(--blue); }
+  .b.a3 span { font-family: var(--ui); font-weight: 800; }
+
+  /* layout editor */
+  #edit { flex: none; height: calc(var(--u) * 9); padding: 0 calc(var(--u) * 3); border-radius: calc(var(--u) * 3); border: 0; background: #2a1f26; color: var(--paper);
+          font-family: var(--ui); font-weight: 800; font-size: calc(var(--u) * 4); letter-spacing: 0.1em; }
+  #bar { position: absolute; left: 50%; bottom: calc(var(--u) * 2); transform: translateX(-50%); display: none; gap: 8px; align-items: center; z-index: 5;
+         background: #2a1f26; border-radius: 14px; padding: 8px 10px; font-size: 14px; letter-spacing: 0.04em; white-space: nowrap; }
+  #bar button { border: 0; border-radius: 10px; background: #43343d; color: var(--paper); font: 800 15px/1 var(--ui); letter-spacing: 0.08em; padding: 10px 12px; }
+  #bar button.go { background: var(--red); color: #fff; }
+  #bar em { font-style: normal; color: var(--dim); }
+  main.edit #bar { display: flex; }
+  main.edit .b, main.edit #base { outline: 2px dashed rgba(246,237,220,0.6); outline-offset: 4px; opacity: 1; }
+  main.edit #base { pointer-events: auto; }
+  main.edit #hintL { opacity: 0 !important; }
 
   /* overlays */
   .sheet { position: fixed; inset: 0; background: rgba(15, 10, 14, 0.96); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; text-align: center; font-size: 18px; }
@@ -82,52 +92,77 @@
 </head>
 <body>
 <div id="app">
-  <header><div id="tag">KUMITE</div><div id="dot"></div><div id="msg">Connecting…</div><button id="pause" aria-label="Pause">PAUSE</button></header>
-  <main>
-    <div class="zone" id="stickZone"><div id="base"></div><div id="knob"></div><div id="hintL">MOVE</div></div>
-    <div class="zone" id="btnZone">
-      <div class="b" id="bS" data-b="3"><span>★</span><small>SKILL</small></div>
-      <div class="b" id="bL" data-b="2"><span>L</span><small>DASH</small></div>
-      <div class="b" id="bK" data-b="1"><span>K</span><small>GRAB</small></div>
-      <div class="b" id="bJ" data-b="0"><span>J</span><small>PUSH</small></div>
-    </div>
+  <header><div id="tag">KUMITE</div><div id="dot"></div><div id="msg">Connecting…</div><button id="edit" aria-label="Edit layout">LAYOUT</button><button id="pause" aria-label="Pause">PAUSE</button></header>
+  <main id="main">
+    <div id="base"></div><div id="knob"></div><div id="hintL">MOVE</div>
+    <div class="b" id="b0"><span></span><small></small></div>
+    <div class="b" id="b1"><span></span><small></small></div>
+    <div class="b" id="b2"><span></span><small></small></div>
+    <div class="b" id="b3"><span></span><small></small></div>
+    <div id="bar"><em>Drag to move · tap a button to change it</em><button id="sm" aria-label="Smaller">−</button><button id="bg" aria-label="Bigger">+</button><button id="rs">RESET</button><button id="done" class="go">DONE</button></div>
   </main>
 </div>
 <div class="sheet" id="join"><h1>KUMITE</h1><p>Enter the code shown on the game screen.</p><input id="code" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="PD…"><button id="go">CONNECT</button></div>
 <div class="sheet" id="turn"><h1>TURN SIDEWAYS</h1><p>Hold your phone in landscape, like a controller.</p></div>
-<div id="tip"><span>Full screen: Share, then Add to Home Screen</span><button id="tipOk">OK</button></div>
+<div id="tip"><span id="tipT">Full screen: tap Share, then Add to Home Screen</span><button id="tipGo" hidden>INSTALL</button><button id="tipOk">OK</button></div>
 <script>
 'use strict';
 (function () {
   const $ = (id) => document.getElementById(id), root = document.documentElement;
   const st = { mx: 0, mz: 0, b: [false, false, false, false, false] };
   let ws = null, myId = null, slot = null, code = (new URLSearchParams(location.search).get('c') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  let lastSent = '', lastAt = 0, retry = null;
+  try { if (code) localStorage.setItem('kumitePadCode', code); else code = localStorage.getItem('kumitePadCode') || ''; } catch (e) { /* storage blocked */ }
+  let lastSent = '', lastAt = 0, retry = null, noGame = null;
 
-  // ---- fit everything to the part of the screen that is actually visible
+  // ---- layout: where the stick rests and where each button sits (fractions of the play area), what each
+  // button does, and a size. The player can change all of it (LAYOUT) and it is kept on this phone.
+  const ACT = [['J', 'PUSH'], ['K', 'GRAB'], ['L', 'DASH'], ['★', 'SKILL']];
+  const main = $('main'), base = $('base'), knob = $('knob'), btns = [0, 1, 2, 3].map((i) => $('b' + i));
+  let L = null, sticking = false, area = { w: 1, h: 1 };
+  function defaults() {
+    // stick in the middle of the left half; buttons in a diamond in the middle of the right half
+    const s = Math.min(area.w / 2, area.h), off = s * 0.30, cx = area.w * 0.75, cy = area.h / 2;
+    const f = (x, y) => [x / area.w, y / area.h];
+    return { k: 1, stick: [0.25, 0.5], b: [f(cx, cy + off).concat(0), f(cx + off, cy).concat(1), f(cx - off, cy).concat(2), f(cx, cy - off).concat(3)] };
+  }
+  function loadLayout() { try { const j = JSON.parse(localStorage.getItem('kumitePadLayout')); if (j && j.b && j.b.length === 4 && j.stick) return j; } catch (e) { /* none saved */ } return null; }
+  function saveLayout() { try { localStorage.setItem('kumitePadLayout', JSON.stringify(L)); } catch (e) { /* storage blocked */ } }
+  function drawButtons() {
+    const s = Math.min(area.w / 2, area.h);
+    main.style.setProperty('--d', (s * 0.30 * L.k) + 'px'); root.style.setProperty('--k', L.k);
+    btns.forEach((el, i) => {
+      const [fx, fy, a] = L.b[i]; el.className = 'b a' + a + (st.b[a] && el.dataset.on ? ' on' : '');
+      el.style.left = (fx * area.w) + 'px'; el.style.top = (fy * area.h) + 'px';
+      el.querySelector('span').textContent = ACT[a][0]; el.querySelector('small').textContent = ACT[a][1];
+    });
+    const hx = L.stick[0] * area.w, hy = L.stick[1] * area.h;
+    if (!sticking) placeBase(hx, hy);
+    const h = $('hintL'); h.style.left = hx + 'px'; h.style.top = Math.min(area.h - 20, hy + base.offsetHeight / 2 + 6) + 'px';
+  }
+
+  // ---- fit everything to the part of the screen that is actually visible (ignoring any zoom)
   function layout() {
-    const vv = window.visualViewport, w = Math.round(vv ? vv.width : innerWidth), h = Math.round(vv ? vv.height : innerHeight);
+    const vv = window.visualViewport, z = vv && Math.abs(vv.scale - 1) < 0.01;
+    const w = Math.round(z ? vv.width : document.documentElement.clientWidth), h = Math.round(z ? vv.height : innerHeight);
     root.style.setProperty('--vw', w + 'px'); root.style.setProperty('--vh', h + 'px');
     const u = Math.max(4, Math.min(w, h * 1.6) / 100) * 0.62; // scale unit for the bar and small text
     root.style.setProperty('--u', u.toFixed(2) + 'px');
     $('turn').classList.toggle('on', h > w * 1.1 && !$('join').classList.contains('on'));
     requestAnimationFrame(() => {
-      const L = $('stickZone').getBoundingClientRect(), R = $('btnZone').getBoundingClientRect();
-      const S = Math.min(L.width, L.height);
-      root.style.setProperty('--S', S + 'px');
-      if (!sticking) placeBase(L.width / 2, L.height / 2);
-      // four buttons in a diamond, as big as the space allows
-      const s = Math.min(R.width, R.height), d = s * 0.30, off = s * 0.30; // the diamond stays inside its half, even pressed
-      $('btnZone').style.setProperty('--d', d + 'px');
-      const cx = R.width / 2, cy = R.height / 2;
-      const put = (id, x, y) => { const el = $(id); el.style.left = x + 'px'; el.style.top = y + 'px'; };
-      put('bJ', cx, cy + off); put('bK', cx + off, cy); put('bL', cx - off, cy); put('bS', cx, cy - off);
+      const r = main.getBoundingClientRect(); area = { w: r.width, h: r.height };
+      root.style.setProperty('--S', Math.min(r.width / 2, r.height) + 'px');
+      if (!L) L = loadLayout() || defaults();
+      drawButtons();
     });
   }
   window.addEventListener('resize', layout);
   if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+  window.scrollTo(0, 0);
 
   // ---- connection
+  // this phone's key, kept on the phone so a reconnect gets the same player seat back
+  let pk = ''; try { pk = localStorage.getItem('kumitePk') || ''; } catch (e) { /* ignore */ }
+  if (!pk) { pk = Math.random().toString(36).slice(2, 10); try { localStorage.setItem('kumitePk', pk); } catch (e) { /* ignore */ } }
   function msg(t) { $('msg').textContent = t; }
   function connect() {
     if (!code) { $('join').classList.add('on'); layout(); return; }
@@ -135,7 +170,10 @@
     const u = new URL('ws', location.href); u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; u.search = '?room=' + code; u.hash = '';
     try { ws = new WebSocket(u.toString()); } catch (e) { msg('Could not reach the game'); return; }
     msg('Connecting…');
-    ws.onopen = () => { ws.send(JSON.stringify({ t: 'hi' })); };
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ t: 'hi', pk }));
+      clearTimeout(noGame); noGame = setTimeout(() => { if (slot === null) msg('Waiting for the game: open PHONE CONTROLLERS on it'); }, 3000);
+    };
     ws.onmessage = (e) => {
       if (e.data === 'pong') return;
       let m; try { m = JSON.parse(e.data); } catch (er) { return; }
@@ -155,7 +193,7 @@
   // send stick and buttons when they change, plus a heartbeat so the game knows we're still here
   function send(force) {
     if (!ws || ws.readyState !== 1 || slot === null || slot < 0) return;
-    const s = JSON.stringify({ t: 'st', mx: Math.round(st.mx * 100) / 100, mz: Math.round(st.mz * 100) / 100, b: st.b.map((x) => (x ? 1 : 0)) });
+    const s = JSON.stringify({ t: 'st', mx: Math.round(st.mx * 100) / 100, mz: Math.round(st.mz * 100) / 100, b: st.b.map((x) => (x ? 1 : 0)), pk });
     const now = performance.now();
     if (!force && s === lastSent && now - lastAt < 250) return;
     ws.send(s); lastSent = s; lastAt = now;
@@ -164,19 +202,21 @@
   setInterval(() => { if (ws && ws.readyState === 1) ws.send('ping'); }, 20000);
   const buzz = (ms) => { if (navigator.vibrate) navigator.vibrate(ms); };
 
-  // ---- stick: rests in the middle of the left half; touch anywhere there and it jumps under your thumb
-  const zone = $('stickZone'), base = $('base'), knob = $('knob');
-  let sid = null, ox = 0, oy = 0, sticking = false;
+  // ---- stick: rests at its home spot; touch anywhere on that side of the screen and it jumps under your thumb
+  let sid = null, ox = 0, oy = 0;
   function placeBase(x, y) { ox = x; oy = y; base.style.left = knob.style.left = x + 'px'; base.style.top = knob.style.top = y + 'px'; }
-  zone.addEventListener('pointerdown', (e) => {
-    if (sid !== null) return; sid = e.pointerId; zone.setPointerCapture(sid); sticking = true;
-    const r = zone.getBoundingClientRect(); placeBase(e.clientX - r.left, e.clientY - r.top);
+  const rel = (e) => { const r = main.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  main.addEventListener('pointerdown', (e) => {
+    if (editing || sid !== null || e.target.closest('.b,#bar')) return;
+    const [x, y] = rel(e);
+    if ((x < area.w / 2) !== (L.stick[0] < 0.5)) return; // the other half belongs to the buttons
+    sid = e.pointerId; main.setPointerCapture(sid); sticking = true; placeBase(x, y);
     base.classList.add('live'); $('hintL').style.opacity = 0; wake();
   });
-  zone.addEventListener('pointermove', (e) => {
+  main.addEventListener('pointermove', (e) => {
     if (e.pointerId !== sid) return;
-    const r = zone.getBoundingClientRect(), R = base.offsetWidth * 0.36;
-    let dx = e.clientX - r.left - ox, dy = e.clientY - r.top - oy;
+    const [x, y] = rel(e), R = base.offsetWidth * 0.36;
+    let dx = x - ox, dy = y - oy;
     const l = Math.hypot(dx, dy); if (l > R) { dx *= R / l; dy *= R / l; }
     knob.style.left = (ox + dx) + 'px'; knob.style.top = (oy + dy) + 'px';
     let mx = dx / R, mz = dy / R; if (Math.hypot(mx, mz) < 0.2) { mx = 0; mz = 0; }
@@ -184,17 +224,46 @@
   });
   const endStick = (e) => {
     if (e.pointerId !== sid) return; sid = null; sticking = false; st.mx = 0; st.mz = 0;
-    base.classList.remove('live'); const r = zone.getBoundingClientRect(); placeBase(r.width / 2, r.height / 2); send(true);
+    base.classList.remove('live'); placeBase(L.stick[0] * area.w, L.stick[1] * area.h); send(true);
   };
-  zone.addEventListener('pointerup', endStick); zone.addEventListener('pointercancel', endStick);
+  main.addEventListener('pointerup', endStick); main.addEventListener('pointercancel', endStick);
 
   // ---- face buttons: each finger can hold its own
-  document.querySelectorAll('.b').forEach((el) => {
-    const i = +el.dataset.b;
-    el.addEventListener('pointerdown', (e) => { el.setPointerCapture(e.pointerId); st.b[i] = true; el.classList.add('on'); buzz(10); send(true); wake(); });
-    const up = () => { st.b[i] = false; el.classList.remove('on'); send(true); };
+  btns.forEach((el, i) => {
+    el.addEventListener('pointerdown', (e) => {
+      el.setPointerCapture(e.pointerId);
+      if (editing) { drag = { i, x0: e.clientX, y0: e.clientY, moved: false }; return; }
+      const a = L.b[i][2]; st.b[a] = true; el.dataset.on = 1; el.classList.add('on'); buzz(10); send(true); wake();
+    });
+    const up = () => { if (editing) return; const a = L.b[i][2]; st.b[a] = false; delete el.dataset.on; el.classList.remove('on'); send(true); };
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   });
+
+  // ---- layout editor: drag the stick or a button, tap a button to change what it does, resize, reset
+  let editing = false, drag = null;
+  base.addEventListener('pointerdown', (e) => { if (!editing) return; base.setPointerCapture(e.pointerId); drag = { i: -1, x0: e.clientX, y0: e.clientY, moved: false }; });
+  document.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 8) drag.moved = true;
+    if (!drag.moved) return;
+    const [x, y] = rel(e), fx = Math.max(0.06, Math.min(0.94, x / area.w)), fy = Math.max(0.08, Math.min(0.92, y / area.h));
+    if (drag.i < 0) L.stick = [fx, fy]; else { L.b[drag.i][0] = fx; L.b[drag.i][1] = fy; }
+    drawButtons();
+  });
+  document.addEventListener('pointerup', () => {
+    if (!drag) return;
+    if (!drag.moved && drag.i >= 0) { const b = L.b[drag.i]; b[2] = (b[2] + 1) % 4; buzz(10); } // tap: next action
+    drag = null; drawButtons(); saveLayout();
+  });
+  function setEdit(on) {
+    editing = on; main.classList.toggle('edit', on); $('edit').classList.toggle('on', on);
+    st.mx = 0; st.mz = 0; st.b = [false, false, false, false, st.b[4]]; send(true); drawButtons();
+  }
+  $('edit').addEventListener('click', () => setEdit(!editing));
+  $('done').addEventListener('click', () => { saveLayout(); setEdit(false); });
+  $('rs').addEventListener('click', () => { L = defaults(); saveLayout(); drawButtons(); });
+  $('sm').addEventListener('click', () => { L.k = Math.max(0.7, +(L.k - 0.1).toFixed(2)); saveLayout(); drawButtons(); });
+  $('bg').addEventListener('click', () => { L.k = Math.min(1.5, +(L.k + 0.1).toFixed(2)); saveLayout(); drawButtons(); });
   const pz = $('pause');
   pz.addEventListener('pointerdown', () => { st.b[4] = true; pz.classList.add('on'); buzz(10); send(true); });
   const pzUp = () => { st.b[4] = false; pz.classList.remove('on'); send(true); };
@@ -205,13 +274,25 @@
   function wake() { if (lock || !navigator.wakeLock) return; navigator.wakeLock.request('screen').then((l) => { lock = l; l.addEventListener('release', () => { lock = null; }); }).catch(() => {}); }
   document.addEventListener('contextmenu', (e) => e.preventDefault());
   document.addEventListener('gesturestart', (e) => e.preventDefault()); // no pinch zoom on iPhone
-  let lastTap = 0; document.addEventListener('touchend', (e) => { const n = Date.now(); if (n - lastTap < 350) e.preventDefault(); lastTap = n; }, { passive: false }); // no double-tap zoom
+  // no double-tap zoom, no magnifier, no scrolling: the page swallows raw touches (pointer events still arrive)
+  const free = (e) => e.target.closest && e.target.closest('input, .sheet button, #tip button, #bar button, #edit');
+  for (const t of ['touchstart', 'touchmove', 'touchend']) document.addEventListener(t, (e) => { if (!free(e)) e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', (e) => e.preventDefault());
 
-  // ---- one-time tip: on iPhone, a home-screen icon opens full screen without Safari's bars
-  try {
-    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent), standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
-    if (ios && !standalone && !localStorage.getItem('kumitePadTip')) $('tip').classList.add('on');
-  } catch (e) { /* storage blocked */ }
+  // ---- install tip. A home-screen icon opens full screen with no browser bars. Android/Chrome can install it
+  // in one tap; on iPhone only the person can do it (Share, then Add to Home Screen), so we just explain how.
+  // The icon remembers this phone's code, so it reconnects to the same computer next time.
+  let standalone = false, seen = false;
+  try { standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches; seen = !!localStorage.getItem('kumitePadTip'); } catch (e) { /* storage blocked */ }
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!ios) { const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'pad.webmanifest'; document.head.appendChild(l); }
+  if (ios && !standalone && !seen) $('tip').classList.add('on');
+  let ask = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); ask = e; if (seen) return;
+    $('tipT').textContent = 'Install the controller: full screen, one tap to open'; $('tipGo').hidden = false; $('tip').classList.add('on');
+  });
+  $('tipGo').addEventListener('click', () => { if (ask) { ask.prompt(); ask = null; } $('tip').classList.remove('on'); });
   $('tipOk').addEventListener('click', () => { $('tip').classList.remove('on'); try { localStorage.setItem('kumitePadTip', '1'); } catch (e) { /* ignore */ } });
 
   $('go').addEventListener('click', () => { code = $('code').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code) connect(); });

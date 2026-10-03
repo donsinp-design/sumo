@@ -390,6 +390,7 @@
         if (c < -0.2) this.hurt(w, dt * 0.55 * (sp / ms) * -c, w.vx / sp, w.vz / sp, true);
       }
       w.vx += ax * dt; w.vz += az * dt;
+      if (w.down) { const k = Math.exp(-dt * 7); w.vx *= k; w.vz *= k; if (Math.hypot(w.vx, w.vz) < 0.15) w.vx = w.vz = 0; } // down means down: a short skid, then still
 
       // facing: always tries to square up to the opponent, but turning has inertia
       if (w.gulpI >= 0) { // carrying someone in your belly: face where you walk, so you can aim the spit
@@ -659,7 +660,8 @@
       if (d < 1e-4) d = 1e-4;
       const nx = dx / d, nz = dz / d;
       const ma = this.effMass(A, nx, nz), mb = this.effMass(B, -nx, -nz);
-      const ia = 1 / ma, ib = 1 / mb, pen = min - d;
+      // someone lying on the clay is a dead weight: the other one is pushed off them, never the other way round
+      const ia = A.down && !B.down ? 0 : 1 / ma, ib = B.down && !A.down ? 0 : 1 / mb, pen = min - d;
       A.x -= nx * pen * ia / (ia + ib); A.z -= nz * pen * ia / (ia + ib);
       B.x += nx * pen * ib / (ia + ib); B.z += nz * pen * ib / (ia + ib);
       // a dash into someone's chest carries no more weight than walking into them
@@ -841,7 +843,7 @@
   class Clinch {
     constructor(m, a, b, opt) {
       this.m = m; this.a = a; this.b = b; this.t = 0; this.done = false;
-      this.grip = [0, 0]; this.type = ['inside', 'inside'];
+      this.grip = [0, 0]; this.type = ['inside', 'inside']; this.won = [false, false];
       this.grip[a.idx] = 1.3 + (a.a.grip - 1) * 1.2 + (opt.braced ? 0.55 : 0) - (opt.mutual ? 0.2 : 0);
       this.grip[b.idx] = 1.0 + (b.a.grip - 1) * 1.2 - (opt.braced ? 0.2 : 0);
       const aIn = a.a.key === 'tech' || a.r <= b.r + 0.02;
@@ -1018,16 +1020,19 @@
           // elbows tight (no stick input, not being driven): their grip stops growing and yours creeps back
           const oI = live ? o.input : S.NULL_IN, oTight = Math.hypot(oI.mx, oI.mz) < 0.2 && this.tow[j] > -0.3;
           const myI = live ? w.input : S.NULL_IN;
-          if (Math.hypot(myI.mx, myI.mz) < 0.2 && back < 0.35) this.grip[i] = Math.min(1.6, this.grip[i] + dt * 0.05);
-          if (-back > 0.35 && tow[i] > 0.3) this.grip[i] = Math.min(3, this.grip[i] + dt * (oTight ? 0.04 : 0.14));
-          // won the grip battle: work your hand inside the belt for better throws
-          if (live && this.type[i] === 'outside' && this.grip[i] - this.grip[j] > 0.6 && !this.rear) {
-            this.type[i] = 'inside'; this.type[j] = 'outside'; m.emit('gripWin', { w, o });
+          // the grip battle: drive them back to work your hands deeper; get driven back and your hands slip
+          if (live && Math.hypot(myI.mx, myI.mz) < 0.2 && back < 0.35) this.grip[i] = Math.min(1.6, this.grip[i] + dt * 0.2);
+          if (live && -back > 0.35 && tow[i] > 0.3) this.grip[i] = Math.min(3, this.grip[i] + dt * (oTight ? 0.25 : 0.5));
+          // won the grip battle (clearly ahead): a better hold, and an inside grip if you didn't have one
+          if (live && !this.won[i] && this.grip[i] - this.grip[j] > 0.6 && !this.rear) {
+            this.won[i] = true; this.won[j] = false;
+            if (this.type[i] === 'outside') { this.type[i] = 'inside'; this.type[j] = 'outside'; }
+            m.emit('gripWin', { w, o });
           }
           if (back > 0.35 && tow[i] > -0.3) {
             m.tag(w, o, this.rear === o ? 'rearDrive' : 'drive');
             m.hurt(w, dt * 0.04 * back, -s * nx, -s * nz);
-            this.grip[i] = Math.max(0, this.grip[i] - dt * 0.1);
+            if (live) this.grip[i] = Math.max(0, this.grip[i] - dt * 0.3);
           }
           const mine = w === A ? -lat[i] : lat[i];
           if (Math.abs(this.w) > 0.9 && Math.sign(mine) !== Math.sign(this.w)) {
@@ -1118,7 +1123,7 @@
           name = this.grip[i] < 1.1 ? 'kotenage' : this.type[i] === 'inside' ? 'shitatenage' : 'uwatenage';
           ok = sc > 0.3; break;
         case 'trip':
-          sc = 0.05 + gd * 0.1 + bd * 0.45 + Math.max(mom, clamp(-toward, 0, 1) * 0.8) * 0.4 + (Math.abs(this.w) > 0.6 ? 0.15 : 0) + (tech - 1) * 0.6 - (oBrace ? 0.32 : 0) + (massR - 1) * 0.1;
+          sc = 0.05 + gd * 0.15 + bd * 0.45 + Math.max(oDrive, clamp(Math.abs(toward), 0, 1)) * 0.36 + (Math.abs(this.w) > 0.6 ? 0.15 : 0) + (tech - 1) * 0.6 - (oBrace ? 0.32 : 0) + (massR - 1) * 0.1;
           name = this.type[i] === 'inside' ? 'uchigake' : 'sotogake';
           ok = sc > 0.3; break;
         case 'spin':

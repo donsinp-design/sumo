@@ -1,6 +1,18 @@
 'use strict';
 // DOM UI: HUD, banners, result card, callouts, menus, clinch hints, 2D overlay (speed lines, debug).
 (function () {
+  // Title logo: red 組手 behind blocky white KUMITE, drawn as vectors so it is sharp at any size
+  S.LOGO = '<svg class="logo-img" viewBox="-30 -370 1430 660" role="img" aria-label="Kumite 組手">' +
+    '<defs><linearGradient id="lgK" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c8000f"/><stop offset="0.75" stop-color="#a8000c"/><stop offset="1" stop-color="#5a0006"/></linearGradient></defs>' +
+    '<text x="685" y="40" text-anchor="middle" font-size="380" fill="url(#lgK)" font-family="\'Dela Gothic One\', \'Hiragino Sans\', \'Yu Gothic\', \'Noto Sans JP\', sans-serif" font-weight="900" stroke="url(#lgK)" stroke-width="18" stroke-linejoin="round" letter-spacing="10" transform="skewX(-4)">組手</text>' +
+    '<g fill="#f6f3ee">' +
+    '<polygon points="0,0 90,0 90,105 185,0 290,0 170,128 290,258 185,258 110,170 90,192 90,258 0,258"/>' +
+    '<polygon points="300,0 390,0 390,178 450,178 450,0 540,0 540,218 500,258 340,258 300,218"/>' +
+    '<polygon points="558,0 645,0 702,100 759,0 846,0 846,258 759,258 759,160 702,242 645,160 645,258 558,258"/>' +
+    '<rect x="864" y="0" width="88" height="258"/>' +
+    '<polygon points="968,0 1150,0 1150,82 1104,82 1104,258 1014,258 1014,82 968,82"/>' +
+    '<polygon points="1168,0 1370,0 1370,82 1258,82 1258,98 1352,98 1352,162 1258,162 1258,178 1370,178 1370,258 1168,258"/>' +
+    '</g></svg>';
   const $ = (id) => document.getElementById(id);
 
   class UI {
@@ -262,7 +274,7 @@
       const P = S.profile;
       const foot = (t) => '<div class="foot">' + t + '</div>';
       if (n === 'title') {
-        h = '<div class="title-wrap"><img class="logo-img" src="assets/logo.webp" alt="Kumite"><div class="menu">' +
+        h = '<div class="title-wrap">' + S.LOGO + '<div class="menu">' +
           btn('PLAY', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') +
           '</div></div>';
       } else if (n === 'play') {
