@@ -11,6 +11,8 @@
   };
   // remembers how the human opens, across rounds and matches
   const MEM = { charge: 1, brace: 0.6, henka: 0.4, wait: 0.6 };
+  // remembers what the human leans on mid-bout, so it can stop falling for it
+  const HAB = { flurry: 0.3, slap: 0.3, grab: 0.3, dodge: 0.3, charge: 0.3 };
 
   class AI {
     constructor(me, match, level, opts) {
@@ -34,7 +36,8 @@
         const ml = Math.hypot(mx, mz) || 1;
         return { mx: mx / ml, mz: mz / ml, push: false, grab: false, dash: false, skill: false };
       }
-      return { mx: this.mx, mz: this.mz, push: T < b.push.until, grab: T < b.grab.until, dash: T < b.dash.until, skill: T < b.skill.until };
+      const k = this.slow || 1;
+      return { mx: this.mx * k, mz: this.mz * k, push: T < b.push.until, grab: T < b.grab.until, dash: T < b.dash.until, skill: T < b.skill.until };
     }
     tap(n, dur) {
       const b = this.btn[n];
@@ -55,8 +58,12 @@
     step(dt) {
       this.time += dt;
       const o = this.me.opp, m = this.m;
-      if (m.round !== this.round) { this.round = m.round; this.open = null; this.mode = null; this.recorded = false; this.dir(0, 0); }
-      if (!(o.fxs && o.fxs.invis > 0) || !this.hist.length) this.hist.push({ st: o.st, t: o.t, x: o.x, z: o.z, vx: o.vx, vz: o.vz, bal: o.bal, fwd: o.fwdIn, contact: o.contact, braceT: o.braceT, pressT: o.pressT });
+      if (m.round !== this.round) {
+        this.round = m.round; this.open = null; this.mode = null; this.recorded = false; this.dir(0, 0); this.aimHold = null; this.fakeStop = null;
+        if (this.learn) for (const k in HAB) HAB[k] = Math.min(4, HAB[k] * 0.85);
+      }
+      if (this.learn && m.phase === 'fight') this.watch(o, m);
+      if (!(o.fxs && o.fxs.invis > 0) || !this.hist.length) this.hist.push({ st: o.st, t: o.t, x: o.x, z: o.z, vx: o.vx, vz: o.vz, bal: o.bal, fwd: o.fwdIn, contact: o.contact, braceT: o.braceT, pressT: o.pressT, flurry: o.flurry || 0 });
       if (this.hist.length > 90) this.hist.shift();
       // learn the human's opening habit
       if (this.learn && m.phase === 'fight' && !this.recorded && m.sinceGo > 0.6) {
@@ -74,6 +81,17 @@
         if (this.me.fxs && (this.me.fxs.blind > 0 || fogged) && m.phase === 'fight') { this.dir(this.rnd() - 0.5, this.rnd() - 0.5); this.state = 'blind'; }
         else this.decide();
       }
+    }
+    // notice the human's habits as they happen
+    watch(o, m) {
+      const prev = this.lastOSt; this.lastOSt = o.st;
+      if (o.st === prev) return;
+      const me = this.me;
+      if (o.st === 'slap') HAB.slap += 0.5;
+      else if (o.st === 'dash' && (me.st === 'charge' || me.spd > me.a.maxSpeed * 0.6)) HAB.dodge += 0.5;
+      else if (o.st === 'charge') HAB.charge += 0.3;
+      else if (o.st === 'palm' && (o.flurry || 0) === 4) HAB.flurry += 0.6;
+      else if (o.st === 'clinch' && m.clinch && m.clinch.a === o) HAB.grab += 0.5;
     }
     perceive() {
       const k = Math.min(this.hist.length - 1, Math.round(this.L.react / S.DT));
@@ -94,7 +112,7 @@
       }
       if (m.phase !== 'fight') { this.dir(0, 0); this.state = 'idle'; return; }
       if (me.clinch) { if (this.clT === 0) { this.techTried = false; } if (this.clT === 0) this.nextTech = 0.5 + this.rnd() * 1.2; this.clT += this.L.think; this.decideClinch(); return; }
-      this.clT = 0;
+      this.clT = 0; this.aimHold = null; this.armT = 0;
       if (this.open && !this.open.done && this.execOpening()) return;
       this.decideFree();
     }
@@ -107,6 +125,8 @@
       if (ph > 0.25) { w.delay += 0.3; w.walk += 0.2; w.henka = 0.02; }
       if (pb > 0.35) { w.walk += 0.35; w.charge -= 0.15; }
       if (pw > 0.35) w.charge += 0.3;
+      // hard: sometimes jump at the call and stop dead, to draw out a sidestep or a slap
+      w.fake = L.tricky > 0.25 ? 0.12 + 0.3 * ph + 0.1 * Math.min(2, HAB.slap + HAB.dodge) : 0;
       let r = this.rnd() * Object.values(w).reduce((a, b) => a + Math.max(0, b), 0), kind = 'charge';
       for (const k in w) { r -= Math.max(0, w[k]); if (r <= 0) { kind = k; break; } }
       this.open = { kind, done: false, side: this.rnd() < 0.5 ? 1 : -1, delay: 0.1 + this.rnd() * 0.12, power: this.rnd() < 0.5 };
@@ -127,6 +147,9 @@
         case 'walk':
           if (t > 1.0 || me.contact) { Op.done = true; return false; }
           this.dir(nx, nz); return true;
+        case 'fake':
+          if (t < this.L.react * 0.7 + 0.2) { this.dir(nx, nz); return true; }
+          Op.done = true; this.mode = 'fake'; this.modeT = 0; this.fakeStop = this.time; this.fakeOpen = true; return false;
       }
       Op.done = true; return false;
     }
@@ -152,6 +175,11 @@
       const oSpeedToMe = -(P.vx * nx + P.vz * nz);
       const canAct = ['free', 'brace', 'recover', 'palm'].includes(me.st);
       const mySp = me.spd, ms = me.a.maxSpeed;
+      this.slow = 1;
+      // they are on the rim: no lunging, creep in so a sidestep can't send me flying out
+      const rimCareful = oEdge < 1.7 && myEdge > oEdge && L.skill * (0.6 + 0.3 * Math.min(2, HAB.dodge)) > 0.45;
+      // they keep grabbing: running into them just hands them a catch
+      const grabWary = L.skill * Math.min(2, HAB.grab) > 0.7;
 
       if (me.st === 'stumble' || me.st === 'overrun' || (me.st === 'recover' && RR - Math.hypot(me.x, me.z) < 1.2)) { this.steer(nx, nz, 0, 0); this.state = 'recovering'; return; }
 
@@ -170,7 +198,7 @@
       if (me.st === 'brace' && this.holding('dash')) { this.dir(0, 0); this.state = 'bracing'; return; }
 
       // 2. punish an opponent who is stuck in recovery / off balance
-      const oVuln = ['recover', 'stun', 'overrun', 'stumble'].includes(P.st) || (P.st === 'heavy' && P.t > 0.2) || (P.st === 'grab' && P.t > 0.12);
+      const oVuln = ['recover', 'stun', 'overrun', 'stumble'].includes(P.st) || (P.st === 'heavy' && P.t > 0.2) || (P.st === 'grab' && P.t > 0.12) || (P.st === 'slap' && P.t > 0.24);
       if (oVuln && gap < 1.4 && canAct) {
         const behind = (o.fx * -nx + o.fz * -nz) < -0.2;
         this.dir(nx, nz);
@@ -182,7 +210,24 @@
       // interrupt a heavy windup
       if (P.st === 'wind' && gap < 0.7 && canAct) { this.dir(nx, nz); this.tap('push'); this.state = 'interrupt'; return; }
 
+      // a planted fake charge: hold still, braced, and see what they do
+      if (this.mode === 'fake' && this.fakeStop) {
+        const held = this.time - this.fakeStop;
+        if (held < 0.4) { this.dir(0, 0); this.hold('dash', 0.08); this.state = 'fake-plant'; return; }
+        this.release('dash'); this.mode = null; this.fakeStop = null;
+        // nothing happened and the opening charge is still live: now really go
+        if (this.fakeOpen && m.sinceGo < 0.8 && this.rnd() < 0.6) { this.fakeOpen = false; this.dir(nx, nz); this.tap('push'); this.state = 'stutter-charge'; return; }
+        this.fakeOpen = false;
+      }
+
       // 3. close range
+      if (gap < 0.6 && P.st === 'palm' && P.flurry >= 2 && canAct) {
+        // they are flurrying: parry it, slap them down with their own lean, or step off the line
+        const r = this.rnd(), ad = L.skill * Math.min(1, 0.45 + 0.2 * HAB.flurry);
+        if (r < ad * 0.3) { this.dir(0, 0); this.tap('dash', 0.04); this.state = 'parry'; return; }
+        if (r < ad * 0.65 && myEdge > 1.3) { this.dir(-nx, -nz); this.tap('push'); this.state = 'slapdown-flurry'; return; }
+        if (r < ad && me.dashCD <= 0) { let lx = -nz, lz = nx; if (lx * -me.x + lz * -me.z < 0) { lx = -lx; lz = -lz; } this.dir(lx, lz); this.tap('dash'); this.state = 'sidestep-flurry'; return; }
+      }
       if (gap < 0.45) {
         if (!canAct) { this.dir(nx, nz); return; }
         if (P.st === 'brace' && P.braceT > 0.05) { this.dir(nx, nz); this.tap('grab'); this.state = 'grab-vs-brace'; return; }
@@ -191,21 +236,27 @@
           let lx = -nz, lz = nx; if (lx * -me.x + lz * -me.z < 0) { lx = -lx; lz = -lz; }
           this.dir(lx, lz); this.tap('dash'); this.state = 'edge-escape'; return;
         }
-        if (P.contact && P.fwd > 0.5 && P.pressT > 0.15 && myEdge > 1.6 && this.rnd() < L.tricky) {
+        if (P.contact && P.fwd > 0.5 && P.pressT > 0.15 && myEdge > 1.6 && this.rnd() < L.tricky * (1 + 0.4 * Math.min(2, HAB.charge + HAB.flurry))) {
           this.dir(-nx, -nz); this.tap('push'); this.state = 'slapdown'; return;
         }
+        if ((rimCareful || grabWary) && mySp > ms * 0.4) { this.dir(nx, nz); this.slow = 0.2; this.state = 'brake'; return; }
         const a = me.a;
-        const wGrab = a.grip * a.tech * 0.55 + (oEdge < 1.5 ? 0.25 : 0) + (a.key === 'heavy' ? 0.25 : 0);
-        const wPalm = a.power * 0.6 + (a.key === 'fast' ? 0.25 : 0);
+        const wGrab = a.grip * a.tech * 0.55 + (oEdge < 1.5 ? 0.25 + 0.3 * L.skill * Math.min(2, HAB.dodge) : 0) + (a.key === 'heavy' ? 0.25 : 0);
+        const wPalm = a.power * 0.6 + (a.key === 'fast' ? 0.25 : 0) + 0.3 * L.skill * Math.min(2, HAB.grab); // they love the belt: keep them off it
         this.dir(nx, nz);
         if (this.rnd() < wGrab / (wGrab + wPalm)) { this.tap('grab'); this.state = 'grab'; }
         else { this.tap('push'); this.state = 'tsuppari'; }
         return;
       }
 
+      // 4a. fake run-up: sprint in, plant before they can slap
+      if (this.mode === 'fake' && !this.fakeStop) {
+        if (this.modeT > 1.2) this.mode = null;
+        else { this.dir(nx, nz); if (gap < 1.5) { this.fakeStop = this.time; this.dir(0, 0); this.hold('dash', 0.1); } this.state = 'fake-run'; return; }
+      }
       // 4. charge run-up in progress
       if (this.mode === 'charge') {
-        if (this.modeT > 1.2 || gap > 3.4) this.mode = null;
+        if (this.modeT > 1.2 || gap > 3.4 || rimCareful || grabWary) this.mode = null;
         else {
           this.dir(nx, nz);
           const vf = me.vx * me.fx + me.vz * me.fz;
@@ -219,12 +270,19 @@
       if (gap < 2.6) {
         const aligned = (me.fx * nx + me.fz * nz) > 0.85;
         // charging at someone on the bales is how you get sidestepped out: only the reckless do it
-        const lineOut = oEdge < 1.25 && this.rnd() > (1 - L.skill) * 0.5;
+        const lineOut = oEdge < 1.25 + 0.35 * L.skill * Math.min(2, HAB.dodge) && this.rnd() > (1 - L.skill) * 0.5;
         const wantCharge = !lineOut && ((oEdge < 1.8 && myEdge > oEdge + 0.4) || quiet > 2.2 || this.rnd() < L.aggr * 0.15);
-        if (wantCharge && aligned && gap > 0.8 && myEdge > 1.2 && P.st !== 'brace') {
+        if (wantCharge && aligned && gap > 0.8 && myEdge > 1.2 && P.st !== 'brace' && !(grabWary && this.rnd() < 0.8)) {
+          // hard: against someone who slaps down or sidesteps charges, run in and stop dead instead
+          const fakeP = L.tricky > 0.25 ? L.tricky * (0.5 + 0.5 * Math.min(3, HAB.slap + HAB.dodge)) : 0;
+          if (gap > 1.6 && this.rnd() < fakeP) { this.mode = 'fake'; this.modeT = 0; this.fakeStop = null; this.fakeOpen = false; this.dir(nx, nz); this.state = 'fake-run'; return; }
+          // a known slap-downer gets fewer straight charges
+          if (this.rnd() < L.skill * 0.25 * Math.min(2, HAB.slap)) { this.steer(nx, nz, 0.5, 0.5); this.state = 'wary'; return; }
           this.mode = 'charge'; this.modeT = 0; this.dir(nx, nz); this.state = 'start-charge'; return;
         }
-        this.steer(nx, nz, 0.75, 0.45); this.state = 'approach'; return;
+        this.steer(nx, nz, 0.75 / (1 + 0.25 * L.skill * Math.min(3, HAB.slap)), 0.45);
+        if (rimCareful && gap < 1.8) { this.slow = 0.45; this.state = 'creep'; return; }
+        this.state = 'approach'; return;
       }
       this.steer(nx, nz, 1, 0.25); this.state = 'close-in';
       void mySp;
@@ -241,11 +299,26 @@
     decideClinch() {
       const c = this.m.clinch, me = this.me, o = me.opp, L = this.L;
       if (!c) return;
-      this.release('dash');
+      this.release('dash'); this.slow = 1;
       const i = me.idx, j = o.idx, s = c.sg(me);
       const [nx, nz] = c.axis();
-      if (c.b === me && c.t < 0.2 && !c.rear && !this.techTried) { this.techTried = true; if (this.rnd() < L.skill * 0.25) { this.tap('grab', 0.04); this.state = 'grab-break'; return; } }
-      if (c.tech) { this.dir(0, 0); this.state = 'tech'; return; }
+      // winding up my own throw: keep K held and keep pointing until it goes
+      if (this.aimHold && !c.tech && !c.lift) {
+        if (this.time < this.aimHold.until) { this.mx = this.aimHold.mx; this.mz = this.aimHold.mz; this.state = 'windup'; return; }
+        this.aimHold = null;
+      }
+      // just been grabbed: counter-grab
+      if (c.b === me && c.t < 0.3 && !c.rear && !this.techTried) { this.techTried = true; if (this.rnd() < L.skill * (0.35 + 0.1 * Math.min(2, HAB.grab))) { this.tap('grab', 0.04); this.state = 'grab-break'; return; } }
+      if (c.tech) {
+        // their throw has only just started: slip it
+        if (c.tech.o === me && c.tech.t < 0.2 && this.escFor !== c.tech) { this.escFor = c.tech; if (this.rnd() < L.skill * 0.5) { this.escape(c); return; } }
+        this.dir(0, 0); this.state = 'tech'; return;
+      }
+      // they are winding up (K held and aiming) or already swinging me: get out
+      const oArmed = (o.kArm && o.input && o.input.grab && o.input.grab.held) || (c.swing && c.swing.w === o);
+      this.armT = oArmed ? (this.armT || 0) + this.L.think : 0;
+      const danger = RR - Math.hypot(me.x, me.z) < 1.6 ? 0.15 : 0;
+      if (oArmed && this.armT > L.react && this.rnd() < L.skill * (0.2 + danger + 0.05 * Math.min(2, HAB.grab))) { this.escape(c); return; }
       if (c.lift) {
         if (c.lift.w === me) { const ol = Math.hypot(o.x, o.z) || 1; this.dir(o.x / ol, o.z / ol); this.state = 'carry'; }
         else { this.dir(this.rnd() - 0.5, this.rnd() - 0.5); this.tap(['push', 'grab', 'dash'][(this.rnd() * 3) | 0], 0.04); this.state = 'struggle'; }
@@ -283,7 +356,10 @@
         else if (k === 'trip') this.rel(c, 1, 0);
         else if (k === 'spin') this.rel(c, -1, 0);
         else this.dir(0, 0);
-        this.tap('grab'); this.state = k; return;
+        // hold K and point for a moment before letting go, like a human does: it can be read and escaped
+        const wind = k === 'lift' ? 0.05 : 0.5 - 0.22 * L.skill + this.rnd() * 0.15;
+        this.hold('grab', wind); this.aimHold = { until: this.time + wind, mx: this.mx, mz: this.mz };
+        this.state = k; return;
       }
       if (me.stam < 0.18 && c.tow[j] < 0.3 && this.rnd() < 0.5) { this.dir(0, 0); this.state = 'rest'; return; }
       if (oEdge < 2.0 && oBack > 0.2) {
@@ -295,6 +371,15 @@
       this.rel(c, 1, oBack < 0.2 ? this.bestSide(c) * 0.5 : 0); this.state = 'drive';
     }
 
+    // break out of a hold: shove off if my back is to the edge, otherwise mostly slip back
+    escape(c) {
+      const me = this.me, s = c.sg(me), [nx, nz] = c.axis();
+      const d = Math.hypot(me.x, me.z) || 1, back = (me.x / d) * -s * nx + (me.z / d) * -s * nz;
+      this.release('grab'); this.dir(0, 0); this.aimHold = null;
+      this.tap((RR - d < 1.6 && back > 0.2) || this.rnd() < 0.4 ? 'push' : 'dash', 0.04);
+      this.state = 'escape';
+    }
+
     // which rotation sends the opponent toward the edge
     bestSide(c) {
       const me = this.me, o = me.opp;
@@ -304,6 +389,6 @@
     }
   }
   S.AI = AI;
-  S.AI_MEM = MEM;
+  S.AI_MEM = MEM; S.AI_HAB = HAB;
   S.AI_LEVELS = LEVELS;
 })();

@@ -43,7 +43,7 @@
       this.sdx = 0; this.sdz = 0; this.fallX = 0; this.fallZ = 0;
       this.down = false; this.out = false; this.clinch = null; this.lifted = false;
       this.squash = 0; this.slideT = 0; this.pressT = 0; this.ghostT = 0;
-      this.parryAt = -9; this.teeter = false; this.crouchT = 0; this.feint = 0; this.feintAt = -9; this.feintBtn = null; this.buf = null;
+      this.parryAt = -9; this.gripCD = 0; this.flurry = 0; this.lastPalmAt = -9; this.teeter = false; this.crouchT = 0; this.feint = 0; this.feintAt = -9; this.feintBtn = null; this.buf = null;
       this.pre = null; this.preT = 9; this.stomped = false; this.power = 0; this.tachiPow = 0;
       this.lastTech = null; this.lastBy = null; this.lastT = -99;
       this.fxs = {}; this.str = 1; this.szCur = 1; this.charges = 0; this.torpedo = false; this.trapped = false;
@@ -214,7 +214,7 @@
       const buf = w.buf; w.buf = null;
       const pr = (b) => I[b].pressed || buf === b;
       const slowK = (w.fxs.slow > 0 ? 0.45 : 1) * (w.gulpI >= 0 ? 0.8 : 1) * (w.fxs.haste > 0 ? 1.4 : 1) * (w.fxs.poison > 0 ? 0.75 : 1); // a belly full of wrestler slows you down dt *= slowK; // time drag: their whole body runs slow
-      w.t += dt; w.dashCD -= dt; w.braceT += dt; w.ghostT -= dt; w.slideT -= dt; w.uprightT = (w.uprightT || 0) - dt;
+      w.t += dt; w.dashCD -= dt; w.gripCD = (w.gripCD || 0) - dt; w.braceT += dt; w.ghostT -= dt; w.slideT -= dt; w.uprightT = (w.uprightT || 0) - dt;
       w.squash = Math.max(0, w.squash - dt * 5);
       w.throatT = (w.throatT || 0) - dt; w.thrHand = (w.thrHand || 0) - dt; w.throatCD = (w.throatCD || 0) - dt;
       if (w.st === 'fall' && w.t > 0.22 && !w.down) { w.down = true; w.squash = 1; this.emit('slam', { w, x: w.x, z: w.z }); } // hits the clay
@@ -255,10 +255,13 @@
           break;
         case 'palm':
           if (w.t >= 0.05 && w.t < 0.12) this.hitCheck(w, 'palm', 0.42);
-          if (w.t >= 0.11 && pr('push')) { w.hand ^= 1; w.set('palm'); w.stam = Math.max(0, w.stam - 0.025); this.emit('palm', { w }); }
+          if (w.t >= 0.11 && pr('push')) { const hit = w.hitDone; w.hand ^= 1; w.set('palm'); this.palmCost(w, hit); this.emit('palm', { w }); }
           else if (w.t >= 0.11 && pr('grab')) w.set('grab');
           else if (pr('dash') && w.dashCD <= 0 && mag > 0.35) this.startDash(w, ix / mag, iz / mag);
-          else if (w.t >= 0.2) { if (I.push.held && I.push.t > 0.17) { w.set('wind'); this.emit('wind', { w }); } else w.set('free'); }
+          else if (w.t >= 0.2) {
+            if (!w.hitDone && (w.flurry || 0) >= 4) { w.set('recover', 0.12 + 0.03 * Math.min(6, w.flurry)); this.hurt(w, 0.03, w.fx, w.fz, true); this.emit('whiff', { w, palm: true }); } // swinging at air: overreach
+            else if (I.push.held && I.push.t > 0.17) { w.set('wind'); this.emit('wind', { w }); } else w.set('free');
+          }
           break;
         case 'wind':
           w.windPow = clamp(w.t / 0.45, 0, 1);
@@ -285,7 +288,7 @@
           break;
         case 'slap':
           if (w.t >= 0.06 && w.t < 0.24 && !w.hitDone) this.slapCheck(w);
-          if (w.t >= w.dur) w.set('free');
+          if (w.t >= w.dur) { if (!w.hitDone) { w.set('recover', 0.32); this.emit('whiff', { w, slap: true }); } else w.set('free'); } // slapped at nothing: caught leaning
           break;
         case 'grab':
           if (w.t >= 0.06 && w.t < 0.17 && this.tryClinch(w)) return;
@@ -443,8 +446,15 @@
         w.stam = Math.max(0, w.stam - 0.12);
         this.emit('charge', { w }); return;
       }
-      w.set('palm'); w.hand ^= 1; w.stam = Math.max(0, w.stam - 0.025);
+      w.set('palm'); w.hand ^= 1; this.palmCost(w, true);
       this.emit('palm', { w });
+    }
+
+    // every palm in a quick string costs more stamina; a long flurry wears you out
+    palmCost(w, lastHit) {
+      w.flurry = this.time - w.lastPalmAt < 0.5 && this.time >= w.lastPalmAt ? (w.flurry || 0) + 1 : 1;
+      w.lastPalmAt = this.time;
+      w.stam = Math.max(0, w.stam - (0.04 + 0.018 * Math.min(6, Math.max(0, w.flurry - 2)) + (lastHit ? 0 : 0.02)));
     }
 
     hitCheck(w, kind, extra) {
@@ -478,7 +488,7 @@
       if (w.fxs.thiefT > 0 && S.Skills) S.Skills.knockSkill(this, w, o, nx, nz);
       const P = w.a.power * (w.str || 1);
       let imp, bal, tag;
-      if (kind === 'palm') { imp = 2.3 * P; bal = 0.04; tag = 'palm'; }
+      if (kind === 'palm') { const k = 0.45 + 0.55 * w.stam; imp = 2.3 * P * k; bal = 0.04 * k; tag = 'palm'; }
       else { imp = (3.2 + 3.4 * w.windPow) * P; bal = 0.08 + 0.16 * w.windPow; tag = 'heavy'; }
       const braced = o.st === 'brace' && zone === 'front' && o.stam > 0.05;
       if (zone === 'side') { imp *= 1.2; bal *= 1.8; tag = 'side'; }
@@ -519,7 +529,7 @@
       w.hitDone = true;
       const oIn = -(o.vx * nx + o.vz * nz); // opponent's speed toward me
       const ov = o.spd || 1;
-      if (oIn > 2.0 || o.st === 'charge' || o.pressT > 0.15 || o.st === 'heavy') {
+      if (oIn > Math.max(2.0, o.a.maxSpeed * 1.05) || o.st === 'charge' || o.pressT > 0.15 || o.st === 'heavy' || ((o.st === 'palm' || o.st === 'recover') && (o.flurry || 0) >= 3 && this.time - o.lastPalmAt < 0.6)) {
         // Hatakikomi: their own momentum slams them down
         const dmg = 0.32 + 0.11 * Math.max(0, oIn) + (o.st === 'charge' ? 0.25 : 0);
         this.tag(o, w, 'slap');
@@ -538,6 +548,7 @@
 
     tryClinch(w) {
       const o = w.opp;
+      if (w.gripCD > 0) return false; // hands still shaken loose from the last grip
       if (o.clinch || o.down || o.st === 'fall' || o.st === 'charge' || o.st === 'dash' || o.st === 'air' || o.fxs.thru > 0 || o.swallowed || w.swallowed || w.gulpI >= 0 || o.fxs.ball > 0 || w.fxs.ball > 0 || o.fxs.chicken > 0 || w.fxs.chicken > 0 || o.carried || w.carried || o.inShop || w.inShop) return false;
       const dx = o.x - w.x, dz = o.z - w.z, d = Math.hypot(dx, dz) || 1e-4;
       if (d > w.r + o.r + 0.45) return false;
@@ -555,7 +566,7 @@
       if (a.clinch) a.clinch.end('tech');
       const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz) || 1, nx = dx / d, nz = dz / d;
       a.vx = -nx * 3.2; a.vz = -nz * 3.2; b.vx = nx * 3.2; b.vz = nz * 3.2;
-      a.set('recover', 0.22); b.set('recover', 0.22); a.ghostT = b.ghostT = 0.15;
+      a.set('recover', 0.22); b.set('recover', 0.22); a.ghostT = b.ghostT = 0.15; a.gripCD = 0.7;
       for (const w of [a, b]) { // a break never pushes anyone out of the ring
         const dc = Math.hypot(w.x, w.z);
         if (dc > RR - 1.4 && (w.vx * w.x + w.vz * w.z) > 0) { const sx = -w.z / dc, sz = w.x / dc, sg = (w.vx * sx + w.vz * sz) >= 0 ? 1 : -1; w.vx = sx * sg * 2.4 - w.x / dc * 0.8; w.vz = sz * sg * 2.4 - w.z / dc * 0.8; }
@@ -820,6 +831,17 @@
       this.t += dt;
       this.d += (this.dT - this.d) * Math.min(1, dt * 10);
       for (const w of [A, B]) { this.burst[w.idx] -= dt; this.vul[w.idx] -= dt; }
+      // a throw that has only just started can still be slipped (L) or shoved off (J)
+      if (this.tech && this.tech.t < 0.25 && this.tech.kind !== 'utchari' && m.phase === 'fight') {
+        const v = this.tech.o, atk = this.tech.w, I = v.input;
+        if (I && (I.dash.pressed || I.push.pressed)) {
+          this.tech = null;
+          if (I.dash.pressed) this.tryDisengage(v); else this.tryBreak(v);
+          atk.set('recover', 0.3); atk.gripCD = 0.7;
+          m.emit('techEscape', { w: v, o: atk, x: (v.x + atk.x) / 2, z: (v.z + atk.z) / 2 });
+          return;
+        }
+      }
       if (this.tech) { this.updateTech(dt); return; }
       const live = m.phase === 'fight';
       let [nx, nz] = this.axis();
@@ -846,7 +868,7 @@
             continue;
           }
           if (this.rear === w && I.push.pressed) { this.rearShove(w); return; }
-          if (I.grab.pressed && w === this.b && this.t < (m.techWin || 0.22) && !this.rear) { m.grabTech(this.a, this.b); return; }
+          if (I.grab.pressed && w === this.b && this.t < (m.techWin || 0.38) && !this.rear) { m.grabTech(this.a, this.b); return; }
           if (I.grab.pressed) w.kArm = true; // only presses made while locked arm a move
           // SWING: keep K held and point somewhere: they swing round you to that side
           if (w.kArm && I.grab.held && Math.hypot(I.mx, I.mz) > 0.4) {
@@ -1070,12 +1092,13 @@
     // rotate the opponent around you toward the angle you point at
     swingStep(w, ta, dt) {
       const o = this.other(w), m = this.m;
-      if (!this.swing || this.swing.w !== w) this.swing = { w, swept: 0, om: 0, side: 1 };
-      const Sw = this.swing;
+      if (!this.swing || this.swing.w !== w) this.swing = { w, swept: 0, om: 0, side: 1, t: 0 };
+      const Sw = this.swing; Sw.t += dt;
       let cur = Math.atan2(o.z - w.z, o.x - w.x);
       const d = S.wrap(ta - cur);
       let omax = 4.6 * Math.sqrt((w.m * (w.str || 1)) / o.m) * (0.75 + 0.12 * this.grip[w.idx]);
       if (this.tow[o.idx] > 0.3) omax *= 0.6;
+      omax *= Math.min(1, 0.3 + Sw.t * 2.0); // the swing builds up: a quick flick is a weak throw, a big one takes time (and can be escaped)
       if (o.fxs.invuln > 0) omax *= 0.2;
       const stp = clamp(d, -omax * dt, omax * dt);
       cur += stp; Sw.swept += Math.abs(stp); Sw.om = stp / dt; if (Math.abs(stp) > 1e-4) Sw.side = Math.sign(stp);
@@ -1314,6 +1337,7 @@
 
     tryBreak(w) {
       const o = this.other(w), i = w.idx, j = o.idx, s = this.sg(w);
+      if (o === this.a) o.gripCD = 0.5; // shoved out of their grip: they can't just grab straight back
       const [nx, nz] = this.axis();
       {
         this.end('break');
@@ -1331,6 +1355,7 @@
 
     tryDisengage(w) {
       const o = this.other(w), i = w.idx, j = o.idx, s = this.sg(w);
+      if (o === this.a) o.gripCD = 0.5;
       const [nx, nz] = this.axis();
       {
         const oWasDriving = this.tow[j] > 0.3;

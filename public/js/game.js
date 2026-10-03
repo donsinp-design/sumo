@@ -270,13 +270,17 @@
       if (c.lift) { const left = Math.max(0, c.lift.w.stam); const bar = '<span class="wbar"><i style="width:' + Math.round(left * 100) + '%"></i></span>'; return c.lift.w === me ? 'Walk them out of the ring · ' + K + ' slam them down ' + bar : '<b>WRIGGLE!</b> Mash any button to break free ' + bar; }
       if (c.rear === me) return 'You are behind them! ' + J + ' shove them out';
       if (c.rear) return 'They are behind you! Hold any direction to turn around';
+      // being grabbed: how to get out, first
+      const oArmed = (o.kArm && o.input && o.input.grab && o.input.grab.held) || (c.swing && c.swing.w === o);
+      if (oArmed) return '<b>THROW COMING!</b> ' + Lk + ' slip out &nbsp;·&nbsp; ' + J + ' shove off';
+      if (c.b === me && c.t < (this.match.techWin || 0.38)) return '<b>GRABBED!</b> Tap ' + K + ' now to break the grip';
       const myEdge = S.RING_R - Math.hypot(me.x, me.z), oEdge = S.RING_R - Math.hypot(o.x, o.z);
       const pushedBack = -s * c.v > 0.3;
       if (pushedBack && myEdge < 1.3) return 'Near the edge! Hold ' + K + ' and <b>point behind you</b> to swing them out';
       if (pushedBack || c.tow[o.idx] > 0.3) return 'They are pushing: hold ' + K + ' and <b>point behind you</b> to swing them past';
       if (oEdge < 1.6) return '<b>Hold toward them</b> to drive them out';
       const tips = ['<b>Hold toward them</b> to drive them back', 'Hold ' + K + ' and <b>point</b>: they swing round you · let go to throw', 'Hold ' + K + ', point <b>at them</b>, let go: leg trip', 'Tap ' + K + ' alone to lift',
-        J + ' shove off &nbsp;·&nbsp; ' + Lk + ' let go'];
+        'Want out? ' + J + ' shove off &nbsp;·&nbsp; ' + Lk + ' slip back'];
       return tips[Math.floor(c.t / 2.5) % tips.length];
     }
 
@@ -555,6 +559,10 @@
           case 'grabTech': {
             this.stop(0.05); this.slowmo(0.4, 0.2); A.slap(5); A.whoosh(0.3); fx.dust(e.x, 0.05, e.z, 8, 0.4, 0.6, 0.35); fx.spark(e.x, 1.4, e.z, 1.2);
             const p = this.scr(e.x, e.z); if (!quiet) ui.callout('TECH!', p.x, p.y - 80, 'teal'); break;
+          }
+          case 'techEscape': {
+            this.slowmo(0.3, 0.25); A.whoosh(0.3); fx.dust(e.x, 0.05, e.z, 8, 0.4, 0.6, 0.35);
+            const p = this.scr(e.x, e.z); if (!quiet) ui.callout('ESCAPED!', p.x, p.y - 80, 'teal'); break;
           }
           case 'parry': {
             this.stop(0.06); this.slowmo(0.3, 0.3); R.fx.spark(e.x, 1.4, e.z, 1.5); A.slap(6); A.thump(4);
