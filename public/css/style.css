@@ -409,3 +409,14 @@ html.touch .rules b, html.touch .bet b, html.touch .foot { display: none; }
 @media (prefers-reduced-motion: reduce) { #trainPanel .tp-rec { animation: none; } }
 .gripm { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 11px; letter-spacing: 1.5px; opacity: 0.85; }
 .gripm em { font-style: normal; }
+/* phone controllers screen */
+.ph-box { display: flex; gap: 28px; align-items: center; justify-content: center; flex-wrap: wrap; margin: 10px auto 18px; max-width: 760px; }
+.ph-qr { width: 220px; max-width: 60vw; background: #fff; padding: 8px; border-radius: 6px; }
+.ph-qr svg { display: block; width: 100%; height: auto; }
+.ph-info { max-width: 380px; text-align: left; font-size: 16px; line-height: 1.45; min-width: 0; }
+.ph-info p { margin: 0 0 10px; }
+.ph-code span { color: var(--gold); word-break: break-all; }
+.ph-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; background: rgba(0,0,0,0.35); margin-bottom: 6px; letter-spacing: 1px; }
+.ph-row span { opacity: 0.7; }
+.ph-row span.ok { color: #6fdc8c; opacity: 1; font-weight: 700; }
+.ph-small { font-size: 13px; opacity: 0.75; }

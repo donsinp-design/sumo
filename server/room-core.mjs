@@ -13,7 +13,8 @@ export class RoomCore {
     this.match = null;        // { p: [id, id] }
     this.nextId = 1;
     this.auto = /^QM[A-Z0-9]+$/.test(code); // quick match: one-on-one, bouts start by themselves
-    this.cap = this.auto ? 2 : Infinity; // private rooms take anyone (the rest watch and queue)
+    this.relay = /^PD[A-Z0-9]+$/.test(code); // phone controllers: the game plus up to two phones, messages passed straight through
+    this.cap = this.auto ? 2 : this.relay ? 3 : Infinity; // private rooms take anyone (the rest watch and queue)
     this.autoTimer = null;
   }
 
@@ -21,6 +22,14 @@ export class RoomCore {
     if (this.members.size >= this.cap) { this.send(conn, { t: 'full' }); return null; } // quick match is full: try the next room
     const id = 'm' + this.nextId++;
     conn.id = id;
+    if (this.relay) {
+      this.members.set(id, { conn, name: '', arch: 0, lo: null });
+      this.order.push(id);
+      this.send(conn, { t: 'you', id });
+      this.broadcast({ t: 'pjoin', id }, id);
+      if (this.onChange) this.onChange();
+      return id;
+    }
     this.members.set(id, { conn, name: 'PLAYER', arch: 0, lo: null });
     this.order.push(id);
     if (!this.host) this.host = id;
@@ -34,6 +43,7 @@ export class RoomCore {
     if (!this.members.has(id)) return;
     this.goneMember = this.members.get(id);
     this.members.delete(id);
+    if (this.relay) { this.order = this.order.filter((x) => x !== id); this.broadcast({ t: 'pleave', id }); if (this.onChange) this.onChange(); return; }
     this.order = this.order.filter((x) => x !== id);
     if (this.host === id) this.host = this.order[0] || null;
     if (this.autoTimer && this.order.length < 2) { clearTimeout(this.autoTimer); this.autoTimer = null; }
@@ -54,6 +64,7 @@ export class RoomCore {
     try { m = JSON.parse(raw); } catch (e) { return; }
     const id = conn.id, me = this.members.get(id);
     if (!me) return;
+    if (this.relay) { m.from = id; this.broadcast(m, id); return; } // phone pad: pass it on to the game (and the game's replies to the phones)
     switch (m.t) {
       case 'hello':
         me.name = String(m.name || 'PLAYER').slice(0, 12).toUpperCase();

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#150c14">
+<title>Kumite Controller</title>
+<style>
+  /* Phone controller for Kumite: a stick on the left, four buttons on the right. */
+  :root { --ink: #150c14; --panel: #24161f; --paper: #f6eddc; --red: #e0402f; --gold: #f0c35a; --teal: #4fc3b8; --blue: #4a8fe0; --dim: rgba(246, 237, 220, 0.55); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--paper); font: 600 16px/1.3 -apple-system, "Helvetica Neue", Arial, sans-serif; overflow: hidden; overscroll-behavior: none; touch-action: none; }
+  #app { position: fixed; inset: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); display: grid; grid-template-rows: auto 1fr; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; }
+  #who { font-size: 18px; letter-spacing: 2px; font-style: italic; font-weight: 800; }
+  #who.p1 { color: var(--blue); } #who.p2 { color: var(--red); }
+  #msg { flex: 1; text-align: center; color: var(--dim); font-size: 13px; letter-spacing: 1px; min-width: 0; }
+  #pause { width: 52px; height: 40px; border-radius: 10px; border: 2px solid var(--dim); background: transparent; color: var(--paper); font-size: 16px; }
+  #pause.on { background: var(--paper); color: var(--ink); }
+  main { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+  #stickZone { position: relative; border-right: 1px solid rgba(246, 237, 220, 0.08); }
+  #stickHint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; letter-spacing: 2px; pointer-events: none; }
+  #base, #knob { position: absolute; border-radius: 50%; pointer-events: none; display: none; transform: translate(-50%, -50%); }
+  #base { width: 150px; height: 150px; border: 3px solid rgba(246, 237, 220, 0.35); }
+  #knob { width: 70px; height: 70px; background: var(--paper); opacity: 0.9; }
+  #btns { position: relative; }
+  .b { position: absolute; width: 30%; aspect-ratio: 1; max-width: 120px; border-radius: 50%; border: 3px solid currentColor; background: rgba(0, 0, 0, 0.25); color: var(--paper);
+       display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; transform: translate(-50%, -50%); }
+  .b small { font-size: 11px; letter-spacing: 1px; opacity: 0.8; }
+  .b span { font-size: 26px; line-height: 1; }
+  .b.on { background: currentColor; }
+  .b.on span, .b.on small { color: var(--ink); }
+  #bJ { left: 50%; top: 74%; color: var(--red); }
+  #bK { left: 78%; top: 50%; color: var(--gold); }
+  #bL { left: 22%; top: 50%; color: var(--teal); }
+  #bS { left: 50%; top: 24%; color: var(--blue); }
+  #join { position: fixed; inset: 0; background: var(--ink); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px; text-align: center; }
+  #join input { font: 800 28px/1 -apple-system, Arial, sans-serif; letter-spacing: 6px; text-transform: uppercase; width: 220px; max-width: 100%; text-align: center; padding: 10px; border-radius: 10px; border: 2px solid var(--paper); background: transparent; color: var(--paper); -webkit-user-select: text; user-select: text; }
+  #join button { font: 800 18px/1 -apple-system, Arial, sans-serif; padding: 12px 28px; border-radius: 10px; border: 0; background: var(--red); color: var(--paper); }
+  #turn { position: fixed; inset: 0; background: var(--ink); display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; color: var(--dim); font-size: 18px; }
+  @media (orientation: portrait) { #turn.ask { display: flex; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <header><div id="who">KUMITE</div><div id="msg">Connecting…</div><button id="pause" aria-label="Pause">❚❚</button></header>
+  <main>
+    <div id="stickZone"><div id="stickHint">MOVE: drag anywhere here</div><div id="base"></div><div id="knob"></div></div>
+    <div id="btns">
+      <div class="b" id="bS" data-b="3"><span>★</span><small>SKILL</small></div>
+      <div class="b" id="bL" data-b="2"><span>L</span><small>DASH</small></div>
+      <div class="b" id="bK" data-b="1"><span>K</span><small>GRAB</small></div>
+      <div class="b" id="bJ" data-b="0"><span>J</span><small>PUSH</small></div>
+    </div>
+  </main>
+</div>
+<div id="join"><div>Enter the code shown on the game screen</div><input id="code" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="PD…"><button id="go">CONNECT</button></div>
+<div id="turn" class="ask">Turn your phone sideways to play.</div>
+<script>
+'use strict';
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const st = { mx: 0, mz: 0, b: [false, false, false, false, false] };
+  let ws = null, myId = null, slot = null, code = (new URLSearchParams(location.search).get('c') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  let lastSent = '', lastAt = 0, retry = null;
+
+  function msg(t) { $('msg').textContent = t; }
+  function connect() {
+    if (!code) { $('join').style.display = 'flex'; return; }
+    $('join').style.display = 'none';
+    const u = new URL('ws', location.href); u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; u.search = '?room=' + code; u.hash = '';
+    try { ws = new WebSocket(u.toString()); } catch (e) { msg('Could not reach the game.'); return; }
+    msg('Connecting…');
+    ws.onopen = () => { ws.send(JSON.stringify({ t: 'hi' })); };
+    ws.onmessage = (e) => {
+      if (e.data === 'pong') return;
+      let m; try { m = JSON.parse(e.data); } catch (er) { return; }
+      if (m.t === 'full') { msg('Both player spots are taken.'); return; }
+      if (m.t === 'you') myId = m.id;
+      if (m.t === 'slot' && m.to === myId) {
+        slot = m.slot;
+        if (slot < 0) { msg('Both player spots are taken.'); $('who').textContent = 'KUMITE'; $('who').className = ''; return; }
+        $('who').textContent = 'PLAYER ' + (slot + 1); $('who').className = 'p' + (slot + 1);
+        msg('Connected · menus: J ok, K back');
+        send(true);
+      }
+    };
+    ws.onclose = () => { slot = null; msg('Disconnected. Reconnecting…'); clearTimeout(retry); retry = setTimeout(connect, 2000); };
+    ws.onerror = () => {};
+  }
+  // send the stick and buttons when they change, plus a short heartbeat so the game knows we are still here
+  function send(force) {
+    if (!ws || ws.readyState !== 1 || slot === null || slot < 0) return;
+    const s = JSON.stringify({ t: 'st', mx: Math.round(st.mx * 100) / 100, mz: Math.round(st.mz * 100) / 100, b: st.b.map((x) => (x ? 1 : 0)) });
+    const now = performance.now();
+    if (!force && s === lastSent && now - lastAt < 250) return;
+    ws.send(s); lastSent = s; lastAt = now;
+  }
+  setInterval(() => send(false), 100);
+  setInterval(() => { if (ws && ws.readyState === 1) ws.send('ping'); }, 20000);
+
+  // stick: wherever the thumb lands in the left half becomes the centre
+  const zone = $('stickZone'), base = $('base'), knob = $('knob'); let sid = null, ox = 0, oy = 0;
+  const R = 60;
+  zone.addEventListener('pointerdown', (e) => {
+    if (sid !== null) return; sid = e.pointerId; zone.setPointerCapture(sid);
+    const r = zone.getBoundingClientRect(); ox = e.clientX - r.left; oy = e.clientY - r.top;
+    for (const el of [base, knob]) { el.style.display = 'block'; el.style.left = ox + 'px'; el.style.top = oy + 'px'; }
+    $('stickHint').style.display = 'none'; wake();
+  });
+  zone.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== sid) return;
+    const r = zone.getBoundingClientRect(); let dx = e.clientX - r.left - ox, dy = e.clientY - r.top - oy;
+    const l = Math.hypot(dx, dy); if (l > R) { dx *= R / l; dy *= R / l; }
+    knob.style.left = (ox + dx) + 'px'; knob.style.top = (oy + dy) + 'px';
+    let mx = dx / R, mz = dy / R; if (Math.hypot(mx, mz) < 0.2) { mx = 0; mz = 0; }
+    st.mx = mx; st.mz = mz; send(false);
+  });
+  const endStick = (e) => { if (e.pointerId !== sid) return; sid = null; st.mx = 0; st.mz = 0; base.style.display = knob.style.display = 'none'; send(true); };
+  zone.addEventListener('pointerup', endStick); zone.addEventListener('pointercancel', endStick);
+
+  // buttons: each finger can hold its own button
+  document.querySelectorAll('.b').forEach((el) => {
+    const i = +el.dataset.b;
+    el.addEventListener('pointerdown', (e) => { el.setPointerCapture(e.pointerId); st.b[i] = true; el.classList.add('on'); if (navigator.vibrate) navigator.vibrate(8); send(true); wake(); });
+    const up = () => { st.b[i] = false; el.classList.remove('on'); send(true); };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  });
+  const pz = $('pause');
+  pz.addEventListener('pointerdown', () => { st.b[4] = true; pz.classList.add('on'); send(true); });
+  pz.addEventListener('pointerup', () => { st.b[4] = false; pz.classList.remove('on'); send(true); });
+
+  // keep the screen awake while playing (where the phone allows it)
+  let lock = null;
+  function wake() { if (lock || !navigator.wakeLock) return; navigator.wakeLock.request('screen').then((l) => { lock = l; l.addEventListener('release', () => { lock = null; }); }).catch(() => {}); }
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  $('go').addEventListener('click', () => { code = $('code').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code) connect(); });
+  $('turn').addEventListener('click', () => { $('turn').classList.remove('ask'); });
+  connect();
+})();
+</script>
+</body>
+</html>

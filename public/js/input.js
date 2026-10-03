@@ -61,7 +61,15 @@
   S.mainKey = (a) => (S.MAPS.solo[a] || [])[0];
   if (S.profile) S.applyBinds(S.profile.binds);
 
+  // a controller for player i: a gamepad (PS5, Xbox, ...) and/or a phone paired as a controller
   function readPad(i) {
+    const g = readGamepad(i), ph = i != null && S.phones ? S.phones.get(i) : null;
+    if (!ph) return g;
+    if (!g) return { mx: ph.mx, mz: ph.mz, push: ph.push, grab: ph.grab, dash: ph.dash, skill: ph.skill, start: ph.start };
+    const useG = Math.hypot(g.mx, g.mz) > 0.2;
+    return { mx: useG ? g.mx : ph.mx, mz: useG ? g.mz : ph.mz, push: g.push || ph.push, grab: g.grab || ph.grab, dash: g.dash || ph.dash, skill: g.skill || ph.skill, start: g.start || ph.start };
+  }
+  function readGamepad(i) {
     if (i == null || !navigator.getGamepads) return null;
     const gp = navigator.getGamepads()[i];
     if (!gp || !gp.connected) return null;
