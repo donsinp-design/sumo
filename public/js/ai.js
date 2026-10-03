@@ -1,0 +1,302 @@
+'use strict';
+// CPU opponent. Acts as an input source (presses the same three buttons as a human).
+// It perceives the opponent with a reaction delay and decides on a fixed think rhythm.
+(function () {
+  const RR = S.RING_R;
+  const clamp = S.clamp;
+  const LEVELS = {
+    easy:   { react: 0.30, think: 0.16, skill: 0.45, dodge: 0.25, tricky: 0.08, aggr: 0.45 },
+    normal: { react: 0.19, think: 0.10, skill: 0.72, dodge: 0.45, tricky: 0.18, aggr: 0.6 },
+    hard:   { react: 0.12, think: 0.06, skill: 0.94, dodge: 0.6, tricky: 0.28, aggr: 0.72 },
+  };
+  // remembers how the human opens, across rounds and matches
+  const MEM = { charge: 1, brace: 0.6, henka: 0.4, wait: 0.6 };
+
+  class AI {
+    constructor(me, match, level, opts) {
+      this.me = me; this.m = match; this.L = LEVELS[level] || LEVELS.normal;
+      this.learn = !(opts && opts.noLearn);
+      this.mx = 0; this.mz = 0;
+      this.btn = { push: { until: 0, next: 0 }, grab: { until: 0, next: 0 }, dash: { until: 0, next: 0 }, skill: { until: 0, next: 0 } };
+      this.time = 0; this.thinkT = 0; this.hist = []; this.state = 'idle';
+      this.open = null; this.mode = null; this.modeT = 0; this.recorded = false; this.clT = 0;
+      this.round = -1;
+    }
+    sample() {
+      const T = this.time, b = this.btn;
+      // steering a chicken: run it for the nearest edge
+      const o = this.me.opp;
+      if (o && o.fxs.chicken > 0 && o.chkBy === this.me.idx) { let x = o.x, z = o.z, l = Math.hypot(x, z); if (l < 0.3) { x = o.x - this.me.x; z = o.z - this.me.z; l = Math.hypot(x, z) || 1; } return { mx: x / l, mz: z / l, push: false, grab: false, dash: false, skill: false }; }
+      return { mx: this.mx, mz: this.mz, push: T < b.push.until, grab: T < b.grab.until, dash: T < b.dash.until, skill: T < b.skill.until };
+    }
+    tap(n, dur) {
+      const b = this.btn[n];
+      if (this.time < b.next) return false;
+      b.until = this.time + (dur || 0.05); b.next = b.until + 0.04;
+      return true;
+    }
+    hold(n, dur) {
+      const b = this.btn[n];
+      if (this.time < b.until) { b.until = Math.max(b.until, this.time + dur); b.next = b.until + 0.04; return true; }
+      return this.tap(n, dur);
+    }
+    holding(n) { return this.time < this.btn[n].until; }
+    release(n) { const b = this.btn[n]; if (this.time < b.until) { b.until = this.time; b.next = this.time + 0.04; } }
+    dir(x, z) { const l = Math.hypot(x, z); if (l < 1e-4) { this.mx = this.mz = 0; return; } this.mx = x / l; this.mz = z / l; }
+    rnd() { return Math.random(); }
+
+    step(dt) {
+      this.time += dt;
+      const o = this.me.opp, m = this.m;
+      if (m.round !== this.round) { this.round = m.round; this.open = null; this.mode = null; this.recorded = false; this.dir(0, 0); }
+      if (!(o.fxs && o.fxs.invis > 0) || !this.hist.length) this.hist.push({ st: o.st, t: o.t, x: o.x, z: o.z, vx: o.vx, vz: o.vz, bal: o.bal, fwd: o.fwdIn, contact: o.contact, braceT: o.braceT, pressT: o.pressT });
+      if (this.hist.length > 90) this.hist.shift();
+      // learn the human's opening habit
+      if (this.learn && m.phase === 'fight' && !this.recorded && m.sinceGo > 0.6) {
+        this.recorded = true;
+        const k = o.tachiai ? 'charge' : (o.st === 'brace' || o.braceT < 0.7) ? 'brace' : (o.dashCD > -0.2) ? 'henka' : 'wait';
+        for (const key in MEM) MEM[key] *= 0.85;
+        MEM[k] += 1;
+      }
+      this.modeT += dt;
+      this.thinkT -= dt;
+      if (m.phase === 'fight' && S.Skills && S.Skills.aiWant(m, this.me)) this.tap('skill', 0.05);
+      if (this.thinkT <= 0) {
+        this.thinkT = this.L.think * (0.75 + this.rnd() * 0.5);
+        const fogged = this.me.fxs && this.me.fxs.dark > 0 && this.rnd() < 0.45; // can't see properly: guesses
+        if (this.me.fxs && (this.me.fxs.blind > 0 || fogged) && m.phase === 'fight') { this.dir(this.rnd() - 0.5, this.rnd() - 0.5); this.state = 'blind'; }
+        else this.decide();
+      }
+    }
+    perceive() {
+      const k = Math.min(this.hist.length - 1, Math.round(this.L.react / S.DT));
+      return this.hist[this.hist.length - 1 - k];
+    }
+
+    // ----------------------------------------------------------------- decide
+    decide() {
+      const m = this.m, me = this.me;
+      if (m.phase === 'shikiri') {
+        this.dir(0, 0);
+        if (!this.open) this.planOpening();
+        const Op = this.open, t = m.phaseT;
+        if (Op.kind === 'charge' && t > 1.55) this.hold('dash', 0.25); // fists down
+        if (!Op.taunt && t > 0.9 && t < 1.2) { Op.taunt = true; if (this.rnd() < 0.45) { const d = [[0, -1], [-1, 0], [0, 1], [1, 0]][(this.rnd() * 4) | 0]; this.dir(d[0], d[1]); } }
+        if (!Op.pre && t > 1.25 && t < 1.5) { Op.pre = true; if (t < 1.35 && this.rnd() < 0.35) this.tap('grab', 0.05); else if (this.rnd() < 0.5) this.tap('push', 0.05); }
+        this.state = 'shikiri:' + Op.kind; return;
+      }
+      if (m.phase !== 'fight') { this.dir(0, 0); this.state = 'idle'; return; }
+      if (me.clinch) { if (this.clT === 0) { this.techTried = false; } if (this.clT === 0) this.nextTech = 0.5 + this.rnd() * 1.2; this.clT += this.L.think; this.decideClinch(); return; }
+      this.clT = 0;
+      if (this.open && !this.open.done && this.execOpening()) return;
+      this.decideFree();
+    }
+
+    planOpening() {
+      const L = this.L, tot = MEM.charge + MEM.brace + MEM.henka + MEM.wait;
+      const pc = MEM.charge / tot, ph = MEM.henka / tot, pb = MEM.brace / tot, pw = MEM.wait / tot;
+      const w = { charge: 0.45, brace: 0.15, henka: 0.1, delay: 0.15, walk: 0.15 };
+      if (pc > 0.45) { w.brace += 0.3 * L.skill; w.henka += 0.15 * L.skill; w.charge -= 0.15; }
+      if (ph > 0.25) { w.delay += 0.3; w.walk += 0.2; w.henka = 0.02; }
+      if (pb > 0.35) { w.walk += 0.35; w.charge -= 0.15; }
+      if (pw > 0.35) w.charge += 0.3;
+      let r = this.rnd() * Object.values(w).reduce((a, b) => a + Math.max(0, b), 0), kind = 'charge';
+      for (const k in w) { r -= Math.max(0, w[k]); if (r <= 0) { kind = k; break; } }
+      this.open = { kind, done: false, side: this.rnd() < 0.5 ? 1 : -1, delay: 0.1 + this.rnd() * 0.12, power: this.rnd() < 0.5 };
+    }
+
+    execOpening() {
+      const m = this.m, me = this.me, o = me.opp, t = m.sinceGo, Op = this.open;
+      if (t < this.L.react * 0.7) { this.dir(0, 0); return true; }
+      const nx = o.x - me.x, nz = o.z - me.z;
+      this.state = 'open:' + Op.kind;
+      switch (Op.kind) {
+        case 'charge': this.dir(nx, nz); this.tap('push'); Op.done = true; return true;
+        case 'brace': this.dir(0, 0); this.hold('dash', 0.4); Op.done = true; return true;
+        case 'henka': this.dir(-nz * Op.side + -nx * 0.2, nx * Op.side - nz * 0.2); this.tap('dash'); Op.done = true; return true;
+        case 'delay':
+          if (t < this.L.react * 0.7 + Op.delay) { this.dir(0, 0); return true; }
+          this.dir(nx, nz); this.tap('push'); Op.done = true; return true;
+        case 'walk':
+          if (t > 1.0 || me.contact) { Op.done = true; return false; }
+          this.dir(nx, nz); return true;
+      }
+      Op.done = true; return false;
+    }
+
+    // steer: toward the opponent while working my way to the centre side
+    steer(nx, nz, fwdW, tanW) {
+      const me = this.me;
+      const tx = -nz, tz = nx;
+      const cx = -me.x, cz = -me.z, cl = Math.hypot(cx, cz) || 1;
+      const sign = (tx * cx + tz * cz) >= 0 ? 1 : -1;
+      const myEdge = RR - Math.hypot(me.x, me.z);
+      const inW = clamp((1.6 - myEdge) / 1.6, 0, 1) * 1.2;
+      this.dir(nx * fwdW + tx * sign * tanW + cx / cl * inW, nz * fwdW + tz * sign * tanW + cz / cl * inW);
+    }
+
+    decideFree() {
+      const m = this.m, me = this.me, o = me.opp, L = this.L, P = this.perceive();
+      if (!P) return;
+      const dx = P.x - me.x, dz = P.z - me.z, dist = Math.hypot(dx, dz) || 1e-3;
+      const nx = dx / dist, nz = dz / dist;
+      const gap = dist - me.r - o.r;
+      const myEdge = RR - Math.hypot(me.x, me.z), oEdge = RR - Math.hypot(P.x, P.z);
+      const oSpeedToMe = -(P.vx * nx + P.vz * nz);
+      const canAct = ['free', 'brace', 'recover', 'palm'].includes(me.st);
+      const mySp = me.spd, ms = me.a.maxSpeed;
+
+      if (me.st === 'stumble' || me.st === 'overrun' || (me.st === 'recover' && RR - Math.hypot(me.x, me.z) < 1.2)) { this.steer(nx, nz, 0, 0); this.state = 'recovering'; return; }
+
+      // 1. threats: incoming charge / heavy
+      const oCharging = P.st === 'charge' || (P.st === 'heavy' && P.t < 0.17) || oSpeedToMe > 3.4;
+      if (oCharging && gap < Math.max(0.45, oSpeedToMe * 0.32) && canAct) {
+        if (gap < 0.9 && canAct && this.rnd() < L.skill * 0.3) { this.dir(nx, nz); this.tap('grab', 0.05); this.state = 'catch'; return; }
+        const preferDodge = myEdge < 1.8 || this.rnd() < L.dodge;
+        if (preferDodge && me.dashCD <= 0) {
+          let lx = -P.vz, lz = P.vx; const ll = Math.hypot(lx, lz) || 1; lx /= ll; lz /= ll;
+          if (lx * -me.x + lz * -me.z < 0) { lx = -lx; lz = -lz; }
+          this.release('dash'); this.dir(lx, lz); this.tap('dash', 0.05); this.state = 'dodge'; return;
+        }
+        this.dir(0, 0); this.hold('dash', 0.35); this.state = 'brace'; return;
+      }
+      if (me.st === 'brace' && this.holding('dash')) { this.dir(0, 0); this.state = 'bracing'; return; }
+
+      // 2. punish an opponent who is stuck in recovery / off balance
+      const oVuln = ['recover', 'stun', 'overrun', 'stumble'].includes(P.st) || (P.st === 'heavy' && P.t > 0.2) || (P.st === 'grab' && P.t > 0.12);
+      if (oVuln && gap < 1.4 && canAct) {
+        const behind = (o.fx * -nx + o.fz * -nz) < -0.2;
+        this.dir(nx, nz);
+        if (gap < 0.45) {
+          if (behind || P.bal < 0.45 || this.rnd() < 0.5) this.tap('push'); else this.tap('grab');
+        }
+        this.state = 'punish'; return;
+      }
+      // interrupt a heavy windup
+      if (P.st === 'wind' && gap < 0.7 && canAct) { this.dir(nx, nz); this.tap('push'); this.state = 'interrupt'; return; }
+
+      // 3. close range
+      if (gap < 0.45) {
+        if (!canAct) { this.dir(nx, nz); return; }
+        if (P.st === 'brace' && P.braceT > 0.05) { this.dir(nx, nz); this.tap('grab'); this.state = 'grab-vs-brace'; return; }
+        if (P.bal < 0.42) { this.dir(nx, nz); this.hold('push', 0.42); this.state = 'heavy'; return; }
+        if (myEdge < 1.0 && P.fwd > 0.4 && me.dashCD <= 0) { // escape the edge sideways
+          let lx = -nz, lz = nx; if (lx * -me.x + lz * -me.z < 0) { lx = -lx; lz = -lz; }
+          this.dir(lx, lz); this.tap('dash'); this.state = 'edge-escape'; return;
+        }
+        if (P.contact && P.fwd > 0.5 && P.pressT > 0.15 && myEdge > 1.6 && this.rnd() < L.tricky) {
+          this.dir(-nx, -nz); this.tap('push'); this.state = 'slapdown'; return;
+        }
+        const a = me.a;
+        const wGrab = a.grip * a.tech * 0.55 + (oEdge < 1.5 ? 0.25 : 0) + (a.key === 'heavy' ? 0.25 : 0);
+        const wPalm = a.power * 0.6 + (a.key === 'fast' ? 0.25 : 0);
+        this.dir(nx, nz);
+        if (this.rnd() < wGrab / (wGrab + wPalm)) { this.tap('grab'); this.state = 'grab'; }
+        else { this.tap('push'); this.state = 'tsuppari'; }
+        return;
+      }
+
+      // 4. charge run-up in progress
+      if (this.mode === 'charge') {
+        if (this.modeT > 1.2 || gap > 3.4) this.mode = null;
+        else {
+          this.dir(nx, nz);
+          const vf = me.vx * me.fx + me.vz * me.fz;
+          if (vf > ms * 0.58 && gap < 1.6 && canAct) { this.tap('push'); this.mode = null; }
+          this.state = 'charging'; return;
+        }
+      }
+
+      // 5. mid range
+      const quiet = m.time - m.lastContactT;
+      if (gap < 2.6) {
+        const aligned = (me.fx * nx + me.fz * nz) > 0.85;
+        // charging at someone on the bales is how you get sidestepped out: only the reckless do it
+        const lineOut = oEdge < 1.25 && this.rnd() > (1 - L.skill) * 0.5;
+        const wantCharge = !lineOut && ((oEdge < 1.8 && myEdge > oEdge + 0.4) || quiet > 2.2 || this.rnd() < L.aggr * 0.15);
+        if (wantCharge && aligned && gap > 0.8 && myEdge > 1.2 && P.st !== 'brace') {
+          this.mode = 'charge'; this.modeT = 0; this.dir(nx, nz); this.state = 'start-charge'; return;
+        }
+        this.steer(nx, nz, 0.75, 0.45); this.state = 'approach'; return;
+      }
+      this.steer(nx, nz, 1, 0.25); this.state = 'close-in';
+      void mySp;
+    }
+
+    // relative direction inside a clinch: tw toward opponent, sd lateral in my frame
+    rel(c, tw, sd) {
+      const me = this.me, s = c.sg(me);
+      const [nx, nz] = c.axis();
+      const px = -nz, pz = nx;
+      this.dir(s * nx * tw + s * px * sd, s * nz * tw + s * pz * sd);
+    }
+
+    decideClinch() {
+      const c = this.m.clinch, me = this.me, o = me.opp, L = this.L;
+      if (!c) return;
+      this.release('dash');
+      const i = me.idx, j = o.idx, s = c.sg(me);
+      const [nx, nz] = c.axis();
+      if (c.b === me && c.t < 0.2 && !c.rear && !this.techTried) { this.techTried = true; if (this.rnd() < L.skill * 0.25) { this.tap('grab', 0.04); this.state = 'grab-break'; return; } }
+      if (c.tech) { this.dir(0, 0); this.state = 'tech'; return; }
+      if (c.lift) {
+        if (c.lift.w === me) { const ol = Math.hypot(o.x, o.z) || 1; this.dir(o.x / ol, o.z / ol); this.state = 'carry'; }
+        else { this.dir(this.rnd() - 0.5, this.rnd() - 0.5); this.tap(['push', 'grab', 'dash'][(this.rnd() * 3) | 0], 0.04); this.state = 'struggle'; }
+        return;
+      }
+      const myD = Math.hypot(me.x, me.z) || 1, oD = Math.hypot(o.x, o.z) || 1;
+      const myEdge = RR - myD, oEdge = RR - oD;
+      const myBack = (me.x / myD) * -s * nx + (me.z / myD) * -s * nz;
+      const oBack = (o.x / oD) * s * nx + (o.z / oD) * s * nz;
+      if (c.rear === me) { this.rel(c, 1, 0); if (oEdge < 1.6 || this.rnd() < 0.25) this.tap('push'); this.state = 'rear'; return; }
+      if (c.rear === o) { this.rel(c, 0, 1); this.state = 'turning'; return; }
+
+      // fighting for survival on the bales
+      if (c.utchariOk(me)) {
+        const ev = c.evalTech(me, 'utchari');
+        if (ev.ok && this.clT > this.nextTech && this.rnd() < L.skill * 0.35) { this.rel(c, -0.7, this.rnd() < 0.5 ? 0.7 : -0.7); this.tap('grab'); this.state = 'UTCHARI'; return; }
+        if (ev.ok) this.nextTech = this.clT + 0.3;
+        if (this.rnd() < 0.55) { this.rel(c, 0.2, this.bestSide(c)); this.state = 'edge-rotate'; }
+        else { this.rel(c, 1, 0); this.state = 'edge-pushback'; }
+        return;
+      }
+
+      const thresh = 0.3 + (1 - L.skill) * 0.18;
+      const cands = [];
+      for (const k of ['throw', 'trip', 'spin', 'lift']) {
+        const ev = c.evalTech(me, k);
+        if (ev.ok && ev.sc > thresh) cands.push([k, ev.sc]);
+      }
+      cands.sort((a, b) => b[1] - a[1]);
+      const patience = this.clT > 2.2;
+      if (cands.length && this.clT > this.nextTech && (cands[0][1] > 0.5 || patience)) {
+        this.nextTech = this.clT + 0.6 + this.rnd() * 1.4;
+        const k = cands[0][0], side = this.bestSide(c);
+        if (k === 'throw') this.rel(c, 0, side);
+        else if (k === 'trip') this.rel(c, 1, 0);
+        else if (k === 'spin') this.rel(c, -1, 0);
+        else this.dir(0, 0);
+        this.tap('grab'); this.state = k; return;
+      }
+      if (me.stam < 0.18 && c.tow[j] < 0.3 && this.rnd() < 0.5) { this.dir(0, 0); this.state = 'rest'; return; }
+      if (oEdge < 2.0 && oBack > 0.2) {
+        this.rel(c, 1, 0);
+        this.state = 'drive'; return;
+      }
+      if (myEdge < 1.6 && myBack > 0.3) { this.rel(c, 0.3, this.bestSide(c)); this.state = 'swap'; return; }
+      if (patience && this.rnd() < 0.15) { this.tap(this.rnd() < 0.5 ? 'push' : 'dash'); this.state = 'break'; return; }
+      this.rel(c, 1, oBack < 0.2 ? this.bestSide(c) * 0.5 : 0); this.state = 'drive';
+    }
+
+    // which rotation sends the opponent toward the edge
+    bestSide(c) {
+      const me = this.me, o = me.opp;
+      const a0 = Math.atan2(o.z - me.z, o.x - me.x), r = Math.hypot(o.x - me.x, o.z - me.z);
+      const pos = (sg) => { const a = a0 + sg * 0.8; return Math.hypot(me.x + Math.cos(a) * r, me.z + Math.sin(a) * r); };
+      return pos(1) > pos(-1) ? 1 : -1;
+    }
+  }
+  S.AI = AI;
+  S.AI_MEM = MEM;
+  S.AI_LEVELS = LEVELS;
+})();

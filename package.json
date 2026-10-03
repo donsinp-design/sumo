@@ -1,0 +1,11 @@
+{
+  "name": "kumite",
+  "private": true,
+  "scripts": {
+    "start": "node server/local.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.146.0"
+  }
+}
