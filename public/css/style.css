@@ -304,7 +304,7 @@ html.touch #trainPanel .tp-btn { padding: 4px 10px; border: 1px solid rgba(246,2
   background: #000 !important; backdrop-filter: none !important; }
 #screen.title { justify-content: center; }
 .title-wrap { padding: 0; display: flex; flex-direction: column; align-items: center; text-align: center; }
-.logo-img { width: min(660px, 84vw); height: auto; display: block; margin-top: -2vh; overflow: visible; filter: drop-shadow(0 6px 0 rgba(0,0,0,0.55)) drop-shadow(0 10px 24px rgba(0,0,0,0.6)); }
+.logo-img { width: min(560px, 78vw); height: auto; display: block; margin-top: -2vh; }
 .title-wrap .menu { align-items: center; margin-top: 10px; gap: 6px; }
 .title-wrap .menu button { font-size: 24px; }
 .title-wrap .menu button.on { transform: skewX(-10deg); }
