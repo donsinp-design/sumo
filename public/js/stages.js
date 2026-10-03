@@ -516,8 +516,9 @@
       for (const z of [-BW / 2, BW / 2]) bx(g, 200, 0.8, 0.5, 0x8a929c, 0, BY - 0.2, z, { shade: 0x3a4048, spec: 0.8 });
       const plateCols = [0xd83a3a, 0xf2c23a, 0x3a7ad8, 0x4ab04a];
       const rice = toon(0xfbfaf4, { shade: 0xb8b4a8 }), salmon = toon(0xf28a5a, { shade: 0xb04a2a }), tuna = toon(0xc8283a, { shade: 0x6a0e18 }), egg = toon(0xf6d04a, { shade: 0xb08a1a }), nori = toon(0x1a2a1e, { shade: 0x050a06 });
+      const ridePlates = [];
       [-26, -13, 13, 26].forEach((x, k) => {
-        const pg = new THREE.Group(); pg.position.set(x, BY, 0); g.add(pg);
+        const pg = new THREE.Group(); pg.position.set(x, BY, 0); g.add(pg); ridePlates.push(pg);
         cy(pg, 4.6, 4.2, 0.45, plateCols[k], 0, 0, 0, { shade: 0x3a3a3a }, 48); cy(pg, 4.0, 4.0, 0.05, 0xfbfaf6, 0, 0.45, 0, { shade: 0xb8b8b8 }, 48);
         if (k % 2 === 0) { // two pieces of nigiri
           for (const dz of [-1.4, 1.4]) { const r1 = mesh(new THREE.SphereGeometry(1, 16, 12), rice, 0.03); r1.scale.set(2.2, 0.9, 1.1); r1.position.set(0, 1.3, dz); pg.add(r1); const f = mesh(new THREE.SphereGeometry(1, 16, 12), k === 0 ? salmon : egg, 0.03); f.scale.set(2.5, 0.35, 1.25); f.position.set(0, 2.1, dz); pg.add(f); if (k === 2) { const b = mesh(BOX(), nori, 0.01); b.scale.set(0.5, 1.6, 2.5); b.position.set(0, 1.6, dz); pg.add(b); } }
@@ -526,12 +527,22 @@
         }
       });
       // the counter alongside, with tea cups and soy sauce dishes
-      ground(g, BY - 1.6, (c, w) => { c.fillStyle = '#d8a868'; c.fillRect(0, 0, w, w); c.strokeStyle = 'rgba(120,70,30,0.35)'; c.lineWidth = 3; for (let y = 10; y < w; y += 22) { c.beginPath(); c.moveTo(0, y); for (let x = 0; x <= w; x += 32) c.lineTo(x, y + Math.sin(x * 0.02 + y) * 4); c.stroke(); } }, 240, 10);
-      for (let k = 0; k < 6; k++) {
-        const pr = new THREE.Group(); pr.position.set(-25 + k * 10, BY - 1.6, (k % 2 ? 1 : -1) * 13); g.add(pr);
+      const counter = ground(g, BY - 1.6, (c, w) => { c.fillStyle = '#d8a868'; c.fillRect(0, 0, w, w); c.fillStyle = 'rgba(110,62,26,0.55)'; for (let x = 0; x < w; x += 60) c.fillRect(x, 0, 3, w); c.strokeStyle = 'rgba(120,70,30,0.35)'; c.lineWidth = 3; for (let y = 10; y < w; y += 22) { c.beginPath(); c.moveTo(0, y); for (let x = 0; x <= w; x += 32) c.lineTo(x, y + Math.sin(x * 0.02 + y) * 4); c.stroke(); } }, 240, 10);
+      const props = [], SPAN = 120;
+      for (let k = 0; k < 12; k++) {
+        const pr = new THREE.Group(); pr.position.set(-60 + k * 10, BY - 1.6, (k % 2 ? 1 : -1) * 13); g.add(pr); pr.userData.x0 = -60 + k * 10; props.push(pr);
         if (k % 2) { cy(pr, 1.1, 0.9, 2.4, 0x6a8a5a, 0, 0, 0, { shade: 0x2a3a22 }, 20); const tea = new THREE.Mesh(new THREE.CircleGeometry(0.95, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x9ab84a })); tea.position.y = 2.2; pr.add(tea); }
         else { cy(pr, 1.5, 1.2, 0.4, 0xfbfaf6, 0, 0, 0, { shade: 0xb8b8b8 }, 24); const soy = new THREE.Mesh(new THREE.CircleGeometry(1.2, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a140a })); soy.position.y = 0.41; pr.add(soy); }
       }
+      // in motion: the belt (and every plate on it, ours included) travels together, so they stay put on screen
+      // and the counter beside it slides past. The fighting circle never moves.
+      const V = 2.2; // world units per second
+      return (T) => {
+        const d = V * T;
+        counter.material.map.offset.x = -(d / 24) % 1;
+        for (const pr of props) { let x = (pr.userData.x0 + d) % SPAN; if (x > SPAN / 2) x -= SPAN; else if (x < -SPAN / 2) x += SPAN; pr.position.x = x; }
+        ridePlates.forEach((pg, k) => { pg.position.y = BY + 0.025 * Math.sin(T * 17 + k * 1.7); }); // a little belt rumble
+      };
     },
   };
 })();
