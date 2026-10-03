@@ -98,7 +98,7 @@
     L('BRACE', 'They will charge again. Hold L (no direction) to brace and take the hit. Start holding L on NOW, just before impact, for a perfect STOP that stuns them.', { cue: 0.12, dummy: 'charge', pos: [[-1.2, 0], [2.6, 0]], ev: (e, p) => (e.type === 'braceCounter' && e.w === p) || (e.type === 'impact' && e.t === p && e.braced) }),
     L('PARRY', 'They will slap at you. Tap L (no direction) right as their hand arrives. Their push is knocked aside and does nothing, and THEY are stunned and lose balance for a moment: a free push or grab for you. Too early or too late and you just take the hit. Watch the count over your head and tap L on NOW.', { cue: 'parry', dummy: 'palm', ev: (e, p) => e.type === 'parry' && e.w === p }),
     L('CATCH', 'One more charge. Tap K on NOW, right as they crash into you, to catch them and spin them away.', { cue: 0.1, dummy: 'charge', pos: [[-1.2, 0], [2.6, 0]], ev: (e, p) => e.type === 'catch' && e.w === p }),
-    L('FACE-OFF', 'Show off first: J clap, K stomp (W A S D more taunts). Then hold L to crouch and KEEP holding. When you hear the wooden clappers and PRESS J! appears, press J to charge. Tap J once more while charging and you slap their face as you hit (harite): they are dazed for a moment. Charge before the call and it is a false start (matta): the face-off restarts, and a second one makes you start late.', { setup: 'faceoff', check: 'faceoff' }),
+    L('FACE-OFF', 'Show off first: J clap, K stomp (W A S D more taunts). Then hold L to crouch and KEEP holding. Watch the count over your head: 3, 2, 1, then the wooden clappers and PRESS J! Press J right on the clappers to charge (or dash aside with a direction and L to dodge their charge). Tap J once more while charging and you slap their face as you hit (harite): they are dazed for a moment. Charge before the call and it is a false start (matta): the face-off restarts, and a second one makes you start late.', { setup: 'faceoff', check: 'faceoff' }),
     L('GACHA MODE', 'Two ways to play: PURE (just sumo) or GACHA, picked with Tab on character select. In Gacha, both of you draw a random one-shot skill at the start of every round. Use it or lose it. Try some: Space uses it, G draws another. Press Enter when you are done.', { setup: 'gacha', check: 'gacha' }),
   ];
 
@@ -194,6 +194,14 @@
       const Ls = LESSONS[this.i]; if (!Ls) return;
       const p = this.p, m = this.g.match;
       if (Ls.cue !== undefined && !this.done && m.phase === 'fight') this.countIn(Ls.cue);
+      // face-off: tick 3, 2, 1 over your head into the start; the clappers on GO are the moment to charge (or dash aside)
+      if (Ls.setup === 'faceoff' && !this.done && m.phase === 'shikiri' && m.goAt < 1e8) {
+        const toGo = m.goAt - m.phaseT, idx = Math.ceil(toGo / 0.4);
+        if (idx >= 1 && idx <= 3 && idx !== this.goBeat) {
+          this.goBeat = idx; const s = this.g.scr(p.x, p.z, 2.6);
+          this.g.ui.callout(String(idx), s.x, s.y, 'gold'); this.g.audio.tick();
+        }
+      } else this.goBeat = null;
       if (Ls.check === 'marker' && !this.done && Math.hypot(p.x - this.mk[0], p.z - this.mk[1]) < 0.6) this.complete();
       if (Ls.check === 'faceoff' && this.flags.clap && this.flags.stomp && (p.crouchT || 0) > 0.4 && !this.flags.go) {
         this.flags.go = true; m.goAt = m.phaseT + 0.8 + Math.random() * 0.8;

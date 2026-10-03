@@ -262,7 +262,7 @@
       const P = S.profile;
       const foot = (t) => '<div class="foot">' + t + '</div>';
       if (n === 'title') {
-        h = '<div class="title-wrap"><img class="logo-img" src="assets/logo.webp" alt="Kumite"><div class="menu">' +
+        h = '<div class="title-wrap"><img class="logo-img" src="assets/logo.webp?v=2" alt="Kumite"><div class="menu">' +
           btn('PLAY', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') +
           '</div></div>';
       } else if (n === 'play') {
