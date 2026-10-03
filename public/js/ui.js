@@ -266,8 +266,10 @@
           btn('PLAY', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') +
           '</div></div>';
       } else if (n === 'play') {
+        const phs = () => { const P = S.phones, k = P.slots.filter(Boolean).length; return P.on ? (k ? k + ' CONNECTED' : 'ON') : 'OFF'; };
+        this.phs = phs;
         h = '<div class="pause-wrap"><div class="ptitle">PLAY</div><div class="menu">' +
-          btn('PLAY VS CPU', 'cpu') + btn('LEARN TO PLAY', 'learn') + btn('TRAINING', 'training') + btn('LOCKER', 'locker') + btn('BACK', 'back') +
+          btn('PLAY VS CPU', 'cpu') + btn('LEARN TO PLAY', 'learn') + btn('TRAINING', 'training') + btn('LOCKER', 'locker') + btn('PHONE CONTROLLERS', 'phones', phs()) + btn('BACK', 'back') +
           '</div>' + foot('Esc back') + '</div>';
       } else if (n === 'binds') {
         h = '<div class="pause-wrap"><div class="ptitle">KEY BINDINGS</div><div class="menu">';
@@ -280,7 +282,7 @@
           btn('STAGE', 'pstage', (S.STAGES.find((x) => x.id === S.profile.stage) || S.STAGES[0]).name) +
           btn('COUNTER TIPS', 'hints', st.hints ? 'ON' : 'OFF') +
           btn('SOUND', 'sound', st.sound ? 'ON' : 'OFF') +
-          btn('DEBUG VIEW', 'debug', st.debug ? 'ON' : 'OFF') + btn('CONTROLS', 'controls') +
+          btn('DEBUG VIEW', 'debug', st.debug ? 'ON' : 'OFF') + btn('CONTROLS', 'controls') + btn('PHONE CONTROLLERS', 'phones', (S.phones.on ? (S.phones.slots.filter(Boolean).length + ' CONNECTED') : 'OFF')) +
           btn('YOUR NAME', 'name1', P.names[0]) +
           btn('BACK', 'back') + '</div>' + foot('← → change &nbsp;·&nbsp; Enter on a name to type it &nbsp;·&nbsp; Esc back') + '</div>';
       } else if (n === 'select') {
@@ -311,7 +313,7 @@
           '</div><div class="menu">' + (n === 'controls' ? btn('KEY BINDINGS', 'binds') + btn('MOVE LIST', 'moves') : '') + btn(n === 'tutorial' ? 'START' : 'BACK', n === 'tutorial' ? 'begin' : 'back') + '</div></div>';
       } else if (n === 'pause') {
         h = '<div class="pause-wrap"><div class="ptitle">PAUSED</div><div class="menu">' +
-          btn('RESUME', 'resume') + (g.kind === 'training' ? btn('STAGE', 'pstage', (S.STAGES.find((x) => x.id === S.profile.stage) || S.STAGES[0]).name) : '') + btn(d.tut ? 'RESTART TUTORIAL' : 'RESTART MATCH', 'restart') + btn('SETTINGS', 'settings') + btn('QUIT TO TITLE', 'quit') + '</div></div>';
+          btn('RESUME', 'resume') + (g.kind === 'training' ? btn('STAGE', 'pstage', (S.STAGES.find((x) => x.id === S.profile.stage) || S.STAGES[0]).name) : '') + btn(d.tut ? 'RESTART TUTORIAL' : 'RESTART MATCH', 'restart') + btn('PHONE CONTROLLERS', 'phones', (S.phones.on ? (S.phones.slots.filter(Boolean).length + ' CONNECTED') : 'OFF')) + btn('SETTINGS', 'settings') + btn('QUIT TO TITLE', 'quit') + '</div></div>';
       } else if (n === 'trainsel') {
         h = '<div class="sel-wrap"><div class="sel-title">TRAINING · PICK YOUR WRESTLER</div>' + this.stageRow() + '<div class="cards">';
         S.ARCH.forEach((a, i) => {
@@ -339,7 +341,7 @@
             '<p>Scan with your phone camera. The first phone is Player 1, the second Player 2.</p>' +
             '<p class="ph-code">or open <span>' + P.padUrl().replace(/^https?:\/\//, '') + '</span></p>' + row(0) + row(1) +
             '<p class="ph-small">Phones work in the menus too: J is OK, K is back, ❚❚ pauses. PS5 and Xbox controllers work as well: just connect them to this computer.</p></div></div>' : '') +
-          '<div class="menu">' + (P.on ? btn('PLAY', 'play') + btn('DISCONNECT PHONES', 'phonesOff') : P.connecting ? '' : btn('TRY AGAIN', 'phonesOn')) + btn('BACK', 'back') + '</div>' + foot('Pick PLAY, then Versus for two phones, or vs CPU for one · Esc back') + '</div>';
+          '<div class="menu">' + (P.on ? (g.phonesBack && g.phonesBack !== 'online' && g.phonesBack !== 'title' ? btn('DONE', 'back') : btn('PLAY', 'play')) + btn('DISCONNECT PHONES', 'phonesOff') : P.connecting ? '' : btn('TRY AGAIN', 'phonesOn')) + btn('BACK', 'back') + '</div>' + foot('Pick PLAY, then Versus for two phones, or vs CPU for one · Esc back') + '</div>';
       } else if (n === 'lobby') {
         const r = d.room, me = r ? r.you : null;
         if (d.searching) { // Quick Match queue

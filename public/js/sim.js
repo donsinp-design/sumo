@@ -349,7 +349,9 @@
         case 'recover': mv(0.4); F *= 0.7; rec = 0.3; break;
         case 'stun': F *= 0.25; rec = 0; break;
         case 'stumble': vdx = w.sdx * 1.3 + ix * ms * 0.25; vdz = w.sdz * 1.3 + iz * ms * 0.25; F *= 0.45; turnK = 0.3; rec = 0.4; break;
-        case 'fall': vdx = w.fallX * 0.8; vdz = w.fallZ * 0.8; F *= 0.4; face = false; rec = 0; break;
+        case 'fall': // tipping over carries you along; once you hit the clay you skid to a stop
+          if (w.down) { vdx = 0; vdz = 0; F = a.moveForce * 0.9; } else { vdx = w.fallX * 0.8; vdz = w.fallZ * 0.8; F *= 0.4; }
+          face = false; rec = 0; break;
         case 'win': case 'lose': F *= 0.8; face = false; rec = 1; break;
       }
       if (w.slideT > 0) F *= 0.33;

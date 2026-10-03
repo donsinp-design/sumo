@@ -1364,7 +1364,7 @@
       else if (n === 'play') this.ui.show('title');
       else if (n === 'controls') { const f = this.uiBack; this.ui.show('settings'); this.uiBack = f; }
       else if (n === 'online') this.ui.show('title');
-      else if (n === 'phones') this.ui.show('online', {});
+      else if (n === 'phones') { const b = this.phonesBack || 'online'; this.phonesBack = null; if (b === 'pause') this.ui.show('pause', { tut: !!this.tut }); else this.ui.show(b, {}); }
       else if (n === 'lobby') this.leaveRoom();
       else if (n === 'moves' || n === 'binds') this.ui.show('controls');
       else if (n === 'select' || n === 'trainsel') this.ui.show('play');
@@ -1426,7 +1426,7 @@
         case 'play': ui.show('play'); break;
         case 'locker': this.openLocker(); break;
         case 'moves': this.movesBack = ui.name; ui.show('moves'); break;
-        case 'phones': this.watchPhones(); S.phones.start(); ui.show('phones'); break;
+        case 'phones': this.phonesBack = ui.name; this.watchPhones(); S.phones.start(); ui.show('phones'); break;
         case 'phonesOn': this.watchPhones(); S.phones.start(); break;
         case 'phonesOff': S.phones.stop(); break;
         case 'online': ui.show('online', { err: this.net.available() ? '' : 'Online needs the game server. Start it with: node server/local.mjs' }); break;

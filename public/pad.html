@@ -4,50 +4,88 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#150c14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kumite Pad">
+<meta name="theme-color" content="#0f0a0e">
 <title>Kumite Controller</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Barlow+Condensed:wght@600;800&display=swap" rel="stylesheet">
 <style>
-  /* Phone controller for Kumite: a stick on the left, four buttons on the right. */
-  :root { --ink: #150c14; --panel: #24161f; --paper: #f6eddc; --red: #e0402f; --gold: #f0c35a; --teal: #4fc3b8; --blue: #4a8fe0; --dim: rgba(246, 237, 220, 0.55); }
+  /* Kumite phone controller. Sized from the visible screen (JS sets --vw/--vh), so it fits with Safari's bars showing.
+     Layout: a stick on the left, four face buttons in a diamond on the right, a slim status bar on top. */
+  :root {
+    --bg: #0f0a0e; --bg2: #1d131a; --line: rgba(246, 237, 220, 0.10); --paper: #f6eddc; --dim: rgba(246, 237, 220, 0.55);
+    --red: #e3412f; --gold: #f2c14e; --teal: #3fc2b4; --blue: #4d8de6; --p1: #4d8de6; --p2: #e3412f;
+    --display: "Dela Gothic One", "Arial Black", Impact, sans-serif; --ui: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+    --vw: 100vw; --vh: 100vh; --u: 1px;
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--paper); font: 600 16px/1.3 -apple-system, "Helvetica Neue", Arial, sans-serif; overflow: hidden; overscroll-behavior: none; touch-action: none; }
-  #app { position: fixed; inset: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); display: grid; grid-template-rows: auto 1fr; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; }
-  #who { font-size: 18px; letter-spacing: 2px; font-style: italic; font-weight: 800; }
-  #who.p1 { color: var(--blue); } #who.p2 { color: var(--red); }
-  #msg { flex: 1; text-align: center; color: var(--dim); font-size: 13px; letter-spacing: 1px; min-width: 0; }
-  #pause { width: 52px; height: 40px; border-radius: 10px; border: 2px solid var(--dim); background: transparent; color: var(--paper); font-size: 16px; }
-  #pause.on { background: var(--paper); color: var(--ink); }
-  main { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
-  #stickZone { position: relative; border-right: 1px solid rgba(246, 237, 220, 0.08); }
-  #stickHint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; letter-spacing: 2px; pointer-events: none; }
-  #base, #knob { position: absolute; border-radius: 50%; pointer-events: none; display: none; transform: translate(-50%, -50%); }
-  #base { width: 150px; height: 150px; border: 3px solid rgba(246, 237, 220, 0.35); }
-  #knob { width: 70px; height: 70px; background: var(--paper); opacity: 0.9; }
-  #btns { position: relative; }
-  .b { position: absolute; width: 30%; aspect-ratio: 1; max-width: 120px; border-radius: 50%; border: 3px solid currentColor; background: rgba(0, 0, 0, 0.25); color: var(--paper);
-       display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; transform: translate(-50%, -50%); }
-  .b small { font-size: 11px; letter-spacing: 1px; opacity: 0.8; }
-  .b span { font-size: 26px; line-height: 1; }
-  .b.on { background: currentColor; }
-  .b.on span, .b.on small { color: var(--ink); }
-  #bJ { left: 50%; top: 74%; color: var(--red); }
-  #bK { left: 78%; top: 50%; color: var(--gold); }
-  #bL { left: 22%; top: 50%; color: var(--teal); }
-  #bS { left: 50%; top: 24%; color: var(--blue); }
-  #join { position: fixed; inset: 0; background: var(--ink); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px; text-align: center; }
-  #join input { font: 800 28px/1 -apple-system, Arial, sans-serif; letter-spacing: 6px; text-transform: uppercase; width: 220px; max-width: 100%; text-align: center; padding: 10px; border-radius: 10px; border: 2px solid var(--paper); background: transparent; color: var(--paper); -webkit-user-select: text; user-select: text; }
-  #join button { font: 800 18px/1 -apple-system, Arial, sans-serif; padding: 12px 28px; border-radius: 10px; border: 0; background: var(--red); color: var(--paper); }
-  #turn { position: fixed; inset: 0; background: var(--ink); display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; color: var(--dim); font-size: 18px; }
-  @media (orientation: portrait) { #turn.ask { display: flex; } }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--paper); overflow: hidden; overscroll-behavior: none; touch-action: none; font-family: var(--ui); }
+  #app { position: fixed; left: 0; top: 0; width: var(--vw); height: var(--vh);
+         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+         display: grid; grid-template-rows: auto 1fr;
+         background: radial-gradient(ellipse at 25% 60%, #24171f 0%, transparent 55%), radial-gradient(ellipse at 78% 55%, #24171f 0%, transparent 55%), linear-gradient(180deg, var(--bg2), var(--bg)); }
+
+  /* status bar */
+  header { display: flex; align-items: center; gap: 10px; padding: calc(var(--u) * 2.2) calc(var(--u) * 4); min-height: 0; }
+  #tag { font-family: var(--display); font-size: calc(var(--u) * 5); letter-spacing: 0.04em; padding: calc(var(--u) * 0.6) calc(var(--u) * 3); border-radius: 999px; background: #2a1f26; color: var(--dim); white-space: nowrap; }
+  #tag.p1 { background: var(--p1); color: #fff; } #tag.p2 { background: var(--p2); color: #fff; }
+  #dot { width: calc(var(--u) * 2.4); height: calc(var(--u) * 2.4); border-radius: 50%; background: #6a5a62; flex: none; }
+  #dot.ok { background: #5fd88a; box-shadow: 0 0 calc(var(--u) * 2) #5fd88a; }
+  #msg { flex: 1; min-width: 0; font-size: calc(var(--u) * 4); font-weight: 600; letter-spacing: 0.06em; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pause { flex: none; width: calc(var(--u) * 15); height: calc(var(--u) * 9); border-radius: calc(var(--u) * 3); border: 0; background: #2a1f26; color: var(--paper);
+           font-family: var(--ui); font-weight: 800; font-size: calc(var(--u) * 4); letter-spacing: 0.1em; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.4); }
+  #pause.on { background: var(--paper); color: var(--bg); }
+
+  main { position: relative; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+  .zone { position: relative; min-width: 0; min-height: 0; }
+
+  /* stick */
+  #base { position: absolute; width: calc(var(--S) * 0.62); height: calc(var(--S) * 0.62); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
+          background: radial-gradient(circle, rgba(0,0,0,0.45) 0 55%, rgba(0,0,0,0.25) 70%, transparent 71%);
+          box-shadow: inset 0 0 0 calc(var(--u) * 1.4) #c9a86a, inset 0 0 0 calc(var(--u) * 2.4) rgba(0,0,0,0.5), 0 calc(var(--u) * 1.5) calc(var(--u) * 5) rgba(0,0,0,0.5);
+          opacity: 0.55; transition: opacity 0.15s; }
+  #base.live { opacity: 1; }
+  #base::before { content: ""; position: absolute; inset: 18%; border-radius: 50%; border: 1px dashed rgba(246, 237, 220, 0.18); }
+  #knob { position: absolute; width: calc(var(--S) * 0.30); height: calc(var(--S) * 0.30); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
+          background: radial-gradient(circle at 38% 32%, #fffaf0 0%, #e9dcc4 38%, #b9a88c 72%, #8a7a62 100%);
+          box-shadow: 0 calc(var(--u) * 1.8) calc(var(--u) * 4) rgba(0,0,0,0.6), inset 0 0 0 calc(var(--u) * 1.2) rgba(0,0,0,0.18); }
+  #knob::after { content: ""; position: absolute; inset: 22%; border-radius: 50%; background: repeating-radial-gradient(circle, rgba(0,0,0,0.10) 0 1px, transparent 1px 4px); }
+  #hintL { position: absolute; left: 0; right: 0; bottom: calc(var(--u) * 2); text-align: center; font-size: calc(var(--u) * 3.6); letter-spacing: 0.18em; color: var(--dim); pointer-events: none; }
+
+  /* face buttons */
+  .b { position: absolute; width: var(--d); height: var(--d); border-radius: 50%; transform: translate(-50%, -50%); color: var(--c);
+       background: radial-gradient(circle at 35% 28%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 32%), radial-gradient(circle at 50% 60%, var(--c) 0%, color-mix(in srgb, var(--c) 70%, #000) 100%);
+       box-shadow: 0 calc(var(--u) * 1.6) 0 color-mix(in srgb, var(--c) 45%, #000), 0 calc(var(--u) * 3) calc(var(--u) * 6) rgba(0,0,0,0.55), inset 0 0 0 calc(var(--u) * 0.8) rgba(255,255,255,0.18);
+       display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform 0.05s, box-shadow 0.05s, filter 0.05s; }
+  .b span { font-family: var(--display); font-size: calc(var(--d) * 0.36); line-height: 1; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.35); }
+  .b small { font-weight: 800; font-size: calc(var(--d) * 0.15); letter-spacing: 0.12em; color: rgba(255,255,255,0.85); margin-top: 2%; }
+  .b.on { transform: translate(-50%, -46%) scale(0.95); filter: brightness(1.15);
+          box-shadow: 0 0 0 color-mix(in srgb, var(--c) 45%, #000), 0 0 calc(var(--u) * 8) var(--c), inset 0 0 0 calc(var(--u) * 0.8) rgba(255,255,255,0.3); }
+  #bJ { --c: var(--red); } #bK { --c: var(--gold); } #bL { --c: var(--teal); } #bS { --c: var(--blue); }
+  #bS span { font-family: var(--ui); font-weight: 800; }
+
+  /* overlays */
+  .sheet { position: fixed; inset: 0; background: rgba(15, 10, 14, 0.96); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; text-align: center; font-size: 18px; }
+  .sheet.on { display: flex; }
+  .sheet h1 { font-family: var(--display); font-weight: 400; font-size: 28px; margin: 0; letter-spacing: 0.04em; }
+  .sheet p { margin: 0; color: var(--dim); max-width: 420px; line-height: 1.35; }
+  .sheet input { font: 400 28px/1 var(--display); letter-spacing: 6px; text-transform: uppercase; width: 220px; max-width: 100%; text-align: center; padding: 10px; border-radius: 12px; border: 2px solid var(--paper); background: transparent; color: var(--paper); -webkit-user-select: text; user-select: text; }
+  .sheet button { font: 800 18px/1 var(--ui); letter-spacing: 0.1em; padding: 14px 30px; border-radius: 12px; border: 0; background: var(--red); color: #fff; }
+  #tip { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 6px); transform: translateX(-50%); display: none; gap: 10px; align-items: center;
+         background: #2a1f26; color: var(--paper); border-radius: 999px; padding: 8px 8px 8px 16px; font-size: 14px; letter-spacing: 0.04em; box-shadow: 0 6px 18px rgba(0,0,0,0.5); max-width: calc(100vw - 24px); }
+  #tip.on { display: flex; }
+  #tip button { border: 0; border-radius: 999px; background: var(--paper); color: var(--bg); font: 800 13px/1 var(--ui); letter-spacing: 0.08em; padding: 8px 12px; }
+  @media (prefers-reduced-motion: reduce) { .b, #base { transition: none; } }
 </style>
 </head>
 <body>
 <div id="app">
-  <header><div id="who">KUMITE</div><div id="msg">Connecting…</div><button id="pause" aria-label="Pause">❚❚</button></header>
+  <header><div id="tag">KUMITE</div><div id="dot"></div><div id="msg">Connecting…</div><button id="pause" aria-label="Pause">PAUSE</button></header>
   <main>
-    <div id="stickZone"><div id="stickHint">MOVE: drag anywhere here</div><div id="base"></div><div id="knob"></div></div>
-    <div id="btns">
+    <div class="zone" id="stickZone"><div id="base"></div><div id="knob"></div><div id="hintL">MOVE</div></div>
+    <div class="zone" id="btnZone">
       <div class="b" id="bS" data-b="3"><span>★</span><small>SKILL</small></div>
       <div class="b" id="bL" data-b="2"><span>L</span><small>DASH</small></div>
       <div class="b" id="bK" data-b="1"><span>K</span><small>GRAB</small></div>
@@ -55,41 +93,66 @@
     </div>
   </main>
 </div>
-<div id="join"><div>Enter the code shown on the game screen</div><input id="code" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="PD…"><button id="go">CONNECT</button></div>
-<div id="turn" class="ask">Turn your phone sideways to play.</div>
+<div class="sheet" id="join"><h1>KUMITE</h1><p>Enter the code shown on the game screen.</p><input id="code" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="PD…"><button id="go">CONNECT</button></div>
+<div class="sheet" id="turn"><h1>TURN SIDEWAYS</h1><p>Hold your phone in landscape, like a controller.</p></div>
+<div id="tip"><span>Full screen: Share, then Add to Home Screen</span><button id="tipOk">OK</button></div>
 <script>
 'use strict';
 (function () {
-  const $ = (id) => document.getElementById(id);
+  const $ = (id) => document.getElementById(id), root = document.documentElement;
   const st = { mx: 0, mz: 0, b: [false, false, false, false, false] };
   let ws = null, myId = null, slot = null, code = (new URLSearchParams(location.search).get('c') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   let lastSent = '', lastAt = 0, retry = null;
 
+  // ---- fit everything to the part of the screen that is actually visible
+  function layout() {
+    const vv = window.visualViewport, w = Math.round(vv ? vv.width : innerWidth), h = Math.round(vv ? vv.height : innerHeight);
+    root.style.setProperty('--vw', w + 'px'); root.style.setProperty('--vh', h + 'px');
+    const u = Math.max(4, Math.min(w, h * 1.6) / 100) * 0.62; // scale unit for the bar and small text
+    root.style.setProperty('--u', u.toFixed(2) + 'px');
+    $('turn').classList.toggle('on', h > w * 1.1 && !$('join').classList.contains('on'));
+    requestAnimationFrame(() => {
+      const L = $('stickZone').getBoundingClientRect(), R = $('btnZone').getBoundingClientRect();
+      const S = Math.min(L.width, L.height);
+      root.style.setProperty('--S', S + 'px');
+      if (!sticking) placeBase(L.width / 2, L.height / 2);
+      // four buttons in a diamond, as big as the space allows
+      const s = Math.min(R.width, R.height), d = s * 0.30, off = s * 0.30; // the diamond stays inside its half, even pressed
+      $('btnZone').style.setProperty('--d', d + 'px');
+      const cx = R.width / 2, cy = R.height / 2;
+      const put = (id, x, y) => { const el = $(id); el.style.left = x + 'px'; el.style.top = y + 'px'; };
+      put('bJ', cx, cy + off); put('bK', cx + off, cy); put('bL', cx - off, cy); put('bS', cx, cy - off);
+    });
+  }
+  window.addEventListener('resize', layout);
+  if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+
+  // ---- connection
   function msg(t) { $('msg').textContent = t; }
   function connect() {
-    if (!code) { $('join').style.display = 'flex'; return; }
-    $('join').style.display = 'none';
+    if (!code) { $('join').classList.add('on'); layout(); return; }
+    $('join').classList.remove('on');
     const u = new URL('ws', location.href); u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; u.search = '?room=' + code; u.hash = '';
-    try { ws = new WebSocket(u.toString()); } catch (e) { msg('Could not reach the game.'); return; }
+    try { ws = new WebSocket(u.toString()); } catch (e) { msg('Could not reach the game'); return; }
     msg('Connecting…');
     ws.onopen = () => { ws.send(JSON.stringify({ t: 'hi' })); };
     ws.onmessage = (e) => {
       if (e.data === 'pong') return;
       let m; try { m = JSON.parse(e.data); } catch (er) { return; }
-      if (m.t === 'full') { msg('Both player spots are taken.'); return; }
+      if (m.t === 'full') { msg('Both player spots are taken'); return; }
       if (m.t === 'you') myId = m.id;
       if (m.t === 'slot' && m.to === myId) {
         slot = m.slot;
-        if (slot < 0) { msg('Both player spots are taken.'); $('who').textContent = 'KUMITE'; $('who').className = ''; return; }
-        $('who').textContent = 'PLAYER ' + (slot + 1); $('who').className = 'p' + (slot + 1);
-        msg('Connected · menus: J ok, K back');
+        if (slot < 0) { msg('Both player spots are taken'); $('tag').textContent = 'KUMITE'; $('tag').className = ''; $('dot').className = ''; return; }
+        $('tag').textContent = 'PLAYER ' + (slot + 1); $('tag').className = 'p' + (slot + 1); $('dot').className = 'ok';
+        msg('Connected · in menus J is OK, K is back');
         send(true);
       }
     };
-    ws.onclose = () => { slot = null; msg('Disconnected. Reconnecting…'); clearTimeout(retry); retry = setTimeout(connect, 2000); };
+    ws.onclose = () => { slot = null; $('dot').className = ''; msg('Reconnecting…'); clearTimeout(retry); retry = setTimeout(connect, 2000); };
     ws.onerror = () => {};
   }
-  // send the stick and buttons when they change, plus a short heartbeat so the game knows we are still here
+  // send stick and buttons when they change, plus a heartbeat so the game knows we're still here
   function send(force) {
     if (!ws || ws.readyState !== 1 || slot === null || slot < 0) return;
     const s = JSON.stringify({ t: 'st', mx: Math.round(st.mx * 100) / 100, mz: Math.round(st.mz * 100) / 100, b: st.b.map((x) => (x ? 1 : 0)) });
@@ -99,46 +162,60 @@
   }
   setInterval(() => send(false), 100);
   setInterval(() => { if (ws && ws.readyState === 1) ws.send('ping'); }, 20000);
+  const buzz = (ms) => { if (navigator.vibrate) navigator.vibrate(ms); };
 
-  // stick: wherever the thumb lands in the left half becomes the centre
-  const zone = $('stickZone'), base = $('base'), knob = $('knob'); let sid = null, ox = 0, oy = 0;
-  const R = 60;
+  // ---- stick: rests in the middle of the left half; touch anywhere there and it jumps under your thumb
+  const zone = $('stickZone'), base = $('base'), knob = $('knob');
+  let sid = null, ox = 0, oy = 0, sticking = false;
+  function placeBase(x, y) { ox = x; oy = y; base.style.left = knob.style.left = x + 'px'; base.style.top = knob.style.top = y + 'px'; }
   zone.addEventListener('pointerdown', (e) => {
-    if (sid !== null) return; sid = e.pointerId; zone.setPointerCapture(sid);
-    const r = zone.getBoundingClientRect(); ox = e.clientX - r.left; oy = e.clientY - r.top;
-    for (const el of [base, knob]) { el.style.display = 'block'; el.style.left = ox + 'px'; el.style.top = oy + 'px'; }
-    $('stickHint').style.display = 'none'; wake();
+    if (sid !== null) return; sid = e.pointerId; zone.setPointerCapture(sid); sticking = true;
+    const r = zone.getBoundingClientRect(); placeBase(e.clientX - r.left, e.clientY - r.top);
+    base.classList.add('live'); $('hintL').style.opacity = 0; wake();
   });
   zone.addEventListener('pointermove', (e) => {
     if (e.pointerId !== sid) return;
-    const r = zone.getBoundingClientRect(); let dx = e.clientX - r.left - ox, dy = e.clientY - r.top - oy;
+    const r = zone.getBoundingClientRect(), R = base.offsetWidth * 0.36;
+    let dx = e.clientX - r.left - ox, dy = e.clientY - r.top - oy;
     const l = Math.hypot(dx, dy); if (l > R) { dx *= R / l; dy *= R / l; }
     knob.style.left = (ox + dx) + 'px'; knob.style.top = (oy + dy) + 'px';
     let mx = dx / R, mz = dy / R; if (Math.hypot(mx, mz) < 0.2) { mx = 0; mz = 0; }
     st.mx = mx; st.mz = mz; send(false);
   });
-  const endStick = (e) => { if (e.pointerId !== sid) return; sid = null; st.mx = 0; st.mz = 0; base.style.display = knob.style.display = 'none'; send(true); };
+  const endStick = (e) => {
+    if (e.pointerId !== sid) return; sid = null; sticking = false; st.mx = 0; st.mz = 0;
+    base.classList.remove('live'); const r = zone.getBoundingClientRect(); placeBase(r.width / 2, r.height / 2); send(true);
+  };
   zone.addEventListener('pointerup', endStick); zone.addEventListener('pointercancel', endStick);
 
-  // buttons: each finger can hold its own button
+  // ---- face buttons: each finger can hold its own
   document.querySelectorAll('.b').forEach((el) => {
     const i = +el.dataset.b;
-    el.addEventListener('pointerdown', (e) => { el.setPointerCapture(e.pointerId); st.b[i] = true; el.classList.add('on'); if (navigator.vibrate) navigator.vibrate(8); send(true); wake(); });
+    el.addEventListener('pointerdown', (e) => { el.setPointerCapture(e.pointerId); st.b[i] = true; el.classList.add('on'); buzz(10); send(true); wake(); });
     const up = () => { st.b[i] = false; el.classList.remove('on'); send(true); };
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   });
   const pz = $('pause');
-  pz.addEventListener('pointerdown', () => { st.b[4] = true; pz.classList.add('on'); send(true); });
-  pz.addEventListener('pointerup', () => { st.b[4] = false; pz.classList.remove('on'); send(true); });
+  pz.addEventListener('pointerdown', () => { st.b[4] = true; pz.classList.add('on'); buzz(10); send(true); });
+  const pzUp = () => { st.b[4] = false; pz.classList.remove('on'); send(true); };
+  pz.addEventListener('pointerup', pzUp); pz.addEventListener('pointercancel', pzUp);
 
-  // keep the screen awake while playing (where the phone allows it)
+  // ---- keep the screen awake while playing (where the phone allows it)
   let lock = null;
   function wake() { if (lock || !navigator.wakeLock) return; navigator.wakeLock.request('screen').then((l) => { lock = l; l.addEventListener('release', () => { lock = null; }); }).catch(() => {}); }
   document.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('gesturestart', (e) => e.preventDefault()); // no pinch zoom on iPhone
+  let lastTap = 0; document.addEventListener('touchend', (e) => { const n = Date.now(); if (n - lastTap < 350) e.preventDefault(); lastTap = n; }, { passive: false }); // no double-tap zoom
+
+  // ---- one-time tip: on iPhone, a home-screen icon opens full screen without Safari's bars
+  try {
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent), standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+    if (ios && !standalone && !localStorage.getItem('kumitePadTip')) $('tip').classList.add('on');
+  } catch (e) { /* storage blocked */ }
+  $('tipOk').addEventListener('click', () => { $('tip').classList.remove('on'); try { localStorage.setItem('kumitePadTip', '1'); } catch (e) { /* ignore */ } });
 
   $('go').addEventListener('click', () => { code = $('code').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code) connect(); });
-  $('turn').addEventListener('click', () => { $('turn').classList.remove('ask'); });
-  connect();
+  layout(); connect();
 })();
 </script>
 </body>

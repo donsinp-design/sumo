@@ -730,7 +730,10 @@
       for (const Lg of this.legs) {
         const hip = this.v1.set(Lg.sd * 0.3 * s, -0.1 * s, 0).applyMatrix4(this.body.matrix);
         let foot;
-        if (w.lifted || w.y > 0.12) {
+        const downed = w.st === 'fall' || w.down;
+        if (downed) { // lying on the clay: legs stay straight along the body instead of stepping
+          foot = this.v2.set(Lg.sd * 0.32 * s, -0.92 * s, 0.1 * s).applyMatrix4(this.body.matrix);
+        } else if (w.lifted || w.y > 0.12) {
           foot = this.v2.set(Lg.sd * 0.34 * s, hip.y - 0.74 * s, 0.05 * s + Math.sin(T * 14 + Lg.sd) * 0.12 * s);
         } else {
           foot = this.v2.set(Lg.x, Lg.y + 0.07 * s, Lg.z);
@@ -761,6 +764,10 @@
       const sliding = (w.slideT > 0 && back) || (w.st === 'brace' && sp > 0.5) || w.st === 'stun' ||
         (w.clinch && !w.clinch.tech && !w.lifted && back);
       let slideAmt = 0;
+      if (w.st === 'fall' || w.down) { // no stepping while down; plant fresh when they are back up
+        for (const Lg of this.legs) { Lg.k = 1; Lg.y = 0; }
+        this.footInit = false; this.slideAmt = 0; return;
+      }
       for (let i = 0; i < 2; i++) {
         const Lg = this.legs[i], sd = Lg.sd;
         const fwdOff = (w.st === 'charge' || w.st === 'heavy' ? 0.12 : 0.04) * (i === 0 ? 1 : -1) * s;
