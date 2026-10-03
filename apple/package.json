@@ -1,0 +1,17 @@
+{
+  "name": "kumite-apple",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Kumite for iPhone, iPad and Mac (Apple silicon) via Capacitor",
+  "scripts": {
+    "copy": "node copy-game.js",
+    "sync": "npm run copy && cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

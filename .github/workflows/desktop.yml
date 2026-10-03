@@ -1,0 +1,44 @@
+# Builds the desktop app (the Steam version) for Windows, Mac and Linux.
+# Runs when the game or the desktop wrapper changes, or by hand from the Actions tab.
+# The finished zips are attached to each run under "Artifacts" (download from the run's page).
+name: Desktop builds
+
+on:
+  push:
+    branches: [main, claude/chicken-self-steer]
+    paths: ['public/**', 'desktop/**', '.github/workflows/desktop.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, flag: --win, name: Kumite-Windows }
+          - { os: macos-latest, flag: --mac, name: Kumite-Mac }
+          - { os: ubuntu-latest, flag: --linux, name: Kumite-Linux }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run dist -- ${{ matrix.flag }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            desktop/dist/*.zip
+            desktop/dist/*.tar.gz
+          if-no-files-found: error

@@ -1,0 +1,30 @@
+{
+  "name": "kumite",
+  "productName": "Kumite",
+  "version": "1.0.0",
+  "description": "Kumite: a sumo fighting game",
+  "author": "Look Twice Studio",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "copy": "node copy-game.js",
+    "start": "npm run copy && electron .",
+    "dist": "npm run copy && electron-builder --publish never"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.looktwicestudio.kumite",
+    "productName": "Kumite",
+    "copyright": "© Look Twice Studio",
+    "files": ["main.js", "preload.js", "app/**/*"],
+    "extraResources": [{ "from": "steam_appid.txt", "to": "steam_appid.txt" }],
+    "directories": { "output": "dist", "buildResources": "build" },
+    "artifactName": "Kumite-${os}-${arch}.${ext}",
+    "win": { "target": [{ "target": "zip", "arch": ["x64"] }], "icon": "icon-1024.png" },
+    "mac": { "target": [{ "target": "zip", "arch": ["universal"] }], "icon": "icon-1024.png", "category": "public.app-category.action-games", "identity": null },
+    "linux": { "target": [{ "target": "tar.gz", "arch": ["x64"] }], "icon": "icon-1024.png", "category": "Game" }
+  }
+}

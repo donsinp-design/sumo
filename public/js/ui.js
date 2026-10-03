@@ -263,7 +263,7 @@
       const foot = (t) => '<div class="foot">' + t + '</div>';
       if (n === 'title') {
         h = '<div class="title-wrap"><img class="logo-img" src="assets/logo.webp?v=2" alt="Kumite"><div class="menu">' +
-          btn('PLAY', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') +
+          btn('PLAY', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') + (S.APP === 'desktop' ? btn('QUIT', 'quit') : '') +
           '</div></div>';
       } else if (n === 'play') {
         const phs = () => { const P = S.phones, k = P.slots.filter(Boolean).length; return P.on ? (k ? k + ' CONNECTED' : 'ON') : 'OFF'; };
@@ -282,6 +282,7 @@
           btn('STAGE', 'pstage', (S.STAGES.find((x) => x.id === S.profile.stage) || S.STAGES[0]).name) +
           btn('COUNTER TIPS', 'hints', st.hints ? 'ON' : 'OFF') +
           btn('SOUND', 'sound', st.sound ? 'ON' : 'OFF') +
+          (S.APP === 'desktop' ? btn('DISPLAY', 'fullscreen', window.kumiteDesktop && window.kumiteDesktop.isFullScreen() ? 'FULLSCREEN' : 'WINDOWED') : '') +
           btn('DEBUG VIEW', 'debug', st.debug ? 'ON' : 'OFF') + btn('CONTROLS', 'controls') + btn('PHONE CONTROLLERS', 'phones', (S.phones.on ? (S.phones.slots.filter(Boolean).length + ' CONNECTED') : 'OFF')) +
           btn('YOUR NAME', 'name1', P.names[0]) +
           btn('BACK', 'back') + '</div>' + foot('← → change &nbsp;·&nbsp; Enter on a name to type it &nbsp;·&nbsp; Esc back') + '</div>';

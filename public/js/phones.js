@@ -13,7 +13,6 @@
     get connecting() { return !!this.ws && !this.opened; }
     start(again) {
       if (this.ws) return;
-      if (!(location.protocol === 'http:' || location.protocol === 'https:')) { this.err = 'Phone controllers need the online version of the game.'; this.changed(); return; }
       // the same code every time on this computer, so a phone's home-screen icon reconnects without scanning again
       if (!this.code) {
         try { this.code = localStorage.getItem('kumitePhoneCode'); } catch (e) { /* storage blocked */ }
@@ -24,7 +23,7 @@
       }
       if (!again) { this.slots = [null, null]; this.conns = [null, null]; this.state = [null, null]; }
       this.err = ''; this.opened = false;
-      const u = new URL('ws', location.href); u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; u.search = '?room=' + this.code; u.hash = '';
+      const u = S.wsUrl('ws'); u.search = '?room=' + this.code;
       let ws; try { ws = this.ws = new WebSocket(u.toString()); } catch (e) { this.ws = null; this.err = 'Could not reach the game server.'; this.changed(); return; }
       ws.onopen = () => { this.opened = true; this.tries = 0; this.changed(); };
       ws.onmessage = (e) => { if (e.data === 'pong') return; let m; try { m = JSON.parse(e.data); } catch (er) { return; } this.onMsg(m); };
@@ -86,7 +85,7 @@
     // the phone for player i, if it is connected and talking
     get(i) { const s = this.state[i]; return s && performance.now() - s.at < FRESH ? s : null; }
     connected(i) { return !!this.slots[i]; }
-    padUrl() { return new URL('pad.html?c=' + this.code, location.href).toString(); }
+    padUrl() { return S.webUrl('pad.html?c=' + this.code); } // phones always open the controller on the website
     qrSvg() {
       if (!this.code || typeof qrcode !== 'function') return '';
       const q = qrcode(0, 'M'); q.addData(this.padUrl()); q.make();

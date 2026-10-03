@@ -1,0 +1,12 @@
+{
+  "appId": "com.looktwicestudio.kumite",
+  "appName": "Kumite",
+  "webDir": "www",
+  "backgroundColor": "#000000",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "backgroundColor": "#000000",
+    "preferredContentMode": "mobile"
+  }
+}

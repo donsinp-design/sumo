@@ -1,0 +1,53 @@
+# Builds the iPhone / iPad app (it also runs on Apple-silicon Macs) and checks it starts:
+# compiles for the iOS Simulator, launches it on an iPhone and an iPad, and saves screenshots
+# under "Artifacts" on the run's page. No Apple account is needed for this check.
+# To send a build to TestFlight / the App Store, use the "iOS release" workflow (needs Apple secrets).
+name: iOS build check
+
+on:
+  push:
+    branches: [main, claude/chicken-self-steer]
+    paths: ['public/**', 'apple/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: apple
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run sync
+      - name: Build for the simulator
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -n 30
+          ls build/Build/Products/Debug-iphonesimulator/App.app
+      - name: Launch on iPhone and iPad, take screenshots
+        run: |
+          mkdir -p shots
+          for dev in "iPhone 16 Pro" "iPad Pro 13-inch (M4)"; do
+            id=$(xcrun simctl list devices available | grep -m1 "$dev (" | grep -oE '[0-9A-F-]{36}') || true
+            if [ -z "$id" ]; then id=$(xcrun simctl list devices available | grep -m1 "${dev%% *}" | grep -oE '[0-9A-F-]{36}'); fi
+            echo "device $dev -> $id"
+            xcrun simctl boot "$id" || true
+            xcrun simctl bootstatus "$id" -b
+            xcrun simctl install "$id" build/Build/Products/Debug-iphonesimulator/App.app
+            xcrun simctl launch "$id" com.looktwicestudio.kumite
+            sleep 25
+            xcrun simctl io "$id" screenshot "shots/${dev// /-}.png"
+            xcrun simctl shutdown "$id" || true
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iOS-simulator-screenshots
+          path: apple/shots/*.png

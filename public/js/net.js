@@ -41,9 +41,9 @@
       const worst = Math.max(...this.rtts.slice(-8));
       return Math.max(2, Math.min(9, Math.ceil((worst + 15) / 33.3)));
     }
-    available() { return location.protocol === 'http:' || location.protocol === 'https:'; }
+    available() { return true; } // the website, or an app talking to the website's server
     // works at the site root or under a subpage like /kumite/
-    url() { const u = new URL('ws', location.href); u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; u.search = ''; u.hash = ''; return u.toString(); }
+    url() { return S.wsUrl('ws').toString(); }
     connect(code) {
       this.close();
       this.code = code;
@@ -62,7 +62,7 @@
     // Quick Match: wait in the matchmaker queue until it pairs us with a similar player
     findMatch() {
       this.stopFind();
-      const u = new URL('mm', location.href); u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; u.search = ''; u.hash = '';
+      const u = S.wsUrl('mm');
       let ws; try { ws = this.mm = new WebSocket(u.toString()); } catch (e) { this.g.onNetClosed('Could not reach the game server.'); return; }
       const g = this.g;
       ws.onopen = () => ws.send(JSON.stringify({ t: 'find', pid: S.profile.pid }));
