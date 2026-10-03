@@ -74,6 +74,7 @@
         case 'need': g.onNetNeed(m); break;
         case 'snap': g.onNetSnap(m); break;
         case 'abort': g.onNetAbort(m); break;
+        case 'full': g.onQuickFull(); break;
       }
     }
   }

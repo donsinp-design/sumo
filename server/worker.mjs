@@ -58,7 +58,7 @@ export class Room {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.state.acceptWebSocket(server);
-    this.core.join(this.connFor(server));
+    if (this.core.join(this.connFor(server)) === null) { this.conns.delete(server); try { server.close(1000, 'full'); } catch (e) { /* ignore */ } }
     return new Response(null, { status: 101, webSocket: client });
   }
   webSocketMessage(ws, msg) {

@@ -12,11 +12,13 @@ export class RoomCore {
     this.playing = false;
     this.match = null;        // { p: [id, id] }
     this.nextId = 1;
-    this.auto = code === 'PUBLIC'; // quick match: bouts start by themselves
+    this.auto = /^QM\d+$/.test(code); // quick match: one-on-one, bouts start by themselves
+    this.cap = this.auto ? 2 : Infinity; // private rooms take anyone (the rest watch and queue)
     this.autoTimer = null;
   }
 
   join(conn) {
+    if (this.members.size >= this.cap) { this.send(conn, { t: 'full' }); return null; } // quick match is full: try the next room
     const id = 'm' + this.nextId++;
     conn.id = id;
     this.members.set(id, { conn, name: 'PLAYER', arch: 0, lo: null });
@@ -68,6 +70,7 @@ export class RoomCore {
         // reported by the first fighter; winner stays on, loser to the back of the queue
         if (!this.playing || id !== this.match.p[0]) return;
         const loser = this.match.p[m.winner === 0 ? 1 : 0];
+        if (!this.members.has(loser)) { this.playing = false; this.match = null; this.broadcastRoom(); this.maybeAuto(); break; }
         this.order = this.order.filter((x) => x !== loser); this.order.push(loser);
         const winner = this.match.p[m.winner === 0 ? 0 : 1];
         this.order = [winner].concat(this.order.filter((x) => x !== winner));

@@ -1044,6 +1044,12 @@
       return '';
     }
     // ---- online
+    // that quick-match room already has two people: try the next one (two people waiting always meet in the lowest free room)
+    onQuickFull() {
+      this.net.close();
+      if ((this.qmN || 1) >= 500) { this.onNetClosed('Quick Match is busy. Please try again.'); return; }
+      this.qmN = (this.qmN || 1) + 1; this.enterRoom('QM' + this.qmN);
+    }
     enterRoom(code) {
       this.net.connect(code);
       this.ui.show('lobby', { room: null, code });
@@ -1408,7 +1414,7 @@
         case 'online': ui.show('online', { err: this.net.available() ? '' : 'Online needs the game server. Start it with: node server/local.mjs' }); break;
         case 'createRoom': { const L = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; let c = ''; for (let i = 0; i < 4; i++) c += L[(Math.random() * L.length) | 0]; this.enterRoom(c); break; }
         case 'joinRoom': this.askRoomCode(); break;
-        case 'quickMatch': this.enterRoom('PUBLIC'); break;
+        case 'quickMatch': this.qmN = 1; this.enterRoom('QM1'); break;
         case 'leaveRoom': this.leaveRoom(); break;
         case 'startBout': this.net.send({ t: 'start' }); break;
         case 'soonRanked': ui.show('soon', { title: 'RANKED', lines: ['Coming soon.', 'Online matches against players of your level.', 'Climb the banzuke: from Jonokuchi to Yokozuna.', 'Pure rules only.'] }); break;

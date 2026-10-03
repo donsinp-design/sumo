@@ -332,18 +332,18 @@
           '<div class="menu">' + btn('QUICK MATCH', 'quickMatch') + btn('CREATE ROOM', 'createRoom') + btn('JOIN ROOM', 'joinRoom') + btn('BACK', 'back') + '</div>' + foot('Pure rules online · Esc back') + '</div>';
       } else if (n === 'lobby') {
         const r = d.room, me = r ? r.you : null;
-        h = '<div class="lobby">' + (d.code === 'PUBLIC' ? '<div class="lb-code"><span>ONLINE</span>QUICK MATCH</div>' : '<div class="lb-code"><span>ROOM CODE</span>' + (d.code || '…') + '</div>');
+        h = '<div class="lobby">' + (/^QM\d+$/.test(d.code || '') ? '<div class="lb-code"><span>ONLINE</span>QUICK MATCH</div>' : '<div class="lb-code"><span>ROOM CODE</span>' + (d.code || '…') + '</div>');
         if (!r) h += '<div class="lb-wait">Connecting…</div>';
         else {
           const nm = (x) => x ? x.name + (x.id === me ? ' (YOU)' : '') + (x.id === r.host ? ' ★' : '') : '<em>waiting…</em>';
           const ar = (x) => x ? '<b style="color:' + S.ARCH[x.arch].accent + '">' + S.ARCH[x.arch].name + '</b>' : '';
           h += '<div class="lb-ring"><div class="lb-p">' + nm(r.order[0]) + ar(r.order[0]) + '</div><div class="lb-vs">VS</div><div class="lb-p">' + nm(r.order[1]) + ar(r.order[1]) + '</div></div>';
           const q = r.order.slice(2);
-          h += '<div class="lb-q">' + (q.length ? 'NEXT UP: ' + q.map((x) => x.name + (x.id === me ? ' (YOU)' : '')).join(' → ') : (r.auto ? 'Winner stays on. Others wait their turn and watch.' : 'Share the code: more people can join and watch.')) + '</div>';
+          h += '<div class="lb-q">' + (q.length ? 'NEXT UP: ' + q.map((x) => x.name + (x.id === me ? ' (YOU)' : '')).join(' → ') : (r.auto ? 'One on one. Rematches start by themselves.' : 'Share the code: more people can join and watch.')) + '</div>';
           const mine = r.order.find((x) => x.id === me);
           if (mine) h += '<div class="lb-pick">Your wrestler: <b>‹ ' + S.ARCH[mine.arch].name + ' ›</b></div>';
           const host = me === r.host;
-          h += '<div class="lb-wait">' + (r.playing ? 'A bout is on: you will watch it start…' : r.order.length < 2 ? (r.auto ? 'Looking for an opponent… anyone who presses Quick Match joins you.' : 'Waiting for a second player to join…') : r.auto ? 'Next bout starts in a few seconds…' : host ? 'Press <kbd>Enter</kbd> to start the bout' : 'Waiting for the host to start') + '</div>';
+          h += '<div class="lb-wait">' + (r.playing ? 'A bout is on: you will watch it start…' : r.order.length < 2 ? (r.auto ? 'Looking for an opponent… the next person to press Quick Match is matched with you.' : 'Waiting for a second player to join…') : r.auto ? 'Next bout starts in a few seconds…' : host ? 'Press <kbd>Enter</kbd> to start the bout' : 'Waiting for the host to start') + '</div>';
           h += '<div class="menu">' + (!r.auto && host && !r.playing && r.order.length >= 2 ? btn('START BOUT', 'startBout') : '') + btn('LEAVE', 'leaveRoom') + '</div>';
         }
         h += foot('← → change wrestler · Esc leave') + '</div>';
