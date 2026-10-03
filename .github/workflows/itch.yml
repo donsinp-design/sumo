@@ -1,0 +1,85 @@
+# Builds every download of the game and uploads them to itch.io in one go:
+#   html5    the browser version (plays on the itch.io page; also the zip for Newgrounds, Game Jolt, CrazyGames)
+#   windows / mac / linux    the desktop app
+# Run it by hand from the Actions tab. The upload step needs the repository secret BUTLER_API_KEY
+# (itch.io > Settings > API keys) and the game's itch.io address, e.g. looktwicestudio/kumite.
+# Without the secret it still builds everything and attaches the zips to the run.
+name: itch.io release
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: itch.io game (user/game)
+        required: true
+        default: looktwicestudio/kumite
+      version:
+        description: Version shown on itch.io
+        required: true
+        default: '1.0.0'
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/build-web.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kumite-web
+          path: Kumite-web.zip
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, flag: --win, name: Kumite-Windows }
+          - { os: macos-latest, flag: --mac, name: Kumite-Mac }
+          - { os: ubuntu-latest, flag: --linux, name: Kumite-Linux }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run dist -- ${{ matrix.flag }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            desktop/dist/*.zip
+            desktop/dist/*.tar.gz
+
+  upload:
+    needs: [web, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: builds
+      - name: Upload to itch.io
+        shell: bash
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          GAME: ${{ github.event.inputs.game }}
+          VER: ${{ github.event.inputs.version }}
+        run: |
+          ls -R builds
+          if [ -z "$BUTLER_API_KEY" ]; then echo "::warning::No BUTLER_API_KEY secret: built everything, skipped the itch.io upload"; exit 0; fi
+          curl -sL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler && chmod +x butler/butler
+          B=butler/butler
+          $B push builds/Kumite-web/Kumite-web.zip "$GAME:html5" --userversion "$VER"
+          $B push builds/Kumite-Windows/*.zip "$GAME:windows" --userversion "$VER"
+          $B push builds/Kumite-Mac/*.zip "$GAME:mac" --userversion "$VER"
+          $B push builds/Kumite-Linux/*.tar.gz "$GAME:linux" --userversion "$VER"

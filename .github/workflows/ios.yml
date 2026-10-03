@@ -7,7 +7,7 @@ name: iOS build check
 on:
   push:
     branches: [main, claude/chicken-self-steer]
-    paths: ['public/**', 'apple/**', '.github/workflows/ios.yml']
+    paths: ['public/**', 'mobile/**', '.github/workflows/ios.yml']
   workflow_dispatch:
 
 concurrency:
@@ -19,14 +19,14 @@ jobs:
     runs-on: macos-15
     defaults:
       run:
-        working-directory: apple
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm ci
-      - run: npm run sync
+      - run: npm run sync:ios
       - name: Build for the simulator
         shell: bash
         run: |
@@ -68,4 +68,4 @@ jobs:
         if: always()
         with:
           name: iOS-simulator-screenshots
-          path: apple/shots/*.png
+          path: mobile/shots/*.png

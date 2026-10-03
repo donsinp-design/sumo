@@ -20,14 +20,14 @@ jobs:
     runs-on: macos-15
     defaults:
       run:
-        working-directory: apple
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm ci
-      - run: npm run sync
+      - run: npm run sync:ios
       - name: Archive and upload
         env:
           TEAM: ${{ secrets.APPLE_TEAM_ID }}

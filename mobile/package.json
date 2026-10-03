@@ -1,0 +1,20 @@
+{
+  "name": "kumite-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Kumite for iPhone, iPad, Apple-silicon Macs and Android (Capacitor)",
+  "scripts": {
+    "copy": "node copy-game.js",
+    "sync": "npm run copy && cap sync",
+    "sync:ios": "npm run copy && cap sync ios",
+    "sync:android": "npm run copy && cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@capacitor/android": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kumite</string>
+    <string name="title_activity_main">Kumite</string>
+    <string name="package_name">com.looktwicestudio.kumite</string>
+    <string name="custom_url_scheme">com.looktwicestudio.kumite</string>
+</resources>
