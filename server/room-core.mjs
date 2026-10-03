@@ -43,6 +43,7 @@ export class RoomCore {
   }
 
   message(conn, raw) {
+    if (raw === 'ping') { this.send(conn, 'pong'); return; } // plain-text ping (Cloudflare answers these itself)
     let m;
     try { m = JSON.parse(raw); } catch (e) { return; }
     const id = conn.id, me = this.members.get(id);
@@ -58,10 +59,10 @@ export class RoomCore {
       case 'start':
         if (this.auto || id !== this.host || this.playing || this.order.length < 2) return;
         this.startMatch(); break;
-      case 'in': case 'hash': case 'snap': case 'need':
+      case 'in': case 'ir': case 'hash': case 'snap': case 'need':
         // only the two fighters' inputs matter; relay to everyone else in the room
         if (!this.playing) return;
-        if (m.t === 'in' && !this.match.p.includes(id)) return;
+        if ((m.t === 'in' || m.t === 'ir') && !this.match.p.includes(id)) return;
         this.broadcast(m, id); break;
       case 'end': {
         // reported by the first fighter; winner stays on, loser to the back of the queue
@@ -102,7 +103,21 @@ export class RoomCore {
       order: this.order.map((id) => { const x = this.members.get(id); return { id, name: x.name, arch: x.arch }; }),
     };
   }
-  broadcastRoom() { for (const [id, x] of this.members) this.send(x.conn, this.roomState(id)); }
+  broadcastRoom() { for (const [id, x] of this.members) this.send(x.conn, this.roomState(id)); if (this.onChange) this.onChange(); }
+
+  // rebuild after the room slept (Cloudflare hibernation): who is here, in what order, and who hosts
+  restore(list) {
+    list.sort((a, b) => a.pos - b.pos);
+    for (const e of list) {
+      e.conn.id = e.id;
+      this.members.set(e.id, { conn: e.conn, name: e.name || 'PLAYER', arch: e.arch | 0, lo: e.lo || null });
+      this.order.push(e.id);
+      this.nextId = Math.max(this.nextId, (parseInt(String(e.id).slice(1), 10) || 0) + 1);
+      if (e.host) this.host = e.id;
+    }
+    if (!this.host || !this.members.has(this.host)) this.host = this.order[0] || null;
+    this.playing = false; this.match = null; // a room only sleeps when nobody is fighting
+  }
   broadcast(msg, exceptId) {
     const s = JSON.stringify(msg);
     for (const [id, x] of this.members) if (id !== exceptId) this.send(x.conn, s);

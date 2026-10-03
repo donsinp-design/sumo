@@ -19,6 +19,7 @@
     };
   }
   S.netPack = pack; S.netUnpack = unpack;
+  S.NET_KEEP = 5; // unchanged inputs are confirmed every 5 net frames (about 1/6 s)
 
   // input source for a wrestler driven by the network
   class NetSource {
@@ -31,7 +32,8 @@
     constructor(game) {
       this.g = game; this.ws = null; this.room = null; this.id = null; this.code = null;
       this.rtts = []; this.rtt = 0;
-      setInterval(() => { if (this.open) this.send({ t: 'ping', id: performance.now() }); }, 700);
+      // plain-text ping: the server answers it without waking the room
+      setInterval(() => { const now = performance.now(); if (this.open && (!this.pingWait || now - this.pingAt > 3000)) { this.pingAt = now; this.pingWait = true; this.ws.send('ping'); } }, 1000);
     }
     // a safe input delay (in net frames of 33 ms) for this connection: covers the trip plus its wobble
     delayFrames() {
@@ -50,7 +52,10 @@
       catch (e) { this.g.onNetClosed('Could not reach the game server.'); return; }
       const g = this.g;
       ws.onopen = () => this.send({ t: 'hello', name: S.profile.names[0], arch: g.sel.c1 || 0, lo: S.profile.loadout() });
-      ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (er) { return; } this.onMsg(m); };
+      ws.onmessage = (e) => {
+        if (e.data === 'pong') { if (!this.pingWait) return; this.pingWait = false; this.rtts.push(performance.now() - this.pingAt); if (this.rtts.length > 12) this.rtts.shift(); this.rtt = this.rtts[this.rtts.length - 1]; return; }
+        let m; try { m = JSON.parse(e.data); } catch (er) { return; } this.onMsg(m);
+      };
       ws.onclose = () => { if (this.ws === ws) { this.ws = null; this.room = null; g.onNetClosed('Disconnected from the room.'); } };
       ws.onerror = () => {};
     }
@@ -64,6 +69,7 @@
         case 'room': this.room = m; this.id = m.you; g.onRoom(m); break;
         case 'start': g.onNetStart(m); break;
         case 'in': g.onNetInput(m); break;
+        case 'ir': g.onNetRuns(m); break;
         case 'hash': g.onNetHash(m); break;
         case 'need': g.onNetNeed(m); break;
         case 'snap': g.onNetSnap(m); break;

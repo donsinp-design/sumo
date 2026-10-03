@@ -1094,11 +1094,28 @@
       this.viewerIdx = this.slot >= 0 ? this.slot : -1;
       this.ui.hint((this.slot < 0 ? 'Watching · ' : '') + 'Room ' + this.net.code + ' · Esc twice to leave');
       this.ui.setRecord('');
-      this.nf = 0; this.ND = this.slot >= 0 ? 1 : this.net.delayFrames(); this.inBuf = [{}, {}]; this.sentF = this.ND - 1; this.netCur = [null, null];
+      this.nf = 0; this.ND = this.slot >= 0 ? 1 : this.net.delayFrames() + S.NET_KEEP; this.outQ = null; this.remoteNf = 0; this.remoteNfAt = performance.now(); this.inBuf = [{}, {}]; this.sentF = this.ND - 1; this.netCur = [null, null];
       this.snaps = {}; this.pred = {}; this.rbFrom = null; this.confirmed = [-1, -1]; this.nextHash = 30; this.awaitSnap = false; this.rollbacks = 0;
-      if (this.slot >= 0) for (let f = 0; f < this.ND; f++) { const z = [0, 0, 0, 0, 0, 0]; this.inBuf[this.slot][f] = z; this.net.send({ t: 'in', f, s: this.slot, b: z }); }
+      if (this.slot >= 0) { for (let f = 0; f < this.ND; f++) { const z = [0, 0, 0, 0, 0, 0]; this.inBuf[this.slot][f] = z; this.queueInput(f, z); } this.flushInputs(); }
       this.localSrc = new S.KeySource(S.MAPS.solo, 0);
       this.hashes = {}; this.rHashes = {}; this.desyncs = 0; this.waitT = 0; this.acc = 0; this.resultUntil = 0;
+    }
+    // inputs go out only when they change, plus a short 'still the same' note every few frames (far fewer messages)
+    queueInput(k, pk) {
+      const q = this.outQ || (this.outQ = { runs: [], sent: null });
+      const L = q.runs[q.runs.length - 1], key = pk.join();
+      if (L && L[1] === k - 1 && L[3] === key) L[1] = k; else q.runs.push([k, k, pk, key]);
+      if ((q.sent !== key) || k - q.runs[0][0] + 1 >= S.NET_KEEP) this.flushInputs();
+    }
+    flushInputs() {
+      const q = this.outQ; if (!q || !q.runs.length) return;
+      this.net.send({ t: 'ir', s: this.slot, n: this.nf, r: q.runs.map((x) => [x[0], x[1], x[2]]) });
+      q.sent = q.runs[q.runs.length - 1][3]; q.runs = [];
+    }
+    onNetRuns(m) {
+      if (!this.inBuf || (m.s !== 0 && m.s !== 1) || !Array.isArray(m.r)) return;
+      if (m.s !== this.slot) { this.remoteNf = m.n; this.remoteNfAt = performance.now(); }
+      for (const [f0, f1, b] of m.r) for (let f = f0; f <= f1 && f - f0 < 400; f++) this.onNetInput({ s: m.s, f, b });
     }
     onNetInput(m) {
       if (!this.inBuf || (m.s !== 0 && m.s !== 1)) return;
@@ -1133,7 +1150,7 @@
         const f = this.nf;
         if (this.slot >= 0 && this.sentF < f + this.ND) {
           const pk = S.netPack(this.localSrc.sample()); S.kb.flush();
-          for (let k = this.sentF + 1; k <= f + this.ND; k++) { this.inBuf[this.slot][k] = pk; this.net.send({ t: 'in', f: k, s: this.slot, b: pk }); }
+          for (let k = this.sentF + 1; k <= f + this.ND; k++) { this.inBuf[this.slot][k] = pk; this.queueInput(k, pk); }
           this.sentF = f + this.ND;
         }
         const a = this.inBuf[0][f], b = this.inBuf[1][f];
@@ -1189,18 +1206,18 @@
       // no hit-pause or slow-mo here: each side would pause at slightly different moments and drift apart
       this.hitstop = 0; this.slowT = 0; const ts = 1; this.ts = 1;
       // time sync: if we're running ahead of the other player, ease off a little so neither side has to stall
-      const remoteNow = this.confirmed[1 - this.slot] - this.ND + (this.net.rtt || 0) / 33.3; // their input reaches us via the server: about one ping
+      const remoteNow = this.remoteNf + (performance.now() - this.remoteNfAt) / 33.3 + (this.net.rtt || 0) / 33.3; // where they are now: last report, aged, plus the trip
       this.ahead = this.nf - remoteNow;
       this.acc += dt * ts * (this.ahead > 1.5 ? 0.85 : this.ahead < -2 ? 1.15 : 1);
       if (this.rbFrom !== null) { const k = this.rbFrom; this.rbFrom = null; if (k < this.nf) this.rollback(k); }
-      const NDT = 4 * S.DT, MAXROLL = 12, op = 1 - this.slot;
+      const NDT = 4 * S.DT, MAXROLL = 12 + S.NET_KEEP, op = 1 - this.slot;
       let n = 0, ran = 0;
       while (this.acc >= NDT && n < 8) {
         const f = this.nf;
         if (f - this.confirmed[op] > MAXROLL) { this.waitT += dt; this.stallT = (this.stallT || 0) + dt; break; } // too far ahead of what we know: wait
         if (this.sentF < f + this.ND) {
           const pk = S.netPack(this.localSrc.sample()); S.kb.flush();
-          for (let k = this.sentF + 1; k <= f + this.ND; k++) { this.inBuf[this.slot][k] = pk; this.net.send({ t: 'in', f: k, s: this.slot, b: pk }); }
+          for (let k = this.sentF + 1; k <= f + this.ND; k++) { this.inBuf[this.slot][k] = pk; this.queueInput(k, pk); }
           this.sentF = f + this.ND;
         }
         this.snaps[f] = this.saveFrame();
