@@ -80,7 +80,7 @@
       this.buildHud();
       this.resize = () => { this.cam.aspect = innerWidth / innerHeight; this.cam.updateProjectionMatrix(); this.fx.pmat.uniforms.uScale.value = innerHeight * this.R.r.getPixelRatio() / (2 * Math.tan(this.cam.fov * Math.PI / 360)); };
       addEventListener('resize', this.resize); this.resize();
-      this.say('TSUKIJI', 'Fight your way to the tuna auction', 3.5);
+      this.say('UOGASHI MARKET', 'Fight your way to the tuna auction', 3.5);
       this.prompt('Grab a free gacha from the red machine (walk up, press K)');
       g.audio.swell(0.4, 1.5);
     }
@@ -180,7 +180,7 @@
       this.fireStep(dt);
       if (this.abCd > 0) this.abCd -= dt;
       // tidy up the knocked-out
-      for (const a of this.actors) if (a.dead && a.t > 2.2 && !a.gone) { a.gone = true; a.view.dispose ? a.view.dispose(this.scene) : 0; }
+      for (const a of this.actors) if (a !== this.P && a.dead && a.t > 2.2 && !a.gone) { a.gone = true; a.view.dispose ? a.view.dispose(this.scene) : 0; }
       this.actors = this.actors.filter((a) => !a.gone);
     }
 
@@ -254,7 +254,8 @@
       if (c.skill.pressed && this.ability && this.abCd <= 0 && ['free', 'hold', 'strike'].includes(P.st)) this.useAbility();
       // interacting with the gacha machine
       const gm = this.map.gacha, nearG = !this.ability && Math.hypot(P.x - gm.x, P.z - gm.z) < 1.9;
-      if (nearG !== this.nearGacha) { this.nearGacha = nearG; this.prompt(nearG ? 'K: spin the gacha' : (!this.ability ? 'Grab a free gacha from the red machine (walk up, press K)' : '')); }
+      const atStart = P.z > -11 && !this.ability;
+      if (nearG !== this.nearGacha || atStart !== this.atStart) { this.nearGacha = nearG; this.atStart = atStart; this.prompt(nearG ? 'K: spin the gacha' : atStart ? 'Grab a free gacha from the red machine (walk up, press K)' : ''); }
       switch (P.st) {
         case 'free': {
           wantMove(4.3 * giant);
@@ -831,7 +832,15 @@
         s.t += dt; s.vy -= 18 * dt; s.x += s.vx * dt; s.z += s.vz * dt; s.y += s.vy * dt;
         s.mesh.position.set(s.x, s.y, s.z); s.mesh.rotation.x += dt * 14;
         const P = this.P;
-        if (s.kind === 'bottle' && !s.done && Math.hypot(P.x - s.x, P.z - s.z) < P.r + 0.2 && s.y < 1.9) { s.done = true; this.damage(P, 10, s.by, s.vx * 0.3, s.vz * 0.3, false); this.g.audio.slap(4); }
+        if (s.kind === 'bottle' && !s.done && s.by !== P && Math.hypot(P.x - s.x, P.z - s.z) < P.r + 0.35 && s.y < 1.9) {
+          if (P.st === 'parry' && P.t < 0.26) { // PARRY: swat it back at whoever threw it
+            const T = s.by && !s.by.dead ? s.by : null, a = T ? Math.atan2(T.z - s.z, T.x - s.x) : P.f + Math.PI, l = T ? Math.hypot(T.x - s.x, T.z - s.z) : 6, ft = Math.max(0.2, l / 14);
+            s.by = P; s.vx = Math.cos(a) * 14; s.vz = Math.sin(a) * 14; s.vy = (1.0 - s.y) / ft + 9 * ft; s.back = true;
+            this.popAt(P, 'PARRY!'); this.g.audio.hyoshigi(); this.g.audio.slap(6); this.hitFx(s.x, s.z, 0.9, true);
+          } else if (P.st === 'block') { s.done = true; this.g.audio.thump(2); }
+          else if (P.st !== 'dodge' && P.iframe <= 0) { s.done = true; this.damage(P, 10, s.by, s.vx * 0.3, s.vz * 0.3, false); this.g.audio.slap(4); }
+        }
+        if (s.back && !s.done) for (const T of this.actors) if (T.team === 1 && !T.dead && Math.hypot(T.x - s.x, T.z - s.z) < T.r + 0.3 && s.y < 2) { s.done = true; this.damage(T, 18, P, s.vx * 0.4, s.vz * 0.4, true); this.g.audio.slap(6); break; }
         let wall = false; for (const w of this.map.walls) if (s.x > w.x0 && s.x < w.x1 && s.z > w.z0 && s.z < w.z1) wall = true;
         if (s.y <= 0 || wall || s.done) {
           s.done = true; this.scene.remove(s.mesh); this.fx.spark(s.x, 0.2, s.z, 0.6);
@@ -984,51 +993,67 @@
   // ---------------------------------------------------------------- market workers (non-sumo enemies)
   class WorkerView {
     constructor(scene, kind, fat) {
-      const K = KINDS[kind], M = (c, s, o) => S.toon(c, Object.assign({ shade: s, rimAmt: 0.55 }, o || {}));
-      const skin = M(0xe9b894, 0x9a6a5a), shirt = M(K.shirt, mul(K.shirt, 0.45)), apron = M(K.apron, mul(K.apron, 0.5)), boot = M(0x1a1a20, 0x050508), band = M(K.band, mul(K.band, 0.5)), ink = S.toon(0x1a1014, { shade: 0x0b0608, rimAmt: 0 });
-      const mesh = S.R3.mesh, SG = S.R3.GEO.sphere, s = 1, fw = fat ? 1.45 : 1;
+      // rounded, chunky shapes with ink outlines, the same family as the sumo wrestlers (no boxes)
+      const K = KINDS[kind], M = (c, s, o) => S.toon(c, Object.assign({ shade: s, rimAmt: 0.6 }, o || {}));
+      const skin = M(0xe9b894, 0xa06a5a, { rim: 0xfff0d8 }), shirt = M(K.shirt, mul(K.shirt, 0.45)), apron = M(K.apron, mul(K.apron, 0.55)), pants = M(0x2a2a3a, 0x0c0c16),
+        boot = M(0x22242c, 0x08080c, { spec: 0.35 }), band = M(K.band, mul(K.band, 0.5)), hair = M(0x2a1e2c, 0x0e0a14, { spec: 0.2, rim: 0x8fa6e8 }), ink = S.toon(0x1a1014, { shade: 0x0b0608, rimAmt: 0 }), white = M(0xfff8ec, 0xb8b0a0);
+      const mesh = S.R3.mesh, SG = S.R3.GEO.sphere, fw = fat ? 1.45 : 1, th = 0.026;
       this.kind = kind; this.fat = fat; this.scene = scene;
       this.root = new THREE.Group(); scene.add(this.root);
       this.hips = new THREE.Group(); this.hips.position.y = 0.9; this.root.add(this.hips);
-      const add = (p, geo, mat, x, y, z, sx, sy, sz, th) => { const m = mesh(geo, mat, th === undefined ? 0.024 : th); m.position.set(x, y, z); m.scale.set(sx, sy, sz); p.add(m); return m; };
-      // torso and belly
+      const add = (p, geo, mat, x, y, z, sx, sy, sz, t) => { const m = mesh(geo, mat, t === undefined ? th : t); m.position.set(x, y, z); m.scale.set(sx, sy, sz); p.add(m); return m; };
+      const cap = (r, l) => new THREE.CapsuleGeometry(r, l, 4, 12);
+      // torso: chest + belly (a real round belly on the big ones), apron hugging the front
       this.torso = new THREE.Group(); this.hips.add(this.torso);
-      add(this.torso, new THREE.CapsuleGeometry(0.26, 0.42, 4, 12), shirt, 0, 0.42, 0, fw, 1, fat ? 1.3 : 1);
-      if (fat) add(this.torso, SG, shirt, 0, 0.3, 0.12, 0.42, 0.4, 0.38);
-      add(this.torso, S.R3.GEO.box, apron, 0, 0.18, (fat ? 0.42 : 0.25), 0.44 * fw, 0.62, 0.04, 0.012);
-      if (K.coat) add(this.torso, new THREE.CapsuleGeometry(0.28, 0.4, 4, 12), M(0xc8231d, 0x6e1018), 0, 0.42, -0.02, fw * 1.06, 1.02, 1.1);
-      // head
-      this.head = new THREE.Group(); this.head.position.set(0, 0.98, 0.02); this.torso.add(this.head);
-      add(this.head, SG, skin, 0, 0, 0, 0.21, 0.23, 0.21);
-      add(this.head, new THREE.TorusGeometry(0.205, 0.035, 6, 18), band, 0, 0.08, 0, 1, 1, 1, 0.01).rotation.x = Math.PI / 2;
-      add(this.head, SG, M(0x2a1e2c, 0x0e0a14), 0, 0.1, -0.03, 0.2, 0.15, 0.2, 0.012);
-      for (const sd of [-1, 1]) add(this.head, S.R3.GEO.box, ink, sd * 0.07, 0.02, 0.2, 0.04, 0.03, 0.02, 0);
-      add(this.head, S.R3.GEO.box, ink, 0, -0.08, 0.205, 0.08, 0.015, 0.02, 0);
-      if (K.glasses) add(this.head, S.R3.GEO.box, ink, 0, 0.03, 0.215, 0.24, 0.06, 0.02, 0);
-      if (K.cap) add(this.head, new THREE.CylinderGeometry(0.22, 0.23, 0.12, 14), M(0x2a5a9a, 0x10284a), 0, 0.17, 0, 1, 1, 1, 0.012);
-      // arms (shoulder pivot -> upper arm -> forearm)
+      add(this.torso, SG, shirt, 0, 0.56, 0, 0.34 * fw, 0.34, 0.25 * (fat ? 1.25 : 1));
+      add(this.torso, SG, shirt, 0, 0.24, fat ? 0.06 : 0, 0.31 * fw, 0.3 * (fat ? 1.15 : 1), (fat ? 0.36 : 0.23));
+      if (K.coat) add(this.torso, SG, M(0xc8231d, 0x6e1018), 0, 0.5, -0.01, 0.37 * fw, 0.38, 0.28 * (fat ? 1.25 : 1)); // happi coat
+      if (!K.coat) add(this.torso, SG, apron, 0, 0.28, (fat ? 0.27 : 0.17), 0.27 * fw, 0.36, 0.08, 0.016);
+      add(this.torso, new THREE.TorusGeometry(0.3 * fw, 0.022, 6, 24), apron, 0, 0.36, 0.0, 1, 1, fat ? 1.2 : 0.8, 0.01).rotation.x = Math.PI / 2;
+      for (const sd of [-1, 1]) add(this.torso, SG, shirt, sd * 0.33 * fw, 0.74, 0, 0.13 * (fat ? 1.25 : 1), 0.12, 0.13);
+      // head: big and readable, anime hair tufts, headband with a knot and tails
+      this.head = new THREE.Group(); this.head.position.set(0, 1.02, 0.02); this.torso.add(this.head);
+      add(this.head, SG, skin, 0, 0, 0, 0.23, 0.25, 0.23);
+      add(this.head, SG, skin, 0, -0.1, 0.05, 0.16, 0.1, 0.15, 0.0);                     // jaw
+      add(this.head, SG, hair, 0, 0.1, -0.035, 0.235, 0.19, 0.235, 0.02);
+      for (let i = 0; i < 5; i++) { const t = add(this.head, new THREE.ConeGeometry(0.07, 0.2, 5), hair, -0.14 + i * 0.07, 0.24, -0.03 + Math.abs(i - 2) * -0.02, 1, 1, 1, 0.012); t.rotation.set(-0.5, 0, (i - 2) * 0.35); }
+      add(this.head, new THREE.TorusGeometry(0.228, 0.035, 6, 22), band, 0, 0.1, 0, 1, 1, 1, 0.012).rotation.x = Math.PI / 2 - 0.12;
+      add(this.head, SG, band, 0, 0.1, -0.24, 0.06, 0.05, 0.05, 0.01);
+      for (const sd of [-1, 1]) { const tl = add(this.head, cap(0.025, 0.12), band, sd * 0.05, 0.02, -0.27, 1, 1, 1, 0.008); tl.rotation.set(0.6, 0, sd * 0.4); }
+      for (const sd of [-1, 1]) {
+        add(this.head, SG, white, sd * 0.085, 0.0, 0.2, 0.05, 0.055, 0.03, 0.0);           // eye white
+        add(this.head, SG, ink, sd * 0.08, -0.005, 0.222, 0.032, 0.042, 0.02, 0.0);       // pupil
+        const br = add(this.head, cap(0.016, 0.07), ink, sd * 0.09, 0.075, 0.205, 1, 1, 1, 0); br.rotation.z = Math.PI / 2 + sd * 0.35; // angry brows
+        add(this.head, SG, skin, sd * 0.225, -0.01, 0, 0.04, 0.06, 0.035, 0.012);          // ears
+      }
+      add(this.head, cap(0.012, 0.06), ink, 0, -0.1, 0.205, 1, 1, 1, 0).rotation.z = Math.PI / 2;
+      if (K.glasses) { for (const sd of [-1, 1]) add(this.head, new THREE.TorusGeometry(0.055, 0.012, 5, 14), ink, sd * 0.085, 0.0, 0.225, 1, 1, 1, 0); }
+      if (K.cap) { add(this.head, SG, M(0x2a5a9a, 0x10284a), 0, 0.15, -0.01, 0.245, 0.15, 0.245, 0.016); add(this.head, SG, M(0x2a5a9a, 0x10284a), 0, 0.12, 0.2, 0.17, 0.03, 0.12, 0.01); }
+      // arms: shirt sleeve, rolled up, bare forearm, round fist
       this.arms = [-1, 1].map((sd) => {
-        const sh = new THREE.Group(); sh.position.set(sd * (0.33 * fw), 0.72, 0); this.torso.add(sh);
-        add(sh, new THREE.CapsuleGeometry(0.085, 0.3, 3, 8), shirt, 0, -0.2, 0, fat ? 1.3 : 1, 1, fat ? 1.3 : 1, 0.02);
-        const el = new THREE.Group(); el.position.y = -0.4; sh.add(el);
-        add(el, new THREE.CapsuleGeometry(0.075, 0.28, 3, 8), skin, 0, -0.17, 0, 1, 1, 1, 0.02);
-        add(el, SG, skin, 0, -0.36, 0, 0.1, 0.1, 0.1, 0.018);
+        const sh = new THREE.Group(); sh.position.set(sd * 0.36 * fw, 0.74, 0); this.torso.add(sh);
+        add(sh, cap(0.095 * (fat ? 1.3 : 1), 0.24), shirt, 0, -0.17, 0, 1, 1, 1, 0.022);
+        add(sh, new THREE.TorusGeometry(0.1 * (fat ? 1.3 : 1), 0.03, 6, 14), shirt, 0, -0.33, 0, 1, 1, 1, 0.01).rotation.x = Math.PI / 2;
+        const el = new THREE.Group(); el.position.y = -0.36; sh.add(el);
+        add(el, cap(0.082 * (fat ? 1.2 : 1), 0.22), skin, 0, -0.15, 0, 1, 1, 1, 0.022);
+        add(el, SG, skin, 0, -0.33, 0.01, 0.105, 0.1, 0.105, 0.02);
         return { sh, el, sd };
       });
-      if (K.pole) { const p = add(this.arms[1].el, new THREE.CylinderGeometry(0.035, 0.035, 2.4, 6), M(0xc8a070, 0x6a4a2a), 0, -0.36, 0.6, 1, 1, 1, 0.012); p.rotation.x = Math.PI / 2; add(p, S.R3.GEO.box, M(0x3a3a40, 0x101014), 0, 1.15, 0, 0.3, 0.12, 0.08, 0.01); }
-      if (kind === 'thrower') add(this.arms[1].el, new THREE.CylinderGeometry(0.05, 0.06, 0.22, 8), M(0x3a9a5a, 0x1a4a2a), 0, -0.42, 0.05, 1, 1, 1, 0.01);
-      if (K.coat) { const mg = add(this.arms[0].el, new THREE.ConeGeometry(0.1, 0.26, 10, 1, true), M(0xf6f2ea, 0x9a9080), 0, -0.45, 0.08, 1, 1, 1, 0.01); mg.rotation.x = -Math.PI / 2; }
-      // legs with rubber boots
+      if (K.pole) { const p = add(this.arms[1].el, new THREE.CylinderGeometry(0.035, 0.035, 2.4, 8), M(0xc8a070, 0x6a4a2a), 0, -0.33, 0.6, 1, 1, 1, 0.012); p.rotation.x = Math.PI / 2; add(p, SG, M(0x3a3a40, 0x101014), 0, 1.15, 0, 0.16, 0.08, 0.06, 0.01); }
+      if (kind === 'thrower') add(this.arms[1].el, new THREE.CylinderGeometry(0.05, 0.06, 0.22, 10), M(0x3a9a5a, 0x1a4a2a, { spec: 0.5 }), 0, -0.4, 0.06, 1, 1, 1, 0.01);
+      if (K.coat) { const mg = add(this.arms[0].el, new THREE.ConeGeometry(0.11, 0.28, 12, 1, true), M(0xf6f2ea, 0x9a9080), 0, -0.45, 0.09, 1, 1, 1, 0.01); mg.rotation.x = -Math.PI / 2; }
+      // legs: work trousers and round rubber boots
       this.legs = [-1, 1].map((sd) => {
-        const hp = new THREE.Group(); hp.position.set(sd * 0.14 * fw, 0, 0); this.hips.add(hp);
-        add(hp, new THREE.CapsuleGeometry(0.1 * (fat ? 1.25 : 1), 0.4, 3, 8), M(0x2a2a34, 0x0a0a10), 0, -0.3, 0, 1, 1, 1, 0.02);
-        add(hp, S.R3.GEO.box, boot, 0, -0.78, 0.04, 0.17, 0.26, 0.26, 0.018);
+        const hp = new THREE.Group(); hp.position.set(sd * 0.15 * fw, 0, 0); this.hips.add(hp);
+        add(hp, cap(0.115 * (fat ? 1.3 : 1), 0.28), pants, 0, -0.26, 0, 1, 1, 1, 0.022);
+        add(hp, cap(0.105, 0.2), boot, 0, -0.62, 0, 1, 1, 1, 0.022);
+        add(hp, SG, boot, 0, -0.83, 0.06, 0.12, 0.08, 0.19, 0.02);
         return { hp, sd };
       });
       // ground shadow
       this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.45 * fw, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x1a0a20, transparent: true, opacity: 0.4, depthWrite: false }));
       this.shadow.renderOrder = 1; scene.add(this.shadow);
-      this.walk = 0; this.mats = [skin, shirt, apron];
+      this.walk = 0; this.mats = [skin, shirt, apron, pants];
       this.flashT = 0; this.lastHp = null;
     }
     update(a, dt, T) {

@@ -8,8 +8,8 @@
 //   S.Banners.flood(opts)           banners slide in; once covered: opts.onCovered(), hold, slide away
 //   opts: { hold: seconds, speed: 1 = normal (higher = faster), onCovered, onDone }
 (function () {
-  const N = 11, PIV = 0.06;           // pivot: the top pole, as a fraction of image height
-  const CLOTH = [0.115, 0.905];       // rows of the image that are solid cloth
+  const N = 11, PIV = 0.064;          // pivot: the top pole, as a fraction of image height
+  const CLOTH = [0.09, 0.994];        // rows of the image that are solid cloth (images end at the cloth: no pole feet or tassels)
   const imgs = [], dark = [];
   let ready = false;
 

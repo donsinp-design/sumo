@@ -1,5 +1,5 @@
 'use strict';
-// CAMPAIGN MAP: the fish market (Tsukiji-style), built for a high-angle action camera.
+// CAMPAIGN MAP: the Uogashi fish market (a made-up Tokyo wholesale market), built for a high-angle action camera.
 // The route runs from +z (entrance) to -z (tuna auction):
 //   entrance plaza (gacha machine) -> outdoor street (stalls, restaurants, alley) -> market hall (vendor rows)
 //   -> loading bay -> tuna auction floor (boss).
@@ -72,7 +72,7 @@
     // entrance arch: two red posts and a big sign
     for (const x of [-6.6, 6.6]) { cyl(g, 0.22, 0.25, 4.2, 0xc8231d, 0x6e1018, x, 2.1, -9.5); wall(x - 0.3, x + 0.3, -9.8, -9.2); }
     box(g, 14, 0.35, 0.4, 0xc8231d, 0x6e1018, 0, 4.15, -9.5, 0.03);
-    sign(g, '築地 魚市場', 'TSUKIJI FISH MARKET', 7.2, 1.5, '#f6eddc', '#1a0e14', 0, 3.3, -9.3, 0, -0.35);
+    sign(g, '魚河岸 市場', 'UOGASHI FISH MARKET', 7.2, 1.5, '#f6eddc', '#1a0e14', 0, 3.3, -9.3, 0, -0.35);
     // paper lanterns on the arch
     const lantern = (x, y, z, col) => {
       const l = W.mesh(new THREE.SphereGeometry(0.32, 14, 10), S.toon(col || 0xe2322b, { shade: 0x8a1a14, rim: 0xfff0c0, rimAmt: 0.9 }), 0.02);
@@ -230,16 +230,66 @@
       ['pallet', 0, -116.5], ['foam', -11, -138], ['bucket', 11.2, -138.5], ['crate2', 11, -122]]) prop(t, x, z);
     puddle(-4.5, -127, 1.4, 1.4); puddle(5.0, -124.5, 1.2, 1.7);
 
-    // cel-shaded puddles: a flat cool-blue shape with a white highlight streak (readable from the camera)
-    const pudTex = W.canvasTex(256, 256, (c) => {
-      c.fillStyle = 'rgba(120,190,235,0.62)'; c.beginPath(); c.ellipse(128, 128, 120, 104, 0, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = 'rgba(30,70,110,0.7)'; c.lineWidth = 6; c.stroke();
-      c.fillStyle = 'rgba(255,255,255,0.8)'; c.beginPath(); c.ellipse(96, 100, 46, 9, -0.45, 0, Math.PI * 2); c.fill();
-      c.beginPath(); c.ellipse(150, 150, 22, 5, -0.45, 0, Math.PI * 2); c.fill();
-    });
+    // ================================================================ SURROUNDINGS: rooftops past the walls, so the camera never sees void
+    {
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 220).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a2228 }));
+      ground.position.set(0, -0.03, -70); g.add(ground);
+      const roofs = [0x6a4c52, 0x5a5a6a, 0x7a5a48, 0x4e5a62, 0x6e6458, 0x584858];
+      const block = (x0, x1, z0, z1, h, col, steel) => {
+        const w = x1 - x0, d = z0 - z1, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+        box(g, w, h, d, col, mul3(col, 0.45), cx, h / 2, cz, 0.03);
+        if (steel) { for (let i = 0; i < Math.floor(d / 1.6); i++) box(g, w * 0.98, 0.06, 0.08, mul3(col, 1.25), mul3(col, 0.5), cx, h + 0.03, z0 - 0.8 - i * 1.6, 0.0); return; }
+        // rooftop clutter: AC units, a water tank, a skylight
+        const r = (a, b) => a + Math.random() * (b - a);
+        for (let i = 0; i < Math.max(1, Math.floor(w * d / 14)); i++) box(g, r(0.7, 1.2), 0.5, r(0.6, 1.0), 0xc8ccd0, 0x6a7078, r(x0 + 0.8, x1 - 0.8), h + 0.25, r(z1 + 0.8, z0 - 0.8), 0.015);
+        if (Math.random() < 0.6) cyl(g, 0.55, 0.55, 1.1, 0x8aa0b0, 0x3a4a58, r(x0 + 1.2, x1 - 1.2), h + 0.55, r(z1 + 1.2, z0 - 1.2), 14, 0.02);
+        if (Math.random() < 0.5) box(g, r(1.4, 2.2), 0.12, r(1.0, 1.6), 0x9ad0e8, 0x3a6a88, r(x0 + 1.5, x1 - 1.5), h + 0.06, r(z1 + 1.5, z0 - 1.5), 0.012);
+      };
+      // the street: a row of small buildings each side, varied heights and roof colours
+      for (const sd of [-1, 1]) {
+        let z = 5;
+        while (z > -48) {
+          let z1 = Math.max(-48.5, z - (4 + Math.random() * 4));
+          // the side alley on the left (z -22.5 .. -26.5) stays open: break the row around it
+          if (sd < 0 && z > -22.5 && z1 < -22.5) z1 = -22.5;
+          const alley = sd < 0 && z <= -22.5 && z > -26.5; if (alley) z1 = -26.5;
+          block(sd > 0 ? 8.4 : -30, sd > 0 ? 30 : alley ? -12.2 : -8.4, z, z1, 3.6 + Math.random() * 2.2, roofs[(Math.random() * roofs.length) | 0]); z = z1;
+        }
+      }
+      block(-30, 30, 14, 5, 4.2, 0x5a4a52);                                   // behind the entrance
+      // big steel roofs around the market hall, loading bay and auction
+      block(-30, -13.6, -48.5, -100, 5.2, 0x5e6a76, true); block(13.6, 30, -48.5, -100, 5.2, 0x5e6a76, true);
+      block(-30, -11.4, -100, -112, 4.6, 0x545e68, true); block(11.4, 30, -100, -112, 4.6, 0x545e68, true);
+      block(-30, -14.4, -112, -144, 5.6, 0x4e5660, true); block(14.4, 30, -112, -144, 5.6, 0x4e5660, true);
+      block(-30, 30, -142.4, -160, 5.6, 0x4e5660, true);
+    }
+
+    // puddles: irregular wet patches. A darker wet stain, a lighter sky reflection inside it, a couple of glints.
+    // No outline: water has no edge line, just a change in tone.
+    const blob = (c, cx, cy, R, n, seed) => {
+      c.beginPath();
+      const pts = 48;
+      for (let i = 0; i <= pts; i++) {
+        const a = i / pts * Math.PI * 2;
+        let r = R;
+        for (let k = 1; k <= n; k++) r += Math.sin(a * (k + 1) + seed * (k + 3)) * R * 0.18 / k;
+        const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.78;
+        i ? c.lineTo(x, y) : c.moveTo(x, y);
+      }
+      c.closePath();
+    };
+    const pudTexs = [0, 1, 2, 3].map((v) => W.canvasTex(256, 256, (c) => {
+      const sd = v * 1.7 + 0.4;
+      c.fillStyle = 'rgba(18,22,40,0.32)'; blob(c, 128, 128, 104, 4, sd); c.fill();                 // the wet stain
+      c.fillStyle = 'rgba(150,196,230,0.42)'; blob(c, 122, 122, 74, 3, sd + 2.1); c.fill();          // sky reflection
+      c.fillStyle = 'rgba(205,232,250,0.5)'; blob(c, 108, 106, 34, 2, sd + 4.3); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineCap = 'round';
+      c.lineWidth = 6; c.beginPath(); c.moveTo(78, 112); c.lineTo(126, 92); c.stroke();               // glints
+      c.lineWidth = 4; c.beginPath(); c.moveTo(140, 150); c.lineTo(162, 141); c.stroke();
+    }));
     for (const p of puddles) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.r * 2 * p.sx, p.r * 2).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: pudTex, transparent: true, depthWrite: false }));
-      m.position.set(p.x, 0.012, p.z); m.renderOrder = 1; g.add(m); decor.push({ m, kind: 'puddle', p: Math.random() * 6 });
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.r * 2.3 * p.sx, p.r * 2.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: pudTexs[(Math.random() * 4) | 0], transparent: true, depthWrite: false }));
+      m.rotation.y = Math.random() * Math.PI; m.position.set(p.x, 0.012, p.z); m.renderOrder = 1; g.add(m); decor.push({ m, kind: 'puddle', p: Math.random() * 6 });
     }
 
     // COMBAT ZONES: you enter at z0; the exit at z1 stays shut until every enemy in the zone is down
@@ -265,6 +315,7 @@
     };
   }
 
+  function mul3(c, k) { const C = new THREE.Color(c); C.multiplyScalar(k); return C.getHex(); }
   let gt = null;
   function glowTex() {
     if (!gt) gt = W.canvasTex(64, 64, (c) => { const gr = c.createRadialGradient(32, 32, 0, 32, 32, 31); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, 64, 64); });
