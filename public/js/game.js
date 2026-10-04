@@ -1458,7 +1458,7 @@
         case 'sound': st.sound = !st.sound; this.audio.muted = !st.sound; this.save(); refresh(); break;
         case 'debug': this.toggleDebug(); break;
         case 'fullscreen': if (window.kumiteDesktop) { window.kumiteDesktop.toggleFullScreen(); setTimeout(refresh, 150); } break;
-        case 'quit': if (window.kumiteDesktop) window.kumiteDesktop.quit(); break;
+        case 'quitApp': if (window.kumiteDesktop) window.kumiteDesktop.quit(); break;
         case 'controls': ui.show('controls'); break;
         case 'binds': ui.show('binds'); break;
         case 'pstage': { // pick the stage from the menus; in Training it changes there and then

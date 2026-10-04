@@ -263,7 +263,7 @@
       const foot = (t) => '<div class="foot">' + t + '</div>';
       if (n === 'title') {
         h = '<div class="title-wrap"><img class="logo-img" src="assets/logo.webp?v=2" alt="Kumite"><div class="menu">' +
-          btn('PLAY', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') + (S.APP === 'desktop' ? btn('QUIT', 'quit') : '') +
+          btn('PLAY', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') + (S.APP === 'desktop' ? btn('QUIT', 'quitApp') : '') +
           '</div></div>';
       } else if (n === 'play') {
         const phs = () => { const P = S.phones, k = P.slots.filter(Boolean).length; return P.on ? (k ? k + ' CONNECTED' : 'ON') : 'OFF'; };
