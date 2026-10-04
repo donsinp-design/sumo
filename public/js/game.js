@@ -186,6 +186,7 @@
       if (!bg && this.lastBg && now - this.lastBg < 50) { this.last = now; }
       // online keeps real time even when the browser ticks slowly, so the two players don't drift apart
       const dt = Math.min(this.kind === 'online' ? 0.25 : 0.05, (now - this.last) / 1000); this.last = now;
+      if (this.camp) { this.pollPad(); this.camp.frame(dt); this.ui.draw(dt); return; } // CAMPAIGN: its own engine and scene
       this.pollPad();
       let animDt = 0;
       if (this.frozen) { this.R.update(this, 1e-4, 1e-4); this.R.render(); this.ui.draw(0); return; }
@@ -863,6 +864,7 @@
     // ------------------------------------------------------------ menus
     onKey(e) {
       this.audio.init();
+      if (this.camp && !this.ui.name && this.camp.onKey(e)) return;
       const c = e.code, ui = this.ui;
       if (this.bindWait) { // KEY BINDINGS: this key becomes the new main key for that action
         const a = this.bindWait, f = ui.focus; this.bindWait = null;
@@ -928,6 +930,17 @@
       }
     }
     // ---- training: endless practice ring
+    // CAMPAIGN: the fish market brawler (campaign.js); the ring and its views are left alone underneath
+    startCampaign() {
+      this.startAttract(); this.ui.hide(); this.ui.showHud(false); this.ui.hint('');
+      this.mode = 'campaign'; document.body.classList.add('playing', 'campaign');
+      this.camp = new S.Campaign(this); this.camp.start();
+    }
+    endCampaign() {
+      if (this.camp) { this.camp.stop(); this.camp = null; }
+      document.body.classList.remove('playing', 'campaign');
+      this.R.resize(); this.ui.show('title'); this.startAttract();
+    }
     startTraining() {
       if (this.rec) { this.rec = null; if (this.recKeys) this.ctrls[0].src = this.recKeys; }
       if (!S.Banners.busy) S.Banners.wall({ hold: 0.12, speed: 1.1 });
@@ -1432,6 +1445,7 @@
           this.sel = { mode: act, c1: this.sel.c1 || 0, c2: act === 'pvp' ? 1 : this.sel.c2, lock1: false, lock2: false };
           ui.show('select', this.sel); break;
         case 'learn': this.startTutorial(); break;
+        case 'campaign': this.startCampaign(); break;
         case 'training': this.sel.c1 = this.sel.c1 || 0; ui.show('trainsel', { c1: this.sel.c1 }); break;
         case 'play': ui.show('play'); break;
         case 'locker': this.openLocker(); break;
@@ -1507,6 +1521,7 @@
         if (a) ui.activate(1); if (b) this.back();
       } else if (this.awaitGacha && a) this.confirmGacha();
       else if (st && this.mode === 'game') this.pause(true);
+      else if (st && this.camp) this.camp.onKey({ code: 'Escape' });
     }
   }
 

@@ -2020,6 +2020,12 @@
 
   S.Renderer = Renderer;
   S.R3.GEO = GEO;
+  // shared with the campaign (campaign.js): the wrestler model, effects, and the toon light for any camera
+  S.WrestlerView = WrestlerView; S.FX = FX;
+  S.R3.setLight = (cam, anime) => {
+    SH.uLight.value.copy(anime ? LIGHT_ANIME : LIGHT_W).transformDirection(cam.matrixWorldInverse);
+    SH.uRimDir.value.copy(RIM_W).transformDirection(cam.matrixWorldInverse);
+  };
   // STAGES: swap the classic dohyo for a themed stage (built in stages.js). The fight area is the same everywhere.
   Renderer.prototype.setStage = function (id) {
     const classic = !id || id === 'dohyo' || !S.STAGE_BUILD[id];

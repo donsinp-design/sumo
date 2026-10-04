@@ -269,7 +269,7 @@
         const phs = () => { const P = S.phones, k = P.slots.filter(Boolean).length; return P.on ? (k ? k + ' CONNECTED' : 'ON') : 'OFF'; };
         this.phs = phs;
         h = '<div class="pause-wrap"><div class="ptitle">PLAY</div><div class="menu">' +
-          btn('PLAY VS CPU', 'cpu') + btn('LEARN TO PLAY', 'learn') + btn('TRAINING', 'training') + btn('LOCKER', 'locker') + btn('PHONE CONTROLLERS', 'phones', phs()) + btn('BACK', 'back') +
+          btn('CAMPAIGN', 'campaign') + btn('PLAY VS CPU', 'cpu') + btn('LEARN TO PLAY', 'learn') + btn('TRAINING', 'training') + btn('LOCKER', 'locker') + btn('PHONE CONTROLLERS', 'phones', phs()) + btn('BACK', 'back') +
           '</div>' + foot('Esc back') + '</div>';
       } else if (n === 'binds') {
         h = '<div class="pause-wrap"><div class="ptitle">KEY BINDINGS</div><div class="menu">';
