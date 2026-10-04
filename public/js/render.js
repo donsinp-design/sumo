@@ -1189,8 +1189,20 @@
     // the anime look: crisper toon shading, bolder outlines, hard shadows and the ink / grade pass
     setAnime(on) {
       this.anime = !!on; SH.uAnime.value = on ? 1 : 0; SH.uOL.value = on ? 1.35 : 1;
-      if (this.crowdG) this.crowdG.visible = this.classicStage !== false && !on; // no audience in the anime look (you still hear them)
+      this.applyArena();
       if (on && !this.post) { this.post = new AnimePost(this.r); this.resize(); }
+    }
+    // classic look: the square dohyo in a hall full of people. Anime look: a round stage in a black void,
+    // no audience (you still hear them), no corner props: one spotlight and the two of them.
+    applyArena() {
+      const classic = this.classicStage !== false, boss = classic && this.anime;
+      if (this.dohyoG) this.dohyoG.visible = classic && !boss;
+      if (this.bossG) this.bossG.visible = boss;
+      if (this.crowdG) this.crowdG.visible = classic && !boss;
+      if (this.floorM) this.floorM.visible = classic && !boss;
+      if (this.banners) for (const b of this.banners) b.visible = classic && !boss;
+      if (this.coneM) this.coneM.visible = classic && !boss; // against pure black the beam reads as a grey slab
+      if (classic) this.scene.background.set(boss ? 0x000000 : 0x150c14); // themed stages set their own sky
     }
     resize() {
       const w = innerWidth, h = innerHeight;
@@ -1285,6 +1297,26 @@
         const g = new THREE.Group(); g.rotation.y = k * Math.PI / 2; g.add(b);
         b.position.set(0, 0.05, half - 0.22);
         this.dohyoG.add(g);
+      }
+      // ANIME LOOK: a round raised stage floating in a black void under one spotlight ("final boss" arena).
+      // It replaces the square platform (dohyoG); the ring, its straw and the referee stay as they are.
+      {
+        const rT = R + 1.6, bg = this.bossG = new THREE.Group(); bg.visible = false; sc.add(bg);
+        const disc = new THREE.CircleGeometry(rT, 96).rotateX(-Math.PI / 2), uv = disc.attributes.uv;
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.5 + (uv.getX(i) - 0.5) * rT / half, 0.5 + (uv.getY(i) - 0.5) * rT / half);
+        const topM = new THREE.Mesh(disc, new THREE.MeshBasicMaterial({ map: this.ringTex })); topM.position.y = -0.002; bg.add(topM);
+        const side = new THREE.Mesh(new THREE.CylinderGeometry(rT, rT - 0.25, 0.7, 96, 1, true), toon(0x4a2a2e, { shade: 0x120810, rim: 0xffc890, rimAmt: 0.7 }));
+        side.position.y = -0.35; bg.add(side);
+        const lip = new THREE.Mesh(new THREE.TorusGeometry(rT, 0.05, 6, 96), toon(0xe2c48c, { shade: 0x7a5a3a, rimAmt: 0.6 }));
+        lip.rotation.x = Math.PI / 2; lip.position.y = 0.0; bg.add(lip);
+        // the spotlight falls off towards the edge of the stage
+        const vig = canvasTex(512, 512, (g, w) => {
+          const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
+          gr.addColorStop(0, 'rgba(8,3,10,0)'); gr.addColorStop(0.62, 'rgba(8,3,10,0)'); gr.addColorStop(0.9, 'rgba(8,3,10,0.38)'); gr.addColorStop(1, 'rgba(8,3,10,0.6)');
+          g.fillStyle = gr; g.fillRect(0, 0, w, w);
+        });
+        const vm = new THREE.Mesh(new THREE.CircleGeometry(rT + 0.02, 96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: vig, transparent: true, depthWrite: false }));
+        vm.position.y = 0.009; vm.renderOrder = 1; bg.add(vm);
       }
       // salt box + water bucket corners
       const wood = toon(0x6d4430, { shade: 0x3c2219 });
@@ -1995,11 +2027,11 @@
     this.dohyoG.visible = classic;
     for (const c of this.spinG.children) if (c.userData.dohyo) c.visible = classic;
     this.classicStage = classic;
-    if (this.crowdG) this.crowdG.visible = classic && !this.anime; // the anime look has no audience: a dark hall keeps the eye on the fight
     if (this.floorM) this.floorM.visible = classic;
     if (this.coneM) this.coneM.visible = classic;
     if (this.motes) this.motes.visible = classic;
     if (this.banners) for (const b of this.banners) b.visible = classic;
+    this.applyArena();
     this.fx.noMarks = !classic; // sand footprints, slide marks and step dust belong to the dohyo only
     if (this.fx.noMarks) this.fx.clearDecals();
     if (this.stageId === id) return;
