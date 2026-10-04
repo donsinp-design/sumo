@@ -1,4 +1,5 @@
-# Puts the game live at looktwicestudio.com/kumite/ (Cloudflare Workers, see wrangler.jsonc).
+# Puts the game live at looktwicestudio.com/kumite/ (Cloudflare Workers, see wrangler.jsonc),
+# and the fork KUMITEGAME at looktwicestudio.com/kumitegame/ (wrangler.kumitegame.jsonc).
 # Runs on every push to main or the working branch, or by hand from the Actions tab.
 # Needs one repository secret: CLOUDFLARE_API_TOKEN (Cloudflare "Edit Cloudflare Workers" token).
 # CLOUDFLARE_ACCOUNT_ID is only needed if your Cloudflare login has more than one account.
@@ -28,3 +29,11 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+      # KUMITEGAME, the fork at looktwicestudio.com/kumitegame/ (anime look)
+      - run: node tools/build-fork.js
+      - name: Deploy the fork to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.kumitegame.jsonc

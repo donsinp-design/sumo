@@ -15,6 +15,10 @@
       } catch (e) { /* storage blocked */ }
       this.settings.debug = false;
       this.R = new S.Renderer(document.getElementById('gl'));
+      // ART STYLE: the fork (KUMITEGAME) keeps its own choice and starts in ANIME; the main game starts CLASSIC
+      this.styleKey = window.KUMITE_FORK ? 'styleFork' : 'style';
+      if (!this.settings[this.styleKey]) this.settings[this.styleKey] = window.KUMITE_STYLE === 'anime' ? 'anime' : 'classic';
+      this.R.setAnime(this.settings[this.styleKey] === 'anime');
       this.audio = new S.Audio();
       this.audio.muted = !this.settings.sound;
       this.ui = new S.UI(this);
@@ -1449,6 +1453,7 @@
           break;
         }
         case 'hints': st.hints = !st.hints; this.save(); refresh(); break;
+        case 'style': st[this.styleKey] = st[this.styleKey] === 'anime' ? 'classic' : 'anime'; this.R.setAnime(st[this.styleKey] === 'anime'); this.save(); refresh(); break;
         case 'endless': st.endless = !st.endless; this.save(); refresh(); break;
         case 'sound': st.sound = !st.sound; this.audio.muted = !st.sound; this.save(); refresh(); break;
         case 'debug': this.toggleDebug(); break;

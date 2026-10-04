@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // KUMITEGAME: a fork of Kumite at looktwicestudio.com/kumitegame/ for trying new things (the anime look)
+  // without touching the main game. Same server code, its own online rooms and ratings.
+  // Its files are built into dist-kumitegame/ by tools/build-fork.js.
+  "name": "kumitegame",
+  "main": "server/worker.mjs",
+  "compatibility_date": "2026-09-15",
+  "assets": { "directory": "./dist-kumitegame", "binding": "ASSETS" },
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "looktwicestudio.com/kumitegame", "zone_name": "looktwicestudio.com" },
+    { "pattern": "looktwicestudio.com/kumitegame/*", "zone_name": "looktwicestudio.com" }
+  ],
+  "vars": { "BASE_PATH": "/kumitegame" },
+  "durable_objects": { "bindings": [ { "name": "ROOMS", "class_name": "Room" }, { "name": "MM", "class_name": "Matchmaker" } ] },
+  "migrations": [ { "tag": "v1", "new_sqlite_classes": ["Room"] }, { "tag": "v2", "new_sqlite_classes": ["Matchmaker"] } ]
+}

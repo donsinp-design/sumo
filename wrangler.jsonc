@@ -7,10 +7,12 @@
   // Only the public folder is uploaded: the game files players need.
   "assets": { "directory": "./public", "binding": "ASSETS" },
 
-  // Serve the game at looktwicestudio.com/kumite/ (and a backup workers.dev address)
+  // Serve the game at looktwicestudio.com/kumite/ (and a backup workers.dev address).
+  // Exact patterns, so looktwicestudio.com/kumitegame (the fork, wrangler.kumitegame.jsonc) is left alone.
   "workers_dev": true,
   "routes": [
-    { "pattern": "looktwicestudio.com/kumite*", "zone_name": "looktwicestudio.com" }
+    { "pattern": "looktwicestudio.com/kumite", "zone_name": "looktwicestudio.com" },
+    { "pattern": "looktwicestudio.com/kumite/*", "zone_name": "looktwicestudio.com" }
   ],
   "vars": { "BASE_PATH": "/kumite" },
 

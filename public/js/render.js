@@ -6,7 +6,8 @@
   const clamp = S.clamp;
   const LIGHT_W = new THREE.Vector3(-0.5, 0.85, 0.42).normalize();
   const RIM_W = new THREE.Vector3(0.6, 0.35, -0.75).normalize();
-  const SH = { uLight: { value: new THREE.Vector3() }, uRimDir: { value: new THREE.Vector3() } };
+  const LIGHT_ANIME = new THREE.Vector3(-0.85, 0.5, 0.35).normalize(); // anime fighters light from the side: a clear lit half and shadow half
+  const SH = { uLight: { value: new THREE.Vector3() }, uRimDir: { value: new THREE.Vector3() }, uAnime: { value: 0 }, uOL: { value: 1 } }; // uAnime: the anime look (KUMITEGAME / ART STYLE)
 
   // ------------------------------------------------------------------ shaders
   const TOON_VS = `
@@ -27,27 +28,29 @@
   const TOON_FS = `
     uniform vec3 uColor; uniform vec3 uShade; uniform vec3 uRim; uniform vec3 uLight; uniform vec3 uRimDir;
     uniform float uRimAmt; uniform float uSpec; uniform float uFlash; uniform vec3 uFlashCol;
-    uniform sampler2D uMap; uniform float uHasMap; uniform float uAlpha;
+    uniform sampler2D uMap; uniform float uHasMap; uniform float uAlpha; uniform float uAnime;
     varying vec3 vN; varying vec3 vV; varying vec3 vIC; varying vec2 vUv;
     void main(){
       vec3 n = normalize(vN); vec3 v = normalize(vV);
       vec3 tx = uHasMap > 0.5 ? texture2D(uMap, vUv).rgb : vec3(1.0);
       vec3 base = uColor * vIC * tx, sh = uShade * vIC * tx;
+      // anime: brighter lit side, cool violet shadow, a razor-sharp terminator
+      sh *= mix(vec3(1.0), vec3(0.8, 0.76, 1.1), uAnime);
       float d = dot(n, uLight);
-      float lit = smoothstep(0.0, 0.04, d);
+      float lit = smoothstep(0.0, mix(0.04, 0.012, uAnime), d);
       float deep = smoothstep(-0.5, -0.46, d);
-      vec3 col = mix(sh * 0.78, sh, deep);
+      vec3 col = mix(sh * mix(0.78, 0.66, uAnime), sh, deep);
       col = mix(col, base, lit);
       float fres = 1.0 - max(dot(n, v), 0.0);
-      float rim = smoothstep(0.58, 0.62, fres) * smoothstep(-0.15, 0.2, dot(n, uRimDir));
-      col = mix(col, uRim, rim * uRimAmt);
+      float rim = smoothstep(mix(0.58, 0.6, uAnime), mix(0.62, 0.615, uAnime), fres) * smoothstep(-0.15, 0.2, dot(n, uRimDir));
+      col = mix(col, uRim, min(1.0, rim * uRimAmt * mix(1.0, 1.5, uAnime)));
       vec3 h = normalize(uLight + v);
       col += uSpec * smoothstep(0.955, 0.965, dot(n, h));
       col = mix(col, uFlashCol, uFlash);
       gl_FragColor = vec4(col, uAlpha);
     }`;
   const OL_VS = `
-    uniform float uThick;
+    uniform float uThick; uniform float uOL;
     void main(){
       vec4 p = vec4(position,1.0); vec3 n = normal;
       #ifdef USE_INSTANCING
@@ -55,7 +58,7 @@
       #endif
       vec4 mv = modelViewMatrix * p;
       vec3 nv = normalize(normalMatrix * n);
-      mv.xyz += nv * uThick * (0.5 + 0.035 * -mv.z);
+      mv.xyz += nv * uThick * uOL * (0.5 + 0.035 * -mv.z);
       gl_Position = projectionMatrix * mv;
     }`;
   const OL_FS = `uniform vec3 uColor; uniform float uAlpha; void main(){ gl_FragColor = vec4(uColor, uAlpha); }`;
@@ -70,7 +73,7 @@
         uRimAmt: { value: o.rimAmt !== undefined ? o.rimAmt : 0.55 }, uSpec: { value: o.spec || 0 },
         uFlash: { value: 0 }, uFlashCol: { value: new THREE.Color(0xffffff) },
         uMap: { value: o.map || null }, uHasMap: { value: o.map ? 1 : 0 }, uAlpha: { value: 1 },
-        uLight: SH.uLight, uRimDir: SH.uRimDir,
+        uLight: SH.uLight, uRimDir: SH.uRimDir, uAnime: SH.uAnime,
       },
       vertexShader: TOON_VS, fragmentShader: TOON_FS,
     });
@@ -80,7 +83,7 @@
     const key = th + ':' + (color || 0);
     if (!olCache[key]) {
       olCache[key] = new THREE.ShaderMaterial({
-        uniforms: { uThick: { value: th }, uColor: { value: new THREE.Color(color || 0x1c0f15) }, uAlpha: { value: 1 } },
+        uniforms: { uThick: { value: th }, uOL: SH.uOL, uColor: { value: new THREE.Color(color || 0x1c0f15) }, uAlpha: { value: 1 } },
         vertexShader: OL_VS, fragmentShader: OL_FS, side: THREE.BackSide,
       });
     }
@@ -234,6 +237,9 @@
         gr.addColorStop(0, 'rgba(25,8,18,0.55)'); gr.addColorStop(0.7, 'rgba(25,8,18,0.35)'); gr.addColorStop(1, 'rgba(25,8,18,0)');
         g.fillStyle = gr; g.fillRect(0, 0, w, h);
       });
+      // anime look: a hard-edged cel shadow instead of a soft blob
+      this.shTexSoft = shTex;
+      this.shTexHard = canvasTex(128, 128, (g) => { g.fillStyle = 'rgba(40,14,52,0.62)'; g.beginPath(); g.arc(64, 64, 52, 0, Math.PI * 2); g.fill(); });
       this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
         new THREE.MeshBasicMaterial({ map: shTex, transparent: true, depthWrite: false }));
       this.shadow.renderOrder = 1;
@@ -753,6 +759,7 @@
       }
       // shadow
       const sc = 1.9 * s * (1 - Math.min(0.5, w.y));
+      this.shadow.material.map = SH.uAnime.value > 0.5 ? this.shTexHard : this.shTexSoft;
       this.shadow.position.set(w.x + 0.12, 0.015, w.z + 0.05);
       this.shadow.scale.set(sc, 1, sc * (1 + ps.drop * 0.6));
       this.shadow.rotation.y = Math.PI / 2 - w.f;
@@ -1070,6 +1077,94 @@
     }
   }
 
+
+  // ------------------------------------------------------------------ anime post-processing
+  // The anime look (KUMITEGAME, or ART STYLE: ANIME): the scene is drawn into a texture, then one pass adds
+  // ink lines around every shape and fold (from depth and colour changes, so stages and crowd get them too),
+  // an anime grade (richer colour, violet shadows, warm highlights), halftone dots in the shadows, a soft
+  // glow on bright things, film grain and a vignette.
+  const POST_VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+  const BRIGHT_FS = `uniform sampler2D tColor; varying vec2 vUv;
+    void main(){ vec3 c = texture2D(tColor, vUv).rgb; float l = dot(c, vec3(0.299, 0.587, 0.114)); float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b)); gl_FragColor = vec4(c * smoothstep(0.93, 1.0, l + sat * 0.25), 1.0); } // only really bright things (sparks, fire, lights), not pale skin`;
+  const BLUR_FS = `uniform sampler2D tColor; uniform vec2 uDir; varying vec2 vUv;
+    void main(){
+      vec3 c = texture2D(tColor, vUv).rgb * 0.227;
+      c += (texture2D(tColor, vUv + uDir * 1.385).rgb + texture2D(tColor, vUv - uDir * 1.385).rgb) * 0.316;
+      c += (texture2D(tColor, vUv + uDir * 3.231).rgb + texture2D(tColor, vUv - uDir * 3.231).rgb) * 0.070;
+      gl_FragColor = vec4(c, 1.0); }`;
+  const COMP_FS = `uniform sampler2D tColor; uniform sampler2D tDepth; uniform sampler2D tBloom;
+    uniform vec2 uRes; uniform float uNear; uniform float uFar; uniform float uTime; uniform float uPx;
+    varying vec2 vUv;
+    float D(vec2 uv){ float z = texture2D(tDepth, uv).r; return uNear * uFar / (uFar - z * (uFar - uNear)); }
+    vec3 C(vec2 uv){ return texture2D(tColor, uv).rgb; }
+    float L(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
+    void main(){
+      vec2 px = uPx / uRes;
+      vec3 c = C(vUv);
+      // ink: where depth bends (silhouettes, overlaps) or the colour jumps (folds, markings)
+      float d0 = D(vUv);
+      float dl = D(vUv - vec2(px.x, 0.0)), dr = D(vUv + vec2(px.x, 0.0)), du = D(vUv + vec2(0.0, px.y)), dd = D(vUv - vec2(0.0, px.y));
+      float bend = (abs(dl + dr - 2.0 * d0) + abs(du + dd - 2.0 * d0)) / d0;
+      float edgeD = smoothstep(0.012, 0.03, bend) * step(d0, uFar * 0.8);
+      vec3 cl = C(vUv - vec2(px.x, 0.0)), cr = C(vUv + vec2(px.x, 0.0)), cu = C(vUv + vec2(0.0, px.y)), cd = C(vUv - vec2(0.0, px.y));
+      float edgeC = smoothstep(0.45, 0.8, length(cl - cr) + length(cu - cd)) * step(d0, uFar * 0.8);
+      float edge = max(edgeD, edgeC * 0.45);
+      // anime grade
+      float l = L(c);
+      c = mix(vec3(l), c, 1.15);
+      c = mix(c, c * c * (3.0 - 2.0 * c), 0.2);
+      c *= mix(vec3(0.84, 0.8, 1.04), vec3(1.0, 0.98, 0.93), smoothstep(0.1, 0.6, l));
+      // halftone dots in the shadows (comic print)
+      float cell = 4.5 * max(1.0, uPx);
+      vec2 g = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy;
+      float r = length(mod(g, cell) - cell * 0.5) / (cell * 0.5);
+      float shade = smoothstep(0.34, 0.1, l);
+      c *= 1.0 - step(r, shade * 0.95) * 0.22;
+      // glow, ink, vignette, grain
+      c += texture2D(tBloom, vUv).rgb * 0.35;
+      c = mix(c, vec3(0.1, 0.045, 0.085), edge * 0.92);
+      vec2 vg = vUv - 0.5; c *= 1.0 - dot(vg, vg) * 0.6;
+      float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 91.7, vec2(12.9898, 78.233))) * 43758.5453);
+      c += (n - 0.5) * 0.035;
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }`;
+  class AnimePost {
+    constructor(r) {
+      this.r = r;
+      const ms = r.capabilities.isWebGL2 ? 4 : 0;
+      this.rt = new THREE.WebGLRenderTarget(4, 4, { samples: ms });
+      this.rt.depthTexture = new THREE.DepthTexture(4, 4); this.rt.depthTexture.type = THREE.UnsignedIntType;
+      const lin = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+      this.bA = new THREE.WebGLRenderTarget(4, 4, lin); this.bB = new THREE.WebGLRenderTarget(4, 4, lin);
+      this.qs = new THREE.Scene(); this.qc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)); this.quad.frustumCulled = false; this.qs.add(this.quad);
+      const mk = (fs, u) => new THREE.ShaderMaterial({ uniforms: u, vertexShader: POST_VS, fragmentShader: fs, depthTest: false, depthWrite: false });
+      this.bright = mk(BRIGHT_FS, { tColor: { value: null } });
+      this.blur = mk(BLUR_FS, { tColor: { value: null }, uDir: { value: new THREE.Vector2() } });
+      this.comp = mk(COMP_FS, { tColor: { value: null }, tDepth: { value: null }, tBloom: { value: null }, uRes: { value: new THREE.Vector2() }, uNear: { value: 0.1 }, uFar: { value: 200 }, uTime: { value: 0 }, uPx: { value: 1 } });
+    }
+    setSize(w, h, pr) {
+      const W = Math.max(4, Math.round(w * pr)), H = Math.max(4, Math.round(h * pr));
+      this.rt.setSize(W, H); this.bA.setSize(W >> 2, H >> 2); this.bB.setSize(W >> 2, H >> 2);
+      this.comp.uniforms.uRes.value.set(W, H);
+      this.comp.uniforms.uPx.value = Math.max(1, H / 900); // line width grows with the screen, about 1px at 900p
+    }
+    pass(mat, target) { this.quad.material = mat; this.r.setRenderTarget(target); this.r.render(this.qs, this.qc); }
+    render(scene, cam, t) {
+      const r = this.r;
+      r.setRenderTarget(this.rt); r.render(scene, cam);
+      this.bright.uniforms.tColor.value = this.rt.texture; this.pass(this.bright, this.bA);
+      for (let i = 0; i < 2; i++) {
+        this.blur.uniforms.tColor.value = this.bA.texture; this.blur.uniforms.uDir.value.set(1 / this.bA.width, 0); this.pass(this.blur, this.bB);
+        this.blur.uniforms.tColor.value = this.bB.texture; this.blur.uniforms.uDir.value.set(0, 1 / this.bA.height); this.pass(this.blur, this.bA);
+      }
+      const u = this.comp.uniforms;
+      u.tColor.value = this.rt.texture; u.tDepth.value = this.rt.depthTexture; u.tBloom.value = this.bA.texture;
+      u.uNear.value = cam.near; u.uFar.value = cam.far; u.uTime.value = t;
+      this.pass(this.comp, null);
+    }
+  }
+
   // ------------------------------------------------------------------ Renderer
   class Renderer {
     constructor(el) {
@@ -1087,12 +1182,19 @@
       this.buildCrowd();
       this.cs = { fx: 0, fz: 0, tight: 0, kick: 0, shake: 0, yaw: 0, orbit: false, focusW: 0, fox: 0, foz: 0 };
       this.time = 0; this.excite = 0;
+      this.setAnime(window.KUMITE_STYLE === 'anime');
       this.resize();
       addEventListener('resize', () => this.resize());
+    }
+    // the anime look: crisper toon shading, bolder outlines, hard shadows and the ink / grade pass
+    setAnime(on) {
+      this.anime = !!on; SH.uAnime.value = on ? 1 : 0; SH.uOL.value = on ? 1.35 : 1;
+      if (on && !this.post) { this.post = new AnimePost(this.r); this.resize(); }
     }
     resize() {
       const w = innerWidth, h = innerHeight;
       this.r.setSize(w, h);
+      if (this.post) this.post.setSize(w, h, this.r.getPixelRatio());
       this.cam.aspect = w / h; this.cam.updateProjectionMatrix();
       this.fx.pmat.uniforms.uScale.value = h * this.r.getPixelRatio() / (2 * Math.tan(this.cam.fov * Math.PI / 360));
     }
@@ -1843,7 +1945,7 @@
       if (this.stageTick) this.stageTick(T, rdt, m);
       this.motes.rotation.y += rdt * 0.02;
       this.updateCamera(rdt, game);
-      SH.uLight.value.copy(LIGHT_W).transformDirection(this.cam.matrixWorldInverse);
+      SH.uLight.value.copy(this.anime ? LIGHT_ANIME : LIGHT_W).transformDirection(this.cam.matrixWorldInverse);
       SH.uRimDir.value.copy(RIM_W).transformDirection(this.cam.matrixWorldInverse);
     }
 
@@ -1880,7 +1982,7 @@
       return { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight };
     }
 
-    render() { this.r.render(this.scene, this.cam); }
+    render() { if (this.anime && this.post) this.post.render(this.scene, this.cam, this.time); else this.r.render(this.scene, this.cam); }
   }
 
   S.Renderer = Renderer;

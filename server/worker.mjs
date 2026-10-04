@@ -10,7 +10,7 @@ export default {
     const url = new URL(request.url);
     // the game can live under a subpage, e.g. looktwicestudio.com/kumite/
     const base = (env.BASE_PATH || '').replace(/\/$/, '');
-    if (base && url.pathname.startsWith(base)) {
+    if (base && (url.pathname === base || url.pathname.startsWith(base + '/'))) {
       if (url.pathname === base) return Response.redirect(url.origin + base + '/' + url.search, 301);
       url.pathname = url.pathname.slice(base.length) || '/';
       request = new Request(url.toString(), request);

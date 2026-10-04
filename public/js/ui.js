@@ -280,6 +280,7 @@
           btn('CPU DIFFICULTY', 'diff', st.difficulty.toUpperCase()) +
           btn('VS CPU MATCH', 'endless', st.endless ? 'NON-STOP' : 'BEST OF 3') +
           btn('STAGE', 'pstage', (S.STAGES.find((x) => x.id === S.profile.stage) || S.STAGES[0]).name) +
+          btn('ART STYLE', 'style', st[this.g.styleKey] === 'anime' ? 'ANIME' : 'CLASSIC') +
           btn('COUNTER TIPS', 'hints', st.hints ? 'ON' : 'OFF') +
           btn('SOUND', 'sound', st.sound ? 'ON' : 'OFF') +
           (S.APP === 'desktop' ? btn('DISPLAY', 'fullscreen', window.kumiteDesktop && window.kumiteDesktop.isFullScreen() ? 'FULLSCREEN' : 'WINDOWED') : '') +
