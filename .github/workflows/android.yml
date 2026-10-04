@@ -3,10 +3,7 @@
 # secrets exist: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.
 name: Android build
 
-on:
-  push:
-    branches: [main, claude/chicken-self-steer]
-    paths: ['public/**', 'mobile/**', '.github/workflows/android.yml']
+on:  # manual only (Run workflow button): macOS/Windows runners eat the free minutes 10x/2x
   workflow_dispatch:
     inputs:
       build:

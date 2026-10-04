@@ -4,10 +4,7 @@
 # To send a build to TestFlight / the App Store, use the "iOS release" workflow (needs Apple secrets).
 name: iOS build check
 
-on:
-  push:
-    branches: [main, claude/chicken-self-steer]
-    paths: ['public/**', 'mobile/**', '.github/workflows/ios.yml']
+on:  # manual only (Run workflow button): macOS/Windows runners eat the free minutes 10x/2x
   workflow_dispatch:
 
 concurrency:

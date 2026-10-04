@@ -4,10 +4,7 @@
 # The finished zips are attached to each run under "Artifacts" (download from the run's page).
 name: Desktop builds
 
-on:
-  push:
-    branches: [main, claude/chicken-self-steer]
-    paths: ['public/**', 'desktop/**', 'tools/**', '.github/workflows/desktop.yml']
+on:  # manual only (Run workflow button): macOS/Windows runners eat the free minutes 10x/2x
   workflow_dispatch:
 
 concurrency:
