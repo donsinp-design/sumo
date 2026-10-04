@@ -40,7 +40,7 @@
     thrower:   { hp: 32,  spd: 3.4, r: 0.4,  mass: 0.9, name: 'THROWER',   shirt: 0xf2c14e, apron: 0x4a4a52, band: 0x2a2a30, cap: true },
     staff:     { hp: 50,  spd: 2.9, r: 0.42, mass: 1.1, name: 'STAFF',     shirt: 0x7a4ab0, apron: 0x2a2a30, band: 0xf6f6f0, pole: true },
     commander: { hp: 70,  spd: 2.7, r: 0.45, mass: 1.3, name: 'COMMANDER', shirt: 0xc8231d, apron: 0xf2c14e, band: 0xf2c14e, coat: true },
-    sumo:      { hp: 150, spd: 2.5, r: 0.85, mass: 6,   name: 'SUMO',      wrestler: 1, size: 1.25 },
+    sumo:      { hp: 110, spd: 2.5, r: 0.85, mass: 6,   name: 'SUMO',      wrestler: 1, size: 1.25 },
     boss:      { hp: 650, spd: 2.4, r: 1.05, mass: 12,  name: 'ŌZEKI MAGURO-YAMA', wrestler: 1, size: 1.6 },
   };
 
@@ -94,7 +94,8 @@
     addActor(kind, x, z, o) {
       o = o || {};
       const K = kind === 'player' ? { hp: 100, spd: 4.3, r: 0.55, mass: 2.2 } : KINDS[kind];
-      const a = { kind, x, z, y: 0, vx: 0, vz: 0, vy: 0, f: Math.PI / 2, r: K.r, mass: K.mass * (o.fat ? 1.6 : 1), hp: K.hp * (o.fat ? 1.35 : 1),
+      const big = kind === 'sumo' || kind === 'boss', fat = o.fat && !big;
+      const a = { kind, x, z, y: 0, vx: 0, vz: 0, vy: 0, f: Math.PI / 2, r: K.r, mass: K.mass * (fat ? 1.6 : 1), hp: K.hp * (fat ? 1.35 : 1),
         spd: K.spd * (o.fat ? 0.82 : 1), fat: !!o.fat, st: 'free', t: 0, dur: 0, team: kind === 'player' ? 0 : 1, cd: rnd(0.6, 1.6), iframe: 0,
         hitLog: [], stun: 0, slow: 0, buff: 0, zone: o.zone, dead: false, held: null, holder: null, combo: 0, lastStrike: -9, frozen: 0, blind: 0, burn: 0 };
       a.maxHp = a.hp;
@@ -214,6 +215,11 @@
         return;
       }
       for (const [kind, x, z, fat] of Z.spawns) { const e = this.addActor(kind, x, z, { fat: fat === 'fat', zone: Z }); e.f = Math.PI / 2; Z.ens.push(e); }
+      if (Z.spawns.some((sp) => sp[0] === 'sumo') && !this.sumoTip) { // first sumo: say how to beat him
+        this.sumoTip = true;
+        this.prompt('SUMO: too heavy to push. Make him crash into a cart or wall, parry him (tap L), or throw crates at him, then grab (K)');
+        clearTimeout(this.tipT); this.tipT = setTimeout(() => this.prompt(''), 9000);
+      }
       this.backGate = Z.z0 + 1.2;
     }
     retry() {
@@ -468,6 +474,10 @@
       const canDown = T.kind !== 'boss' && !(T.kind === 'sumo' && !(T.stun > 0));
       if ((heavy || (slick && dmg >= 8)) && canDown && !(T.fat && !heavy)) { this.set(T, 'down', T === this.P ? 0.85 : 1.15); T.fallX = kx; T.fallZ = kz; if (T.holdP) this.escapeFrom(T); }
       else if (T.kind !== 'boss' && T.kind !== 'sumo') { if (T.holdP) this.escapeFrom(T); if (T.st !== 'act' || heavy) this.set(T, 'hurt', T === this.P ? 0.32 : 0.38); }
+      else if (T.kind === 'sumo' && T.st !== 'dazed' && A === this.P) { // too heavy to stagger with one hit, but a full 3-hit string rocks him
+        T.hitRun = (T.hitRun || []).filter((h) => this.t - h < 2.5); T.hitRun.push(this.t);
+        if (T.hitRun.length >= 3 && T.st !== 'act') { T.hitRun = []; this.set(T, 'dazed', 1.0); T.stun = 1.0; }
+      }
     }
     ko(T, kx, kz) {
       T.hp = 0;
@@ -919,11 +929,19 @@
         if (a.atk === 'stomp') { m = get('disc'); m.scale.set(3.7 * k, 1, 3.7 * k); m.rotation.y = 0; }
         else if (a.atk === 'charge' || a.atk === 'rush') { m = get('line'); const L = a.kind === 'boss' ? 16 : 6; m.scale.set(L, 1, a.r * 2); m.rotation.y = -a.f; }
         else if (a.atk === 'sweep') { m = get('wide'); m.scale.set(2.4, 1, 2.4); m.rotation.y = -a.f; }
-        else if (a.atk === 'bottle') { m = get('ring'); const P = this.P; m.scale.set(0.8, 1, 0.8); m.position.set(P.x, 0.03, P.z); m.material.opacity = pulse; continue; }
+        else if (a.atk === 'bottle') { m = get('ring'); const P = this.P; m.scale.set(0.8, 1, 0.8); m.position.set(P.x, 0.03, P.z); m.material.opacity = pulse; m.material.color.set(0xff2a2a); continue; }
         else if (a.atk === 'shout') { m = get('ring'); m.scale.set(7, 1, 7); m.rotation.y = 0; }
         else { m = get('cone'); const r = a.kind === 'boss' ? 2.2 : a.kind === 'sumo' ? 1.9 : 1.4; m.scale.set(r + a.r, 1, r + a.r); m.rotation.y = -a.f; }
         m.position.set(a.x, 0.03, a.z); m.material.opacity = pulse;
         m.material.color.set(a.atk === 'grab' ? 0xff8a1a : 0xff2a2a); // orange = a grab (break it with K)
+      }
+      // a heavy one (sumo, boss) is open: gold ring under him, call it out once
+      for (const a of this.actors) {
+        if (a.kind !== 'sumo' && a.kind !== 'boss') continue;
+        const open = !a.dead && (a.st === 'dazed' || a.stun > 0);
+        if (open && !a.wasOpen) this.popAt(a, a.kind === 'boss' ? 'DAZED! PUNISH HIM' : 'DAZED! GRAB HIM (K)');
+        a.wasOpen = open;
+        if (open) { const m = get('ring'); const R = a.r + 0.5; m.scale.set(R, 1, R); m.position.set(a.x, 0.035, a.z); m.material.opacity = 0.55 + 0.3 * Math.sin(T * 14); m.material.color.set(0xffd23a); }
       }
       // a red "!" over anyone winding up an attack (orange for a grab)
       if (!this.bangTex) this.bangTex = S.R3.canvasTex(64, 64, (c) => { c.fillStyle = '#fff8ec'; c.beginPath(); c.arc(32, 32, 30, 0, 7); c.fill(); c.fillStyle = '#e2322b'; c.beginPath(); c.arc(32, 32, 25, 0, 7); c.fill(); c.fillStyle = '#fff8ec'; c.font = '900 44px "Dela Gothic One", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('!', 32, 34); });
