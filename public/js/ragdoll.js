@@ -50,6 +50,11 @@
         else { b.m0 = this._basis(b.frame, b.m0 || new THREE.Matrix4()); }
       }
       for (const q of this.p) q.o.copy(q.x);
+      // muscle tone: remember the body's shape in its own torso frame; limbs are pulled back toward it,
+      // strongly at first (a person tenses and braces), relaxing as they settle. Dead bodies relax faster.
+      this._frame(tm); tm2.copy(tm).transpose(); const pel = this.P('pelvis').x;
+      for (const q of this.p) q.rest = (q.rest || V()).subVectors(q.x, pel).applyMatrix4(tm2);
+      this.tone0 = opt.limp ? 0.08 : 0.16; this.toneEnd = opt.limp ? 0.01 : 0.035;
       this.kick(vel, opt);
       this.on = true; this.age = 0; this.rest = 0;
     }
@@ -66,6 +71,7 @@
       }
     }
     stop() { this.on = false; }
+    _frame(m) { return this._basis(['pelvis', 'neck', 'hipL', 'hipR'], m); }
     _basis(f, m) {
       const d = this.P(f[0]).x, u = this.P(f[1]).x, l = this.P(f[2]).x, r = this.P(f[3]).x;
       const Y = tv.subVectors(u, d).normalize(), X = tv2.subVectors(r, l), Z = V();
@@ -81,8 +87,8 @@
         for (const q of this.p) {
           if (q.pin) { q.o.copy(q.x); q.x.lerp(q.pin, 0.5); continue; }
           const onGround = q.x.y <= q.r + 0.002;
-          const fr = onGround ? 0.82 : 0.995; // ground friction: bodies slide a little then stop
-          const vx = (q.x.x - q.o.x) * fr, vy = (q.x.y - q.o.y) * 0.995, vz = (q.x.z - q.o.z) * fr;
+          const fr = onGround ? 0.8 : 0.998; // per 1/120 s substep // ground friction: bodies slide a little then stop
+          const vx = (q.x.x - q.o.x) * fr, vy = (q.x.y - q.o.y) * (onGround ? 0.5 : 0.998), vz = (q.x.z - q.o.z) * fr;
           q.o.copy(q.x);
           q.x.x += vx; q.x.y += vy - G * h * h; q.x.z += vz;
         }
@@ -95,6 +101,15 @@
             A.x.addScaledVector(tv, (diff * wa) / ws); B.x.addScaledVector(tv, (-diff * wb) / ws);
           }
           this._knees();
+          if (it === 5 && this.tone0) {
+            const tone = this.toneEnd + (this.tone0 - this.toneEnd) * Math.exp(-this.age * 2.2), pel = this.P('pelvis').x;
+            this._frame(tm);
+            for (const q of this.p) {
+              if (q.pin || /pelvis|neck|hip|sh/.test(q.n)) continue; // the torso box is already rigid
+              tv.copy(q.rest).applyMatrix4(tm).add(pel);
+              q.x.lerp(tv, tone);
+            }
+          }
           for (const q of this.p) {
             if (q.x.y < q.r) { q.x.y = q.r; }
             if (collide) collide(q.x, q.r);
@@ -102,7 +117,7 @@
         }
         // stay with the gameplay body (it handles walls, gates and knockback)
         if (anchor) {
-          const pel = this.P('pelvis').x, dx = anchor.x - pel.x, dz = anchor.z - pel.z, d = Math.hypot(dx, dz), lim = 0.55;
+          const pel = this.P('pelvis').x, dx = anchor.x - pel.x, dz = anchor.z - pel.z, d = Math.hypot(dx, dz), lim = 1.8; // a loose safety tether only
           if (d > lim) { const k = (d - lim) / d; for (const q of this.p) { q.x.x += dx * k; q.x.z += dz * k; q.o.x += dx * k; q.o.z += dz * k; } }
         }
       }

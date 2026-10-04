@@ -139,7 +139,8 @@
       const hp = this.bones.Hips.parent; hp.updateMatrixWorld(true);
       this.hipsParentInv = new THREE.Matrix4().copy(hp.matrixWorld).invert().multiply(root.matrixWorld); // model -> hips-parent local
       this.parentRestQ = modelQ(hp);
-      if (this.bones.Head) this.bones.Head.scale.setScalar(0.78); // a touch less chibi
+      if (this.bones.Head) this.bones.Head.scale.setScalar(0.62); // adult proportions, not a big-headed toy
+      for (const n of ['LeftHand', 'RightHand']) if (this.bones[n]) this.bones[n].scale.setScalar(0.62);
       this.root = root; this.Q = {};
       function depth(o) { let d = 0; while (o.parent) { d++; o = o.parent; } return d; }
     }

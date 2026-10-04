@@ -18,6 +18,16 @@
   }
   // a flat painted plane on the ground
   function floor(g, w, d, x, z, draw, y) {
+    if (draw && draw.kind) { // tiled ground (4 m tiles, 1024 px) plus a transparent layer for paint, grates, numbers
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), S.CampArt.groundMat(draw.kind, w, d));
+      m.position.set(x, y || 0, z); g.add(m);
+      if (draw.lines) {
+        const tex = W.canvasTex(1024, Math.max(64, Math.round(1024 * d / w)), draw.lines);
+        const o = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+        o.position.set(x, (y || 0) + 0.004, z); o.renderOrder = 0; g.add(o);
+      }
+      return m;
+    }
     const tex = W.canvasTex(512, Math.max(64, Math.round(512 * d / w)), draw);
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: tex }));
     m.position.set(x, y || 0, z); g.add(m); return m;
@@ -36,17 +46,13 @@
     m.position.set(x, y, z); m.rotation.set(tilt || 0, ry || 0, 0); g.add(m); return m;
   }
   // concrete / asphalt with grain, drains and painted lines
-  const ground = (base, speck, lines) => (c, w, h) => {
-    c.fillStyle = base; c.fillRect(0, 0, w, h);
-    for (let i = 0; i < w * h / 90; i++) { c.fillStyle = Math.random() < 0.5 ? speck[0] : speck[1]; c.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 3, 2 + Math.random() * 3); }
-    if (lines) lines(c, w, h);
-  };
+  const GK = { '#6b5f63': 'plaza', '#58525c': 'asphalt', '#4a4450': 'asphalt', '#7e8c92': 'concrete', '#6e6a62': 'bay', '#8a8e90': 'auction' };
+  const ground = (base, speck, lines) => ({ kind: GK[base] || 'concrete', lines });
 
   function build(scene) {
     const g = new THREE.Group(); scene.add(g);
     const walls = [], props = [], puddles = [], decor = [];
-    const A = S.CampArt, fishes = A.fishBatch(g), ice = A.iceMat();
-    const woodM = A.mat(A.tex('counter', 256, 128, (c, w, h) => { c.fillStyle = '#7a4a2a'; c.fillRect(0, 0, w, h); for (let i = 0; i < 6; i++) { c.fillStyle = i % 2 ? '#8a5a34' : '#6e4224'; c.fillRect(0, i * h / 6 + 2, w, h / 6 - 4); } c.fillStyle = 'rgba(0,0,0,0.25)'; for (let x = 0; x < w; x += 64) c.fillRect(x, 0, 3, h); }), 0x6a5060);
+    const A = S.CampArt, fishes = A.fishBatch(g);
     const tbox = (m, w, h, d, x, y, z, ol) => { const o = W.mesh(W.GEO.box, m, ol === undefined ? 0.02 : ol); o.scale.set(w, h, d); o.position.set(x, y, z); g.add(o); return o; };
     const wall = (x0, x1, z0, z1) => walls.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) });
     const prop = (type, x, z, ry) => props.push({ type, x, z, ry: ry || 0 });
@@ -76,13 +82,7 @@
     for (const x of [-6.6, 6.6]) { cyl(g, 0.22, 0.25, 4.2, 0xc8231d, 0x6e1018, x, 2.1, -9.5); wall(x - 0.3, x + 0.3, -9.8, -9.2); }
     box(g, 14, 0.35, 0.4, 0xc8231d, 0x6e1018, 0, 4.15, -9.5, 0.03);
     sign(g, '魚河岸 市場', 'UOGASHI FISH MARKET', 7.2, 1.5, '#f6eddc', '#1a0e14', 0, 3.3, -9.3, 0, -0.35);
-    // paper lanterns on the arch
-    const lantern = (x, y, z, col) => {
-      const l = W.mesh(new THREE.SphereGeometry(0.32, 14, 10), S.toon(col || 0xe2322b, { shade: 0x8a1a14, rim: 0xfff0c0, rimAmt: 0.9 }), 0.02);
-      l.scale.set(1, 1.3, 1); l.position.set(x, y, z); g.add(l); decor.push({ m: l, kind: 'lantern', p: Math.random() * 6 });
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffb070, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55 }));
-      glow.scale.setScalar(1.8); glow.position.set(x, y, z); g.add(glow);
-    };
+    const lantern = () => {}; // no lanterns in the market
     for (const x of [-4.5, -1.5, 1.5, 4.5]) lantern(x, 3.55, -9.5);
 
     // ================================================================ 2. OUTDOOR STREET  (z -12 .. -48)
@@ -97,12 +97,7 @@
     const awningCols = [[0xe2322b, 0xf6eddc], [0x2f6fd0, 0xf6eddc], [0xf2c14e, 0x3a2c34], [0x2e9e6a, 0xf6eddc]];
     const stall = (sd, z0, z1, k) => {
       const x = sd * 6.1, zc = (z0 + z1) / 2, len = Math.abs(z1 - z0);
-      tbox(woodM, 1.7, 0.9, len, x, 0.45, zc, 0.025);                             // counter
-      tbox(ice, 1.5, 0.14, len - 0.3, x, 0.96, zc, 0.0);                          // crushed ice
-      for (let i = 0; i < Math.floor((len - 0.4) / 0.42); i++) for (const r of [-0.35, 0.05, 0.42]) {   // fish laid out on the ice, heads to the aisle
-        if (Math.random() < 0.15) continue;
-        fishes.addRandom(x + r + (Math.random() - 0.5) * 0.08, 1.07, Math.min(z0, z1) + 0.35 + i * 0.42 + (Math.random() - 0.5) * 0.1, -sd * Math.PI / 2 + (Math.random() - 0.5) * 0.4, 0.17 + Math.random() * 0.04);
-      }
+      A.stall(g, fishes, x, z0, z1, sd, k); void zc; void len;
       const [c1, c2] = awningCols[k % awningCols.length];
       const aw = A.awning(g, x + sd * 0.95, z0, z1, sd, c1, c2, { depth: 2.2, y: 2.95, drop: 0.6 });
       for (const zz of [z0, z1]) cyl(g, 0.04, 0.04, aw.fy, 0x6a6e78, 0x22242c, aw.fx, aw.fy / 2, zz, 6, 0.01);
@@ -157,8 +152,6 @@
     // ================================================================ 3. MARKET HALL  (z -50 .. -100)
     floor(g, 26, 50, 0, -75, ground('#7e8c92', ['#6e7b82', '#8e9ca2'], (c, w, h) => {
       c.strokeStyle = 'rgba(40,60,70,0.35)'; c.lineWidth = 2;
-      for (let i = 1; i < 26; i++) { c.beginPath(); c.moveTo(i * w / 26, 0); c.lineTo(i * w / 26, h); c.stroke(); }
-      for (let i = 1; i < 50; i++) { c.beginPath(); c.moveTo(0, i * h / 50); c.lineTo(w, i * h / 50); c.stroke(); }
       c.fillStyle = 'rgba(230,200,60,0.85)'; for (let i = 0; i < 50; i += 2) { c.fillRect(w * 0.05, i * h / 50, 6, h / 60); c.fillRect(w * 0.95, i * h / 50, 6, h / 60); }
     }));
     wall(-15, -12.2, -48, -100); wall(12.2, 15, -48, -100);
@@ -166,12 +159,7 @@
     // vendor rows: three rows of tables, broken by cross-aisles so fights move between rows
     const tableRow = (x, z0, z1, k) => {
       const zc = (z0 + z1) / 2, len = Math.abs(z1 - z0);
-      box(g, 1.6, 0.85, len, 0xc8d0d8, 0x6a7a88, x, 0.425, zc, 0.025);                          // steel tables
-      for (let i = 0; i < Math.floor(len / 0.9); i++) {                                         // foam boxes / ice bins on top
-        const zz = z0 - 0.45 - i * 0.9, bx = x + ((i % 2) - 0.5) * 0.7, iceBox = (i + k) % 3 === 0;
-        const fb = A.prop('foam'); fb.position.set(bx, 0.85, zz); fb.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.2; fb.children.forEach((c2) => { if (c2.rotation.x) c2.visible = false; }); void iceBox; g.add(fb);
-        for (let f = 0; f < 3; f++) fishes.addRandom(bx + (Math.random() - 0.5) * 0.3, 1.18, zz + (f - 1) * 0.12, Math.PI / 2 + (Math.random() - 0.5) * 0.5, 0.15);
-      }
+      A.stall(g, fishes, x, z0, z1, 0, k, true); void zc; void len;                              // steel tables with displays
       wall(x - 0.8, x + 0.8, z1, z0);
       // a hanging vendor sign over each segment
       const names = [['丸豊', 'MARUTOYO'], ['魚河岸', 'UOGASHI'], ['鮮魚', 'FRESH FISH'], ['海老', 'EBI · SHRIMP'], ['鮪', 'MAGURO'], ['貝', 'SHELLFISH']];
@@ -307,7 +295,7 @@
     // how wide the walkable space is at a depth (camera keeps it framed)
     const halfWidth = (z) => (z > -12 ? 9 : z > -48 ? 7 : z > -100 ? 12 : z > -112 ? 10 : 13);
 
-    fishes.done();
+    fishes.done(); A.stallKit(g).done();
     return {
       group: g, walls, props, puddles, zones, gacha, start: { x: 0, z: -0.5 }, halfWidth, decor,
       update(t) {

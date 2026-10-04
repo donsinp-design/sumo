@@ -52,13 +52,40 @@
   // one banner's resting place in the wall. Three sizes, layered: small ones hang at the back,
   // medium ones make up most of the wall, and a few large ones pass close to the camera.
   const SIZE = [[0.48, 0.6], [0.66, 0.82], [0.88, 1.02]]; // cloth height as a fraction of screen height
+  // banners keep their proportions (at most a slight stretch to reach below the screen). Wherever one ends
+  // mid-screen, a banner hung in front covers its bottom edge, so no pole foot or tassel ever shows.
+  const LOW = 1.04, STRETCH = 1.12;
   function make(layer, x, clothTop, imgI) {
+    const reach = true; // every banner hangs past the bottom of the screen: no hem ever shows, even mid-slide
     const im = imgs[imgI], asp = im.naturalWidth / im.naturalHeight;
-    const clothH = H * rnd(SIZE[layer][0], SIZE[layer][1]);
-    const h = clothH / (CLOTH[1] - CLOTH[0]), w = h * asp;
-    if (clothTop === null) clothTop = rnd(-0.12 * H, H - clothH * 0.5); // anywhere, as long as it shows
+    const clothH0 = H * rnd(SIZE[layer][0], SIZE[layer][1]); let clothH = clothH0;
+    if (clothTop === null) clothTop = rnd(-0.12 * H, H - clothH * 0.5);
+    if (reach) clothH = Math.max(clothH, H * LOW - clothTop);        // must hang past the bottom of the screen
+    else if (clothTop + clothH < H * LOW && clothTop + clothH * STRETCH >= H * LOW) clothH = H * LOW - clothTop; // close: stretch a touch
+    // a longer banner also gets wider, so the art is never pulled out of shape by more than a little
+    const h = clothH / (CLOTH[1] - CLOTH[0]), w = (clothH0 / (CLOTH[1] - CLOTH[0])) * asp * (clothH / clothH0) / Math.min(STRETCH, clothH / clothH0);
     const top = clothTop - h * CLOTH[0];
     return { im, dk: dark[imgI], layer, w, h, clothH, x, y: top + h * PIV, rot: 0, cx: x, cy: top + h * PIV };
+  }
+  // bottom edge of a banner (cloth hem, pole foot, tassels), in screen space
+  const hemOf = (b) => { const top = b.y - b.h * PIV; return { x0: b.x - b.w * 0.6, x1: b.x + b.w * 0.6, y0: top + b.h * (CLOTH[1] - 0.05), y1: top + b.h * 1.0 }; };
+  // after layout: find hems that still show and hang covering banners in front of them
+  function coverHems(out, pick) {
+    for (let pass = 0; pass < 4; pass++) {
+      const shown = [];
+      out.forEach((b, i) => {
+        const e = hemOf(b); if (e.y0 > H || e.y1 < 0 || e.x1 < 0 || e.x0 > W) return;
+        // sample along the hem; it's hidden if every sample is inside a banner drawn later
+        for (let k = 0; k <= 6; k++) {
+          const sx = e.x0 + (e.x1 - e.x0) * k / 6, sy = (e.y0 + e.y1) / 2;
+          if (sx < 0 || sx > W || sy > H) continue;
+          const hid = out.some((c, j) => j > i && Math.abs(sx - c.x) < c.w * 0.44 && sy > c.y - c.h * PIV + c.h * CLOTH[0] && sy < c.y - c.h * PIV + c.h * CLOTH[1]);
+          if (!hid) { shown.push({ x: sx, y: sy }); break; }
+        }
+      });
+      if (!shown.length) return;
+      for (const p of shown) out.push(make(2, p.x + rnd(-0.15, 0.15) * W * 0.1, Math.max(-0.15 * H, p.y - H * rnd(0.25, 0.55)), pick(), true));
+    }
   }
 
   // lay out a crowded, irregular wall with no gaps: keep hanging banners over whatever still shows
@@ -71,7 +98,7 @@
     const mc = document.createElement('canvas'); mc.width = mw; mc.height = mh;
     const mx = mc.getContext('2d', { willReadFrequently: true });
     // a loose scatter first, so the fill does not start from a neat grid
-    const medW = make(1, 0, 0, 0).w;
+    const medW = make(1, 0, null, 0).w;
     for (let x = rnd(-0.3, 0.1) * medW; x < W + medW * 0.5; x += medW * rnd(0.9, 1.4)) out.push(make(Math.random() < 0.3 ? 0 : 1, x, null, pick()));
     // the mask only ever gains coverage, so each new banner is drawn onto it once
     for (const b of out) drawOne(mx, b, mw / W, true);
@@ -83,10 +110,8 @@
       // cover a random hole with a banner placed loosely around it
       const q = ((Math.random() * holes.length / 2) | 0) * 2;
       const hx = (holes[q] + 0.5) * W / mw, hy = (holes[q + 1] + 0.5) * H / mh;
-      const b = make(Math.random() < 0.25 ? 0 : 1, 0, 0, pick());
+      const b = make(Math.random() < 0.25 ? 0 : 1, 0, hy - H * rnd(0.1, 0.6), pick());
       b.x = b.cx = hx + rnd(-0.25, 0.25) * b.w;
-      const ct = hy - b.clothH * rnd(0.15, 0.85);
-      const top = ct - b.h * CLOTH[0]; b.y = b.cy = top + b.h * PIV;
       out.push(b); drawOne(mx, b, mw / W, true);
     }
     // the final check must be exact, so fill any last pinholes at full resolution
@@ -99,17 +124,17 @@
       let gx = -1, gy = 0;
       for (let y = 0; y < fh && gx < 0; y++) for (let x = 0; x < fw; x++) if (d[(y * fw + x) * 4 + 3] < 200) { gx = x; gy = y; break; }
       if (gx < 0) break;
-      const b = make(1, (gx + 0.5) * W / fw, 0, pick());
-      const ct = (gy + 0.5) * H / fh - b.clothH * rnd(0.3, 0.7);
-      b.y = b.cy = ct - b.h * CLOTH[0] + b.h * PIV;
+      const b = make(1, (gx + 0.5) * W / fw, (gy + 0.5) * H / fh - H * rnd(0.1, 0.4), pick());
       out.push(b); drawOne(fx, b, fw / W, true);
     }
     // a few large banners right in front of the camera
     const big = W > H ? 3 + ((Math.random() * 3) | 0) : 2;
-    for (let i = 0; i < big; i++) out.push(make(2, (i + rnd(0.15, 0.85)) * W / big, rnd(-0.18, 0.02) * H, pick()));
+    for (let i = 0; i < big; i++) out.push(make(2, (i + rnd(0.15, 0.85)) * W / big, rnd(-0.18, 0.02) * H, pick(), true));
     // back to front; within a layer keep the order they were hung
     out.forEach((b, i) => { b.ord = i; });
-    return out.sort((a, b) => a.layer - b.layer || a.ord - b.ord);
+    out.sort((a, b) => a.layer - b.layer || a.ord - b.ord);
+    coverHems(out, pick);
+    return out;
   }
 
   function drawOne(c, b, s, solid) {

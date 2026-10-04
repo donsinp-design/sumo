@@ -278,6 +278,136 @@
     for (let i = 0; i < 500; i++) { c.fillStyle = Math.random() < 0.5 ? '#ffffff' : '#a9d6ee'; const s = rnd(3, 10); c.fillRect(rnd(0, w), rnd(0, h), s, s * rnd(0.5, 1.2)); }
   }), 0x8aa8c8, { spec: 0.6 });
 
+
+  // ---------------------------------------------------------------- ground: seamless high-res tiles (one tile = 4 m)
+  function groundTex(kind) {
+    return tex('ground' + kind, 1024, 1024, (c, w, h) => {
+      const P = {
+        asphalt: { base: '#4c4852', lo: '#3a3640', hi: '#6a6670', agg: 0.9, joints: 0, stones: 0 },
+        plaza: { base: '#6a5f66', lo: '#564c54', hi: '#827880', agg: 0.5, joints: 0, stones: 128 },
+        concrete: { base: '#76868e', lo: '#62727a', hi: '#90a0a8', agg: 0.4, joints: 512, stones: 0, wet: 1 },
+        bay: { base: '#6c6860', lo: '#5a564e', hi: '#86827a', agg: 0.6, joints: 512, stones: 0 },
+        auction: { base: '#8c9294', lo: '#7a8082', hi: '#a4aaac', agg: 0.35, joints: 256, stones: 0, wet: 0.6 },
+      }[kind];
+      const wrap = (f) => { for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) { c.save(); c.translate(ox, oy); f(); c.restore(); } };
+      c.fillStyle = P.base; c.fillRect(0, 0, w, h);
+      // paving stones with gaps and per-stone tone
+      if (P.stones) for (let y = 0; y < h; y += P.stones) for (let x = 0; x < w; x += P.stones) {
+        const off = (y / P.stones) % 2 ? P.stones / 2 : 0;
+        c.fillStyle = Math.random() < 0.5 ? P.lo : P.hi; c.globalAlpha = 0.25 + Math.random() * 0.25; c.fillRect((x + off) % w, y, P.stones - 6, P.stones - 6); c.globalAlpha = 1;
+        c.fillStyle = 'rgba(20,14,22,0.55)'; c.fillRect((x + off + P.stones - 6) % w, y, 6, P.stones); c.fillRect((x + off) % w, y + P.stones - 6, P.stones, 6);
+      }
+      // broad mottling
+      for (let i = 0; i < 70; i++) {
+        const x = Math.random() * w, y = Math.random() * h, r = rnd(60, 220), dark = Math.random() < 0.55;
+        wrap(() => { const gr = c.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, dark ? 'rgba(10,8,16,0.13)' : 'rgba(255,255,255,0.07)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(x - r, y - r, r * 2, r * 2); });
+      }
+      // oil / water stains
+      for (let i = 0; i < 9; i++) {
+        const x = Math.random() * w, y = Math.random() * h, r = rnd(30, 90);
+        wrap(() => { c.fillStyle = 'rgba(14,10,20,0.12)'; c.beginPath(); for (let k = 0; k <= 12; k++) { const a = k / 12 * Math.PI * 2, rr = r * rnd(0.7, 1.15); c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.7); } c.fill(); });
+      }
+      // wet sheen (the market floor is hosed down all day)
+      if (P.wet) for (let i = 0; i < 14; i++) {
+        const x = Math.random() * w, y = Math.random() * h, r = rnd(50, 160);
+        wrap(() => { const gr = c.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(170,205,230,' + 0.13 * P.wet + ')'); gr.addColorStop(1, 'rgba(170,205,230,0)'); c.fillStyle = gr; c.fillRect(x - r, y - r, r * 2, r * 2); });
+      }
+      // aggregate: fine stones in the surface
+      const n = Math.round(26000 * P.agg);
+      for (let i = 0; i < n; i++) { const v = Math.random(); c.fillStyle = v < 0.45 ? P.lo : v < 0.9 ? P.hi : 'rgba(255,255,255,0.35)'; const sz = Math.random() < 0.9 ? 2 : 3; c.fillRect(Math.random() * w, Math.random() * h, sz, sz); }
+      // cracks
+      c.strokeStyle = 'rgba(16,12,20,0.45)'; c.lineCap = 'round';
+      for (let i = 0; i < 7; i++) {
+        let x = Math.random() * w, y = Math.random() * h, a = Math.random() * 6.28; const pts = [[x, y]];
+        for (let k = 0; k < 22; k++) { a += rnd(-0.6, 0.6); x += Math.cos(a) * 9; y += Math.sin(a) * 9; pts.push([x, y]); }
+        wrap(() => { c.lineWidth = rnd(1, 2.2); c.beginPath(); pts.forEach(([px, py], k) => (k ? c.lineTo(px, py) : c.moveTo(px, py))); c.stroke(); });
+      }
+      // expansion joints (cut lines with a lit edge)
+      if (P.joints) for (let t = 0; t < w; t += P.joints) {
+        c.fillStyle = 'rgba(20,24,30,0.6)'; c.fillRect(t, 0, 3, h); c.fillRect(0, t, w, 3);
+        c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(t + 3, 0, 2, h); c.fillRect(0, t + 3, w, 2);
+      }
+    });
+  }
+  function groundMat(kind, w, d) {
+    const t = groundTex(kind).clone(); t.needsUpdate = true;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(w / 4, d / 4); t.anisotropy = 8;
+    return new THREE.MeshBasicMaterial({ map: t });
+  }
+
+  // ---------------------------------------------------------------- instanced batches (many small things, one draw)
+  function batch(scene, geo, material, th) {
+    const L = [];
+    return { add(x, y, z, rx, ry, rz, sx, sy, sz) { L.push(M4(x, y, z, rx, ry, rz, sx, sy, sz)); },
+      done() { if (!L.length) return; const m = new THREE.InstancedMesh(geo, material, L.length); L.forEach((M, i) => m.setMatrixAt(i, M)); scene.add(m);
+        if (th) { const o = new THREE.InstancedMesh(geo, W.mesh(geo, material, th).children[0].material, L.length); L.forEach((M, i) => o.setMatrixAt(i, M)); scene.add(o); } } };
+  }
+
+  // ---------------------------------------------------------------- a fishmonger's stall
+  // counter of dark planks with a steel rim, a tilted ice bed facing the aisle, sections of goods, price cards
+  const plankTex = () => tex('planks', 256, 256, (c, w, h) => {
+    for (let i = 0; i < 8; i++) { wood(c, i * 32, 0, 32, h, ['#5a3a22', '#4e321e', '#63402a', '#553620'][i % 4], '#2a1a0e', i); c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(i * 32, 0, 2, h); }
+    c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(0, h - 26, w, 26);
+  });
+  const cardTex = (txt, price) => tex('card' + txt + price, 128, 96, (c, w, h) => {
+    c.fillStyle = '#fbf6e8'; c.fillRect(0, 0, w, h); c.strokeStyle = '#c8231d'; c.lineWidth = 5; c.strokeRect(3, 3, w - 6, h - 6);
+    c.fillStyle = '#1a1014'; c.textAlign = 'center'; c.font = '34px "Dela Gothic One", sans-serif'; c.fillText(txt, w / 2, 42);
+    c.fillStyle = '#c8231d'; c.font = '800 28px "Barlow Condensed", sans-serif'; c.fillText('¥' + price, w / 2, 82);
+  });
+  let SB = null;
+  function stallKit(scene) {
+    if (SB) return SB;
+    const shell = batch(scene, new THREE.SphereGeometry(1, 8, 6), S.toon(0x2a2430, { shade: 0x0e0a12, spec: 0.6, rimAmt: 0.5 }), 0);
+    const shrimp = batch(scene, new THREE.TorusGeometry(0.05, 0.022, 5, 8, Math.PI * 1.2), S.toon(0xf07a4a, { shade: 0x8a3020, spec: 0.4 }), 0);
+    const saku = batch(scene, new THREE.BoxGeometry(1, 1, 1), S.toon(0xd8323a, { shade: 0x7a1020, spec: 0.7, rimAmt: 0.4 }), 0.008);
+    const tray = batch(scene, new THREE.BoxGeometry(1, 1, 1), S.toon(0xf4f4f0, { shade: 0xa0a8b0 }), 0.008);
+    const tako = batch(scene, new THREE.SphereGeometry(1, 10, 8), S.toon(0xb83a4a, { shade: 0x5a1222, spec: 0.5, rimAmt: 0.5 }), 0.01);
+    SB = { shell, shrimp, saku, tray, tako, done() { for (const k of ['shell', 'shrimp', 'saku', 'tray', 'tako']) SB[k].done(); SB = null; } };
+    return SB;
+  }
+  function stall(g, fishes, x, z0, z1, sd, k, table) {
+    const len = Math.abs(z1 - z0), zc = (z0 + z1) / 2, za = Math.min(z0, z1), kit = stallKit(g);
+    const steel = S.toon(0xb8c2cc, { shade: 0x4a5662, spec: 0.7, rimAmt: 0.5 });
+    if (!table) { const body = W.mesh(new THREE.BoxGeometry(1.7, 0.86, len), mat(plankTex(), 0x6a5060), 0.025); body.position.set(x, 0.43, zc); g.add(body); }
+    else { // an open stainless table: legs, a lower shelf stacked with foam boxes
+      const parts = [], n = Math.max(2, Math.round(len / 2) + 1);
+      for (let i = 0; i < n; i++) for (const dx of [-0.75, 0.75]) parts.push({ geo: new THREE.BoxGeometry(0.06, 0.84, 0.06), m: M4(x + dx, 0.42, za + 0.1 + i * (len - 0.2) / (n - 1)) });
+      parts.push({ geo: new THREE.BoxGeometry(1.56, 0.04, len - 0.1), m: M4(x, 0.2, zc) });
+      g.add(W.mesh(merge(parts), S.toon(0x8a96a2, { shade: 0x2e3842, spec: 0.5 }), 0.01));
+      for (let i = 0; i < Math.floor(len / 0.75); i++) { const b = prop('foam'); b.children.forEach((c2) => { if (c2.rotation.x) c2.visible = false; }); b.position.set(x + (i % 2 ? 0.35 : -0.35), 0.22, za + 0.4 + i * 0.75); b.rotation.y = Math.PI / 2; g.add(b); }
+    }
+    const rim = W.mesh(new THREE.BoxGeometry(1.8, 0.07, len + 0.08), steel, 0.012); rim.position.set(x, 0.88, zc); g.add(rim);
+    // tilted ice bed: high at the back, low at the aisle (flat on a table you can walk round)
+    const tilt = table ? 0 : sd * 0.16, ice = W.mesh(new THREE.BoxGeometry(1.55, 0.16, len - 0.16), iceMat(), 0.0); ice.position.set(x, 0.99, zc); ice.rotation.z = tilt; g.add(ice);
+    const yAt = (dx) => 1.07 + Math.tan(tilt) * dx; // surface height, dx = offset across the counter
+    // goods, in sections along the counter
+    const secs = Math.max(1, Math.round(len / 1.0)), sl = len / secs;
+    const kinds = ['fish', 'fish', 'saku', 'shell', 'fish', 'tako', 'shrimp'];
+    for (let s = 0; s < secs; s++) {
+      const kind = kinds[(s + k * 3) % kinds.length], zs = za + (s + 0.5) * sl;
+      if (kind === 'fish') {
+        const sp = ['maguro', 'tai', 'saba', 'sake'][(s + k) % 4], n = Math.max(2, Math.floor(sl / 0.2));
+        for (let i = 0; i < n; i++) for (const dx of [-0.42, 0.0, 0.42]) {
+          const zz = za + s * sl + (i + 0.5) * sl / n;
+          fishes.add(sp, x + dx, yAt(dx) + 0.02, zz, (table ? (dx < 0 ? 1 : -1) : -sd) * Math.PI / 2 + rnd(-0.08, 0.08), 0.26);
+        }
+      } else {
+        // a white tray per section
+        kit.tray.add(x, yAt(0) + 0.02, zs, 0, 0, tilt, 1.2, 0.05, sl * 0.8);
+        if (kind === 'saku') for (let i = 0; i < 8; i++) kit.saku.add(x + rnd(-0.45, 0.45), yAt(0) + 0.08, zs + rnd(-0.32, 0.32) * sl, 0, rnd(-0.3, 0.3), tilt, 0.26, 0.07, 0.11);
+        if (kind === 'shell') for (let i = 0; i < 36; i++) { const dx = rnd(-0.5, 0.5); kit.shell.add(x + dx, yAt(dx) + 0.07, zs + rnd(-0.36, 0.36) * sl, 0, rnd(0, 6), 0, 0.07, 0.035, 0.05); }
+        if (kind === 'shrimp') for (let i = 0; i < 30; i++) { const dx = rnd(-0.5, 0.5); kit.shrimp.add(x + dx, yAt(dx) + 0.07, zs + rnd(-0.36, 0.36) * sl, Math.PI / 2, rnd(0, 6), 0, 1, 1, 1); }
+        if (kind === 'tako') for (let i = 0; i < 3; i++) { const dx = -0.35 + i * 0.35; kit.tako.add(x + dx, yAt(dx) + 0.12, zs + rnd(-0.1, 0.1), 0, 0, 0, 0.17, 0.12, 0.17); for (let l = 0; l < 6; l++) { const a = l / 6 * Math.PI * 2; kit.tako.add(x + dx + Math.cos(a) * 0.2, yAt(dx) + 0.06, zs + Math.sin(a) * 0.2, 0, -a, 0, 0.12, 0.035, 0.04); } }
+      }
+      // a price card stuck in the ice, facing the aisle and the camera
+      if (s % 2 === 0) {
+        const nm = { fish: '鮮魚', saku: '鮪', shell: '貝', tako: '蛸', shrimp: '海老' }[kind], pr = [380, 580, 800, 1200, 1500][(s + k) % 5];
+        const cd = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.22), new THREE.MeshBasicMaterial({ map: cardTex(nm, pr), side: THREE.DoubleSide }));
+        const cs = table ? (s % 4 ? 1 : -1) : sd; cd.position.set(x - cs * 0.62, yAt(-cs * 0.62) + 0.2, zs + sl * 0.3); cd.rotation.set(-0.55, 0, 0); g.add(cd);
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- awning: curved striped canvas, scalloped valance, steel frame
   // placed along z from z0..z1, x is its back edge; sd = which side of the street (it slopes toward -sd*x)
   function awning(g, x, z0, z1, sd, c1, c2, opt) {
@@ -307,5 +437,5 @@
     return { fx, fy };
   }
 
-  S.CampArt = { prop, awning, fishBatch, iceMat, merge, M4, tex, mat };
+  S.CampArt = { prop, awning, fishBatch, iceMat, merge, M4, tex, mat, groundMat, batch, stall, stallKit };
 })();

@@ -128,7 +128,7 @@
         '<div class="ch-boss"><b></b><span class="ch-bar"><i></i></span></div><div class="ch-bars"></div>' +
         '<div class="ch-card"><div class="ch-cap"></div><b></b><span></span><em>K or SPACE to keep it</em></div>' +
         '<div class="ch-pause"><h2>PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART AREA</button><button data-c="quit">QUIT TO TITLE</button><p>J slap ×3 · K grab / throw · L parry · L+dir dodge, hold to CHARGE · SPACE ability</p></div>' +
-        '<div class="ch-over"><h2></h2><p></p><button data-c="retry">TRY AGAIN</button><button data-c="quit">QUIT TO TITLE</button></div>';
+        '<div class="ch-over"><h2></h2><p></p><button data-c="retry">TRY AGAIN <kbd>J</kbd></button><button data-c="quit">QUIT TO TITLE <kbd>K</kbd></button></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
       this.el = (s) => h.querySelector(s);
@@ -145,7 +145,7 @@
     onKey(e) {
       if (e.code === 'Escape' || e.code === 'KeyP') { if (this.over) return; this.setPause(!this.paused); return true; }
       if (this.paused) { if (e.code === 'KeyR') this.command('retry'); else if (e.code === 'KeyQ') this.command('quit'); else if (e.code === 'Enter' || e.code === 'KeyJ') this.command('resume'); return true; }
-      if (this.over) { if (e.code === 'Enter' || e.code === 'KeyJ' || e.code === 'KeyR') this.command(this.over === 'win' ? 'quit' : 'retry'); else if (e.code === 'KeyQ' || e.code === 'Escape') this.command('quit'); return true; }
+      if (this.over) { if (!this.el('.ch-over').classList.contains('on')) return true; if (e.code === 'Enter' || e.code === 'KeyJ' || e.code === 'KeyR' || e.code === 'Space') this.command(this.over === 'win' ? 'quit' : 'retry'); else if (e.code === 'KeyK' || e.code === 'KeyQ' || e.code === 'Escape') this.command('quit'); return true; }
       return false;
     }
 
@@ -158,10 +158,16 @@
         else {
           const ts = this.slow > 0 ? 0.35 : 1; if (this.slow > 0) this.slow -= dt;
           this.acc += dt * ts; let n = 0;
-          while (this.acc >= STEP && n < 12) { this.ctrl.update(STEP); this.step(STEP); S.kb.flush && 0; this.acc -= STEP; n++; }
+          while (this.acc >= STEP && n < 12) { this.ctrl.update(STEP);
+            if (this.overT > 0.4 && (this.ctrl.push.pressed || this.ctrl.grab.pressed)) { const q = this.ctrl.grab.pressed; this.acc = 0; this.command(q || this.over === 'win' ? 'quit' : 'retry'); return; }
+            this.step(STEP); S.kb.flush && 0; this.acc -= STEP; n++; }
           if (n >= 12) this.acc = 0;
         }
       } else if (this.cardOpen) { this.ctrl.update(dt); if (this.ctrl.grab.pressed || this.ctrl.skill.pressed || this.ctrl.push.pressed) this.closeCard(); }
+      // the result screen answers the slap button however it's mapped (keys, pad, phone): J = try again / continue, K = quit
+      if (this.over && this.el('.ch-over').classList.contains('on')) {
+        this.overT = (this.overT || 0) + dt;
+      } else this.overT = 0;
       S.kb.flush();
       this.draw(dt);
       void g;
@@ -365,7 +371,7 @@
         // TECHNICAL: predictable spam gets parried
         if (A === this.P && T.kind === 'technical' && !['wind', 'act', 'down', 'getup'].includes(T.st)) {
           T.hitLog = T.hitLog.filter((h) => this.t - h < 1.3);
-          if (T.hitLog.length >= 2) { this.parried(A, T); T.hitLog = []; continue; }
+          if (T.hitLog.length >= 1) { this.parried(A, T); T.hitLog = []; continue; }
           T.hitLog.push(this.t);
         }
         const mul = (A.giant > 0 ? 1.6 : 1) * (T.stun > 0 || T.st === 'dazed' ? 1.5 : 1);
@@ -462,6 +468,11 @@
         if (T.giant > 0) { heavy = false; kx *= 0.3; kz *= 0.3; }
       }
       const slick = this.onPuddle(T);
+      // market workers go down in two real hits (the first staggers them); the sumo and the boss use health
+      if (T.team === 1 && T.kind !== 'sumo' && T.kind !== 'boss' && dmg > 0) {
+        T.hits = (T.hits || 0) + (dmg >= 5 ? 1 : dmg / 12);
+        dmg = T.hits >= 2 ? T.hp + 1 : Math.min(dmg, T.hp * 0.5);
+      }
       T.hp -= dmg; T.lastHit = this.t;
       if (A && A !== T) { T.hitX = T.x - A.x; T.hitZ = T.z - A.z; } else { T.hitX = kx; T.hitZ = kz; }
       if (A && T.st === 'held' && A !== T.holder) { /* hit while held */ }
@@ -514,7 +525,7 @@
         case 'free': case 'approach': {
           face(toP);
           const token = this.hasToken(E);
-          const want = { fighter: 1.0, rusher: 4.5, technical: 1.0, grappler: 0.9, thrower: 6, staff: 1.9, commander: 2.6, sumo: 1.4 }[E.kind];
+          const want = { fighter: 1.0, rusher: 1.0, technical: 1.0, grappler: 0.9, thrower: 6, staff: 1.9, commander: 2.6, sumo: 1.4 }[E.kind];
           if (E.kind === 'thrower') { // keep the distance, step away when you get close
             if (d < 4) go(E.x - dx, E.z - dz, sp); else if (d > 8) go(P.x, P.z, sp); else this.strafe(E, toP, sp * 0.5);
             if (E.cd <= 0 && d < 11 && token) this.begin(E, 'bottle', 0.55);
@@ -530,7 +541,7 @@
           if (d > want + 0.2) go(P.x, P.z, sp);
           if (E.cd <= 0 && d < want + 0.8) {
             const roll = Math.random();
-            if (E.kind === 'rusher') this.begin(E, d > 2.5 ? 'rush' : 'jab', d > 2.5 ? 0.5 : 0.36);
+            if (E.kind === 'rusher') { this.begin(E, 'jab', 0.3); E.flurry = 1; }
             else if (E.kind === 'grappler') this.begin(E, roll < 0.7 ? 'grab' : 'jab', roll < 0.7 ? 0.48 : 0.4);
             else if (E.kind === 'staff') this.begin(E, 'sweep', 0.7);
             else if (E.kind === 'sumo') this.begin(E, d > 3 ? 'charge' : 'slap', d > 3 ? 0.75 : 0.5);
@@ -626,6 +637,7 @@
           if (!E.hitDone) { E.hitDone = true; this.popAt(E, 'GET HIM!'); this.fx.ring(E.x, E.z, 7, 0.6); this.g.audio.clap(); for (const a of this.actors) if (a.team === 1 && !a.dead && a !== E) a.cd = Math.min(a.cd, 0.2); }
           break;
       }
+      if (E.st === 'act' && E.t >= E.dur && E.flurry > 0 && E.atk === 'jab' && !E.dead) { E.flurry--; this.begin(E, 'jab', 0.16); return; }
       if (E.st === 'act' && E.t >= E.dur) this.set(E, 'recover', E.atk === 'rush' ? 0.85 : E.atk === 'charge' ? 0.9 : E.atk === 'sweep' ? 0.6 : 0.35);
     }
 
@@ -967,14 +979,8 @@
       const A = this.ability; this.el('.ch-ab').classList.toggle('ready', !!A && this.abCd <= 0);
       this.el('.ch-cd i').style.width = A ? (100 * (1 - Math.max(0, this.abCd) / A.cd)) + '%' : '0%';
       if (this.B) this.el('.ch-boss .ch-bar i').style.width = Math.max(0, this.B.hp / this.B.maxHp * 100) + '%';
-      // small health bars over hurt enemies
-      const bars = this.el('.ch-bars'); let i = 0;
-      for (const a of this.actors) {
-        if (a.team !== 1 || a.dead || a.kind === 'boss' || a.hp >= a.maxHp) continue;
-        let b = this.barEls[i]; if (!b) { b = document.createElement('span'); b.innerHTML = '<i></i>'; bars.appendChild(b); this.barEls.push(b); }
-        const p = this.project(a.x, 2.1 * (a.size || 1) * (a.fat ? 1.05 : 1), a.z);
-        b.style.display = ''; b.style.left = p.x + 'px'; b.style.top = p.y + 'px'; b.firstChild.style.width = (a.hp / a.maxHp * 100) + '%'; i++;
-      }
+      // no floating health bars over enemies (workers go down in two hits; the boss has his bar up top)
+      let i = 0;
       for (; i < this.barEls.length; i++) this.barEls[i].style.display = 'none';
       if (this.flash > 0) { this.flash -= 0.05; document.body.style.setProperty('--campFlash', this.flash); }
     }
@@ -1060,7 +1066,7 @@
         return { sh, el, sd };
       });
       if (K.pole) { const p = add(this.arms[1].el, new THREE.CylinderGeometry(0.035, 0.035, 2.4, 8), M(0xc8a070, 0x6a4a2a), 0, -1.05, 0.04, 1, 1, 1, 0.012); add(p, SG, M(0x3a3a40, 0x101014), 0.06, -1.15, 0, 0.16, 0.08, 0.06, 0.01); p.userData.acc = true; }
-      if (kind === 'thrower') add(this.arms[1].el, new THREE.CylinderGeometry(0.05, 0.06, 0.22, 10), M(0x3a9a5a, 0x1a4a2a, { spec: 0.5 }), 0, -0.4, 0.06, 1, 1, 1, 0.01).userData.acc = true;
+      if (kind === 'thrower') { const bt = this.bottle = add(this.arms[1].el, new THREE.CylinderGeometry(0.045, 0.055, 0.24, 10), M(0x3a9a5a, 0x1a4a2a, { spec: 0.5 }), 0, -0.56, 0.02, 1, 1, 1, 0.01); bt.userData.acc = true; add(bt, new THREE.CylinderGeometry(0.018, 0.026, 0.1, 8), M(0x3a9a5a, 0x1a4a2a), 0, 0.15, 0, 1, 1, 1, 0.008); } // held by the neck, clear of the fist
       if (K.coat) { const mg = add(this.arms[0].el, new THREE.ConeGeometry(0.11, 0.28, 12, 1, true), M(0xf6f2ea, 0x9a9080), 0, -0.45, 0.09, 1, 1, 1, 0.01); mg.rotation.x = -Math.PI / 2; mg.userData.acc = true; }
       // legs: work trousers and round rubber boots, a real knee so they can bend and fold
       this.legs = [-1, 1].map((sd) => {
@@ -1100,15 +1106,15 @@
     pose(a, T) {
       const st = a.st, sp = Math.hypot(a.vx, a.vz), mv = Math.min(1, sp / 2.4), k = a.dur ? clamp(a.t / a.dur, 0, 1) : 0;
       const ez = (x) => x * x * (3 - 2 * x), back = (x) => { const c = 1.9; x = clamp(x, 0, 1) - 1; return 1 + (c + 1) * x * x * x + c * x * x; };
-      const P = { y: 0.9, lean: 0, roll: 0, tw: 0, hx: 0, hz: 0, aR: [-0.55, 0, -0.15], eR: -1.7, aL: [-0.55, 0, 0.15], eL: -1.7, lL: 0, kL: 0.15, lR: 0, kR: 0.15 };
+      const P = { y: 0.9, lean: 0, roll: 0, tw: 0, hx: 0, hz: 0, aR: [0.06, 0, -0.12], eR: -0.3, aL: [0.06, 0, 0.12], eL: -0.3, lL: 0, kL: 0.15, lR: 0, kR: 0.15 }; // arms hang relaxed
       const mix = (A, B, w) => { const o = {}; for (const key in A) o[key] = Array.isArray(A[key]) ? A[key].map((v, i) => v + (B[key][i] - v) * w) : A[key] + (B[key] - A[key]) * w; return o; };
       // idle and walking: guard up, knees soft, a little breath
       const cyc = this.walk, sw = Math.sin(cyc);
       P.y = 0.88 + Math.sin(T * 2.2 + this.ph) * 0.012 - Math.abs(Math.cos(cyc)) * 0.04 * mv - 0.02;
       P.lL = sw * 0.75 * mv; P.lR = -sw * 0.75 * mv;
       P.kL = 0.15 + Math.max(0, Math.sin(cyc + 1.6)) * 1.0 * mv; P.kR = 0.15 + Math.max(0, Math.sin(cyc + 1.6 + Math.PI)) * 1.0 * mv;
-      P.aR[0] += -sw * 0.35 * mv; P.aL[0] += sw * 0.35 * mv; P.lean = 0.08 * mv; P.tw = sw * 0.12 * mv;
-      if (a.kind === 'staff' || a.kind === 'thrower') { P.aR = [-0.25 + -sw * 0.3 * mv, 0, -0.1]; P.eR = -0.5; }
+      P.aR[0] += -sw * 0.45 * mv; P.aL[0] += sw * 0.45 * mv; P.eR -= 0.25 * mv; P.eL -= 0.25 * mv; P.lean = 0.08 * mv; P.tw = sw * 0.12 * mv;
+      if (a.kind === 'staff') { P.aR = [-0.25 + -sw * 0.3 * mv, 0, -0.1]; P.eR = -0.5; }
       if (a.kind === 'commander') { P.aL = [0.1, 0, 0.25]; P.eL = -0.3; }
       let rate = 16;
       if (st === 'wind' || st === 'act') {
@@ -1179,13 +1185,14 @@
       if (rag && !rd.on) {
         this.root.updateMatrixWorld(true);
         if (lifted) rd.start(new THREE.Vector3());
-        else if (st === 'thrown') rd.start(new THREE.Vector3(a.vx, a.vy || 2, a.vz), { spin: 2.4, ax: a.vx / (sp || 1), az: a.vz / (sp || 1) });
-        else { const fx = a.fallX || -Math.cos(a.f), fz = a.fallZ || -Math.sin(a.f), fl = Math.hypot(fx, fz) || 1; rd.start(new THREE.Vector3(a.vx * 0.8, 1.2, a.vz * 0.8), { push: new THREE.Vector3(fx / fl * 3.2, 0, fz / fl * 3.2) }); }
+        else if (st === 'thrown') rd.start(new THREE.Vector3(a.vx, a.vy || 2, a.vz), { spin: 1.3, ax: a.vx / (sp || 1), az: a.vz / (sp || 1) });
+        else { const fx = a.fallX || -Math.cos(a.f), fz = a.fallZ || -Math.sin(a.f), fl = Math.hypot(fx, fz) || 1; rd.start(new THREE.Vector3(a.vx * 0.8, 0.8, a.vz * 0.8), { push: new THREE.Vector3(fx / fl * 2.6, 0, fz / fl * 2.6), limp: a.dead }); }
         this.snap = null;
       }
-      if (rd.on && st === 'thrown' && this.wasLifted) { rd.pin(null); rd.kick(new THREE.Vector3(a.vx, a.vy || 3, a.vz), { spin: 2.4, ax: a.vx / (sp || 1), az: a.vz / (sp || 1) }); }
+      if (rd.on && st === 'thrown' && this.wasLifted) { rd.pin(null); rd.kick(new THREE.Vector3(a.vx, a.vy || 3, a.vz), { spin: 1.3, ax: a.vx / (sp || 1), az: a.vz / (sp || 1) }); }
       this.wasLifted = lifted;
       if (rd.on && !rag) { // back to our feet: blend out of wherever the body ended up
+        const pel = rd.P('pelvis').x; if (!lifted && this.walls) { a.x = pel.x; a.z = pel.z; this.root.position.set(a.x, a.y || 0, a.z); } // get up where the body lies
         this.snap = { q: this.rdBones.map((o) => o.quaternion.clone()), hp: this.hips.position.clone(), face: rd.facing(), side: Math.random() < 0.5 ? 1 : -1, t: 0, dur: st === 'getup' ? a.dur : 0.3, getup: st === 'getup' };
         rd.stop();
       }
@@ -1225,6 +1232,7 @@
         this.shadow.position.set(a.x, 0.014, a.z);
       }
       this.shadow.visible = !a.gone;
+      if (this.bottle) this.bottle.visible = !(a.atk === 'bottle' && (st === 'act' || st === 'recover')); // it's in the air now
       // hit flash and ice tint
       this.lastHp = a.hp; this.flashT = Math.max(0, this.flashT - dt * 7);
       for (const m of this.mats) { const fr = a.frozen > 0; m.uniforms.uFlashCol.value.set(fr ? 0x9fe6ff : a.burn ? 0xff7a1a : 0xffffff); m.uniforms.uFlash.value = fr ? 0.55 : this.flashT * 0.7; }
