@@ -95,7 +95,7 @@
     if (th > 0) m.add(new THREE.Mesh(geo, outlineMat(th, olColor)));
     return m;
   }
-  S.toon = toon; S.R3 = { mesh: (...a) => mesh(...a), canvasTex: (...a) => canvasTex(...a), GEO: null };
+  S.toon = toon; S.R3 = { mesh: (...a) => mesh(...a), canvasTex: (...a) => canvasTex(...a), GEO: null, SH, OL_FS };
 
   const GEO = {
     sphere: new THREE.SphereGeometry(1, 28, 18),

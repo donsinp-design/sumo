@@ -45,6 +45,9 @@
   function build(scene) {
     const g = new THREE.Group(); scene.add(g);
     const walls = [], props = [], puddles = [], decor = [];
+    const A = S.CampArt, fishes = A.fishBatch(g), ice = A.iceMat();
+    const woodM = A.mat(A.tex('counter', 256, 128, (c, w, h) => { c.fillStyle = '#7a4a2a'; c.fillRect(0, 0, w, h); for (let i = 0; i < 6; i++) { c.fillStyle = i % 2 ? '#8a5a34' : '#6e4224'; c.fillRect(0, i * h / 6 + 2, w, h / 6 - 4); } c.fillStyle = 'rgba(0,0,0,0.25)'; for (let x = 0; x < w; x += 64) c.fillRect(x, 0, 3, h); }), 0x6a5060);
+    const tbox = (m, w, h, d, x, y, z, ol) => { const o = W.mesh(W.GEO.box, m, ol === undefined ? 0.02 : ol); o.scale.set(w, h, d); o.position.set(x, y, z); g.add(o); return o; };
     const wall = (x0, x1, z0, z1) => walls.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) });
     const prop = (type, x, z, ry) => props.push({ type, x, z, ry: ry || 0 });
     const puddle = (x, z, r, sx) => puddles.push({ x, z, r, sx: sx || 1 });
@@ -85,7 +88,7 @@
     // ================================================================ 2. OUTDOOR STREET  (z -12 .. -48)
     floor(g, 18, 36, 0, -30, ground('#58525c', ['#4a454f', '#68616c'], (c, w, h) => {
       c.strokeStyle = 'rgba(30,26,34,0.5)'; c.lineWidth = 3; for (let i = 1; i < 9; i++) { c.beginPath(); c.moveTo(0, i * h / 9); c.lineTo(w, i * h / 9); c.stroke(); }
-      c.fillStyle = '#2a2630'; for (let i = 0; i < 6; i++) c.fillRect(w * 0.48, i * h / 6 + 20, w * 0.04, 26); // gutter grates
+      for (let i = 0; i < 6; i++) { const gx = w * 0.475, gy = i * h / 6 + 20, gw = w * 0.05, gh = 26; c.fillStyle = '#6a6470'; c.fillRect(gx - 2, gy - 2, gw + 4, gh + 4); c.fillStyle = '#26222c'; c.fillRect(gx, gy, gw, gh); c.fillStyle = '#7a7480'; for (let b = 1; b < 6; b++) c.fillRect(gx, gy + b * gh / 6, gw, 2); } // gutter grates
     }));
     // building fronts along both sides (the street's walls)
     wall(-11, -7.2, -12, -48); wall(7.2, 11, -12, -48);
@@ -94,15 +97,15 @@
     const awningCols = [[0xe2322b, 0xf6eddc], [0x2f6fd0, 0xf6eddc], [0xf2c14e, 0x3a2c34], [0x2e9e6a, 0xf6eddc]];
     const stall = (sd, z0, z1, k) => {
       const x = sd * 6.1, zc = (z0 + z1) / 2, len = Math.abs(z1 - z0);
-      box(g, 1.7, 0.9, len, 0x8a5a3a, 0x4a2a1a, x, 0.45, zc, 0.025);              // counter
-      box(g, 1.5, 0.12, len - 0.3, 0xdff4ff, 0x88a8c8, x, 0.95, zc, 0.0);         // crushed ice
-      for (let i = 0; i < Math.floor(len / 0.55); i++) {                         // fish on ice
-        const f = W.mesh(W.GEO.sphere, S.toon([0x9ab0c8, 0xe86a4a, 0xc8d0dc, 0x6a8aa8][(i + k) % 4], { shade: 0x4a5a7a, spec: 0.6 }), 0.012);
-        f.scale.set(0.12, 0.07, 0.32); f.position.set(x + (i % 2 ? 0.25 : -0.25), 1.04, z0 - 0.3 - i * 0.55); f.rotation.y = 0.3 * (i % 2 ? 1 : -1); g.add(f);
+      tbox(woodM, 1.7, 0.9, len, x, 0.45, zc, 0.025);                             // counter
+      tbox(ice, 1.5, 0.14, len - 0.3, x, 0.96, zc, 0.0);                          // crushed ice
+      for (let i = 0; i < Math.floor((len - 0.4) / 0.42); i++) for (const r of [-0.35, 0.05, 0.42]) {   // fish laid out on the ice, heads to the aisle
+        if (Math.random() < 0.15) continue;
+        fishes.addRandom(x + r + (Math.random() - 0.5) * 0.08, 1.07, Math.min(z0, z1) + 0.35 + i * 0.42 + (Math.random() - 0.5) * 0.1, -sd * Math.PI / 2 + (Math.random() - 0.5) * 0.4, 0.17 + Math.random() * 0.04);
       }
       const [c1, c2] = awningCols[k % awningCols.length];
-      for (let i = 0; i < 6; i++) box(g, 2.2, 0.08, len / 6, i % 2 ? c1 : c2, 0x3a2a30, x - sd * 0.15, 2.45 - 0.0, z0 + (i + 0.5) * (z1 - z0) / 6, 0.012).rotation.z = sd * 0.28;
-      for (const zz of [z0, z1]) cyl(g, 0.06, 0.06, 2.4, 0x5a4a3a, 0x2a1a10, x - sd * 0.9, 1.2, zz, 6, 0.01);
+      const aw = A.awning(g, x + sd * 0.95, z0, z1, sd, c1, c2, { depth: 2.2, y: 2.95, drop: 0.6 });
+      for (const zz of [z0, z1]) cyl(g, 0.04, 0.04, aw.fy, 0x6a6e78, 0x22242c, aw.fx, aw.fy / 2, zz, 6, 0.01);
       wall(x - 0.9, x + 0.9, z0, z1);
     };
     const restaurant = (sd, z0, z1, name, sub, col) => {
@@ -165,9 +168,9 @@
       const zc = (z0 + z1) / 2, len = Math.abs(z1 - z0);
       box(g, 1.6, 0.85, len, 0xc8d0d8, 0x6a7a88, x, 0.425, zc, 0.025);                          // steel tables
       for (let i = 0; i < Math.floor(len / 0.9); i++) {                                         // foam boxes / ice bins on top
-        const zz = z0 - 0.45 - i * 0.9, ice = (i + k) % 3 === 0;
-        box(g, 0.7, 0.32, 0.8, ice ? 0x3fb0e0 : 0xf6f6f0, ice ? 0x1a5a8a : 0xa8b0b8, x + ((i % 2) - 0.5) * 0.7, 1.0, zz, 0.012);
-        if (!ice) { const f = W.mesh(W.GEO.sphere, S.toon([0xe86a4a, 0x9ab0c8, 0xd8b0a0][(i + k) % 3], { shade: 0x4a3a4a, spec: 0.5 }), 0.01); f.scale.set(0.24, 0.07, 0.3); f.position.set(x + ((i % 2) - 0.5) * 0.7, 1.18, zz); g.add(f); }
+        const zz = z0 - 0.45 - i * 0.9, bx = x + ((i % 2) - 0.5) * 0.7, iceBox = (i + k) % 3 === 0;
+        const fb = A.prop('foam'); fb.position.set(bx, 0.85, zz); fb.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.2; fb.children.forEach((c2) => { if (c2.rotation.x) c2.visible = false; }); void iceBox; g.add(fb);
+        for (let f = 0; f < 3; f++) fishes.addRandom(bx + (Math.random() - 0.5) * 0.3, 1.18, zz + (f - 1) * 0.12, Math.PI / 2 + (Math.random() - 0.5) * 0.5, 0.15);
       }
       wall(x - 0.8, x + 0.8, z1, z0);
       // a hanging vendor sign over each segment
@@ -280,8 +283,8 @@
     };
     const pudTexs = [0, 1, 2, 3].map((v) => W.canvasTex(256, 256, (c) => {
       const sd = v * 1.7 + 0.4;
-      c.fillStyle = 'rgba(18,22,40,0.32)'; blob(c, 128, 128, 104, 4, sd); c.fill();                 // the wet stain
-      c.fillStyle = 'rgba(150,196,230,0.42)'; blob(c, 122, 122, 74, 3, sd + 2.1); c.fill();          // sky reflection
+      c.fillStyle = 'rgba(18,22,40,0.16)'; blob(c, 128, 128, 98, 4, sd); c.fill();                 // the wet stain
+      c.fillStyle = 'rgba(120,160,205,0.38)'; blob(c, 126, 126, 88, 4, sd + 0.4); c.fill();          // sky reflection
       c.fillStyle = 'rgba(205,232,250,0.5)'; blob(c, 108, 106, 34, 2, sd + 4.3); c.fill();
       c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineCap = 'round';
       c.lineWidth = 6; c.beginPath(); c.moveTo(78, 112); c.lineTo(126, 92); c.stroke();               // glints
@@ -304,6 +307,7 @@
     // how wide the walkable space is at a depth (camera keeps it framed)
     const halfWidth = (z) => (z > -12 ? 9 : z > -48 ? 7 : z > -100 ? 12 : z > -112 ? 10 : 13);
 
+    fishes.done();
     return {
       group: g, walls, props, puddles, zones, gacha, start: { x: 0, z: -0.5 }, halfWidth, decor,
       update(t) {

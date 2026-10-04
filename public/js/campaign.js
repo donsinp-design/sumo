@@ -108,7 +108,7 @@
           squash: 0, bal: 1, tx: 0, tz: 0, power: 0, pre: null, preT: 0, hand: 0, windPow: 0, charges: 0, uprightT: 0, throatT: 0, lifted: false, down: false,
           fallX: 0, fallZ: 1, clinch: null, slideT: 0, spd: 0, crouchT: 0, lean: 0, gulpI: -1, contact: false, fwdIn: 0, ddx: 0, ddz: 0, boomT: 0 };
         a.size = K.size || 1;
-      } else a.view = new WorkerView(this.scene, kind, a.fat);
+      } else { a.view = new WorkerView(this.scene, kind, a.fat); a.view.walls = this.map.walls; }
       this.actors.push(a);
       return a;
     }
@@ -463,6 +463,7 @@
       }
       const slick = this.onPuddle(T);
       T.hp -= dmg; T.lastHit = this.t;
+      if (A && A !== T) { T.hitX = T.x - A.x; T.hitZ = T.z - A.z; } else { T.hitX = kx; T.hitZ = kz; }
       if (A && T.st === 'held' && A !== T.holder) { /* hit while held */ }
       const resist = clamp(1.6 / (T.mass || 1), 0.12, 1.2) * (slick ? 1.5 : 1);
       if (T.kind === 'boss' && !(T.st === 'dazed')) { kx *= 0.05; kz *= 0.05; heavy = false; }
@@ -472,7 +473,7 @@
       if (T.st === 'held') return;
       if (T === this.P && this.P.held) this.release(this.P);
       const canDown = T.kind !== 'boss' && !(T.kind === 'sumo' && !(T.stun > 0));
-      if ((heavy || (slick && dmg >= 8)) && canDown && !(T.fat && !heavy)) { this.set(T, 'down', T === this.P ? 0.85 : 1.15); T.fallX = kx; T.fallZ = kz; if (T.holdP) this.escapeFrom(T); }
+      if ((heavy || (slick && dmg >= 8)) && canDown && !(T.fat && !heavy)) { this.set(T, 'down', T === this.P ? 0.85 : 1.15); T.fallX = kx || T.hitX; T.fallZ = kz || T.hitZ; if (T.holdP) this.escapeFrom(T); }
       else if (T.kind !== 'boss' && T.kind !== 'sumo') { if (T.holdP) this.escapeFrom(T); if (T.st !== 'act' || heavy) this.set(T, 'hurt', T === this.P ? 0.32 : 0.38); }
       else if (T.kind === 'sumo' && T.st !== 'dazed' && A === this.P) { // too heavy to stagger with one hit, but a full 3-hit string rocks him
         T.hitRun = (T.hitRun || []).filter((h) => this.t - h < 2.5); T.hitRun.push(this.t);
@@ -482,7 +483,7 @@
     ko(T, kx, kz) {
       T.hp = 0;
       if (T === this.P) { T.dead = true; this.set(T, 'down', 99); this.lose(); return; }
-      T.dead = true; this.set(T, 'down', 99); T.fallX = kx || 0; T.fallZ = kz || 1;
+      T.dead = true; this.set(T, 'down', 99); T.fallX = kx || T.hitX || 0; T.fallZ = kz || T.hitZ || 1;
       if (T.holdP) this.escapeFrom(T);
       if (T.holder) { T.holder.held = null; this.set(T.holder, 'free'); T.holder = null; }
       this.g.audio.thump(7);
@@ -547,7 +548,7 @@
         case 'recover': if (E.t >= E.dur) this.set(E, 'free'); break;
         case 'hurt': if (E.t >= E.dur) this.set(E, 'free'); break;
         case 'dazed': if (E.t >= E.dur) this.set(E, 'free'); break;
-        case 'down': if (E.t >= E.dur) this.set(E, 'getup', 0.45); break;
+        case 'down': if (E.t >= E.dur) this.set(E, 'getup', 0.7); break;
         case 'getup': if (E.t >= E.dur) this.set(E, 'free'); break;
         case 'hold': { // a grappler holding you: throw after a beat
           face(toP, 4);
@@ -981,6 +982,7 @@
 
   // ---------------------------------------------------------------- props: simple readable shapes
   function propMesh(type) {
+    if (S.CampArt) return S.CampArt.prop(type);
     const D = PROPS[type], g = new THREE.Group(), M = (c, s) => S.toon(c, { shade: s, rimAmt: 0.35 }), B = S.CampMap.box, C = S.CampMap.cyl;
     switch (type) {
       case 'crate': B(g, 0.66, 0.5, 0.66, D.col, D.shade, 0, 0.25, 0, 0.022); B(g, 0.7, 0.06, 0.7, 0x8a5a2a, 0x4a2a10, 0, 0.5, 0, 0.0); break;
@@ -1057,67 +1059,198 @@
         add(el, SG, skin, 0, -0.33, 0.01, 0.105, 0.1, 0.105, 0.02);
         return { sh, el, sd };
       });
-      if (K.pole) { const p = add(this.arms[1].el, new THREE.CylinderGeometry(0.035, 0.035, 2.4, 8), M(0xc8a070, 0x6a4a2a), 0, -0.33, 0.6, 1, 1, 1, 0.012); p.rotation.x = Math.PI / 2; add(p, SG, M(0x3a3a40, 0x101014), 0, 1.15, 0, 0.16, 0.08, 0.06, 0.01); }
-      if (kind === 'thrower') add(this.arms[1].el, new THREE.CylinderGeometry(0.05, 0.06, 0.22, 10), M(0x3a9a5a, 0x1a4a2a, { spec: 0.5 }), 0, -0.4, 0.06, 1, 1, 1, 0.01);
-      if (K.coat) { const mg = add(this.arms[0].el, new THREE.ConeGeometry(0.11, 0.28, 12, 1, true), M(0xf6f2ea, 0x9a9080), 0, -0.45, 0.09, 1, 1, 1, 0.01); mg.rotation.x = -Math.PI / 2; }
-      // legs: work trousers and round rubber boots
+      if (K.pole) { const p = add(this.arms[1].el, new THREE.CylinderGeometry(0.035, 0.035, 2.4, 8), M(0xc8a070, 0x6a4a2a), 0, -1.05, 0.04, 1, 1, 1, 0.012); add(p, SG, M(0x3a3a40, 0x101014), 0.06, -1.15, 0, 0.16, 0.08, 0.06, 0.01); p.userData.acc = true; }
+      if (kind === 'thrower') add(this.arms[1].el, new THREE.CylinderGeometry(0.05, 0.06, 0.22, 10), M(0x3a9a5a, 0x1a4a2a, { spec: 0.5 }), 0, -0.4, 0.06, 1, 1, 1, 0.01).userData.acc = true;
+      if (K.coat) { const mg = add(this.arms[0].el, new THREE.ConeGeometry(0.11, 0.28, 12, 1, true), M(0xf6f2ea, 0x9a9080), 0, -0.45, 0.09, 1, 1, 1, 0.01); mg.rotation.x = -Math.PI / 2; mg.userData.acc = true; }
+      // legs: work trousers and round rubber boots, a real knee so they can bend and fold
       this.legs = [-1, 1].map((sd) => {
         const hp = new THREE.Group(); hp.position.set(sd * 0.15 * fw, 0, 0); this.hips.add(hp);
-        add(hp, cap(0.115 * (fat ? 1.3 : 1), 0.28), pants, 0, -0.26, 0, 1, 1, 1, 0.022);
-        add(hp, cap(0.105, 0.2), boot, 0, -0.62, 0, 1, 1, 1, 0.022);
-        add(hp, SG, boot, 0, -0.83, 0.06, 0.12, 0.08, 0.19, 0.02);
-        return { hp, sd };
+        add(hp, cap(0.115 * (fat ? 1.3 : 1), 0.28), pants, 0, -0.24, 0, 1, 1, 1, 0.022);
+        const kn = new THREE.Group(); kn.position.y = -0.45; hp.add(kn);
+        add(kn, cap(0.105, 0.2), boot, 0, -0.17, 0, 1, 1, 1, 0.022);
+        add(kn, SG, boot, 0, -0.38, 0.06, 0.12, 0.08, 0.19, 0.02);
+        const ft = new THREE.Object3D(); ft.position.set(0, -0.4, 0.02); kn.add(ft);
+        return { hp, kn, ft, sd };
       });
+      // ragdoll: joint markers and the bones it turns
+      const mk = (p, x, y, z) => { const o = new THREE.Object3D(); o.position.set(x, y, z); p.add(o); return o; };
+      this.neck = mk(this.torso, 0, 0.8, 0);
+      for (const A of this.arms) A.ha = mk(A.el, 0, -0.33, 0);
+      const [L, R] = this.legs, [aL, aR] = this.arms;
+      this.rd = new S.Ragdoll(
+        { pelvis: this.hips, neck: this.neck, head: this.head, shL: aL.sh, elL: aL.el, haL: aL.ha, shR: aR.sh, elR: aR.el, haR: aR.ha,
+          hipL: L.hp, knL: L.kn, ftL: L.ft, hipR: R.hp, knR: R.kn, ftR: R.ft },
+        [{ obj: this.hips, frame: ['pelvis', 'neck', 'hipL', 'hipR'] }, { obj: this.torso, frame: ['pelvis', 'neck', 'shL', 'shR'] }, { obj: this.head, aim: ['neck', 'head'] },
+          { obj: aL.sh, aim: ['shL', 'elL'] }, { obj: aL.el, aim: ['elL', 'haL'] }, { obj: aR.sh, aim: ['shR', 'elR'] }, { obj: aR.el, aim: ['elR', 'haR'] },
+          { obj: L.hp, aim: ['hipL', 'knL'] }, { obj: L.kn, aim: ['knL', 'ftL'] }, { obj: R.hp, aim: ['hipR', 'knR'] }, { obj: R.kn, aim: ['knR', 'ftR'] }]);
+      this.rdBones = this.rd.bones.map((b) => b.obj);
+      // a real skinned body (when loaded): the shapes above become an invisible rig that drives it
+      if (S.Chars && S.Chars.ready) {
+        this.body = new S.Chars.Body(scene, kind, K, fat, Math.floor(Math.random() * 5));
+        this.root.traverse((o) => { if (o.isMesh && !o.userData.acc && !(o.parent && o.parent.userData.acc)) o.visible = false; });
+        this.J = {}; for (const k in this.rd.joints) this.J[k] = new THREE.Vector3();
+      }
       // ground shadow
       this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.45 * fw, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x1a0a20, transparent: true, opacity: 0.4, depthWrite: false }));
       this.shadow.renderOrder = 1; scene.add(this.shadow);
       this.walk = 0; this.mats = [skin, shirt, apron, pants];
       this.flashT = 0; this.lastHp = null;
     }
+    // a full-body pose for this moment: keyframes with anticipation, a fast strike with overshoot, and follow-through
+    pose(a, T) {
+      const st = a.st, sp = Math.hypot(a.vx, a.vz), mv = Math.min(1, sp / 2.4), k = a.dur ? clamp(a.t / a.dur, 0, 1) : 0;
+      const ez = (x) => x * x * (3 - 2 * x), back = (x) => { const c = 1.9; x = clamp(x, 0, 1) - 1; return 1 + (c + 1) * x * x * x + c * x * x; };
+      const P = { y: 0.9, lean: 0, roll: 0, tw: 0, hx: 0, hz: 0, aR: [-0.55, 0, -0.15], eR: -1.7, aL: [-0.55, 0, 0.15], eL: -1.7, lL: 0, kL: 0.15, lR: 0, kR: 0.15 };
+      const mix = (A, B, w) => { const o = {}; for (const key in A) o[key] = Array.isArray(A[key]) ? A[key].map((v, i) => v + (B[key][i] - v) * w) : A[key] + (B[key] - A[key]) * w; return o; };
+      // idle and walking: guard up, knees soft, a little breath
+      const cyc = this.walk, sw = Math.sin(cyc);
+      P.y = 0.88 + Math.sin(T * 2.2 + this.ph) * 0.012 - Math.abs(Math.cos(cyc)) * 0.04 * mv - 0.02;
+      P.lL = sw * 0.75 * mv; P.lR = -sw * 0.75 * mv;
+      P.kL = 0.15 + Math.max(0, Math.sin(cyc + 1.6)) * 1.0 * mv; P.kR = 0.15 + Math.max(0, Math.sin(cyc + 1.6 + Math.PI)) * 1.0 * mv;
+      P.aR[0] += -sw * 0.35 * mv; P.aL[0] += sw * 0.35 * mv; P.lean = 0.08 * mv; P.tw = sw * 0.12 * mv;
+      if (a.kind === 'staff' || a.kind === 'thrower') { P.aR = [-0.25 + -sw * 0.3 * mv, 0, -0.1]; P.eR = -0.5; }
+      if (a.kind === 'commander') { P.aL = [0.1, 0, 0.25]; P.eL = -0.3; }
+      let rate = 16;
+      if (st === 'wind' || st === 'act') {
+        const W = {
+          jab: [{ tw: -0.55, lean: -0.08, y: 0.84, aR: [0.55, 0, -0.55], eR: -1.9, aL: [-1.0, 0, 0.2], eL: -1.2, lL: -0.35, kL: 0.35, lR: 0.25, kR: 0.3 },
+            { tw: 0.65, lean: 0.32, y: 0.8, aR: [-1.62, 0, 0.12], eR: -0.05, aL: [-0.3, 0, 0.45], eL: -1.9, lL: -0.6, kL: 0.55, lR: 0.45, kR: 0.25 }],
+          grab: [{ tw: 0, lean: 0.28, y: 0.78, aR: [-0.7, 0, -1.0], eR: -0.6, aL: [-0.7, 0, 1.0], eL: -0.6, lL: -0.3, kL: 0.5, lR: 0.3, kR: 0.5 },
+            { tw: 0, lean: 0.5, y: 0.74, aR: [-1.45, 0, 0.2], eR: -0.25, aL: [-1.45, 0, -0.2], eL: -0.25, lL: -0.7, kL: 0.7, lR: 0.55, kR: 0.2 }],
+          rush: [{ tw: -0.2, lean: 0.75, y: 0.7, aR: [0.9, 0, -0.35], eR: -1.2, aL: [0.9, 0, 0.35], eL: -1.2, lL: -0.6, kL: 1.0, lR: 0.5, kR: 0.6 },
+            { tw: 0.35, lean: 0.7, y: 0.78, aR: [-0.3, 0, -0.7], eR: -1.6, aL: [-1.1, 0, 0.3], eL: -1.6, lL: sw * 1.1, kL: 0.4 + Math.max(0, Math.sin(cyc + 1.6)) * 1.3, lR: -sw * 1.1, kR: 0.4 + Math.max(0, Math.sin(cyc + 1.6 + Math.PI)) * 1.3 }],
+          sweep: [{ tw: 1.35, lean: -0.05, y: 0.8, aR: [-1.3, 0, -1.25], eR: -0.3, aL: [-1.2, 0, 0.6], eL: -0.9, lL: -0.45, kL: 0.5, lR: 0.45, kR: 0.4 },
+            { tw: -1.5, lean: 0.25, y: 0.74, aR: [-1.4, 0, 0.3], eR: -0.1, aL: [-1.0, 0, 0.9], eL: -0.6, lL: -0.5, kL: 0.6, lR: 0.5, kR: 0.5 }],
+          bottle: [{ tw: -0.7, lean: -0.25, y: 0.86, aR: [-2.85, 0, -0.35], eR: -1.3, aL: [-1.3, 0, 0.25], eL: -0.2, lL: -0.4, kL: 0.3, lR: 0.3, kR: 0.35 },
+            { tw: 0.55, lean: 0.38, y: 0.8, aR: [-0.75, 0, 0.1], eR: -0.1, aL: [-0.2, 0, 0.5], eL: -1.4, lL: -0.65, kL: 0.55, lR: 0.5, kR: 0.2 }],
+          shout: [{ tw: 0, lean: -0.22, y: 0.9, hx: -0.4, aR: [-2.7, 0, -0.45], eR: -0.25, aL: [-2.7, 0, 0.45], eL: -0.25, lL: -0.25, kL: 0.2, lR: 0.25, kR: 0.2 },
+            { tw: 0, lean: -0.3, y: 0.92, hx: -0.5, aR: [-2.9, 0, -0.55], eR: -0.1, aL: [-2.9, 0, 0.55], eL: -0.1, lL: -0.25, kL: 0.2, lR: 0.25, kR: 0.2 }],
+        };
+        W.slap = W.jab; W.charge = W.rush;
+        const K = W[a.atk] || W.jab;
+        if (st === 'wind') { // ease into the anticipation, then a held, trembling load-up
+          Object.assign(P, mix(P, Object.assign({}, P, K[0]), ez(Math.min(1, a.t / 0.22))));
+          P.tw += Math.sin(T * 40) * 0.015; rate = 22;
+        } else { // strike: snap past the hit pose, then settle
+          const w = back(Math.min(1, a.t / 0.09));
+          Object.assign(P, mix(Object.assign({}, P, K[0]), Object.assign({}, P, K[1]), w));
+          if (a.atk === 'sweep') P.tw = 1.35 + (-1.5 - 1.35) * ez(k);
+          rate = 60;
+        }
+      } else if (st === 'recover') { P.lean = 0.2; P.y = 0.82; P.aR = [-0.9, 0, 0.2]; P.eR = -0.6; rate = 8; }
+      else if (st === 'hold') { P.aR = [-1.35, 0, 0.35]; P.aL = [-1.35, 0, -0.35]; P.eR = P.eL = -0.35; P.lean = -0.1; P.y = 0.84; P.lL = -0.3; P.kL = 0.4; P.lR = 0.3; P.kR = 0.4; }
+      else if (st === 'dazed' || a.blind > 0) {
+        P.lean = 0.1 + Math.sin(T * 5) * 0.12; P.roll = Math.sin(T * 3.3) * 0.15; P.hz = Math.sin(T * 4) * 0.35; P.y = 0.84;
+        P.aR = [0.15, 0, -0.25]; P.aL = [0.15, 0, 0.25]; P.eR = P.eL = -0.3; P.kL = 0.35 + Math.sin(T * 5) * 0.15; P.kR = 0.35 - Math.sin(T * 5) * 0.15;
+      }
+      if (a.frozen > 0) { P.lL = P.lR = 0; P.kL = P.kR = 0.15; rate = 99; }
+      // flinch: thrown back away from the hit, head snapping, then recovering
+      if (this.hitK > 0) {
+        const h = this.hitK, f = this.hitF, sd = this.hitS;
+        P.lean += -0.65 * h * f; P.roll += 0.45 * h * sd; P.hx += -0.6 * h * f; P.hz += 0.5 * h * sd; P.tw += 0.3 * h * sd; P.y -= 0.08 * h;
+        P.aR = P.aR.map((v, i) => v + [0.7, 0, -0.6][i] * h); P.aL = P.aL.map((v, i) => v + [0.7, 0, 0.6][i] * h); P.eR += 0.8 * h; P.eL += 0.8 * h;
+        P.lL += 0.3 * h * f; P.kR += 0.4 * h; rate = 40;
+      }
+      return { P, rate };
+    }
+    setPose(P) {
+      this.hips.position.set(0, P.y, 0); this.hips.rotation.set(P.lean, 0, P.roll);
+      this.torso.rotation.set(0, P.tw, 0); this.head.rotation.set(P.hx, -P.tw * 0.5, P.hz);
+      const [L, R] = this.arms;
+      R.sh.rotation.set(P.aR[0], P.aR[1], P.aR[2]); R.el.rotation.set(P.eR, 0, 0);
+      L.sh.rotation.set(P.aL[0], P.aL[1], P.aL[2]); L.el.rotation.set(P.eL, 0, 0);
+      this.legs[0].hp.rotation.set(P.lL - P.lean, 0, 0); this.legs[0].kn.rotation.set(P.kL, 0, 0);
+      this.legs[1].hp.rotation.set(P.lR - P.lean, 0, 0); this.legs[1].kn.rotation.set(P.kR, 0, 0);
+    }
     update(a, dt, T) {
-      const sp = Math.hypot(a.vx, a.vz), st = a.st;
+      const sp = Math.hypot(a.vx, a.vz), st = a.st, rd = this.rd;
+      if (this.ph === undefined) { this.ph = Math.random() * 6; this.cur = null; this.hitK = 0; }
       this.root.position.set(a.x, a.y || 0, a.z); this.root.rotation.set(0, Math.PI / 2 - a.f, 0);
-      this.shadow.position.set(a.x, 0.014, a.z); this.shadow.visible = !a.gone;
-      this.walk += dt * sp * 3.2;
-      let lean = 0, armR = [0, 0, 0], armL = [0, 0, 0], elR = 0, elL = 0, legA = Math.sin(this.walk) * Math.min(1, sp / 2) * 0.6, bob = Math.abs(Math.sin(this.walk)) * 0.05 * Math.min(1, sp / 2), down = 0, spin = 0;
-      armR[0] = -legA * 0.8; armL[0] = legA * 0.8; elR = -0.4; elL = -0.4;
-      const k = a.dur ? clamp(a.t / a.dur, 0, 1) : 0;
-      if (st === 'wind') {
-        if (a.atk === 'jab' || a.atk === 'slap') { armR = [0.9, 0, -0.3]; elR = -1.4; lean = -0.15; }
-        else if (a.atk === 'grab') { armR = [-0.9, 0, -0.3]; armL = [-0.9, 0, 0.3]; lean = -0.1; elR = elL = -0.2; }
-        else if (a.atk === 'rush' || a.atk === 'charge') { lean = 0.55; armR = [0.6, 0, -0.4]; armL = [0.6, 0, 0.4]; }
-        else if (a.atk === 'sweep') { armR = [-1.2, 0, -1.2]; lean = -0.1; this.torso.rotation.y = 1.2 * k; }
-        else if (a.atk === 'bottle') { armR = [-2.6, 0, -0.2]; elR = -0.8; lean = -0.2; }
-        else if (a.atk === 'shout') { armL = [-2.6, 0, 0.3]; armR = [-2.4, 0, -0.3]; }
-      } else if (st === 'act') {
-        if (a.atk === 'jab' || a.atk === 'slap') { armR = [-1.55, 0, 0.05]; elR = 0; lean = 0.2; }
-        else if (a.atk === 'grab') { armR = [-1.5, 0, 0.1]; armL = [-1.5, 0, -0.1]; elR = elL = 0; lean = 0.25; }
-        else if (a.atk === 'rush' || a.atk === 'charge') { lean = 0.6; armR = [-0.5, 0, -0.6]; armL = [-0.5, 0, 0.6]; }
-        else if (a.atk === 'sweep') { armR = [-1.4, 0, -0.2]; this.torso.rotation.y = 1.2 - 2.8 * k; }
-        else if (a.atk === 'bottle') { armR = [-1.2, 0, 0]; elR = 0; lean = 0.2; }
-      } else if (st === 'hold') { armR = [-1.4, 0, 0.3]; armL = [-1.4, 0, -0.3]; elR = elL = -0.3; }
-      else if (st === 'recover') lean = 0.15;
-      if (st !== 'wind' && st !== 'act') this.torso.rotation.y *= 0.8;
-      if (st === 'hurt') { lean = -0.35 + Math.sin(a.t * 30) * 0.05; armR = [-0.4, 0, -0.8]; armL = [-0.4, 0, 0.8]; }
-      if (st === 'dazed' || a.blind > 0) { lean = Math.sin(T * 5) * 0.12; this.head.rotation.z = Math.sin(T * 4) * 0.3; } else this.head.rotation.z *= 0.8;
-      if (st === 'down' || a.dead) { down = Math.min(1, a.t / 0.25); }
-      if (st === 'getup') down = 1 - k;
-      if (st === 'held' || st === 'clawed') { legA = Math.sin(T * 18) * 0.5; armR = [-0.6 + Math.sin(T * 16) * 0.4, 0, -0.6]; armL = [-0.6 - Math.sin(T * 16) * 0.4, 0, 0.6]; }
-      if (st === 'thrown') spin = a.t * 12;
-      if (a.frozen > 0) { legA = 0; armR = [0.2, 0, -0.2]; armL = [0.2, 0, 0.2]; }
-      this.hips.position.y = 0.9 + bob - down * 0.62;
-      this.hips.rotation.x = lean - down * 1.45 + spin;
-      const sa = (A, v, e) => { A.sh.rotation.set(v[0], v[1], v[2]); A.el.rotation.x = e; };
-      sa(this.arms[1], armR, elR); sa(this.arms[0], armL, elL);
-      this.legs[0].hp.rotation.x = legA * (1 - down); this.legs[1].hp.rotation.x = -legA * (1 - down);
+      this.walk += dt * sp * 3.4;
+      // a new hit: remember which way it shoved us (in our own frame)
+      if (this.lastHp !== null && a.hp < this.lastHp) {
+        this.flashT = 1; this.hitK = 1;
+        const hx = a.hitX || -Math.cos(a.f), hz = a.hitZ || -Math.sin(a.f), hl = Math.hypot(hx, hz) || 1;
+        this.hitF = -((hx * Math.cos(a.f) + hz * Math.sin(a.f)) / hl) >= -0.2 ? 1 : -1; this.hitS = (-hx * Math.sin(a.f) + hz * Math.cos(a.f)) / hl > 0 ? -1 : 1;
+      }
+      this.hitK = Math.max(0, this.hitK - dt * 3.2);
+      // ----- ragdoll: thrown, knocked down, dead, or dangling in someone's grip
+      const lifted = st === 'held' || st === 'clawed', rag = st === 'thrown' || st === 'down' || a.dead || lifted;
+      if (rag && !rd.on) {
+        this.root.updateMatrixWorld(true);
+        if (lifted) rd.start(new THREE.Vector3());
+        else if (st === 'thrown') rd.start(new THREE.Vector3(a.vx, a.vy || 2, a.vz), { spin: 2.4, ax: a.vx / (sp || 1), az: a.vz / (sp || 1) });
+        else { const fx = a.fallX || -Math.cos(a.f), fz = a.fallZ || -Math.sin(a.f), fl = Math.hypot(fx, fz) || 1; rd.start(new THREE.Vector3(a.vx * 0.8, 1.2, a.vz * 0.8), { push: new THREE.Vector3(fx / fl * 3.2, 0, fz / fl * 3.2) }); }
+        this.snap = null;
+      }
+      if (rd.on && st === 'thrown' && this.wasLifted) { rd.pin(null); rd.kick(new THREE.Vector3(a.vx, a.vy || 3, a.vz), { spin: 2.4, ax: a.vx / (sp || 1), az: a.vz / (sp || 1) }); }
+      this.wasLifted = lifted;
+      if (rd.on && !rag) { // back to our feet: blend out of wherever the body ended up
+        this.snap = { q: this.rdBones.map((o) => o.quaternion.clone()), hp: this.hips.position.clone(), face: rd.facing(), side: Math.random() < 0.5 ? 1 : -1, t: 0, dur: st === 'getup' ? a.dur : 0.3, getup: st === 'getup' };
+        rd.stop();
+      }
+      if (rd.on) {
+        if (lifted) {
+          const H = a.holder, f = H ? H.f : a.f + Math.PI, cx = a.x - Math.cos(f) * 0.15, cz = a.z - Math.sin(f) * 0.15, rx = -Math.sin(f), rz = Math.cos(f);
+          this.pins = this.pins || { neck: new THREE.Vector3(), shL: new THREE.Vector3(), shR: new THREE.Vector3() };
+          this.pins.neck.set(cx, 1.62, cz); this.pins.shL.set(cx - rx * 0.34, 1.52, cz - rz * 0.34); this.pins.shR.set(cx + rx * 0.34, 1.52, cz + rz * 0.34);
+          rd.pin(this.pins);
+          if (Math.random() < dt * 3) rd.kick(new THREE.Vector3((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2), { legs: true }); // struggling
+        }
+        rd.step(dt, this.walls ? (p, r) => this.collide(p, r) : null, lifted ? null : { x: a.x, z: a.z });
+        rd.apply(this.hips, this.root);
+        const pel = rd.P('pelvis').x; this.shadow.position.set(pel.x, 0.014, pel.z);
+      } else {
+        const { P, rate } = this.pose(a, T);
+        if (!this.cur) this.cur = JSON.parse(JSON.stringify(P));
+        const w = 1 - Math.exp(-dt * rate);
+        for (const key in P) { if (Array.isArray(P[key])) P[key].forEach((v, i) => (this.cur[key][i] += (v - this.cur[key][i]) * w)); else this.cur[key] += (P[key] - this.cur[key]) * w; }
+        this.setPose(this.cur);
+        // blending out of the ragdoll: through a kneel (getting up) or straight back (released)
+        if (this.snap) {
+          const S0 = this.snap; S0.t += dt;
+          const kk = clamp(S0.t / S0.dur, 0, 1), ez = (x) => x * x * (3 - 2 * x);
+          const stand = this.rdBones.map((o) => o.quaternion.clone()), standHp = this.hips.position.clone();
+          let from = S0.q, fromHp = S0.hp, to = stand, toHp = standHp, w2 = ez(kk);
+          if (S0.getup) {
+            const mid = 0.55;
+            this.setPose(this.kneel(S0.face, S0.side));
+            const kneel = this.rdBones.map((o) => o.quaternion.clone()), kneelHp = this.hips.position.clone();
+            if (kk < mid) { to = kneel; toHp = kneelHp; w2 = ez(kk / mid); } else { from = kneel; fromHp = kneelHp; w2 = ez((kk - mid) / (1 - mid)); }
+          }
+          this.rdBones.forEach((o, i) => o.quaternion.slerpQuaternions(from[i], to[i], w2));
+          this.hips.position.lerpVectors(fromHp, toHp, w2);
+          if (kk >= 1) { this.snap = null; this.cur = null; }
+        }
+        this.shadow.position.set(a.x, 0.014, a.z);
+      }
+      this.shadow.visible = !a.gone;
       // hit flash and ice tint
-      if (this.lastHp !== null && a.hp < this.lastHp) this.flashT = 1;
       this.lastHp = a.hp; this.flashT = Math.max(0, this.flashT - dt * 7);
       for (const m of this.mats) { const fr = a.frozen > 0; m.uniforms.uFlashCol.value.set(fr ? 0x9fe6ff : a.burn ? 0xff7a1a : 0xffffff); m.uniforms.uFlash.value = fr ? 0.55 : this.flashT * 0.7; }
-      const fade = a.dead && a.t > 1.4;
+      const fade = a.dead && a.t > 1.6;
       this.root.visible = !fade || Math.sin(a.t * 30) > 0;
+      if (this.body) {
+        this.root.updateMatrixWorld(true);
+        for (const k in this.J) this.rd.joints[k].getWorldPosition(this.J[k]);
+        this.body.drive(this.J, this.root, this.root.visible && !a.gone);
+        const fr = a.frozen > 0; this.body.flash(fr ? 0x9fe6ff : a.burn ? 0xff7a1a : 0xffffff, fr ? 0.55 : this.flashT * 0.7);
+      }
     }
-    dispose(scene) { scene.remove(this.root); scene.remove(this.shadow); }
+    // halfway up: on one knee (from lying on the back: sat up; from the front: pushed up on the hands)
+    kneel(face, side) {
+      const up = face > 0, L = side > 0;
+      return { y: 0.55, lean: up ? 0.15 : 0.55, roll: 0, tw: 0.15 * side, hx: up ? 0.2 : -0.3, hz: 0,
+        aR: up ? [-0.9, 0, 0.1] : [-1.25, 0, -0.1], eR: up ? -0.8 : -0.15, aL: up ? [-0.5, 0, 0.3] : [-1.25, 0, 0.1], eL: up ? -1.2 : -0.15,
+        lL: L ? -1.45 : 0.05, kL: L ? 1.5 : 1.55, lR: L ? 0.05 : -1.45, kR: L ? 1.55 : 1.5 };
+    }
+    collide(p, r) {
+      for (const w of this.walls) {
+        const cx = clamp(p.x, w.x0, w.x1), cz = clamp(p.z, w.z0, w.z1), dx = p.x - cx, dz = p.z - cz, d = Math.hypot(dx, dz);
+        if (d < r && d > 1e-6) { p.x = cx + (dx / d) * r; p.z = cz + (dz / d) * r; }
+      }
+    }
+    dispose(scene) { scene.remove(this.root); scene.remove(this.shadow); if (this.body) this.body.dispose(); }
   }
   // where a segment first enters a box (0..1), or null
   function segBox(x0, z0, x1, z1, bx0, bz0, bx1, bz1) {
