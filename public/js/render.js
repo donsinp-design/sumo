@@ -1189,6 +1189,7 @@
     // the anime look: crisper toon shading, bolder outlines, hard shadows and the ink / grade pass
     setAnime(on) {
       this.anime = !!on; SH.uAnime.value = on ? 1 : 0; SH.uOL.value = on ? 1.35 : 1;
+      if (this.crowdG) this.crowdG.visible = this.classicStage !== false && !on; // no audience in the anime look (you still hear them)
       if (on && !this.post) { this.post = new AnimePost(this.r); this.resize(); }
     }
     resize() {
@@ -1993,7 +1994,8 @@
     // the arena, its crowd, the corner banners and the light cone belong to the dohyo only
     this.dohyoG.visible = classic;
     for (const c of this.spinG.children) if (c.userData.dohyo) c.visible = classic;
-    if (this.crowdG) this.crowdG.visible = classic;
+    this.classicStage = classic;
+    if (this.crowdG) this.crowdG.visible = classic && !this.anime; // the anime look has no audience: a dark hall keeps the eye on the fight
     if (this.floorM) this.floorM.visible = classic;
     if (this.coneM) this.coneM.visible = classic;
     if (this.motes) this.motes.visible = classic;
