@@ -391,15 +391,18 @@
         sh.classList.add('on'); sh.style.left = p.x + 'px'; sh.style.top = p.y + 'px'; sh.querySelector('i').style.width = (shop.hp / 10) + '%';
       } else sh.classList.remove('on');
       this.shopObj = inside ? shop : null;
-      // CONTROLLER DISCONNECTED
+      // CONTROLLER DISCONNECTED: the full-screen fake error only for the person it hit (when they are watching
+      // this screen); everyone else just sees a tag over the frozen wrestler
       const un = live && m.w.find((w) => w.fxs.unplug > 0);
       const ue = document.getElementById('unplug');
-      ue.classList.toggle('on', !!un);
-      if (un) {
-        const who = this.kind === 'pvp' ? (un.idx === 0 ? 'Player 1' : 'Player 2') + "'s controller" : un.idx === this.viewerIdx ? 'Your controller' : this.kind === 'training' ? "Your partner's controller" : "The other player's controller";
-        ue.querySelector('.up-s').textContent = who + ' lost connection. Reconnecting…';
+      const mine = !!un && this.kind !== 'pvp' && un.idx === this.viewerIdx;
+      ue.classList.toggle('on', mine);
+      if (mine) {
+        ue.querySelector('.up-s').textContent = 'Your controller lost connection. Reconnecting…';
         ue.querySelector('.up-bar i').style.width = (100 * (1 - un.fxs.unplug / 1.5)) + '%';
       }
+      if (un && !mine && this.unplugTag !== un) { const p = this.scr(un.x, un.z, 2.6); this.ui.callout('CONTROLLER DISCONNECTED', p.x, p.y, 'small'); }
+      this.unplugTag = un && !mine ? un : null;
     }
     get SHOP_PRICE() { return 50000; }
     shopList() { return S.Skills.LIST.filter((s) => s.id !== 'konbini'); } // every skill on the shelves
