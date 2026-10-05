@@ -73,7 +73,7 @@
       const nFx = this.scene.children.length;
       this.map = S.CampMap.build(this.scene);
       { // the market never moves: work out its transforms once instead of for thousands of objects every frame
-        const swing = new Set(this.map.decor.filter((d) => d.kind === 'lantern').map((d) => d.m));
+        const swing = new Set(this.map.decor.filter((d) => d.kind === 'lantern' || d.kind === 'arrow').map((d) => d.m)); // these move
         this.scene.updateMatrixWorld(true);
         for (const o of this.scene.children.slice(nFx)) o.traverse((q) => { if (!swing.has(q)) q.matrixAutoUpdate = false; });
       }
@@ -137,7 +137,7 @@
     buildHud() {
       { const tp = document.getElementById('tutPanel'); if (tp) tp.classList.remove('on'); }
       const h = this.hud = document.createElement('div'); h.id = 'campHud';
-      h.innerHTML = '<div class="ch-time">0:00.0</div><div class="ch-me"><b>YOU</b><span class="ch-bar"><i></i></span><div class="ch-ab"><em>NO ABILITY</em><span class="ch-cd"><i></i></span><kbd>SPACE</kbd></div></div>' +
+      h.innerHTML = '<div class="ch-time">0:00.0</div><div class="ch-me"><b>YOU</b><span class="ch-bar"><i></i></span><span class="ch-stam"><i></i></span><div class="ch-ab"><em>NO ABILITY</em><span class="ch-cd"><i></i></span><kbd>SPACE</kbd></div></div>' +
         '<div class="ch-zone"></div><div class="ch-say"><b></b><span></span></div><div class="ch-prompt"></div>' +
         '<div class="ch-boss"><b></b><span class="ch-bar"><i></i></span></div><div class="ch-bars"></div>' +
         '<div class="ch-card"><div class="ch-cap"></div><b></b><span></span><em>' + (S.touch && S.touch.on ? 'GRAB or SKILL' : 'K or SPACE') + ' to keep it</em></div>' +
@@ -249,7 +249,7 @@
       this.actors = this.actors.filter((a) => { if (a !== this.P && a.zone === Z) { this.dropCarry(a); if (a.bang) this.scene.remove(a.bang); if (a.view.dispose) a.view.dispose(this.scene); return false; } return true; });
       Z.state = 'wait'; Z.bossDone = false; this.B = null; this.el('.ch-boss').classList.remove('on');
       this.populate(Z, this.zi);
-      const P = this.P; P.hp = P.maxHp; P.dead = false; P.st = 'free'; P.t = 0; P.held = null; P.holder = null;
+      const P = this.P; P.hp = P.maxHp; P.stam = 1; P.dead = false; P.st = 'free'; P.t = 0; P.held = null; P.holder = null;
       P.x = 0; P.z = Z.z0 - 1; P.vx = P.vz = 0; this.shots = [];
     }
     win() {
@@ -283,6 +283,9 @@
       const wantMove = (sp, turn) => { P.tvx = mx * sp; P.tvz = mz * sp; if (mag > 0.3) P.f += ang(dirA - P.f) * Math.min(1, dt * (turn || 14)); };
       P.tvx = 0; P.tvz = 0;
       const giant = P.giant > 0 ? 1.35 : 1;
+      // STAMINA (as in versus): dodges, charges, slaps and throws spend it; it comes back when you ease off. Run dry and you're slow and weak
+      if (P.stam === undefined) P.stam = 1;
+      if (P.stamT > 0) P.stamT -= dt; else P.stam = Math.min(1, P.stam + dt * (P.st === 'free' ? 0.34 : 0.2));
       // the ability (space)
       if (c.skill.pressed && this.ability && this.abCd <= 0 && ['free', 'hold', 'strike'].includes(P.st)) this.useAbility();
       // drink machines sell skills: one each (a new one replaces the one you have)
@@ -293,7 +296,7 @@
         case 'free': {
           wantMove(4.3 * giant);
           if (c.push.pressed) this.strike(P);
-          else if (c.grab.pressed) { if (vm) this.getSkill(vm); else { this.aim(P, 1.8); this.set(P, 'grab', 0.22); } }
+          else if (c.grab.pressed) { if (vm) this.getSkill(vm); else { this.aim(P, 1.8); this.set(P, 'grab', 0.22); this.spend(P, 0.04); } }
           else if (c.dash.pressed) { if (mag > 0.3) { this.set(P, 'lprep', 0.14); P.ldir = dirA; } else { this.set(P, 'parry', 0.26); this.g.audio.whoosh(0.08); } }
           break;
         }
@@ -345,8 +348,8 @@
         }
         case 'lprep': {
           wantMove(0.5);
-          if (!c.dash.held) { this.set(P, 'dodge', 0.24); P.iframe = 0.26; const d = mag > 0.3 ? dirA : P.ldir; P.vx = Math.cos(d) * 11; P.vz = Math.sin(d) * 11; P.f = d; this.g.audio.whoosh(0.15); }
-          else if (P.t >= P.dur) { this.set(P, 'charge', 1.5); P.cdir = mag > 0.3 ? dirA : P.ldir; P.f = P.cdir; P.chargeHits = new Set(); this.g.audio.whoosh(0.35); }
+          if (!c.dash.held) { const v = this.tired(P) ? 6.5 : 11; this.spend(P, 0.16); this.set(P, 'dodge', 0.24); P.iframe = this.tired(P) ? 0.12 : 0.26; const d = mag > 0.3 ? dirA : P.ldir; P.vx = Math.cos(d) * v; P.vz = Math.sin(d) * v; P.f = d; this.g.audio.whoosh(0.15); }
+          else if (P.t >= P.dur) { if (P.stam < 0.12) { this.set(P, 'free'); this.popAt(P, 'TIRED!'); break; } this.spend(P, 0.08); this.set(P, 'charge', 1.5); P.cdir = mag > 0.3 ? dirA : P.ldir; P.f = P.cdir; P.chargeHits = new Set(); this.g.audio.whoosh(0.35); }
           break;
         }
         case 'dodge': P.tvx = P.vx * 0.9; P.tvz = P.vz * 0.9; if (P.t >= P.dur) this.set(P, 'free'); break;
@@ -356,7 +359,8 @@
           P.f = P.cdir; P.tvx = Math.cos(P.cdir) * sp; P.tvz = Math.sin(P.cdir) * sp; P.vx = P.tvx; P.vz = P.tvz;
           this.chargeHits(P, sp);
           if (P.t > 0.05 && Math.random() < 0.5) this.fx.dust(P.x - Math.cos(P.f) * 0.5, 0.05, P.z - Math.sin(P.f) * 0.5, 1, 0.2, 0.3, 0.3);
-          if (!c.dash.held || P.t >= P.dur) this.set(P, 'recover', 0.22);
+          this.spend(P, dt * 0.38);
+          if (!c.dash.held || P.t >= P.dur || P.stam <= 0) this.set(P, 'recover', P.stam <= 0 ? 0.45 : 0.22); // out of breath: the charge dies
           break;
         }
         case 'parry': {
@@ -395,8 +399,10 @@
       }
       if (best) P.f = Math.atan2(best.z - P.z, best.x - P.x);
     }
+    spend(P, k) { if (P !== this.P) return; P.stam = Math.max(0, (P.stam === undefined ? 1 : P.stam) - k); P.stamT = 0.55; if (P.stam <= 0 && !P.tiredPop) { P.tiredPop = true; this.popAt(P, 'TIRED!'); } if (P.stam > 0.3) P.tiredPop = false; }
+    tired(P) { return P === this.P && P.stam !== undefined && P.stam < 0.15; }
     strike(P) {
-      this.aim(P, 2.2);
+      this.aim(P, 2.2); this.spend(P, 0.06);
       P.combo = this.t - P.lastStrike < 0.38 && P.combo < 3 ? P.combo + 1 : 1;
       this.set(P, 'strike', P.combo === 3 ? 0.42 : 0.26); P.queue = false; P.hand = (P.hand || 0) ^ 1;
       this.g.audio.whoosh(0.06);
@@ -434,7 +440,7 @@
       if (best) {
         if (best.kind === 'boss' || best.kind === 'sumo') { // a belly-toss on a dazed giant
           // hoist him onto your belly, heave him over, and drive him into the floor (btoss state below)
-          P.f = Math.atan2(best.z - P.z, best.x - P.x); P.tossT = best; P.tossDone = false; P.iframe = Math.max(P.iframe || 0, 0.8);
+          P.f = Math.atan2(best.z - P.z, best.x - P.x); P.tossT = best; P.tossDone = false; this.spend(P, 0.2); P.iframe = Math.max(P.iframe || 0, 0.8);
           this.set(best, 'tossed', 0.75); best.holder = P; this.set(P, 'btoss', 0.78); this.g.audio.grab();
           this.say('BELLY TOSS!', '', 1); return true;
         }
@@ -453,7 +459,7 @@
       return false;
     }
     // the slam: hoist them overhead and drive them straight down into the floor
-    slam(P) { this.set(P, 'slam', 0.55); P.slamDone = false; this.g.audio.whoosh(0.35); }
+    slam(P) { this.spend(P, 0.14); this.set(P, 'slam', 0.55); P.slamDone = false; this.g.audio.whoosh(0.35); }
     tossLand(P, B) {
       P.tossDone = true; B.holder = null; B.y = 0; B.st = 'free';
       const fx = Math.cos(P.f), fz = Math.sin(P.f);
@@ -470,10 +476,11 @@
       this.damage(H, H.kind === 'sumo' ? 34 : 30, P, fx * 0.8, fz * 0.8, true); if (!H.dead) this.set(H, 'down', 1.4);
       this.shake = 0.75; this.hitstop = 0.1; this.g.audio.thump(10); this.g.audio.taiko && this.g.audio.taiko();
       this.fx.dust(H.x, 0.05, H.z, 16, 0.9, 0.7, 0.5); this.hitFx(H.x, H.z, 1.2); this.brk.crater(H.x, H.z); // the floor gives
-      for (const T of this.actors) if (T !== H && T.team === 1 && !T.dead && Math.hypot(T.x - H.x, T.z - H.z) < 2.2) { const a = Math.atan2(T.z - H.z, T.x - H.x); this.damage(T, 6, P, Math.cos(a) * 3, Math.sin(a) * 3, false); }
+      this.fx.ring(H.x, H.z, 2.4, 0.4); // a small shockwave: anyone close is hurt and staggered
+      for (const T of this.actors) if (T !== H && T.team === 1 && !T.dead && Math.hypot(T.x - H.x, T.z - H.z) < 2.4) { const a = Math.atan2(T.z - H.z, T.x - H.x); this.damage(T, 10, P, Math.cos(a) * 5, Math.sin(a) * 5, false); }
     }
     throwHeld(P) {
-      const H = P.held; P.held = null; this.set(P, 'throw', 0.28);
+      const H = P.held; P.held = null; this.set(P, 'throw', 0.28); this.spend(P, 0.1);
       if (Math.hypot(this.ctrl.mx, this.ctrl.mz) < 0.3) this.aim(P, 12); // no direction held: throw at the nearest enemy ahead
       const dir = P.f, sp = H.D ? (H.D.wt === 'tuna' ? 9 : 14) : 10;
       if (H.D) { H.held = null; H.thrown = { by: P, t: 0 }; H.vx = Math.cos(dir) * sp; H.vz = Math.sin(dir) * sp; H.vy = 2.2; H.y = 1.2; H.x = P.x + Math.cos(dir) * 0.8; H.z = P.z + Math.sin(dir) * 0.8; }
@@ -522,6 +529,7 @@
     }
     // incoming damage, with the player's parry and block
     damage(T, dmg, A, kx, kz, heavy) {
+      if (A && this.tired(A)) { dmg *= 0.6; kx = (kx || 0) * 0.6; kz = (kz || 0) * 0.6; } // swinging on empty
       if (T.dead) return;
       if (T.sleep) T.sleep = false;
       if (T === this.P) {
@@ -784,7 +792,7 @@
     // ============================================================== skills (from the drink machines)
     getSkill(vm) {
       this.usedSkill = true;
-      if (vm) { vm.used = true; if (vm.glow) vm.glow.material.color.set(0x5a6070); this.g.audio.thump(4); } // sold out: its light goes dim
+      if (vm) { vm.used = true; if (vm.glow) { vm.glow.material.color.set(0x5a6070); vm.glow.userData.dim = true; } if (vm.arrow) vm.arrow.visible = false; this.g.audio.thump(4); } // sold out: its light goes dim, the arrow goes
       const L = POOL.filter((a) => a !== this.ability), A = L[Math.floor(Math.random() * L.length)];
       this.ability = A; this.abCd = 0; this.cardOpen = true; this.nearSkill = false; this.prompt('');
       const c = this.el('.ch-card'); c.querySelector('b').textContent = A.name; c.querySelector('span').textContent = A.desc; c.classList.add('on');
@@ -809,7 +817,9 @@
         case 'absorb': P.iron = 6; break;
         case 'claw': {
           const T = near(12).sort((a, b) => b.hp - a.hp)[0]; if (!T) break;
-          T.clawT = 1.4; this.set(T, 'clawed', 1.4); this.g.audio.whoosh(0.5); break;
+          this.set(T, 'clawed', 9); T.vx = T.vz = 0; this.g.audio.whoosh(0.5);
+          const R = this.R, sc0 = R.scene; R.scene = this.scene; const me = R.makeObj({ type: 'claw' }); R.scene = sc0; // the arcade claw from versus
+          me.userData.tgt.visible = false; (this.claws || (this.claws = [])).push({ me, e: T, t: 0, top: T.w ? 2.3 * (T.size || 1) : 1.85 }); break;
         }
         case 'blind': for (const e of near(9, 0.9)) { e.blind = 3; this.set(e, 'dazed', e.kind === 'boss' ? 1.4 : 3); e.stun = e.kind === 'boss' ? 1.4 : 3; } this.flash = 1; this.g.audio.clack(); break;
         case 'freeze': for (const e of near(6).slice(0, 4)) { e.frozen = e.kind === 'boss' ? 1.6 : 3; } this.g.audio.tick(); break;
@@ -825,10 +835,30 @@
         for (const e of this.actors) if (e.team === 1 && !e.dead && Math.hypot(e.x - F.x, e.z - F.z) < 2) { e.hp -= 12 * dt; if (e.hp <= 0) this.ko(e, 0, 0); else if (Math.random() < dt * 2 && e.kind !== 'boss') this.set(e, 'hurt', 0.4); }
       }
       this.fires = this.fires.filter((F) => { if (F.t > 4.5) { this.scene.remove(F.mesh); return false; } return true; });
-      for (const e of this.actors) if (e.st === 'clawed') {
-        e.vx = e.vz = 0; e.y = e.t < 0.9 ? Math.min(2.6, e.t * 4) : Math.max(0, 2.6 - (e.t - 0.9) * 12);
-        if (e.t >= e.dur) { e.y = 0; this.damage(e, e.kind === 'boss' ? 40 : 45, P, 0, 0, true); this.shake = 0.4; this.fx.burst(e.x, e.z, 1); if (!e.dead) this.set(e, 'down', 1.2); }
+      // CLAW MACHINE: the claw drops on them (0-0.5s), grips (to 0.65), hauls them up (to 1.25), lets go; they crash down
+      for (const C of this.claws || []) {
+        C.t += dt; const e = C.e, U = C.me.userData, t = C.t, LIFT = 2.4;
+        if (!C.dropped && (e.dead || e.st !== 'clawed')) C.dropped = true;
+        let hy;
+        if (t < 0.5) { const k = t / 0.5; hy = 9 + (C.top + 0.75 - 9) * (1 - (1 - k) * (1 - k)); }
+        else if (t < 0.65) hy = C.top + 0.75;
+        else if (t < 1.25 && !C.dropped) { const k = (t - 0.65) / 0.6, ez = k * k * (3 - 2 * k); e.y = LIFT * ez; hy = C.top + 0.75 + e.y; if (!C.up) { C.up = true; this.g.audio.whoosh(0.3); } }
+        else { if (!C.dropped) { C.dropped = true; this.g.audio.clack(); } if (!C.rel) { C.rel = t; C.vy = 0; } hy = C.top + 0.75 + LIFT + Math.max(0, t - (C.rel || t)) * 9; }
+        if (!C.dropped || C.rel) { C.x = e.x; C.z = e.z; }
+        if (C.dropped && C.rel && !C.landed && e.st === 'clawed') { // free fall
+          C.vy -= 30 * dt; e.y = Math.max(0, e.y + C.vy * dt);
+          if (e.y <= 0) { C.landed = true; e.y = 0; this.set(e, 'free'); this.damage(e, e.kind === 'boss' ? 40 : 45, P, 0, 0, true); if (!e.dead) this.set(e, 'down', 1.3);
+            this.shake = 0.55; this.hitstop = 0.08; this.g.audio.thump(11); this.fx.burst(e.x, e.z, 1); this.brk.crater(e.x, e.z); }
+        }
+        if (e.st === 'clawed') { e.vx = e.vz = 0; }
+        C.me.position.set(C.x, 0, C.z);
+        U.head.position.y = hy; U.head.rotation.y += dt * 0.6; U.cable.position.y = (14 + hy) / 2; U.cable.scale.y = Math.max(0.01, 14 - hy);
+        const open = t < 0.5 || C.dropped ? 0.55 : -0.05;
+        for (const pr of U.prongs) pr.rotation.z += ((pr.children[0].position.x > 0 ? -open : open) - pr.rotation.z) * Math.min(1, dt * 12);
+        U.lamp.material.color.setHex(Math.sin(this.t * 14) > 0 ? 0xffd23a : 0xff4fa3);
+        if (hy > 14) { this.scene.remove(C.me); C.gone = true; }
       }
+      if (this.claws) this.claws = this.claws.filter((C) => !C.gone);
     }
 
     // ============================================================== physics
@@ -1082,6 +1112,7 @@
       this.el('.ch-me .ch-bar i').style.width = Math.max(0, P.hp / P.maxHp * 100) + '%';
       const tm = this.el('.ch-time'); if (tm) tm.textContent = fmtT(this.runT || 0);
       this.el('.ch-me .ch-bar').classList.toggle('low', P.hp < 30);
+      const sb = this.el('.ch-stam'); sb.firstChild.style.width = Math.round((P.stam === undefined ? 1 : P.stam) * 100) + '%'; sb.classList.toggle('tired', this.tired(P));
       const A = this.ability; this.el('.ch-ab').classList.toggle('ready', !!A && this.abCd <= 0);
       this.el('.ch-cd i').style.width = A ? (100 * (1 - Math.max(0, this.abCd) / A.cd)) + '%' : '0%';
       if (this.B) this.el('.ch-boss .ch-bar i').style.width = Math.max(0, this.B.hp / this.B.maxHp * 100) + '%';

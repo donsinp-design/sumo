@@ -83,10 +83,13 @@
       box(vm, 0.5, 0.16, 0.06, 0x1a1a22, 0x050508, 0, 0.32, 0.36, 0.01);
       box(vm, 0.12, 0.2, 0.04, 0xc8ccd0, 0x6a7078, 0.24, 0.72, 0.36, 0.006);
       const fx = Math.sin(ry), fz = Math.cos(ry); // the way its front faces
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xc8e8ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.4 })); glow.scale.set(1.6, 1.8, 1); glow.position.set(x + fx * 0.4, 1.3, z + fz * 0.4); g.add(glow);
+      // a skill machine has to read from across the street: a big pulsing glow and a bobbing gold arrow over it
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffe08a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.75 })); glow.scale.set(2.8, 3.2, 1); glow.position.set(x + fx * 0.5, 1.3, z + fz * 0.5); g.add(glow);
+      const arrow = skillArrow(); arrow.scale.setScalar(1.6); arrow.position.set(x, 3.5, z); g.add(arrow);
+      decor.push({ m: arrow, kind: 'arrow', p: x + z }, { m: glow, kind: 'vglow', p: x * 0.7 + z });
       const hx = Math.abs(fx) > 0.5 ? 0.45 : 0.5, hz = Math.abs(fx) > 0.5 ? 0.5 : 0.45;
       sign(vm, 'スキル', 'SKILL · 1', 0.95, 0.42, '#f2c14e', '#2a1218', 0, 2.2, 0.1, 0, -0.5);
-      breakable({ kind: 'vend', x, z, ry, fx, fz, group: vm, glow, hp: 2, w: wall(x - hx, x + hx, z - hz, z + hz) });
+      breakable({ kind: 'vend', x, z, ry, fx, fz, group: vm, glow, arrow, hp: 2, w: wall(x - hx, x + hx, z - hz, z + hz) });
     };
     // one per area, each sells one SKILL (walk up, press K): the plaza, the street, the market hall, the loading bay before the boss
     vending(-6.2, -3.2, Math.PI / 2, 0xe2322b); vending(-6.6, -34.2, Math.PI / 2, 0x2e9e6a); vending(11.65, -77.5, -Math.PI / 2, 0x2f7fd8); vending(9.65, -106, -Math.PI / 2, 0xf2c14e);
@@ -319,11 +322,22 @@
         for (const d of decor) {
           if (d.kind === 'lantern') d.m.rotation.z = Math.sin(t * 1.3 + d.p) * 0.06;
           else if (d.kind === 'tube') d.m.visible = !(Math.sin(t * 23 + d.p * 7) > 0.995); // the odd flicker
+          else if (d.kind === 'arrow') { d.m.position.y = 3.5 + Math.sin(t * 4 + d.p) * 0.2; d.m.rotation.y = t * 2.2; }
+          else if (d.kind === 'vglow') d.m.material.opacity = d.m.userData.dim ? 0.2 : 0.55 + 0.3 * Math.sin(t * 5 + d.p);
         }
       },
     };
   }
 
+  // a chunky gold arrow pointing down (extruded, toon-shaded, inked)
+  let arrowGeo = null;
+  function skillArrow() {
+    if (!arrowGeo) {
+      const sh = new THREE.Shape(); sh.moveTo(-0.16, 0.45); sh.lineTo(0.16, 0.45); sh.lineTo(0.16, 0.05); sh.lineTo(0.36, 0.05); sh.lineTo(0, -0.38); sh.lineTo(-0.36, 0.05); sh.lineTo(-0.16, 0.05); sh.closePath();
+      arrowGeo = new THREE.ExtrudeGeometry(sh, { depth: 0.14, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 1 }); arrowGeo.translate(0, 0, -0.07);
+    }
+    return W.mesh(arrowGeo, S.toon(0xffd23a, { shade: 0xc07a10, spec: 0.6, rimAmt: 0.6 }), 0.03);
+  }
   let vt = null;
   function vendTex() {
     if (!vt) vt = W.canvasTex(140, 210, (c, w, h) => {

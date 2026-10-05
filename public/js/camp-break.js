@@ -131,7 +131,7 @@
         b.broken = true; this.dropWall(b);
         if (!b.used && by === c.P) c.getSkill(b); // you smashed it open: the skill is yours anyway
         this.falling.push({ g: b.group, t: 0, ax: new THREE.Vector3(-dz, 0, dx), q0: b.group.quaternion.clone(), p0: b.group.position.clone(), dx, dz });
-        if (b.glow) b.glow.visible = false;
+        if (b.glow) b.glow.visible = false; if (b.arrow) b.arrow.visible = false;
         c.popAt(by, 'SMASH!'); c.hitstop = Math.max(c.hitstop || 0, 0.06); return true;
       }
       // a stall or a steel table: the whole thing goes

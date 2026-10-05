@@ -489,3 +489,10 @@ body.campaign #hud, body.campaign #hint { display: none !important; }
 /* phones: no keyboard hints in the campaign HUD (the buttons say what they are) */
 html.touch #campHud kbd { display: none; }
 html.touch #campHud .ch-pause p { display: none; }
+
+/* campaign stamina: a thin bar under your health (as in versus) */
+#campHud .ch-stam { display: block; height: 7px; margin-top: 4px; width: 78%; background: rgba(10,4,8,0.7); border: 2px solid rgba(246,237,220,0.5); transform: skewX(-12deg); overflow: hidden; }
+#campHud .ch-stam i { display: block; height: 100%; width: 100%; background: #3fc2b4; transition: width .12s linear; }
+#campHud .ch-stam.tired { border-color: #e2322b; animation: chtired 0.5s steps(2) infinite; }
+#campHud .ch-stam.tired i { background: #e2322b; }
+@keyframes chtired { 50% { opacity: 0.45; } }
