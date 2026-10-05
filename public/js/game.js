@@ -584,6 +584,8 @@
           case 'trainHit': { A.thump(16); R.shake(0.8); this.stop(0.08); const p = this.scr(e.x, e.z, 1.6); if (!quiet) ui.callout('TRAIN!', p.x, p.y, 'big'); break; }
           case 'crowdSave': { const p = this.scr(e.x, e.z, 2.2); if (!quiet) ui.callout('THE CROWD SAVES YOU!', p.x, p.y, 'big'); A.roar(); this.excite = 2; fx.dust(e.x, 0.05, e.z, 18, 0.8, 1.2, 0.5); R.shake(0.3); break; }
           case 'bump': { fx.ring(e.x, e.z, 1.6, 0.35); fx.spark(e.x, 0.8, e.z, 1.6); A.thump(6); A.clack(); R.shake(0.15); break; }
+          case 'cyclone': A.whoosh(0.9); fx.dust(e.x, 0.05, e.z, 14, 0.4, 0.8, 0.45); break;
+          case 'cycloneHit': { fx.burst(e.x, e.z, 10); A.thump(9); R.shake(0.25); this.stop(0.05); const p = this.scr(e.x, e.z, 1.6); if (!quiet) ui.callout('WHIRLED!', p.x, p.y, 'skill'); break; }
           case 'ballDash': A.whoosh(0.5); fx.dust(e.x, 0.05, e.z, 8, 0.3, 0.6, 0.35); break;
           case 'ballHit': { fx.burst(e.x, e.z, 12); A.thump(10); R.shake(0.3); this.stop(0.06); const p = this.scr(e.x, e.z, 1.6); if (!quiet) ui.callout('STRIKE!', p.x, p.y, 'skill'); break; }
           case 'fishHit': { A.slap(6); fx.dust(e.x, 0.05, e.z, 6, 0.3, 0.6, 0.3); const p = this.scr(e.x, e.z, 1.4); if (!quiet) ui.callout('SLAP!', p.x, p.y, 'gold'); break; }

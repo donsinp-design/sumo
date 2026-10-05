@@ -17,7 +17,7 @@
     { id: 'dashThru', name: 'PHANTOM DASH', desc: 'Dash straight through them and end up behind.', kind: 'atk' },
     { id: 'invuln', name: 'INVINCIBLE', desc: 'Nothing can hurt or move you for 3 seconds.', kind: 'atk' },
     { id: 'blind', name: 'BLINDING FLASH', desc: 'They are blinded for 2 seconds.', kind: 'any' },
-    { id: 'drunk', name: 'SAKE', desc: 'For 5 seconds everything they press happens 0.4s late.', kind: 'any' },
+    { id: 'drunk', name: 'SAKE', desc: 'For 5 seconds they are drunk: everything they press happens 0.4s late, and the stick is backwards.', kind: 'any' },
     { id: 'shrink', name: 'SHRINK', desc: 'They shrink to half their power for 5 seconds.', kind: 'any' },
     { id: 'quake', name: 'EARTHQUAKE', desc: 'The ground heaves under them only for 3 seconds, throwing them around the ring.', kind: 'any' },
     { id: 'freeze', name: 'FREEZE', desc: 'They are frozen solid for 3 seconds. Slide them out!', kind: 'atk' },
@@ -63,6 +63,7 @@
     { id: 'molotov', name: 'MOLOTOV COCKTAIL', desc: 'Throw a flaming bottle at where they stand. It bursts into a patch of fire for 4s: anyone in it burns, staggers and loses balance.', kind: 'any' },
     { id: 'peek', name: 'PEEK', desc: 'See the skill they are holding, then draw a new one for yourself.', kind: 'any' },
     { id: 'boom', name: 'KAMIKAZE', desc: 'Light a 1.5s fuse, then explode. If they are within about 3.5 metres, you both go down and the round is fought again. If they got away, only you go down.', kind: 'def' },
+    { id: 'cyclone', name: 'CYCLONE', desc: 'Spin like a top for 5s. Steer with the stick: anyone you touch is flung away, and nobody can grab you.', kind: 'atk' },
     { id: 'bellyFlop', name: 'BELLY FLOP', desc: 'Leap off screen, steer your shadow, and crash down on them.', kind: 'any' },
   ];
   const BY = {}; for (const s of LIST) BY[s.id] = s;
@@ -75,6 +76,7 @@
   S.KIMARITE.sk_inhale = ['', 'SPAT OUT', 'Swallowed whole and spat out'];
   S.KIMARITE.sk_gale = ['', 'BLOWN AWAY', 'Blown out by a giant fan'];
   S.KIMARITE.sk_ball = ['', 'BOWLED OVER', 'Flattened by a rolling ball'];
+  S.KIMARITE.sk_cyclone = ['', 'CYCLONE', 'Flung out by a spinning top'];
   S.KIMARITE.sk_hole = ['', 'BLACK HOLE', 'Dragged out by gravity'];
   S.KIMARITE.sk_fish = ['', 'TUNA SLAP', 'Knocked out by a flopping tuna'];
   S.KIMARITE.sk_bomb = ['', 'BLOWN UP', 'Caught in the bomb blast'];
@@ -145,6 +147,7 @@
         case 'rewind': Skills.rewind(m, w); break;
         case 'bumper': f.bumper = 6; break;
         case 'ball': f.ball = 5; w.ballCD = 0; if (w.clinch) w.clinch.end('skill'); break;
+        case 'cyclone': f.cyclone = 5; w.cycAng = w.cycAng || 0; w.cycHitT = 0; if (w.clinch) w.clinch.end('skill'); m.emit('cyclone', { w, x: w.x, z: w.z }); break;
         case 'hole': m.objs.push({ type: 'hole', x: w.x, z: w.z, t: 0, dur: 3, owner: w }); break;
         case 'favourite': break; // only ever fires by itself
         case 'blur': f.blur = 5; break;
@@ -291,6 +294,16 @@
         const k = Math.exp(-dt * 2.2); w.vx *= k; w.vz *= k;
         const sp = Math.hypot(w.vx, w.vz); if (sp > 7.5) { w.vx *= 7.5 / sp; w.vz *= 7.5 / sp; }
         if (sp > 0.3) w.f = Math.atan2(w.vz, w.vx);
+        if (w.st !== 'free') w.set('free');
+        return true;
+      }
+      if (f.cyclone > 0) {
+        // CYCLONE: a spinning top, arms out. Slow-ish, steerable, and it drifts
+        w.vx += I.mx * 18 * dt; w.vz += I.mz * 18 * dt;
+        const k = Math.exp(-dt * 1.6); w.vx *= k; w.vz *= k;
+        const sp = Math.hypot(w.vx, w.vz); if (sp > 5.2) { w.vx *= 5.2 / sp; w.vz *= 5.2 / sp; }
+        const spin = 26 * Math.min(1, f.cyclone / 0.6, (5 - f.cyclone) / 0.4 + 0.3); // winds up, winds down
+        w.cycAng = (w.cycAng || 0) + spin * dt; w.f = w.cycAng;
         if (w.st !== 'free') w.set('free');
         return true;
       }
@@ -464,6 +477,23 @@
           }
         }
         if (w.ballHitT > 0) w.ballHitT -= dt;
+        // CYCLONE: touch the top and you're thrown off it, sideways and out
+        if (f.cyclone > 0 && m.phase === 'fight' && !(w.cycHitT > 0)) {
+          const o = w.opp, dx = o.x - w.x, dz = o.z - w.z, d = Math.hypot(dx, dz) || 1e-4, nx = dx / d, nz = dz / d;
+          if (d < w.r + o.r + 0.2 && o.st !== 'air' && !o.swallowed && !(o.fxs.invuln > 0)) {
+            w.cycHitT = 0.5;
+            if (Skills.parry(m, o, null, nx, nz)) { w.vx = -nx * 3; w.vz = -nz * 3; }
+            else {
+              if (o.clinch) o.clinch.end('skill');
+              const tx = -nz, tz = nx, pw = 7.5 / Math.max(0.6, o.m); // out, plus a sideways whip from the spin
+              o.vx += (nx * 0.8 + tx * 0.6) * pw; o.vz += (nz * 0.8 + tz * 0.6) * pw; o.slideT = 0.5;
+              m.tag(o, w, 'sk_cyclone'); m.hurt(o, 0.1, nx, nz);
+              if (o.st !== 'fall') { o.set('stumble'); o.sdx = nx; o.sdz = nz; }
+              m.emit('cycloneHit', { w, o, x: (w.x + o.x) / 2, z: (w.z + o.z) / 2 });
+            }
+          }
+        }
+        if (w.cycHitT > 0) w.cycHitT -= dt;
         if (w.gulpI >= 0 && m.phase === 'fight' && w.st !== 'spit') { w.gulpT += dt; if (w.gulpT > 5) Skills.spit(m, w); } // can't hold them forever
         if (m.phase === 'fight' && !w.swallowed && !w.down) {
           w.trailT += dt;
@@ -1012,6 +1042,7 @@
       if (id === 'doors') return Math.random() < 0.006;
       if (id === 'bumper') return myEdge < 1.2 && (w.clinch || o.contact) && Math.random() < 0.1;
       if (id === 'ball') return d > 1.5 && d < 4 && Math.random() < 0.03;
+      if (id === 'cyclone') return d < 3 && Math.random() < 0.04;
       if (id === 'hole') return myEdge > 2 && RR - Math.hypot(o.x, o.z) > 1 && d > 1.5 && Math.random() < 0.02;
       if (id === 'possess') return RR - Math.hypot(o.x, o.z) < 2 && Math.random() < 0.05;
       if (id === 'shock') return d > 1.4 && d < 4 && RR - Math.hypot(o.x, o.z) < 2.5 && Math.random() < 0.05;

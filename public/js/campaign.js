@@ -46,19 +46,8 @@
     boss:      { hp: 420, spd: 2.4, r: 1.05, mass: 12,  name: 'ŌZEKI MAGURO-YAMA', wrestler: 1, size: 1.6 },
   };
 
-  // ---------------------------------------------------------------- skills (sold by the drink machines): a curated, combat-useful pool only
-  const POOL = [
-    { id: 'molotov', name: 'MOLOTOV COCKTAIL', desc: 'Throw a fire bottle ahead: a burning patch that hurts anyone in it.', cd: 18 },
-    { id: 'hundred', name: 'THOUSAND HANDS', desc: 'A blur of slaps in front of you: big damage, pushes everyone back.', cd: 16 },
-    { id: 'giant', name: 'GIANT', desc: 'Grow huge for 8s: more damage, no knockdowns, grabs cannot hold you.', cd: 26 },
-    { id: 'gale', name: 'GIANT FAN', desc: 'A gale in front of you blows enemies off their feet.', cd: 16 },
-    { id: 'shock', name: 'SHOCKWAVE STOMP', desc: 'Stomp: everyone around you is knocked down.', cd: 18 },
-    { id: 'absorb', name: 'IRON BODY', desc: '6s: hits do nothing to you.', cd: 24 },
-    { id: 'claw', name: 'CLAW MACHINE', desc: 'A claw drops on the toughest nearby enemy, lifts them and slams them down.', cd: 22 },
-    { id: 'blind', name: 'BLINDING FLASH', desc: 'Everyone in front of you is dazed for 3s: free hits.', cd: 18 },
-    { id: 'freeze', name: 'FREEZE', desc: 'Freezes the nearest enemies solid for 3s.', cd: 20 },
-    { id: 'storm', name: 'LIGHTNING', desc: 'Lightning strikes the three nearest enemies.', cd: 20 },
-  ];
+  // skills (sold by the drink machines) and masks: camp-skills.js
+  const POOL = S.CampSkills.POOL;
 
   class Campaign {
     constructor(game) { this.g = game; }
@@ -78,6 +67,7 @@
         for (const o of this.scene.children.slice(nFx)) o.traverse((q) => { if (!swing.has(q)) q.matrixAutoUpdate = false; });
       }
       this.brk = new S.CampBreak(this); // stalls, tables and drink machines come apart; floors and walls crack
+      this.sk = new S.CampSkills(this); // skills and masks
       this.ctrl = new S.Controller(new S.KeySource(S.MAPS.solo, 0));
       this.actors = []; this.props = []; this.shots = []; this.zones = this.map.zones.map((z) => Object.assign({ state: 'wait', ens: [] }, z));
       this.zi = 0; this.gate = this.zones[0].z1; this.ability = null; this.abCd = 0; this.fires = [];
@@ -96,6 +86,7 @@
       this.say('UOGASHI MARKET', 'Fight your way to the tuna auction', 3.5);
       this.prompt('Get a skill from the drink machine (walk up, press K)');
       g.audio.swell(0.4, 1.5);
+      this.openMasks();
     }
     stop() {
       removeEventListener('resize', this.resize);
@@ -144,14 +135,20 @@
         '<div class="ch-zone"></div><div class="ch-say"><b></b><span></span></div><div class="ch-prompt"></div>' +
         '<div class="ch-boss"><div class="ch-score">BOSS</div><span class="ch-bar"><i></i></span><b class="ch-name"></b></div><div class="ch-bars"></div>' +
         '<div class="ch-card"><div class="ch-cap"></div><b></b><span></span><em>' + (S.touch && S.touch.on ? 'GRAB or SKILL' : 'K or SPACE') + ' to keep it</em></div>' +
-        '<div class="ch-pause"><h2>PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART AREA</button><button data-c="quit">QUIT TO TITLE</button><p>J slap ×3 · K grab / throw · L parry · L+dir dodge, hold to CHARGE · SPACE ability</p></div>' +
-        '<div class="ch-over"><h2></h2><p></p><button data-c="retry">TRY AGAIN <kbd>J</kbd></button><button data-c="quit">QUIT TO TITLE <kbd>Esc</kbd></button></div>';
+        '<div class="ch-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART AREA</button><button data-c="quit">QUIT TO TITLE</button><p>J slap ×3 · K grab / throw · L parry · L+dir dodge, hold to CHARGE · SPACE ability</p></div>' +
+        '<div class="ch-shop"></div><div class="ch-mask"></div>' +
+        '<div class="ch-over"><h2 data-jp=""></h2><p></p><button data-c="retry">TRY AGAIN <kbd>J</kbd></button><button data-c="quit">QUIT TO TITLE <kbd>Esc</kbd></button></div>';
       document.body.appendChild(h);
-      h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
+      h.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c);
+        const sb = e.target.closest('[data-shop]'); if (sb) this.sk.pick(sb.dataset.shop === 'x' ? 'x' : +sb.dataset.shop);
+        const mb = e.target.closest('[data-mask]'); if (mb) this.pickMask(+mb.dataset.mask);
+      });
+      h.addEventListener('mouseover', (e) => { const mb = e.target.closest('[data-mask]'); if (mb && this.maskOpen) { this.maskI = +mb.dataset.mask; this.drawMasks(); } });
       this.el = (s) => h.querySelector(s);
       this.barEls = [];
     }
-    addScore(n) { if (!this.over) this.score = (this.score || 0) + Math.round(n); }
+    addScore(n) { if (!this.over) this.score = (this.score || 0) + Math.round(n * (this.sk && this.sk.mask.id === 'hannya' ? 2 : 1)); }
     say(big, small, dur) { const e = this.el('.ch-say'); e.querySelector('b').textContent = big; e.querySelector('span').textContent = small || ''; e.classList.add('on'); clearTimeout(this.sayT); this.sayT = setTimeout(() => e.classList.remove('on'), (dur || 2.5) * 1000); }
     prompt(t) {
       if (t && S.touch && S.touch.on) t = t.replace(/\b([Pp])ress (J|K|L|SPACE)\b|\b(J|K|L|SPACE)\b/g, (m, P, k1, k2) => { const k = k1 || k2, n = { J: 'PUSH', K: 'GRAB', L: 'DEFEND', SPACE: 'SKILL' }[k]; return P ? (P === 'P' ? 'Tap ' : 'tap ') + n : n; });
@@ -163,6 +160,8 @@
     }
     setPause(on) { this.paused = on; this.el('.ch-pause').classList.toggle('on', on); }
     onKey(e) {
+      if (this.maskOpen) { if (e.code === 'ArrowUp' || e.code === 'KeyW') this.maskMove(-1); else if (e.code === 'ArrowDown' || e.code === 'KeyS') this.maskMove(1); else if (e.code === 'Enter' || e.code === 'Space') this.pickMask(this.maskI); return true; }
+      if (this.shopping) { if (e.code === 'Escape') this.sk.pick('x'); return true; }
       if (e.code === 'Escape' || e.code === 'KeyP') { if (this.over) return; this.setPause(!this.paused); return true; }
       if (this.paused) { if (e.code === 'KeyR') this.command('retry'); else if (e.code === 'KeyQ') this.command('quit'); else if (e.code === 'Enter' || e.code === 'KeyJ') this.command('resume'); return true; }
       if (this.over) { if (!this.el('.ch-over').classList.contains('on')) return true; if (e.code === 'Enter' || e.code === 'KeyJ' || e.code === 'KeyR' || e.code === 'Space') this.command(this.over === 'win' ? 'quit' : 'retry'); else if (e.code === 'KeyQ' || e.code === 'Escape') this.command('quit'); /* K (grab) never quits: mashing it must not throw the run away */ return true; }
@@ -173,7 +172,7 @@
     frame(dt) {
       if (!this.scene) return;
       const g = this.g;
-      if (!this.paused && !this.cardOpen) {
+      if (!this.paused && !this.cardOpen && !this.maskOpen) {
         if (this.hitstop > 0) this.hitstop -= dt;
         else {
           const ts = this.slow > 0 ? 0.35 : 1; if (this.slow > 0) this.slow -= dt;
@@ -183,7 +182,9 @@
             this.step(STEP); S.kb.flush && 0; this.acc -= STEP; n++; }
           if (n >= 12) this.acc = 0;
         }
-      } else if (this.cardOpen) { this.ctrl.update(dt); if (this.ctrl.grab.pressed || this.ctrl.skill.pressed || this.ctrl.push.pressed) this.closeCard(); }
+      } else if (this.maskOpen) { this.ctrl.update(dt); this.maskInput(); }
+      else if (this.shopping) { this.ctrl.update(dt); const k = this.ctrl; if (k.push.pressed) this.sk.pick(0); else if (k.grab.pressed) this.sk.pick(1); else if (k.dash.pressed) this.sk.pick(2); }
+      else if (this.cardOpen) { this.ctrl.update(dt); if (this.ctrl.grab.pressed || this.ctrl.skill.pressed || this.ctrl.push.pressed) this.closeCard(); }
       // the result screen answers the slap button however it's mapped (keys, pad, phone): J = try again / continue, K = quit
       if (this.over && this.el('.ch-over').classList.contains('on')) {
         this.overT = (this.overT || 0) + dt;
@@ -200,12 +201,12 @@
       const P = this.P;
       this.flow(dt);
       this.playerStep(P, dt);
-      for (const a of this.actors) if (a !== P) this.enemyStep(a, dt);
-      for (const a of this.actors) this.physics(a, dt);
+      for (const a of this.actors) if (a !== P) this.enemyStep(a, dt * this.sk.tscale(a));
+      for (const a of this.actors) this.physics(a, dt * this.sk.tscale(a));
       this.separate();
       this.propStep(dt);
       this.shotStep(dt);
-      this.fireStep(dt);
+      this.fireStep(dt); this.sk.step(dt);
       if (this.abCd > 0) this.abCd -= dt;
       // tidy up the knocked-out
       for (const a of this.actors) if (a !== this.P && a.dead && a.t > 2.2 && !a.gone) { this.dropCarry(a); a.gone = true; a.view.dispose ? a.view.dispose(this.scene) : 0; }
@@ -259,7 +260,7 @@
     win() {
       this.over = 'win'; this.slow = 1.2;
       setTimeout(() => {
-        const o = this.el('.ch-over'); o.querySelector('h2').textContent = 'VICTORY';
+        const o = this.el('.ch-over'); o.querySelector('h2').textContent = 'VICTORY'; o.querySelector('h2').dataset.jp = '勝利';
         const t = this.runT || 0, PAR = 360, noHit = !this.hits, noSkill = !this.usedSkill, fast = t < PAR;
         let best = 0; try { best = +localStorage.getItem('kumite.campBest') || 0; if (!best || t < best) localStorage.setItem('kumite.campBest', String(t)); } catch (e) { /* private mode */ }
         const yen = 200000 + (noHit ? 100000 : 0) + (noSkill ? 50000 : 0) + (fast ? 50000 : 0);
@@ -275,7 +276,7 @@
     }
     lose() {
       if (this.over) return; this.over = 'lose';
-      setTimeout(() => { const o = this.el('.ch-over'); o.querySelector('h2').textContent = 'DEFEATED'; o.querySelector('p').textContent = 'Try this area again'; o.querySelector('[data-c="retry"]').style.display = ''; o.classList.add('on'); }, 1200);
+      setTimeout(() => { const o = this.el('.ch-over'); o.querySelector('h2').textContent = 'DEFEATED'; o.querySelector('h2').dataset.jp = '敗北'; o.querySelector('p').textContent = 'Try this area again'; o.querySelector('[data-c="retry"]').style.display = ''; o.classList.add('on'); }, 1200);
     }
 
     // ============================================================== the player
@@ -286,14 +287,16 @@
       let mx = c.mx, mz = c.mz; const mag = Math.hypot(mx, mz);
       if (mag > 1) { mx /= mag; mz /= mag; }
       const dirA = mag > 0.3 ? Math.atan2(mz, mx) : P.f;
-      const wantMove = (sp, turn) => { P.tvx = mx * sp; P.tvz = mz * sp; if (mag > 0.3) P.f += ang(dirA - P.f) * Math.min(1, dt * (turn || 14)); };
+      const heavy = (P.poison > 0 ? 0.6 : 1) * (this.sk.mask.id === 'fish' ? 0.85 : 1);
+      const wantMove = (sp, turn) => { sp *= heavy; P.tvx = mx * sp; P.tvz = mz * sp; if (mag > 0.3) P.f += ang(dirA - P.f) * Math.min(1, dt * (turn || 14)); };
       P.tvx = 0; P.tvz = 0;
       const giant = P.giant > 0 ? 1.35 : 1;
       // STAMINA (as in versus): dodges, charges, slaps and throws spend it; it comes back when you ease off. Run dry and you're slow and weak
       if (P.stam === undefined) P.stam = 1;
       if (P.stamT > 0) P.stamT -= dt; else P.stam = Math.min(1, P.stam + dt * (P.st === 'free' ? 0.34 : 0.2));
+      if (this.sk.player(P, dt, mx, mz)) { if (c.skill.pressed && this.ability && this.abCd <= 0 && !this.sk.gulp && !P.sk) this.useAbility(); return; } // a skill is driving (cyclone, daruma, torpedo...)
       // the ability (space)
-      if (c.skill.pressed && this.ability && this.abCd <= 0 && ['free', 'hold', 'strike'].includes(P.st)) this.useAbility();
+      if (c.skill.pressed && this.ability && this.abCd <= 0 && !this.sk.gulp && ['free', 'hold', 'strike'].includes(P.st)) this.useAbility();
       // drink machines sell skills: one each (a new one replaces the one you have)
       let vm = null; for (const b of this.map.breakables) if (b.kind === 'vend' && !b.broken && !b.used && Math.hypot(P.x - (b.x + b.fx * 0.7), P.z - (b.z + b.fz * 0.7)) < 1.5) vm = b;
       const nearG = !!vm, atStart = P.z > -11 && !this.ability;
@@ -354,8 +357,8 @@
         }
         case 'lprep': {
           wantMove(0.5);
-          if (!c.dash.held) { const v = this.tired(P) ? 6.5 : 11; this.spend(P, 0.16); this.set(P, 'dodge', 0.24); P.iframe = this.tired(P) ? 0.12 : 0.26; const d = mag > 0.3 ? dirA : P.ldir; P.vx = Math.cos(d) * v; P.vz = Math.sin(d) * v; P.f = d; this.g.audio.whoosh(0.15); }
-          else if (P.t >= P.dur) { if (P.stam < 0.12) { this.set(P, 'free'); this.popAt(P, 'TIRED!'); break; } this.spend(P, 0.08); this.set(P, 'charge', 1.5); P.cdir = mag > 0.3 ? dirA : P.ldir; P.f = P.cdir; P.chargeHits = new Set(); this.g.audio.whoosh(0.35); }
+          if (!c.dash.held) { const v = (this.tired(P) ? 6.5 : 11) * (this.sk.mask.id === 'kitsune' ? 1.9 : 1); this.spend(P, 0.16); this.set(P, 'dodge', 0.24); P.iframe = this.tired(P) ? 0.12 : this.sk.mask.id === 'kitsune' ? 0.42 : 0.26; const d = mag > 0.3 ? dirA : P.ldir; P.vx = Math.cos(d) * v; P.vz = Math.sin(d) * v; P.f = d; this.g.audio.whoosh(0.15); }
+          else if (P.t >= P.dur || this.sk.mask.id === 'tengu') { if (P.stam < 0.12) { this.set(P, 'free'); this.popAt(P, 'TIRED!'); break; } this.spend(P, 0.08); this.set(P, 'charge', 1.5); P.cdir = mag > 0.3 ? dirA : P.ldir; P.f = P.cdir; P.chargeHits = new Set(); this.g.audio.whoosh(0.35); }
           break;
         }
         case 'dodge': P.tvx = P.vx * 0.9; P.tvz = P.vz * 0.9; if (P.t >= P.dur) this.set(P, 'free'); break;
@@ -467,7 +470,7 @@
     // the slam: hoist them overhead and drive them straight down into the floor
     slam(P) { this.spend(P, 0.14); this.set(P, 'slam', 0.55); P.slamDone = false; this.g.audio.whoosh(0.35); }
     tossLand(P, B) {
-      this.addScore(800);
+      this.addScore(800); if (this.sk.mask.id === 'oni') { P.hp = Math.min(P.maxHp, P.hp + 15); this.popAt(P, '+15'); }
       P.tossDone = true; B.holder = null; B.y = 0; B.st = 'free';
       const fx = Math.cos(P.f), fz = Math.sin(P.f);
       this.damage(B, B.kind === 'boss' ? 40 : 30, P, fx * 2, fz * 2, true);
@@ -477,7 +480,7 @@
       for (const T of this.actors) if (T !== B && T.team === 1 && !T.dead && Math.hypot(T.x - B.x, T.z - B.z) < 2.6) { const a = Math.atan2(T.z - B.z, T.x - B.x); this.damage(T, 8, P, Math.cos(a) * 4, Math.sin(a) * 4, true); }
     }
     slamHit(P, H) {
-      this.addScore(500);
+      this.addScore(500); if (this.sk.mask.id === 'oni') { P.hp = Math.min(P.maxHp, P.hp + 15); this.popAt(P, '+15'); }
       P.held = null; H.holder = null;
       const fx = Math.cos(P.f), fz = Math.sin(P.f);
       H.x = P.x + fx * 0.95; H.z = P.z + fz * 0.95; H.y = 0; H.vx = fx * 0.8; H.vz = fz * 0.8; H.slammed = true; H.st = 'free';
@@ -540,10 +543,11 @@
       if (A === this.P && T.team === 1 && dmg > 0 && !T.dead) this.addScore(dmg * 10);
       if (A && this.tired(A)) { dmg *= 0.6; kx = (kx || 0) * 0.6; kz = (kz || 0) * 0.6; } // swinging on empty
       if (T.dead) return;
+      { const km = this.sk.dmgMul(T, A, dmg); if (km === 0) return; dmg *= km; }
       if (T.sleep) T.sleep = false;
       if (T === this.P) {
         if (T.iframe > 0 || T.st === 'dodge' || T.iron > 0) { if (T.iron > 0) this.popAt(T, 'IRON BODY'); return; }
-        if (T.st === 'parry' && T.t < 0.22 && A && A !== T) { this.parried(A, T); return; }
+        if (T.st === 'parry' && T.t < (this.sk.mask.id === 'tengu' ? 0.07 : 0.22) && A && A !== T) { this.parried(A, T); return; }
         if (T.st === 'block') { dmg *= 0.35; kx *= 0.3; kz *= 0.3; heavy = false; this.g.audio.thump(2); }
         if (T.giant > 0) { heavy = false; kx *= 0.3; kz *= 0.3; }
       }
@@ -572,8 +576,11 @@
         T.hitRun = (T.hitRun || []).filter((h) => this.t - h < 2.5); T.hitRun.push(this.t);
         if (T.hitRun.length >= 3 && T.st !== 'act') { T.hitRun = []; this.set(T, 'dazed', 1.0); T.stun = 1.0; }
       }
+      this.sk.afterHit(T, A);
     }
     ko(T, kx, kz) {
+      if (T === this.P && this.sk.saveFromDeath()) return; // REWIND fires by itself
+      if (T !== this.P && T.team === 1 && this.sk.mask.id === 'okame' && Math.random() < 0.45) this.addProp('onigiri', T.x, T.z);
       T.hp = 0;
       if (T === this.P) { T.dead = true; this.set(T, 'down', 99); this.lose(); return; }
       this.addScore(T.kind === 'boss' ? 10000 : T.kind === 'sumo' ? 3000 : 1000);
@@ -599,6 +606,7 @@
       if (E.blind > 0) E.blind -= dt;
       if (E.dead) { E.vx *= 0.9; E.vz *= 0.9; return; }
       if (E.sleep) { E.tvx = 0; E.tvz = 0; return; }
+      if (this.sk.drive(E, dt)) return;
       if (E.st === 'tossed') { E.tvx = 0; E.tvz = 0; if (E.t > 1.2) { E.y = 0; this.set(E, 'free'); } return; } // carried by a belly toss
       if (E.kind === 'boss') { this.bossStep(E, dt); return; }
       const P = this.P, dx = P.x - E.x, dz = P.z - E.z, d = Math.hypot(dx, dz), toP = Math.atan2(dz, dx);
@@ -705,7 +713,7 @@
         case 'grab':
           if (!E.hitDone && E.t > 0.05) {
             E.hitDone = true;
-            if (d < E.r + P.r + 0.75 && Math.abs(ang(toP - E.f)) < 0.9 && !['down', 'dodge', 'grabbed', 'getup'].includes(P.st) && P.iframe <= 0 && !(P.giant > 0)) {
+            if (d < E.r + P.r + 0.75 && Math.abs(ang(toP - E.f)) < 0.9 && !['down', 'dodge', 'grabbed', 'getup'].includes(P.st) && P.iframe <= 0 && !(P.giant > 0) && !(P.sk && (P.sk.kind === 'ball' || P.sk.kind === 'cyc')) && !(P.invuln > 0)) {
               if (P.st === 'parry' && P.t < 0.22) { this.parried(E, P); break; }
               if (P.held) this.release(P);
               this.set(P, 'grabbed'); P.holder = E; P.esc = 0; E.holdP = P; this.set(E, 'hold'); this.g.audio.grab();
@@ -808,10 +816,32 @@
       const c = this.el('.ch-card'); c.querySelector('b').textContent = A.name; c.querySelector('span').textContent = A.desc; c.classList.add('on');
       this.el('.ch-ab em').textContent = A.name; this.g.audio.clack(); this.g.audio.swell(0.5, 1.2);
     }
+    // ============================================================== the mask picker (before the market opens)
+    openMasks() { this.maskOpen = true; this.maskI = 0; this.maskHold = 0; this.drawMasks(); this.el('.ch-mask').classList.add('on'); }
+    drawMasks() {
+      const M = S.CampSkills.MASKS, touch = S.touch && S.touch.on;
+      this.el('.ch-mask').innerHTML = '<h2 data-jp="面">CHOOSE A MASK</h2>' + M.map((m, i) => '<button data-mask="' + i + '" class="' + (i === this.maskI ? 'sel' : '') + '"><span class="jp">' + m.jp + '</span>' + m.name + '<small>' + m.desc + '</small></button>').join('') +
+        '<p>' + (touch ? 'Tap a mask' : 'W / S to choose · J or Enter to wear it') + '</p>';
+    }
+    maskMove(d) { const n = S.CampSkills.MASKS.length; this.maskI = (this.maskI + d + n) % n; this.drawMasks(); this.g.audio.tick && this.g.audio.tick(); }
+    maskInput() {
+      const k = this.ctrl; if (k.push.pressed) { this.pickMask(this.maskI); return; }
+      const v = k.mz; if (Math.abs(v) > 0.5) { if (this.maskHold <= 0) { this.maskMove(v > 0 ? 1 : -1); this.maskHold = 0.22; } this.maskHold -= 1 / 60; } else this.maskHold = 0;
+    }
+    pickMask(i) {
+      const M = S.CampSkills.MASKS[i]; if (!M || !this.maskOpen) return;
+      this.maskOpen = false; this.el('.ch-mask').classList.remove('on'); this.sk.mask = M; this.g.audio.clack();
+      const mesh = S.CampSkills.maskMesh(M.id); if (mesh && this.P.view.head) { const s = this.P.view.s || 1; mesh.scale.setScalar(s); this.P.view.head.add(mesh); }
+      if (M.id !== 'none') this.say(M.name, M.desc, 2.4);
+      if (M.id === 'okame') for (const b of this.map.breakables) if (b.kind === 'vend') { b.used = true; if (b.glow) b.glow.visible = false; if (b.arrow) b.arrow.visible = false; }
+      if (M.id === 'okame') this.prompt('');
+      if (M.id === 'fish') { const t = this.addProp('tuna', this.P.x, this.P.z); t.held = this.P; this.P.held = t; this.set(this.P, 'hold'); }
+    }
     closeCard() { this.cardOpen = false; this.el('.ch-card').classList.remove('on'); this.prompt('Use it with SPACE. It recharges.'); setTimeout(() => this.prompt(''), 3500); }
     useAbility() {
       const A = this.ability, P = this.P, fx = Math.cos(P.f), fz = Math.sin(P.f);
       this.abCd = A.cd; this.popAt(P, A.name); this.g.audio.swell(0.4, 0.8);
+      if (this.sk.use(A)) return;
       const near = (r, cone) => this.actors.filter((e) => e.team === 1 && !e.dead && Math.hypot(e.x - P.x, e.z - P.z) < r && (!cone || Math.abs(ang(Math.atan2(e.z - P.z, e.x - P.x) - P.f)) < cone));
       switch (A.id) {
         case 'molotov': { // lob it onto the nearest enemy ahead (or 4m in front)
@@ -888,8 +918,8 @@
         a.vy -= 18 * dt; a.y += a.vy * dt;
         for (const T of this.actors) if (T !== a && T !== a.thrownBy && !T.dead && T.team === a.team && Math.hypot(T.x - a.x, T.z - a.z) < T.r + a.r && a.y < 1.4) { this.damage(T, 15, a.thrownBy, a.vx * 0.6, a.vz * 0.6, true); }
         if (a.y <= 0) { a.y = 0; this.brk.crack(a.x, a.z, 1.5); this.damage(a, 20, a.thrownBy, a.vx * 0.4, a.vz * 0.4, true); if (!a.dead) this.set(a, 'down', 1.1); this.shake = 0.3; this.g.audio.thump(8); this.fx.dust(a.x, 0.05, a.z, 8, 0.4, 0.5, 0.4); }
-      } else if (a.st !== 'held' && a.st !== 'clawed' && a.st !== 'tossed') a.y = 0;
-      if (a.st === 'held' || a.st === 'grabbed' || a.st === 'tossed') return;
+      } else if (a.st !== 'held' && a.st !== 'clawed' && a.st !== 'tossed' && !(a === this.P && a.sk && a.sk.kind === 'flop')) a.y = 0;
+      if (a.st === 'held' || a.st === 'grabbed' || a.st === 'tossed' || a.st === 'swallowed') return;
       a.x += a.vx * dt; a.z += a.vz * dt;
       // walls (axis-aligned boxes) and the zone gates
       for (const w of this.map.walls) this.pushOut(a, w);
@@ -904,7 +934,7 @@
       if (d >= a.r) return false;
       const sp0 = Math.hypot(a.vx, a.vz);
       if (w.brk && !w.brk.broken && this.brk) { // a charge, a thrown body or a charging sumo goes straight through a stall
-        const ram = (a === this.P && a.st === 'charge' && sp0 > 6) || (a.st === 'thrown' && sp0 > 3) || ((a.kind === 'boss' || a.kind === 'sumo') && a.st === 'act' && a.atk === 'charge');
+        const ram = (a === this.P && a.st === 'charge' && sp0 > 6) || (a === this.P && a.sk && (a.sk.kind === 'torp' || (a.sk.kind === 'ball' && sp0 > 6))) || (a.st === 'thrown' && sp0 > 3) || ((a.kind === 'boss' || a.kind === 'sumo') && a.st === 'act' && a.atk === 'charge');
         if (ram && this.brk.smash(w.brk, a.st === 'thrown' && a.thrownBy ? a.thrownBy : a, a.vx, a.vz)) return false;
       } else if (!w.brk && d > 1e-5 && sp0 > 5 && (a.st === 'thrown' || (a === this.P && a.st === 'charge')) && !(a.crackT > 0) && this.brk) { a.crackT = 0.5; this.brk.wallCrack(cx, cz, dx / d, dz / d, a.st === 'thrown' ? 1.0 + (a.y || 0) : 0.9); this.shake = Math.max(this.shake, 0.3); }
       if (d < 1e-5) { // centre inside the box: push out the shortest way
@@ -915,7 +945,7 @@
       return true;
     }
     separate() {
-      const L = this.actors.filter((a) => !a.dead && !['held', 'grabbed', 'thrown', 'clawed', 'tossed'].includes(a.st));
+      const L = this.actors.filter((a) => !a.dead && !['held', 'grabbed', 'thrown', 'clawed', 'tossed', 'swallowed'].includes(a.st) && !(a.sk && a.sk.kind === 'flop'));
       for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
         const A = L[i], B = L[j], dx = B.x - A.x, dz = B.z - A.z, d = Math.hypot(dx, dz), m = A.r + B.r;
         if (d >= m || d < 1e-5) continue;
@@ -1036,7 +1066,7 @@
     draw(dt) {
       const R = this.R, T = this.t;
       for (const a of this.actors) {
-        const cz = this.camT ? this.camT.z : this.P.z, far = a !== this.P && (a.z - cz > 11 || cz - a.z > 23); // off the screen (behind the camera or far up the street): don't draw or animate it
+        const cz = this.camT ? this.camT.z : this.P.z, far = a !== this.P && (a.z - cz > 11 || cz - a.z > 23 || a.st === 'swallowed'); // off the screen (behind the camera or far up the street): don't draw or animate it
         if (far) { a.view.root.visible = false; if (a.view.body && a.view.body.wrap) a.view.body.wrap.visible = false; if (a.view.shadow) a.view.shadow.visible = false; continue; }
         this.drawActor(a, dt, T);
       }
@@ -1047,7 +1077,7 @@
       }
       for (const F of this.fires) F.mesh.material.opacity = 0.35 + Math.sin(T * 20 + F.x) * 0.1;
       this.map.update(T);
-      this.fx.update(dt); this.brk.update(dt);
+      this.fx.update(dt); this.brk.update(dt); this.sk.draw(dt, T);
       this.telegraphs(T);
       // camera: high angle, follows you, frames the space ahead
       const P = this.P, Z = this.zones[this.zi], boss = Z && Z.boss && Z.state === 'fight';
@@ -1076,9 +1106,11 @@
         if (st === 'act' && a.atk === 'stomp') w.t = 0.46 + a.t;
         w.dur = a.dur || 1; w.hand = a.hand || 0; w.down = st === 'down' && a.t > 0.25; w.fallX = a.fallX || 0; w.fallZ = a.fallZ || 1; w.ddx = Math.cos(a.f); w.ddz = Math.sin(a.f);
         w.fxs = { dizzy: a.stun > 0 || st === 'dazed' ? 1 : 0, frozen: a.frozen > 0 ? 1 : 0, invuln: a.iron > 0 ? 1 : 0 };
+        if (a === this.P) { Object.assign(w.fxs, this.sk.fxs()); w.ballRoll = a.sk && a.sk.roll; w.torpedo = !!(a.sk && a.sk.kind === 'torp'); a.view.viewer = -1; }
+        if (a.clone) { w.fxs.invuln = 0; }
         w.lifted = st === 'held' || st === 'clawed' || st === 'tossed';
         a.view.update(w, Math.max(dt, 1e-4), T);
-        a.view.root.visible = !(a.iframe > 0 && st === 'getup' && Math.sin(T * 40) > 0);
+        a.view.root.visible = !(a.iframe > 0 && st === 'getup' && Math.sin(T * 40) > 0) && !(w.fxs.ball > 0); // a daruma replaces the body
       } else { if (a.team === 1) a.engage = !a.dead && Math.hypot(this.P.x - a.x, this.P.z - a.z) < 5.5; a.view.update(a, dt, T); }
     }
     telegraphs(T) {

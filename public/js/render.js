@@ -399,6 +399,13 @@
     // a wrestler turned into something else: a rolling ball or a tiny chicken
     morph(w, dt, show) {
       const sc = this.scene;
+      // CYCLONE: a whirlwind funnel and wind rings spinning round the wrestler
+      if (w.fxs.cyclone > 0 && show) {
+        if (!this.cycM) this.cycM = S.R3.cyclone(); if (!this.cycM.parent) sc.add(this.cycM);
+        const s = (w.szCur || 1) * w.a.scale, k = Math.min(1, w.fxs.cyclone / 0.5, (5 - w.fxs.cyclone) / 0.3);
+        S.R3.cycloneUpdate(this.cycM, w.x, w.z, s, k, dt);
+        if (this.fx && Math.random() < dt * 30) { const a = Math.random() * 6.3; this.fx.dust(w.x + Math.cos(a) * 0.9 * s, 0.05, w.z + Math.sin(a) * 0.9 * s, 1, 0.25, 0.5, 0.35, -Math.sin(a) * 4, Math.cos(a) * 4); }
+      } else if (this.cycM) this.cycM.visible = false;
       if (w.fxs.ball > 0 && show) {
         if (!this.ballM) {
           const g = new THREE.Group();
@@ -478,6 +485,7 @@
       this.stompLift = 0; this.hyT = 0; this.turnAway = 0;
       let Rh = G, Lh = mir(G);
       this.hook = 0;
+      if (w.fxs && w.fxs.cyclone > 0) { const A = [1.02, 0.95, 0.0]; return { c: 0.32, p: -0.05, r: 0, tw: 0, hp: -0.05, Rh: A, Lh: mir(A), rate: 22, drop: 0 }; } // CYCLONE: arms straight out
       switch (w.st) {
         case 'ready': {
           // standing ready, hands on knees; hold L to drop into the full crouch, fists on the clay
@@ -1179,6 +1187,32 @@
       this.pass(this.comp, null);
     }
   }
+
+  // ------------------------------------------------------------------ CYCLONE whirlwind (versus and campaign)
+  let cycTex = null;
+  const cyclone = () => {
+    if (!cycTex) cycTex = canvasTex(256, 128, (g) => {
+      g.clearRect(0, 0, 256, 128); g.lineCap = 'round';
+      for (let i = 0; i < 14; i++) { const y = 8 + Math.random() * 112, x = Math.random() * 256, l = 50 + Math.random() * 110; g.strokeStyle = 'rgba(255,255,255,' + (0.35 + Math.random() * 0.6) + ')'; g.lineWidth = 2 + Math.random() * 5; g.beginPath(); g.moveTo(x, y); g.lineTo(x + l, y - l * 0.12); g.stroke(); }
+    });
+    const grp = new THREE.Group();
+    const mat = () => { const t = cycTex.clone(); t.wrapS = THREE.RepeatWrapping; t.needsUpdate = true; return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, opacity: 0.55, color: 0xdff4ff }); };
+    const funnel = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 0.55, 2.4, 28, 1, true), mat()); funnel.position.y = 1.2; grp.add(funnel);
+    const inner = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.45, 2.0, 24, 1, true), mat()); inner.position.y = 1.0; inner.material.opacity = 0.35; grp.add(inner);
+    const rings = [0.25, 0.9, 1.6].map((y, i) => { const r = new THREE.Mesh(new THREE.TorusGeometry(0.9 + i * 0.2, 0.025, 6, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false })); r.rotation.x = Math.PI / 2; r.position.y = y; grp.add(r); return r; });
+    grp.userData = { funnel, inner, rings, t: 0 };
+    return grp;
+  };
+  const cycloneUpdate = (grp, x, z, s, k, dt) => {
+    const U = grp.userData; U.t += dt;
+    grp.visible = k > 0.01; grp.position.set(x, 0, z); grp.scale.set(s * (0.6 + 0.4 * k), s, s * (0.6 + 0.4 * k));
+    U.funnel.rotation.y -= dt * 14; U.inner.rotation.y -= dt * 20;
+    U.funnel.material.map.offset.x -= dt * 2.5; U.inner.material.map.offset.x -= dt * 3.5;
+    U.funnel.material.opacity = 0.55 * k; U.inner.material.opacity = 0.35 * k;
+    U.rings.forEach((r, i) => { r.rotation.z += dt * (9 + i * 3); const p = 1 + 0.12 * Math.sin(U.t * 12 + i * 2); r.scale.set(p, p, 1); r.material.opacity = 0.7 * k; });
+  };
+
+  S.R3.cyclone = cyclone; S.R3.cycloneUpdate = cycloneUpdate;
 
   // ------------------------------------------------------------------ Renderer
   class Renderer {

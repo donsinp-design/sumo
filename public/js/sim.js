@@ -85,13 +85,14 @@
     // what the wrestler's body actually receives this frame (status effects bend the controls)
     xform(w) {
       let c = w.ctrl; const f = w.fxs, P = w._px || (w._px = {});
-      // SAKE: everything they press arrives 0.4s late
+      // SAKE: everything they press arrives 0.4s late, with the directions reversed
       if (f.drunk > 0) {
         const sn = (b) => ({ held: b.held, pressed: b.pressed, released: b.released, t: b.t });
         (w.dq || (w.dq = [])).push({ mx: c.mx, mz: c.mz, push: sn(c.push), grab: sn(c.grab), dash: sn(c.dash), skill: sn(c.skill), wd: null, ar: null });
         c = w.dq.length > 48 ? w.dq.shift() : { mx: 0, mz: 0, push: S.NULL_IN.push, grab: S.NULL_IN.grab, dash: S.NULL_IN.dash, skill: S.NULL_IN.skill };
       } else if (w.dq && w.dq.length) w.dq = [];
       let mx = c.mx, mz = c.mz;
+      if (f.drunk > 0) { mx = -mx; mz = -mz; } // ...and the stick is backwards: left is right, up is down
       // POSSESSION: the body runs for the nearest edge, whatever they press
       if (f.possessed > 0) {
         let px = w.x, pz = w.z, l = Math.hypot(px, pz);
@@ -579,7 +580,7 @@
     tryClinch(w) {
       const o = w.opp;
       if (w.gripCD > 0) return false; // hands still shaken loose from the last grip
-      if (o.clinch || o.down || o.st === 'fall' || o.st === 'charge' || o.st === 'dash' || o.st === 'air' || o.fxs.thru > 0 || o.swallowed || w.swallowed || w.gulpI >= 0 || o.fxs.ball > 0 || w.fxs.ball > 0 || o.fxs.chicken > 0 || w.fxs.chicken > 0 || o.carried || w.carried || o.inShop || w.inShop) return false;
+      if (o.clinch || o.down || o.st === 'fall' || o.st === 'charge' || o.st === 'dash' || o.st === 'air' || o.fxs.thru > 0 || o.swallowed || w.swallowed || w.gulpI >= 0 || o.fxs.ball > 0 || w.fxs.ball > 0 || o.fxs.cyclone > 0 || w.fxs.cyclone > 0 || o.fxs.chicken > 0 || w.fxs.chicken > 0 || o.carried || w.carried || o.inShop || w.inShop) return false;
       const dx = o.x - w.x, dz = o.z - w.z, d = Math.hypot(dx, dz) || 1e-4;
       if (d > w.r + o.r + 0.45) return false;
       const nx = dx / d, nz = dz / d;

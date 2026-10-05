@@ -170,6 +170,7 @@
       c.g.audio.thump(11); c.g.audio.slap(7); c.g.audio.scuff();
       c.popAt(by, b.kind === 'stall' ? 'STALL SMASHED!' : 'TABLE SMASHED!');
       if (by === c.P) c.addScore(300);
+      if (c.sk && c.sk.mask.id === 'fish') for (const t of ['knife', 'bottle']) { const q = c.addProp(t, b.x + dx * rnd(0.8, 1.6), b.z + rnd(-0.5, 0.5)); q.y = 0.5; q.vy = 3; q.vx = dx * 3; q.vz = rnd(-1, 1); q.hop = true; } // the fishmonger's stalls hide more weapons
       // anyone standing next to it gets caught in the wreckage
       for (const e of c.actors) if (e !== by && e.team === 1 && !e.dead && e.st !== 'held' && Math.abs(e.x - b.x) < 1.6 && e.z < b.z + b.len / 2 + 0.6 && e.z > z0 - 0.6) c.damage(e, 10, by, dx * 6, dz * 6, true);
       return true;
