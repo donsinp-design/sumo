@@ -84,7 +84,7 @@
       for (const p of this.map.props) this.addProp(p.type, p.x, p.z, p.ry);
       const arch = S.ARCH[g.sel && g.sel.c1 !== undefined ? g.sel.c1 : 0];
       this.P = this.addActor('player', this.map.start.x, this.map.start.z, { arch, lo: S.profile.loadout() });
-      this.P.f = -Math.PI / 2;
+      this.P.f = -Math.PI / 2; this.arch = arch; this.score = 0; this.scoreCp = 0;
       this.camT = new THREE.Vector3(this.P.x, 0, this.P.z - 2.5);
       // everyone is already in place when the market opens: fixed spots (learnable for speedruns), asleep until you walk in
       this.zones.forEach((Z, i) => this.populate(Z, i));
@@ -137,9 +137,12 @@
     buildHud() {
       { const tp = document.getElementById('tutPanel'); if (tp) tp.classList.remove('on'); }
       const h = this.hud = document.createElement('div'); h.id = 'campHud';
-      h.innerHTML = '<div class="ch-time">0:00.0</div><div class="ch-me"><b>YOU</b><span class="ch-bar"><i></i></span><span class="ch-stam"><i></i></span><div class="ch-ab"><em>NO ABILITY</em><span class="ch-cd"><i></i></span><kbd>SPACE</kbd></div></div>' +
+      const name = (this.arch && this.arch.name) || 'TAKAKAZE';
+      h.innerHTML = '<div class="ch-me"><div class="ch-score">0000000</div><span class="ch-bar"><i></i></span><span class="ch-stam"><i></i></span><b class="ch-name">' + name + '</b></div>' +
+        '<div class="ch-time">0:00</div>' +
+        '<div class="ch-ab"><em>NO SKILL</em><kbd>SPACE</kbd><span class="ch-cd"><i></i></span></div>' +
         '<div class="ch-zone"></div><div class="ch-say"><b></b><span></span></div><div class="ch-prompt"></div>' +
-        '<div class="ch-boss"><b></b><span class="ch-bar"><i></i></span></div><div class="ch-bars"></div>' +
+        '<div class="ch-boss"><div class="ch-score">BOSS</div><span class="ch-bar"><i></i></span><b class="ch-name"></b></div><div class="ch-bars"></div>' +
         '<div class="ch-card"><div class="ch-cap"></div><b></b><span></span><em>' + (S.touch && S.touch.on ? 'GRAB or SKILL' : 'K or SPACE') + ' to keep it</em></div>' +
         '<div class="ch-pause"><h2>PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART AREA</button><button data-c="quit">QUIT TO TITLE</button><p>J slap ×3 · K grab / throw · L parry · L+dir dodge, hold to CHARGE · SPACE ability</p></div>' +
         '<div class="ch-over"><h2></h2><p></p><button data-c="retry">TRY AGAIN <kbd>J</kbd></button><button data-c="quit">QUIT TO TITLE <kbd>Esc</kbd></button></div>';
@@ -148,6 +151,7 @@
       this.el = (s) => h.querySelector(s);
       this.barEls = [];
     }
+    addScore(n) { if (!this.over) this.score = (this.score || 0) + Math.round(n); }
     say(big, small, dur) { const e = this.el('.ch-say'); e.querySelector('b').textContent = big; e.querySelector('span').textContent = small || ''; e.classList.add('on'); clearTimeout(this.sayT); this.sayT = setTimeout(() => e.classList.remove('on'), (dur || 2.5) * 1000); }
     prompt(t) {
       if (t && S.touch && S.touch.on) t = t.replace(/\b([Pp])ress (J|K|L|SPACE)\b|\b(J|K|L|SPACE)\b/g, (m, P, k1, k2) => { const k = k1 || k2, n = { J: 'PUSH', K: 'GRAB', L: 'DEFEND', SPACE: 'SKILL' }[k]; return P ? (P === 'P' ? 'Tap ' : 'tap ') + n : n; });
@@ -213,7 +217,7 @@
     // the boss wakes when you step onto the auction floor; beating him wins.
     flow(dt) {
       const P = this.P;
-      const here = this.zones.findIndex((z) => P.z <= z.z0 && P.z > z.z1); if (here > (this.cp || 0)) this.cp = here; // checkpoint: the furthest area you've reached
+      const here = this.zones.findIndex((z) => P.z <= z.z0 && P.z > z.z1); if (here > (this.cp || 0)) { this.cp = here; this.scoreCp = this.score; } // checkpoint: the furthest area you've reached
       for (const Z of this.zones) {
         for (const e of Z.ens) {
           if (!e.sleep || e.dead) continue;
@@ -249,7 +253,7 @@
       this.actors = this.actors.filter((a) => { if (a !== this.P && a.zone === Z) { this.dropCarry(a); if (a.bang) this.scene.remove(a.bang); if (a.view.dispose) a.view.dispose(this.scene); return false; } return true; });
       Z.state = 'wait'; Z.bossDone = false; this.B = null; this.el('.ch-boss').classList.remove('on');
       this.populate(Z, this.zi);
-      const P = this.P; P.hp = P.maxHp; P.stam = 1; P.dead = false; P.st = 'free'; P.t = 0; P.held = null; P.holder = null;
+      const P = this.P; P.hp = P.maxHp; P.stam = 1; P.dead = false; this.score = this.scoreCp || 0; P.st = 'free'; P.t = 0; P.held = null; P.holder = null;
       P.x = 0; P.z = Z.z0 - 1; P.vx = P.vz = 0; this.shots = [];
     }
     win() {
@@ -260,8 +264,10 @@
         let best = 0; try { best = +localStorage.getItem('kumite.campBest') || 0; if (!best || t < best) localStorage.setItem('kumite.campBest', String(t)); } catch (e) { /* private mode */ }
         const yen = 200000 + (noHit ? 100000 : 0) + (noSkill ? 50000 : 0) + (fast ? 50000 : 0);
         const badge = (on, txt) => '<span class="ch-badge' + (on ? ' on' : '') + '">' + txt + '</span>';
-        o.querySelector('p').innerHTML = 'TIME <b>' + fmtT(t) + '</b>' + (best && t >= best ? ' · best ' + fmtT(best) : best ? ' · NEW BEST' : '') + ' · hits taken <b>' + (this.hits || 0) + '</b><br>' +
-          badge(noHit, 'NO HIT +100,000') + badge(noSkill, 'NO SKILL +50,000') + badge(fast, 'UNDER ' + fmtT(PAR).slice(0, -2) + ' +50,000') + '<br>+' + yen.toLocaleString() + ' yen';
+        const bonus = (noHit ? 50000 : 0) + (noSkill ? 20000 : 0) + (fast ? 20000 : 0); this.addScore(bonus);
+        o.querySelector('p').innerHTML = '<div class="ch-total">' + String(this.score).padStart(7, '0') + '</div>' +
+          'Time ' + fmtT(t) + (best && t >= best ? ' · best ' + fmtT(best) : best ? ' · new best' : '') + ' · hits taken ' + (this.hits || 0) + '<br>' +
+          badge(noHit, 'NO HIT') + badge(noSkill, 'NO SKILL') + badge(fast, 'UNDER ' + fmtT(PAR).slice(0, -2)) + '<br>+' + yen.toLocaleString() + ' yen';
         o.querySelector('[data-c="retry"]').style.display = 'none'; o.classList.add('on');
         S.profile.yen += yen; S.profile.save && S.profile.save(); this.g.ui.setYen && this.g.ui.setYen();
       }, 1600);
@@ -461,6 +467,7 @@
     // the slam: hoist them overhead and drive them straight down into the floor
     slam(P) { this.spend(P, 0.14); this.set(P, 'slam', 0.55); P.slamDone = false; this.g.audio.whoosh(0.35); }
     tossLand(P, B) {
+      this.addScore(800);
       P.tossDone = true; B.holder = null; B.y = 0; B.st = 'free';
       const fx = Math.cos(P.f), fz = Math.sin(P.f);
       this.damage(B, B.kind === 'boss' ? 40 : 30, P, fx * 2, fz * 2, true);
@@ -470,6 +477,7 @@
       for (const T of this.actors) if (T !== B && T.team === 1 && !T.dead && Math.hypot(T.x - B.x, T.z - B.z) < 2.6) { const a = Math.atan2(T.z - B.z, T.x - B.x); this.damage(T, 8, P, Math.cos(a) * 4, Math.sin(a) * 4, true); }
     }
     slamHit(P, H) {
+      this.addScore(500);
       P.held = null; H.holder = null;
       const fx = Math.cos(P.f), fz = Math.sin(P.f);
       H.x = P.x + fx * 0.95; H.z = P.z + fz * 0.95; H.y = 0; H.vx = fx * 0.8; H.vz = fz * 0.8; H.slammed = true; H.st = 'free';
@@ -529,6 +537,7 @@
     }
     // incoming damage, with the player's parry and block
     damage(T, dmg, A, kx, kz, heavy) {
+      if (A === this.P && T.team === 1 && dmg > 0 && !T.dead) this.addScore(dmg * 10);
       if (A && this.tired(A)) { dmg *= 0.6; kx = (kx || 0) * 0.6; kz = (kz || 0) * 0.6; } // swinging on empty
       if (T.dead) return;
       if (T.sleep) T.sleep = false;
@@ -567,6 +576,7 @@
     ko(T, kx, kz) {
       T.hp = 0;
       if (T === this.P) { T.dead = true; this.set(T, 'down', 99); this.lose(); return; }
+      this.addScore(T.kind === 'boss' ? 10000 : T.kind === 'sumo' ? 3000 : 1000);
       T.dead = true; this.set(T, 'down', 99); T.fallX = kx || T.hitX || 0; T.fallZ = kz || T.hitZ || 1;
       if (T.holdP) this.escapeFrom(T);
       if (T.holder) { T.holder.held = null; this.set(T.holder, 'free'); T.holder = null; }
@@ -1110,7 +1120,8 @@
     drawHud() {
       const P = this.P;
       this.el('.ch-me .ch-bar i').style.width = Math.max(0, P.hp / P.maxHp * 100) + '%';
-      const tm = this.el('.ch-time'); if (tm) tm.textContent = fmtT(this.runT || 0);
+      const tm = this.el('.ch-time'); if (tm) tm.textContent = fmtT(this.runT || 0).replace(/\.\d$/, '');
+      this.el('.ch-me .ch-score').textContent = String(this.score || 0).padStart(7, '0');
       this.el('.ch-me .ch-bar').classList.toggle('low', P.hp < 30);
       const sb = this.el('.ch-stam'); sb.firstChild.style.width = Math.round((P.stam === undefined ? 1 : P.stam) * 100) + '%'; sb.classList.toggle('tired', this.tired(P));
       const A = this.ability; this.el('.ch-ab').classList.toggle('ready', !!A && this.abCd <= 0);

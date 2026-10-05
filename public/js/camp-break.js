@@ -132,6 +132,7 @@
         if (!b.used && by === c.P) c.getSkill(b); // you smashed it open: the skill is yours anyway
         this.falling.push({ g: b.group, t: 0, ax: new THREE.Vector3(-dz, 0, dx), q0: b.group.quaternion.clone(), p0: b.group.position.clone(), dx, dz });
         if (b.glow) b.glow.visible = false; if (b.arrow) b.arrow.visible = false;
+        if (by === c.P) c.addScore(500);
         c.popAt(by, 'SMASH!'); c.hitstop = Math.max(c.hitstop || 0, 0.06); return true;
       }
       // a stall or a steel table: the whole thing goes
@@ -168,6 +169,7 @@
       c.shake = Math.max(c.shake || 0, 0.55); c.hitstop = Math.max(c.hitstop || 0, 0.07);
       c.g.audio.thump(11); c.g.audio.slap(7); c.g.audio.scuff();
       c.popAt(by, b.kind === 'stall' ? 'STALL SMASHED!' : 'TABLE SMASHED!');
+      if (by === c.P) c.addScore(300);
       // anyone standing next to it gets caught in the wreckage
       for (const e of c.actors) if (e !== by && e.team === 1 && !e.dead && e.st !== 'held' && Math.abs(e.x - b.x) < 1.6 && e.z < b.z + b.len / 2 + 0.6 && e.z > z0 - 0.6) c.damage(e, 10, by, dx * 6, dz * 6, true);
       return true;

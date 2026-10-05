@@ -434,65 +434,68 @@ html.touch .rules b, html.touch .bet b, html.touch .foot { display: none; }
 .ph-row span.ok { color: #6fdc8c; opacity: 1; font-weight: 700; }
 .ph-small { font-size: 13px; opacity: 0.75; }
 
-/* ---------------- CAMPAIGN HUD (campaign.js) ---------------- */
-#campHud { position: fixed; inset: 0; z-index: 8; pointer-events: none; font-family: var(--ui); color: var(--paper); }
-#campHud .ch-me { position: absolute; left: 22px; top: 18px; width: min(360px, 44vw); }
-#campHud .ch-me b { font-family: var(--display); font-weight: 400; font-size: 20px; letter-spacing: 0.06em; display: block; margin-bottom: 4px; text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
-#campHud .ch-bar { display: block; height: 14px; background: rgba(0,0,0,0.55); border: 2px solid rgba(255,248,236,0.85); transform: skewX(-12deg); overflow: hidden; }
-#campHud .ch-bar i { display: block; height: 100%; width: 100%; background: linear-gradient(#ffd166, #f2a33a); transition: width 0.12s linear; }
-#campHud .ch-bar.low i { background: linear-gradient(#ff6b5a, #d8342a); animation: chpulse 0.5s infinite alternate; }
-@keyframes chpulse { to { filter: brightness(1.4); } }
-#campHud .ch-ab { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px; letter-spacing: 0.1em; opacity: 0.7; }
-#campHud .ch-ab.ready { opacity: 1; }
-#campHud .ch-ab em { font-style: normal; background: rgba(0,0,0,0.5); padding: 3px 10px; border-left: 4px solid var(--gold); }
-#campHud .ch-ab.ready em { border-color: #3fe0a0; box-shadow: 0 0 12px rgba(63,224,160,0.5); }
-#campHud .ch-cd { width: 70px; height: 6px; background: rgba(0,0,0,0.5); }
-#campHud .ch-cd i { display: block; height: 100%; background: #3fe0a0; }
-#campHud kbd { font: 800 11px var(--ui); background: var(--paper); color: #1a0e14; padding: 2px 6px; border-radius: 3px; }
-#campHud .ch-zone, #campHud .ch-go { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%) skewX(-8deg); font-family: var(--display); font-size: clamp(30px, 6vw, 64px); letter-spacing: 0.08em;
-  text-shadow: 0 4px 0 #e2322b, 0 8px 18px rgba(0,0,0,0.6); opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
-#campHud .ch-zone.on { opacity: 1; }
-#campHud .ch-go { top: 14%; font-size: clamp(26px, 4vw, 42px); color: #3fe0a0; text-shadow: 0 3px 0 #0a3a2a; }
-#campHud .ch-go.on { opacity: 1; animation: chgo 0.6s infinite alternate; }
-@keyframes chgo { to { transform: translate(-50%, -62%) skewX(-8deg); } }
-#campHud .ch-say { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); text-align: center; opacity: 0; transition: opacity 0.3s; }
-#campHud .ch-say.on { opacity: 1; }
-#campHud .ch-say b { display: block; font-family: var(--display); font-weight: 400; font-size: clamp(34px, 7vw, 76px); text-shadow: 0 4px 0 #e2322b, 0 10px 20px rgba(0,0,0,0.7); }
-#campHud .ch-say span { font-weight: 800; letter-spacing: 0.14em; font-size: 16px; color: var(--gold); text-transform: uppercase; }
-#campHud .ch-prompt { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 8px 18px; border-left: 4px solid var(--gold); font-weight: 800; letter-spacing: 0.08em; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
-#campHud .ch-prompt.on { opacity: 1; }
-#campHud .ch-boss { position: absolute; left: 50%; bottom: 26px; width: min(720px, 80vw); transform: translateX(-50%); display: none; text-align: center; }
-#campHud .ch-boss.on { display: block; }
-#campHud .ch-boss b { font-family: var(--display); font-weight: 400; font-size: 22px; letter-spacing: 0.08em; display: block; margin-bottom: 6px; text-shadow: 0 3px 0 #e2322b; }
-#campHud .ch-boss .ch-bar { height: 18px; }
-#campHud .ch-boss .ch-bar i { background: linear-gradient(#ff6b5a, #b8201a); }
-#campHud .ch-bars span { position: absolute; width: 54px; height: 6px; margin-left: -27px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,248,236,0.7); }
-#campHud .ch-bars span i { display: block; height: 100%; background: #ff6b5a; }
-#campHud .ch-card, #campHud .ch-pause, #campHud .ch-over { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; pointer-events: auto; text-align: center;
-  background: #150c14; border: 3px solid var(--paper); box-shadow: 10px 10px 0 #e2322b, 0 20px 60px rgba(0,0,0,0.8); padding: 26px 34px; min-width: min(420px, 86vw); }
-#campHud .ch-card.on, #campHud .ch-pause.on, #campHud .ch-over.on { display: block; }
-#campHud .ch-card .ch-cap { width: 46px; height: 76px; margin: 0 auto 14px; border-radius: 10px / 6px; background: linear-gradient(90deg, rgba(255,255,255,0) 20%, rgba(255,255,255,0.45) 30%, rgba(255,255,255,0) 42%), linear-gradient(180deg, #c8ccd0 0 9%, #e2322b 9% 62%, #fff8ec 62% 74%, #e2322b 74% 91%, #c8ccd0 91%); border: 4px solid #1a0e14; box-shadow: 0 0 0 3px var(--paper); animation: chcap 0.8s ease-out; }
-@keyframes chcap { from { transform: scale(0) rotate(-200deg); } }
-#campHud .ch-card b { display: block; font-family: var(--display); font-weight: 400; font-size: 30px; color: var(--gold); margin-bottom: 8px; }
-#campHud .ch-card span { display: block; font-size: 17px; max-width: 380px; margin: 0 auto 14px; line-height: 1.3; }
-#campHud .ch-card em { font-style: normal; font-weight: 800; letter-spacing: 0.1em; font-size: 13px; opacity: 0.7; }
-#campHud h2 { font-family: var(--display); font-weight: 400; font-size: 40px; margin: 0 0 12px; text-shadow: 0 4px 0 #e2322b; }
-#campHud .ch-pause button, #campHud .ch-over button { display: block; margin: 8px auto; min-width: 240px; font: 800 italic 22px var(--ui); letter-spacing: 0.08em; padding: 6px 18px; border: 0; background: var(--paper); color: #150c14; cursor: pointer; transform: skewX(-8deg); }
-#campHud .ch-pause button:hover, #campHud .ch-over button:hover { background: var(--gold); }
-#campHud .ch-pause p, #campHud .ch-over p { font-size: 15px; opacity: 0.8; max-width: 440px; margin: 14px auto 0; line-height: 1.4; }
+/* ---------------- CAMPAIGN HUD (campaign.js) ----------------
+   Flat and quiet, arcade layout: score over your bar (top left), the clock in the middle, the boss mirrored on the
+   right, your skill meter along the bottom. No offset shadows, no skews, thin rules. */
+#campHud { position: fixed; inset: 0; z-index: 8; pointer-events: none; font-family: var(--ui); color: #f4efe6; --ch-line: rgba(244,239,230,0.55); --ch-dim: rgba(10,6,10,0.62); text-shadow: 0 0 6px rgba(0,0,0,0.55); } /* a soft halo, not an offset shadow: legible over bright signs */
+#campHud .ch-card, #campHud .ch-pause, #campHud .ch-over, #campHud .ch-time { text-shadow: none; }
 body.campaign #hud, body.campaign #hint { display: none !important; }
-
-#campHud .ch-time { position: absolute; top: 14px; right: 18px; font: 800 22px 'Barlow Condensed', sans-serif; color: #fff8ec; letter-spacing: 0.06em; text-shadow: 0 2px 0 #1a0e14; font-variant-numeric: tabular-nums; }
-#campHud .ch-badge { display: inline-block; margin: 6px 4px 0; padding: 3px 8px; font: 800 14px 'Barlow Condensed', sans-serif; border: 2px solid #555; color: #777; letter-spacing: 0.04em; }
-#campHud .ch-badge.on { border-color: #f2c14e; color: #1a0e14; background: #f2c14e; }
-
-/* phones: no keyboard hints in the campaign HUD (the buttons say what they are) */
+#campHud .ch-me, #campHud .ch-boss { position: absolute; top: 16px; width: min(400px, 38vw); }
+#campHud .ch-me { left: 24px; }
+#campHud .ch-boss { right: 24px; text-align: right; display: none; }
+#campHud .ch-boss.on { display: block; }
+#campHud .ch-score { font: 700 20px 'Barlow Condensed', sans-serif; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; margin-bottom: 4px; opacity: 0.92; }
+#campHud .ch-bar { display: block; height: 12px; background: var(--ch-dim); border: 1px solid var(--ch-line); overflow: hidden; }
+#campHud .ch-bar i { display: block; height: 100%; width: 100%; background: #f2c14e; transition: width 0.12s linear; }
+#campHud .ch-boss .ch-bar i { margin-left: auto; background: #e2483a; }
+#campHud .ch-bar.low i { background: #e2483a; animation: chpulse 0.5s infinite alternate; }
+@keyframes chpulse { to { opacity: 0.6; } }
+#campHud .ch-stam { display: block; height: 4px; margin-top: 3px; width: 60%; background: var(--ch-dim); overflow: hidden; }
+#campHud .ch-stam i { display: block; height: 100%; width: 100%; background: #6fd3c4; transition: width .12s linear; }
+#campHud .ch-stam.tired i { background: #e2483a; animation: chtired 0.5s steps(2) infinite; }
+#campHud .ch-name { display: block; margin-top: 6px; font: 600 14px 'Barlow Condensed', sans-serif; letter-spacing: 0.22em; opacity: 0.85; }
+#campHud .ch-time { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); min-width: 84px; text-align: center; padding: 0 12px; background: var(--ch-dim); border: 1px solid rgba(244,239,230,0.2); font: 700 32px/1.3 'Barlow Condensed', sans-serif; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+/* skill meter: bottom left, like a super gauge */
+#campHud .ch-ab { position: absolute; left: 24px; bottom: 22px; width: min(320px, 40vw); font: 600 13px 'Barlow Condensed', sans-serif; letter-spacing: 0.18em; opacity: 0.55; }
+#campHud .ch-ab.ready { opacity: 1; }
+#campHud .ch-ab em { font-style: normal; display: inline-block; margin-bottom: 5px; }
+#campHud .ch-ab kbd { float: right; margin-top: 1px; }
+#campHud .ch-cd { display: block; height: 6px; background: var(--ch-dim); border: 1px solid var(--ch-line); }
+#campHud .ch-cd i { display: block; height: 100%; background: #6fd3c4; }
+#campHud .ch-ab.ready .ch-cd i { background: #f2c14e; }
+#campHud kbd { font: 600 11px 'Barlow Condensed', sans-serif; letter-spacing: 0.08em; border: 1px solid var(--ch-line); color: #f4efe6; padding: 0 5px; background: none; border-radius: 2px; }
+/* centre-screen titles and the prompt */
+#campHud .ch-zone, #campHud .ch-go { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%); font-family: var(--display); font-size: clamp(28px, 5vw, 56px); letter-spacing: 0.1em; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+#campHud .ch-zone.on, #campHud .ch-go.on { opacity: 1; }
+#campHud .ch-say { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%); text-align: center; opacity: 0; transition: opacity 0.3s; }
+#campHud .ch-say.on { opacity: 1; }
+#campHud .ch-say b { display: block; font-family: var(--display); font-weight: 400; font-size: clamp(30px, 6vw, 64px); letter-spacing: 0.04em; }
+#campHud .ch-say span { display: block; margin-top: 4px; font: 600 15px 'Barlow Condensed', sans-serif; letter-spacing: 0.24em; opacity: 0.8; text-transform: uppercase; }
+#campHud .ch-prompt { position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%); padding: 6px 14px; background: var(--ch-dim); font: 600 15px 'Barlow Condensed', sans-serif; letter-spacing: 0.14em; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+#campHud .ch-prompt.on { opacity: 1; }
+#campHud .ch-bars span { position: absolute; width: 54px; height: 5px; margin-left: -27px; background: var(--ch-dim); }
+#campHud .ch-bars span i { display: block; height: 100%; background: #e2483a; }
+/* panels: skill card, pause, result */
+#campHud .ch-card, #campHud .ch-pause, #campHud .ch-over { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; pointer-events: auto; text-align: center;
+  background: rgba(12,8,12,0.92); border: 1px solid var(--ch-line); padding: 28px 40px 24px; min-width: min(400px, 86vw); }
+#campHud .ch-card.on, #campHud .ch-pause.on, #campHud .ch-over.on { display: block; }
+#campHud .ch-card .ch-cap { width: 30px; height: 50px; margin: 0 auto 14px; border-radius: 6px / 4px; background: linear-gradient(180deg, #c8ccd0 0 9%, #e2322b 9% 62%, #f4efe6 62% 74%, #e2322b 74% 91%, #c8ccd0 91%); }
+#campHud .ch-card b { display: block; font-family: var(--display); font-weight: 400; font-size: 28px; letter-spacing: 0.04em; margin-bottom: 8px; }
+#campHud .ch-card span { display: block; font-size: 16px; max-width: 360px; margin: 0 auto 16px; line-height: 1.35; opacity: 0.85; }
+#campHud .ch-card em { font-style: normal; font: 600 13px 'Barlow Condensed', sans-serif; letter-spacing: 0.16em; opacity: 0.6; }
+#campHud h2 { font-family: var(--display); font-weight: 400; font-size: 38px; letter-spacing: 0.06em; margin: 0 0 10px; }
+#campHud .ch-pause button, #campHud .ch-over button { display: block; width: 100%; margin: 0; font: 600 18px 'Barlow Condensed', sans-serif; letter-spacing: 0.18em; padding: 10px 0; border: 0; border-top: 1px solid rgba(244,239,230,0.15); background: none; color: #f4efe6; cursor: pointer; }
+#campHud .ch-pause button:first-of-type, #campHud .ch-over button:first-of-type { margin-top: 14px; }
+#campHud .ch-pause button:hover, #campHud .ch-over button:hover { color: #f2c14e; }
+#campHud .ch-pause button kbd, #campHud .ch-over button kbd { margin-left: 8px; vertical-align: 2px; }
+#campHud .ch-pause p, #campHud .ch-over p { font-size: 15px; opacity: 0.75; max-width: 420px; margin: 4px auto 0; line-height: 1.5; }
+#campHud .ch-badge { display: inline-block; margin: 10px 3px 0; padding: 3px 8px; font: 600 13px 'Barlow Condensed', sans-serif; letter-spacing: 0.08em; border: 1px solid rgba(244,239,230,0.2); color: rgba(244,239,230,0.35); }
+#campHud .ch-badge.on { border-color: #f2c14e; color: #f2c14e; }
+#campHud .ch-total { font: 700 22px 'Barlow Condensed', sans-serif; letter-spacing: 0.1em; margin-top: 12px; }
+/* phones: no keyboard hints (the buttons say what they are); the skill meter sits bottom centre, clear of the stick */
 html.touch #campHud kbd { display: none; }
 html.touch #campHud .ch-pause p { display: none; }
-
-/* campaign stamina: a thin bar under your health (as in versus) */
-#campHud .ch-stam { display: block; height: 7px; margin-top: 4px; width: 78%; background: rgba(10,4,8,0.7); border: 2px solid rgba(246,237,220,0.5); transform: skewX(-12deg); overflow: hidden; }
-#campHud .ch-stam i { display: block; height: 100%; width: 100%; background: #3fc2b4; transition: width .12s linear; }
-#campHud .ch-stam.tired { border-color: #e2322b; animation: chtired 0.5s steps(2) infinite; }
-#campHud .ch-stam.tired i { background: #e2322b; }
+html.touch #campHud .ch-ab { left: 50%; transform: translateX(-50%); bottom: 10px; width: min(260px, 40vw); text-align: center; }
+html.touch #campHud .ch-time { font-size: 26px; top: 8px; }
+html.touch #campHud .ch-me, html.touch #campHud .ch-boss { top: 10px; width: 34vw; }
 @keyframes chtired { 50% { opacity: 0.45; } }

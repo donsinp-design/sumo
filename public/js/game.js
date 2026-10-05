@@ -942,9 +942,15 @@
       this.camp = new S.Campaign(this); this.camp.start();
     }
     endCampaign() {
-      if (this.camp) { this.camp.stop(); this.camp = null; }
-      document.body.classList.remove('playing', 'campaign');
-      this.R.resize(); this.ui.show('title'); this.startAttract();
+      // cover the screen first, tear down underneath, then reveal the title: never a glimpse of the versus stage
+      const done = () => {
+        if (this.camp) { this.camp.stop(); this.camp = null; }
+        document.body.classList.remove('playing', 'campaign');
+        this.R.resize(); this.startAttract(); this.ui.showNow('title');
+      };
+      const bn = S.Banners;
+      if (bn && !bn.busy && this.camp) { if (this.camp.hud) this.camp.hud.style.display = 'none'; bn.flood({ hold: 0.06, speed: 1.6, onCovered: done }); }
+      else done();
     }
     startTraining() {
       if (this.rec) { this.rec = null; if (this.recKeys) this.ctrls[0].src = this.recKeys; }
