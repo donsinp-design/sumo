@@ -93,7 +93,6 @@
         bits: new Pool(sc, new THREE.SphereGeometry(1, 6, 4), toon(0xe8784a, 0x7a2a14, { spec: 0.4 }), 200, 0),
         glass: new Pool(sc, new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xd8f0ff, transparent: true, opacity: 0.8 }), 90, 0),
         rubble: new Pool(sc, new THREE.DodecahedronGeometry(1, 0), toon(0x6e6a72, 0x2a262e), 140, 0.008),
-        cloth: new Pool(sc, new THREE.BoxGeometry(1, 1, 1), toon(0xe2322b, 0x6e1018), 40, 0),
       };
       this.decals = []; this.falling = [];
       this.decalGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
@@ -154,11 +153,10 @@
       }
       // the counter / table itself
       const wood = b.kind === 'stall';
-      for (let i = 0; i < (wood ? 14 : 8); i++) {
+      for (let i = 0, n = Math.ceil(b.len * (wood ? 5 : 3)); i < n; i++) {
         const zz = z0 + rnd(0, b.len);
         (wood ? P.plank : P.steel).spawn(b.x + rnd(-0.7, 0.7), rnd(0.3, 0.9), zz, dx * rnd(2, 7) + rnd(-2, 2), rnd(2, 6), dz * rnd(2, 7) + rnd(-2, 2), wood ? [rnd(0.1, 0.18), 0.04, rnd(0.5, 1.1)] : [0.05, 0.05, rnd(0.4, 0.8)], { flat: true });
       }
-      if (wood) for (let i = 0; i < 6; i++) P.cloth.spawn(b.x + b.sd * rnd(0.5, 1.8), 2.6, z0 + rnd(0, b.len), dx * rnd(1, 3), rnd(0, 2), dz * rnd(1, 3), [rnd(0.3, 0.5), 0.01, rnd(0.3, 0.5)], { flat: true, bounce: 0 });
       // the ice bed bursts: cubes skate everywhere, and the floor under it turns to ice
       const nIce = Math.round(b.len * 22);
       for (let i = 0; i < nIce; i++) { const s = rnd(0.04, 0.09); P.ice.spawn(b.x + rnd(-0.7, 0.7), 1.0, z0 + rnd(0, b.len), dx * rnd(1, 6) + rnd(-3, 3), rnd(1.5, 5), dz * rnd(1, 6) + rnd(-3, 3), [s, s, s], { slide: 1, bounce: 0.25 }); }

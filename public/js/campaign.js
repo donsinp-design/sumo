@@ -330,6 +330,19 @@
           break;
         }
         case 'throw': wantMove(0.6); if (P.t >= P.dur) this.set(P, 'free'); break;
+        case 'btoss': { // belly toss: lift (0-0.3s), heave over in an arc (0.3-0.62s), impact
+          const B = P.tossT, fx = Math.cos(P.f), fz = Math.sin(P.f), t = P.t;
+          P.vx = P.vz = 0; // planted: the heave comes from the legs
+          if (B && !B.dead && B.st === 'tossed') {
+            const d0 = P.r + B.r * 0.7;
+            if (t < 0.3) { const k = t / 0.3, e = k * k * (3 - 2 * k); B.x = P.x + fx * d0; B.z = P.z + fz * d0; B.y = 0.75 * e; if (t > 0.05 && !P.tossUp) { P.tossUp = true; this.g.audio.whoosh(0.3); } }
+            else { const k = Math.min(1, (t - 0.3) / 0.32), d = d0 + 2.3 * k; B.x = P.x + fx * d; B.z = P.z + fz * d; B.y = 0.75 * (1 - k) + 1.5 * Math.sin(Math.PI * k); }
+            B.f = P.f + Math.PI; B.vx = B.vz = 0;
+            if (t >= 0.62 && !P.tossDone) this.tossLand(P, B);
+          } else if (B && B.st === 'tossed' && !P.tossDone) this.tossLand(P, B);
+          if (t >= P.dur) { P.tossT = null; P.tossUp = false; this.set(P, 'free'); }
+          break;
+        }
         case 'lprep': {
           wantMove(0.5);
           if (!c.dash.held) { this.set(P, 'dodge', 0.24); P.iframe = 0.26; const d = mag > 0.3 ? dirA : P.ldir; P.vx = Math.cos(d) * 11; P.vz = Math.sin(d) * 11; P.f = d; this.g.audio.whoosh(0.15); }
@@ -420,8 +433,9 @@
       }
       if (best) {
         if (best.kind === 'boss' || best.kind === 'sumo') { // a belly-toss on a dazed giant
-          this.damage(best, best.kind === 'boss' ? 40 : 30, P, Math.cos(P.f) * 3, Math.sin(P.f) * 3, true);
-          this.set(P, 'throw', 0.4); this.g.audio.thump(10); this.R.shake && 0; this.shake = 0.5;
+          // hoist him onto your belly, heave him over, and drive him into the floor (btoss state below)
+          P.f = Math.atan2(best.z - P.z, best.x - P.x); P.tossT = best; P.tossDone = false; P.iframe = Math.max(P.iframe || 0, 0.8);
+          this.set(best, 'tossed', 0.75); best.holder = P; this.set(P, 'btoss', 0.78); this.g.audio.grab();
           this.say('BELLY TOSS!', '', 1); return true;
         }
         if (best.holdP) this.escapeFrom(best);
@@ -440,6 +454,15 @@
     }
     // the slam: hoist them overhead and drive them straight down into the floor
     slam(P) { this.set(P, 'slam', 0.55); P.slamDone = false; this.g.audio.whoosh(0.35); }
+    tossLand(P, B) {
+      P.tossDone = true; B.holder = null; B.y = 0; B.st = 'free';
+      const fx = Math.cos(P.f), fz = Math.sin(P.f);
+      this.damage(B, B.kind === 'boss' ? 40 : 30, P, fx * 2, fz * 2, true);
+      if (!B.dead) { this.set(B, 'down', B.kind === 'boss' ? 1.3 : 1.5); B.fallX = fx; B.fallZ = fz; }
+      this.shake = 0.8; this.hitstop = 0.12; this.g.audio.thump(12); this.g.audio.taiko && this.g.audio.taiko();
+      this.fx.dust(B.x, 0.05, B.z, 20, 1.1, 0.8, 0.6); this.hitFx(B.x, B.z, 1.5); this.brk.crater(B.x, B.z);
+      for (const T of this.actors) if (T !== B && T.team === 1 && !T.dead && Math.hypot(T.x - B.x, T.z - B.z) < 2.6) { const a = Math.atan2(T.z - B.z, T.x - B.x); this.damage(T, 8, P, Math.cos(a) * 4, Math.sin(a) * 4, true); }
+    }
     slamHit(P, H) {
       P.held = null; H.holder = null;
       const fx = Math.cos(P.f), fz = Math.sin(P.f);
@@ -558,6 +581,7 @@
       if (E.blind > 0) E.blind -= dt;
       if (E.dead) { E.vx *= 0.9; E.vz *= 0.9; return; }
       if (E.sleep) { E.tvx = 0; E.tvz = 0; return; }
+      if (E.st === 'tossed') { E.tvx = 0; E.tvz = 0; if (E.t > 1.2) { E.y = 0; this.set(E, 'free'); } return; } // carried by a belly toss
       if (E.kind === 'boss') { this.bossStep(E, dt); return; }
       const P = this.P, dx = P.x - E.x, dz = P.z - E.z, d = Math.hypot(dx, dz), toP = Math.atan2(dz, dx);
       const K = KINDS[E.kind], sp = E.spd * (this.buffed(E) ? 1.18 : 1);
@@ -743,7 +767,9 @@
         }
         case 'recover': if (B.t >= B.dur) this.set(B, 'free'); break;
         case 'dazed': if (B.t >= B.dur) this.set(B, 'free'); break;
-        case 'hurt': case 'down': case 'getup': this.set(B, 'free'); break;
+        case 'down': if (B.t >= B.dur) this.set(B, 'getup', 0.6); break;
+        case 'getup': if (B.t >= B.dur) this.set(B, 'free'); break;
+        case 'hurt': this.set(B, 'free'); break;
       }
     }
     bossBegin(B, atk, wind) { B.atk = atk; this.set(B, 'wind', wind); B.cd = rnd(0.9, 1.6) * (B.phase === 2 ? 0.7 : 1); if (atk === 'stomp') this.g.audio.taiko(); }
@@ -822,8 +848,8 @@
         a.vy -= 18 * dt; a.y += a.vy * dt;
         for (const T of this.actors) if (T !== a && T !== a.thrownBy && !T.dead && T.team === a.team && Math.hypot(T.x - a.x, T.z - a.z) < T.r + a.r && a.y < 1.4) { this.damage(T, 15, a.thrownBy, a.vx * 0.6, a.vz * 0.6, true); }
         if (a.y <= 0) { a.y = 0; this.brk.crack(a.x, a.z, 1.5); this.damage(a, 20, a.thrownBy, a.vx * 0.4, a.vz * 0.4, true); if (!a.dead) this.set(a, 'down', 1.1); this.shake = 0.3; this.g.audio.thump(8); this.fx.dust(a.x, 0.05, a.z, 8, 0.4, 0.5, 0.4); }
-      } else if (a.st !== 'held' && a.st !== 'clawed') a.y = 0;
-      if (a.st === 'held' || a.st === 'grabbed') return;
+      } else if (a.st !== 'held' && a.st !== 'clawed' && a.st !== 'tossed') a.y = 0;
+      if (a.st === 'held' || a.st === 'grabbed' || a.st === 'tossed') return;
       a.x += a.vx * dt; a.z += a.vz * dt;
       // walls (axis-aligned boxes) and the zone gates
       for (const w of this.map.walls) this.pushOut(a, w);
@@ -849,7 +875,7 @@
       return true;
     }
     separate() {
-      const L = this.actors.filter((a) => !a.dead && !['held', 'grabbed', 'thrown', 'clawed'].includes(a.st));
+      const L = this.actors.filter((a) => !a.dead && !['held', 'grabbed', 'thrown', 'clawed', 'tossed'].includes(a.st));
       for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
         const A = L[i], B = L[j], dx = B.x - A.x, dz = B.z - A.z, d = Math.hypot(dx, dz), m = A.r + B.r;
         if (d >= m || d < 1e-5) continue;
@@ -1002,15 +1028,15 @@
         const w = a.w, st = a.st;
         w.x = a.x; w.z = a.z; w.y = a.y; w.f = a.f; w.fx = Math.cos(a.f); w.fz = Math.sin(a.f); w.vx = a.vx; w.vz = a.vz; w.spd = Math.hypot(a.vx, a.vz);
         const map = { free: 'free', strike: 'palm', grab: 'grab', hold: 'grab', throw: 'heavy', lprep: 'brace', dodge: 'dash', charge: 'charge', parry: 'brace', block: 'brace',
-          recover: 'recover', slam: 'heavy', bonk: 'stun', hurt: 'stun', down: 'fall', getup: 'recover', grabbed: 'stun', intro: 'free', roar: 'win', wind: a.atk === 'stomp' ? 'bigstomp' : a.atk === 'charge' ? 'wind' : 'wind',
+          recover: 'recover', slam: 'heavy', btoss: a.t < 0.3 ? 'grab' : 'heavy', tossed: 'stun', bonk: 'stun', hurt: 'stun', down: 'fall', getup: 'recover', grabbed: 'stun', intro: 'free', roar: 'win', wind: a.atk === 'stomp' ? 'bigstomp' : a.atk === 'charge' ? 'wind' : 'wind',
           act: a.atk === 'stomp' ? 'bigstomp' : a.atk === 'charge' ? 'charge' : 'slap', dazed: 'stun', held: 'stun', thrown: 'fall', clawed: 'stun' };
         const nst = map[st] || 'free';
-        if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = st === 'hold' ? 0.12 : a.t;
+        if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = st === 'hold' || (st === 'btoss' && a.t < 0.3) ? 0.12 : st === 'btoss' ? a.t - 0.3 : a.t;
         if (st === 'wind' && a.atk === 'stomp') w.t = a.t * (0.45 / Math.max(0.01, a.dur)); // lift the leg over the wind-up
         if (st === 'act' && a.atk === 'stomp') w.t = 0.46 + a.t;
         w.dur = a.dur || 1; w.hand = a.hand || 0; w.down = st === 'down' && a.t > 0.25; w.fallX = a.fallX || 0; w.fallZ = a.fallZ || 1; w.ddx = Math.cos(a.f); w.ddz = Math.sin(a.f);
         w.fxs = { dizzy: a.stun > 0 || st === 'dazed' ? 1 : 0, frozen: a.frozen > 0 ? 1 : 0, invuln: a.iron > 0 ? 1 : 0 };
-        w.lifted = st === 'held' || st === 'clawed';
+        w.lifted = st === 'held' || st === 'clawed' || st === 'tossed';
         a.view.update(w, Math.max(dt, 1e-4), T);
         a.view.root.visible = !(a.iframe > 0 && st === 'getup' && Math.sin(T * 40) > 0);
       } else { if (a.team === 1) a.engage = !a.dead && Math.hypot(this.P.x - a.x, this.P.z - a.z) < 5.5; a.view.update(a, dt, T); }

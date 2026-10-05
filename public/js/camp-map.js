@@ -57,6 +57,14 @@
     const wall = (x0, x1, z0, z1) => { const w = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) }; walls.push(w); return w; };
     const breakables = []; // stalls, tables and drink machines a charge (or a thrown body) smashes through
     const breakable = (b) => { b.w.brk = b; breakables.push(b); return b; };
+    // a long counter is built as sections about a metre and a half long: a charge smashes the section it hits, not the whole row
+    const segments = (kind, x, z0, z1, sd, k, table, hw, seg) => {
+      const n = Math.max(1, Math.round(Math.abs(z1 - z0) / seg)), d = (z1 - z0) / n;
+      for (let i = 0; i < n; i++) {
+        const a = z0 + i * d, b = a + d, rec = A.stall(g, fishes, x, a, b, sd, k + i, table);
+        breakable({ kind, x, z: (a + b) / 2, len: Math.abs(d), sd, rec, w: wall(x - hw, x + hw, a, b) });
+      }
+    };
     const prop = (type, x, z, ry) => props.push({ type, x, z, ry: ry || 0 });
     const puddle = (x, z, r, sx) => puddles.push({ x, z, r, sx: sx || 1 });
 
@@ -100,12 +108,11 @@
     // market stalls: counter, awning, display of fish on ice; restaurant fronts with noren curtains
     const awningCols = [[0xe2322b, 0xf6eddc], [0x2f6fd0, 0xf6eddc], [0xf2c14e, 0x3a2c34], [0x2e9e6a, 0xf6eddc]];
     const stall = (sd, z0, z1, k) => {
-      const x = sd * 6.1, zc = (z0 + z1) / 2, len = Math.abs(z1 - z0);
-      const rec = A.stall(g, fishes, x, z0, z1, sd, k); void len;
+      const x = sd * 6.1;
+      segments('stall', x, z0, z1, sd, k, false, 0.9, 1.3);
       const [c1, c2] = awningCols[k % awningCols.length];
-      const aw = A.awning(rec.group, x + sd * 0.95, z0, z1, sd, c1, c2, { depth: 2.2, y: 2.95, drop: 0.6 });
-      for (const zz of [z0, z1]) cyl(rec.group, 0.04, 0.04, aw.fy, 0x6a6e78, 0x22242c, aw.fx, aw.fy / 2, zz, 6, 0.01);
-      breakable({ kind: 'stall', x, z: zc, len, sd, rec, w: wall(x - 0.9, x + 0.9, z0, z1) });
+      const aw = A.awning(g, x + sd * 0.95, z0, z1, sd, c1, c2, { depth: 2.2, y: 2.95, drop: 0.6 });
+      for (const zz of [z0, z1]) cyl(g, 0.04, 0.04, aw.fy, 0x6a6e78, 0x22242c, aw.fx, aw.fy / 2, zz, 6, 0.01);
     };
     const restaurant = (sd, z0, z1, name, sub, col) => {
       const zc = (z0 + z1) / 2, len = Math.abs(z1 - z0), x = sd * 7.0;
@@ -165,9 +172,7 @@
     for (const sd of [-1, 1]) { box(g, 1.4, 4.6, 52, 0x6a7884, 0x2e3a44, sd * 12.9, 2.3, -74, 0.035); S.CampArt.facade(g, sd * 12.19, -48, -100, 4.6, sd, 'hall', 5); }
     // vendor rows: three rows of tables, broken by cross-aisles so fights move between rows
     const tableRow = (x, z0, z1, k) => {
-      const zc = (z0 + z1) / 2, len = Math.abs(z1 - z0);
-      const rec = A.stall(g, fishes, x, z0, z1, 0, k, true);                                    // steel tables with displays
-      breakable({ kind: 'table', x, z: zc, len, sd: 0, rec, w: wall(x - 0.8, x + 0.8, z1, z0) });
+      segments('table', x, z0, z1, 0, k, true, 0.8, 1.6);                                    // steel tables with displays, in sections
       // a hanging vendor sign over each segment
       const names = [['丸豊', 'MARUTOYO'], ['魚河岸', 'UOGASHI'], ['鮮魚', 'FRESH FISH'], ['海老', 'EBI · SHRIMP'], ['鮪', 'MAGURO'], ['貝', 'SHELLFISH']];
       const [n, sb] = names[k % names.length];
