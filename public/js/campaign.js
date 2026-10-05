@@ -77,6 +77,10 @@
       this.P = this.addActor('player', this.map.start.x, this.map.start.z, { arch, lo: S.profile.loadout() });
       this.P.f = -Math.PI / 2;
       this.camT = new THREE.Vector3(this.P.x, 0, this.P.z - 2.5);
+      // everyone is already in place when the market opens: fixed spots (learnable for speedruns), asleep until you walk in
+      this.zones.forEach((Z, i) => this.populate(Z, i));
+      this.runT = 0; this.hits = 0; this.usedGacha = false;
+      try { this.R.r.compile(this.scene, this.cam); } catch (e) { /* warm the shaders up front: no hitch when an area wakes */ }
       this.buildHud();
       this.resize = () => { this.cam.aspect = innerWidth / innerHeight; this.cam.updateProjectionMatrix(); this.fx.pmat.uniforms.uScale.value = innerHeight * this.R.r.getPixelRatio() / (2 * Math.tan(this.cam.fov * Math.PI / 360)); };
       addEventListener('resize', this.resize); this.resize();
@@ -108,7 +112,7 @@
           squash: 0, bal: 1, tx: 0, tz: 0, power: 0, pre: null, preT: 0, hand: 0, windPow: 0, charges: 0, uprightT: 0, throatT: 0, lifted: false, down: false,
           fallX: 0, fallZ: 1, clinch: null, slideT: 0, spd: 0, crouchT: 0, lean: 0, gulpI: -1, contact: false, fwdIn: 0, ddx: 0, ddz: 0, boomT: 0 };
         a.size = K.size || 1;
-      } else { a.view = new WorkerView(this.scene, kind, a.fat); a.view.walls = this.map.walls; }
+      } else { a.view = new WorkerView(this.scene, kind, a.fat, o.pick); a.view.walls = this.map.walls; }
       this.actors.push(a);
       return a;
     }
@@ -123,7 +127,7 @@
     // ============================================================== HUD
     buildHud() {
       const h = this.hud = document.createElement('div'); h.id = 'campHud';
-      h.innerHTML = '<div class="ch-me"><b>YOU</b><span class="ch-bar"><i></i></span><div class="ch-ab"><em>NO ABILITY</em><span class="ch-cd"><i></i></span><kbd>SPACE</kbd></div></div>' +
+      h.innerHTML = '<div class="ch-time">0:00.0</div><div class="ch-me"><b>YOU</b><span class="ch-bar"><i></i></span><div class="ch-ab"><em>NO ABILITY</em><span class="ch-cd"><i></i></span><kbd>SPACE</kbd></div></div>' +
         '<div class="ch-zone"></div><div class="ch-go">GO ↑</div><div class="ch-say"><b></b><span></span></div><div class="ch-prompt"></div>' +
         '<div class="ch-boss"><b></b><span class="ch-bar"><i></i></span></div><div class="ch-bars"></div>' +
         '<div class="ch-card"><div class="ch-cap"></div><b></b><span></span><em>K or SPACE to keep it</em></div>' +
@@ -175,6 +179,7 @@
 
     // ============================================================== simulation
     step(dt) {
+      if (!this.over) this.runT = (this.runT || 0) + dt; // the speedrun clock
       this.t += dt;
       const P = this.P;
       this.flow(dt);
@@ -196,7 +201,7 @@
       const P = this.P, Z = this.zones[this.zi];
       if (!Z) return;
       if (Z.state === 'wait' && P.z < Z.z0 + 1.5) {
-        Z.state = 'fight'; this.spawnZone(Z);
+        Z.state = 'fight'; this.wakeZone(Z);
         this.el('.ch-zone').textContent = Z.name; this.el('.ch-zone').classList.add('on'); this.el('.ch-go').classList.remove('on');
         setTimeout(() => this.el('.ch-zone') && this.el('.ch-zone').classList.remove('on'), 2200);
       }
@@ -212,15 +217,22 @@
         }
       }
     }
-    spawnZone(Z) {
+    // put a zone's people in their fixed places, asleep
+    populate(Z, zi) {
+      Z.ens = [];
+      if (Z.boss) { const B = this.addActor('boss', Z.boss.x, Z.boss.z - 6, { zone: Z }); B.f = Math.PI / 2; B.sleep = true; this.B = B; Z.ens.push(B); return; }
+      Z.spawns.forEach(([kind, x, z, fat], si) => { const e = this.addActor(kind, x, z, { fat: fat === 'fat', zone: Z, pick: (zi * 3 + si * 2) % 5 }); e.f = Math.PI / 2; e.sleep = true; e.cd = 0.8 + si * 0.25; Z.ens.push(e); });
+    }
+    // you walked in: they notice you
+    wakeZone(Z) {
+      for (const e of Z.ens) e.sleep = false;
       if (Z.boss) {
-        const B = this.addActor('boss', Z.boss.x, Z.boss.z - 6, { zone: Z }); B.f = Math.PI / 2; this.B = B; Z.ens.push(B);
+        this.B = Z.ens[0]; this.B.st = 'intro'; this.B.t = 0;
         this.el('.ch-boss').classList.add('on'); this.el('.ch-boss b').textContent = KINDS.boss.name;
         this.say(KINDS.boss.name, 'Champion of the tuna auction', 3); this.g.audio.roar(); this.g.audio.taiko();
         this.backGate = Z.z0 + 1; // the curtains close behind you
         return;
       }
-      for (const [kind, x, z, fat] of Z.spawns) { const e = this.addActor(kind, x, z, { fat: fat === 'fat', zone: Z }); e.f = Math.PI / 2; Z.ens.push(e); }
       if (Z.spawns.some((sp) => sp[0] === 'sumo') && !this.sumoTip) { // first sumo: say how to beat him
         this.sumoTip = true;
         this.prompt('SUMO: too heavy to push. Make him crash into a cart or wall, parry him (tap L), or throw crates at him, then grab (K)');
@@ -231,9 +243,9 @@
     retry() {
       const Z = this.zones[this.zi];
       this.over = null; this.el('.ch-over').classList.remove('on');
-      for (const e of Z.ens) { e.dead = true; e.t = 99; }
-      this.actors = this.actors.filter((a) => { if (a !== this.P && a.zone === Z) { if (a.view.dispose) a.view.dispose(this.scene); return false; } return true; });
-      Z.ens = []; Z.state = 'wait'; Z.bossDone = false; this.B = null; this.el('.ch-boss').classList.remove('on');
+      this.actors = this.actors.filter((a) => { if (a !== this.P && a.zone === Z) { if (a.bang) this.scene.remove(a.bang); if (a.view.dispose) a.view.dispose(this.scene); return false; } return true; });
+      Z.state = 'wait'; Z.bossDone = false; this.B = null; this.el('.ch-boss').classList.remove('on');
+      this.populate(Z, this.zi);
       const P = this.P; P.hp = P.maxHp; P.dead = false; P.st = 'free'; P.t = 0; P.held = null; P.holder = null;
       P.x = 0; P.z = Z.z0 + 3; P.vx = P.vz = 0; this.shots = [];
     }
@@ -241,8 +253,14 @@
       this.over = 'win'; this.slow = 1.2;
       setTimeout(() => {
         const o = this.el('.ch-over'); o.querySelector('h2').textContent = 'VICTORY';
-        o.querySelector('p').textContent = 'The tuna auction is yours. +200,000 yen'; o.querySelector('[data-c="retry"]').style.display = 'none'; o.classList.add('on');
-        S.profile.yen += 200000; S.profile.save && S.profile.save(); this.g.ui.setYen && this.g.ui.setYen();
+        const t = this.runT || 0, PAR = 360, noHit = !this.hits, noGacha = !this.usedGacha, fast = t < PAR;
+        let best = 0; try { best = +localStorage.getItem('kumite.campBest') || 0; if (!best || t < best) localStorage.setItem('kumite.campBest', String(t)); } catch (e) { /* private mode */ }
+        const yen = 200000 + (noHit ? 100000 : 0) + (noGacha ? 50000 : 0) + (fast ? 50000 : 0);
+        const badge = (on, txt) => '<span class="ch-badge' + (on ? ' on' : '') + '">' + txt + '</span>';
+        o.querySelector('p').innerHTML = 'TIME <b>' + fmtT(t) + '</b>' + (best && t >= best ? ' · best ' + fmtT(best) : best ? ' · NEW BEST' : '') + ' · hits taken <b>' + (this.hits || 0) + '</b><br>' +
+          badge(noHit, 'NO HIT +100,000') + badge(noGacha, 'NO GACHA +50,000') + badge(fast, 'UNDER ' + fmtT(PAR).slice(0, -2) + ' +50,000') + '<br>+' + yen.toLocaleString() + ' yen';
+        o.querySelector('[data-c="retry"]').style.display = 'none'; o.classList.add('on');
+        S.profile.yen += yen; S.profile.save && S.profile.save(); this.g.ui.setYen && this.g.ui.setYen();
       }, 1600);
       this.g.audio.roar(); this.g.audio.taiko();
     }
@@ -461,6 +479,7 @@
     // incoming damage, with the player's parry and block
     damage(T, dmg, A, kx, kz, heavy) {
       if (T.dead) return;
+      if (T.sleep) T.sleep = false;
       if (T === this.P) {
         if (T.iframe > 0 || T.st === 'dodge' || T.iron > 0) { if (T.iron > 0) this.popAt(T, 'IRON BODY'); return; }
         if (T.st === 'parry' && T.t < 0.22 && A && A !== T) { this.parried(A, T); return; }
@@ -473,6 +492,7 @@
         T.hits = (T.hits || 0) + (dmg >= 5 ? 1 : dmg / 12);
         dmg = T.hits >= 2 ? T.hp + 1 : Math.min(dmg, T.hp * 0.5);
       }
+      if (T === this.P && dmg > 0) this.hits = (this.hits || 0) + 1;
       T.hp -= dmg; T.lastHit = this.t;
       if (A && A !== T) { T.hitX = T.x - A.x; T.hitZ = T.z - A.z; } else { T.hitX = kx; T.hitZ = kz; }
       if (A && T.st === 'held' && A !== T.holder) { /* hit while held */ }
@@ -514,6 +534,7 @@
       if (E.frozen > 0) { E.frozen -= dt; E.vx = E.vz = 0; return; }
       if (E.blind > 0) E.blind -= dt;
       if (E.dead) { E.vx *= 0.9; E.vz *= 0.9; return; }
+      if (E.sleep) { E.tvx = 0; E.tvz = 0; return; }
       if (E.kind === 'boss') { this.bossStep(E, dt); return; }
       const P = this.P, dx = P.x - E.x, dz = P.z - E.z, d = Math.hypot(dx, dz), toP = Math.atan2(dz, dx);
       const K = KINDS[E.kind], sp = E.spd * (this.buffed(E) ? 1.18 : 1);
@@ -697,6 +718,7 @@
 
     // ============================================================== abilities (the gacha)
     spinGacha() {
+      this.usedGacha = true;
       const A = POOL[Math.floor(Math.random() * POOL.length)];
       this.ability = A; this.abCd = 0; this.cardOpen = true; this.nearGacha = false; this.prompt('');
       const c = this.el('.ch-card'); c.querySelector('b').textContent = A.name; c.querySelector('span').textContent = A.desc; c.classList.add('on');
@@ -879,7 +901,11 @@
     // ============================================================== drawing
     draw(dt) {
       const R = this.R, T = this.t;
-      for (const a of this.actors) this.drawActor(a, dt, T);
+      for (const a of this.actors) {
+        const far = a.sleep && Math.abs(a.z - this.P.z) > 26; // asleep in an area you're nowhere near: don't draw or animate it
+        if (far) { a.view.root.visible = false; if (a.view.body && a.view.body.wrap) a.view.body.wrap.visible = false; if (a.view.shadow) a.view.shadow.visible = false; continue; }
+        this.drawActor(a, dt, T);
+      }
       for (const p of this.props) if (!p.dead) {
         p.mesh.position.set(p.x, p.y, p.z);
         p.mesh.rotation.set(p.thrown || p.hop ? p.spin : 0, p.held || p.thrown ? -p.ry : p.ry, 0);
@@ -921,7 +947,7 @@
       } else { if (a.team === 1) a.engage = !a.dead && Math.hypot(this.P.x - a.x, this.P.z - a.z) < 5.5; a.view.update(a, dt, T); }
     }
     telegraphs(T) {
-      // red warnings under anyone winding up an attack, so every hit can be read and answered
+      // warnings: a "!" over anyone winding up; a gold ring under a dazed heavy
       if (!this.tg) { this.tg = []; this.tgi = 0; }
       for (const m of this.tg) m.visible = false; this.tgi = 0;
       const get = (shape) => {
@@ -935,19 +961,7 @@
         }
         this.tgi++; m.visible = true; return m;
       };
-      for (const a of this.actors) {
-        if (a.st !== 'wind' || a.dead) continue;
-        const k = clamp(a.t / Math.max(0.01, a.dur), 0, 1), pulse = 0.42 + 0.35 * k + 0.12 * Math.sin(T * 30);
-        let m;
-        if (a.atk === 'stomp') { m = get('disc'); m.scale.set(3.7 * k, 1, 3.7 * k); m.rotation.y = 0; }
-        else if (a.atk === 'charge' || a.atk === 'rush') { m = get('line'); const L = a.kind === 'boss' ? 16 : 6; m.scale.set(L, 1, a.r * 2); m.rotation.y = -a.f; }
-        else if (a.atk === 'sweep') { m = get('wide'); m.scale.set(2.4, 1, 2.4); m.rotation.y = -a.f; }
-        else if (a.atk === 'bottle') { m = get('ring'); const P = this.P; m.scale.set(0.8, 1, 0.8); m.position.set(P.x, 0.03, P.z); m.material.opacity = pulse; m.material.color.set(0xff2a2a); continue; }
-        else if (a.atk === 'shout') { m = get('ring'); m.scale.set(7, 1, 7); m.rotation.y = 0; }
-        else { m = get('cone'); const r = a.kind === 'boss' ? 2.2 : a.kind === 'sumo' ? 1.9 : 1.4; m.scale.set(r + a.r, 1, r + a.r); m.rotation.y = -a.f; }
-        m.position.set(a.x, 0.03, a.z); m.material.opacity = pulse;
-        m.material.color.set(a.atk === 'grab' ? 0xff8a1a : 0xff2a2a); // orange = a grab (break it with K)
-      }
+      // (no floor shapes for attacks: the "!" over the head and the wind-up itself are the warning)
       // a heavy one (sumo, boss) is open: gold ring under him, call it out once
       for (const a of this.actors) {
         if (a.kind !== 'sumo' && a.kind !== 'boss') continue;
@@ -975,6 +989,7 @@
     drawHud() {
       const P = this.P;
       this.el('.ch-me .ch-bar i').style.width = Math.max(0, P.hp / P.maxHp * 100) + '%';
+      const tm = this.el('.ch-time'); if (tm) tm.textContent = fmtT(this.runT || 0);
       this.el('.ch-me .ch-bar').classList.toggle('low', P.hp < 30);
       const A = this.ability; this.el('.ch-ab').classList.toggle('ready', !!A && this.abCd <= 0);
       this.el('.ch-cd i').style.width = A ? (100 * (1 - Math.max(0, this.abCd) / A.cd)) + '%' : '0%';
@@ -1018,7 +1033,7 @@
 
   // ---------------------------------------------------------------- market workers (non-sumo enemies)
   class WorkerView {
-    constructor(scene, kind, fat) {
+    constructor(scene, kind, fat, pick) {
       // rounded, chunky shapes with ink outlines, the same family as the sumo wrestlers (no boxes)
       const K = KINDS[kind], M = (c, s, o) => S.toon(c, Object.assign({ shade: s, rimAmt: 0.6 }, o || {}));
       const skin = M(0xe9b894, 0xa06a5a, { rim: 0xfff0d8 }), shirt = M(K.shirt, mul(K.shirt, 0.45)), apron = M(K.apron, mul(K.apron, 0.55)), pants = M(0x2a2a3a, 0x0c0c16),
@@ -1092,7 +1107,7 @@
       this.rdBones = this.rd.bones.map((b) => b.obj);
       // a real skinned body (when loaded): the shapes above become an invisible rig that drives it
       if (S.Chars && S.Chars.ready) {
-        this.body = new S.Chars.Body(scene, kind, K, fat, Math.floor(Math.random() * 5));
+        this.body = new S.Chars.Body(scene, kind, K, fat, pick === undefined ? Math.floor(Math.random() * 5) : pick);
         this.root.traverse((o) => { if (o.isMesh && !o.userData.acc && !(o.parent && o.parent.userData.acc)) o.visible = false; });
         this.J = {}; for (const k in this.rd.joints) this.J[k] = new THREE.Vector3();
       }
@@ -1226,15 +1241,15 @@
       }
       this.hitK = Math.max(0, this.hitK - dt * 3.2);
       // ----- ragdoll: thrown, knocked down, dead, or dangling in someone's grip
-      const lifted = st === 'held' || st === 'clawed', rag = st === 'thrown' || st === 'down' || a.dead || lifted;
+      const lifted = st === 'held' || st === 'clawed', rag = st === 'thrown' || st === 'down' || a.dead; // held: animated, not a rag doll
       if (rag && !rd.on) {
         this.root.updateMatrixWorld(true);
-        if (lifted) rd.start(new THREE.Vector3());
-        else if (st === 'thrown') rd.start(new THREE.Vector3(a.vx, a.vy || 2, a.vz), { spin: 1.3, ax: a.vx / (sp || 1), az: a.vz / (sp || 1) });
-        else { const fx = a.fallX || -Math.cos(a.f), fz = a.fallZ || -Math.sin(a.f), fl = Math.hypot(fx, fz) || 1; rd.start(new THREE.Vector3(a.vx * 0.8, 0.8, a.vz * 0.8), { push: new THREE.Vector3(fx / fl * 2.6, 0, fz / fl * 2.6), limp: a.dead }); }
+        // launch speeds are capped and the body stays tensed: a person falls, a doll flies
+        const cap = (vx, vz, m) => { const l = Math.hypot(vx, vz), k = l > m ? m / l : 1; return [vx * k, vz * k]; };
+        if (st === 'thrown') { const [vx, vz] = cap(a.vx, a.vz, 5.5); rd.start(new THREE.Vector3(vx, Math.min(a.vy || 2, 2.6), vz), { spin: 0.55, ax: vx / (Math.hypot(vx, vz) || 1), az: vz / (Math.hypot(vx, vz) || 1), tone0: 0.34, toneEnd: 0.07, relax: 1.2 }); }
+        else { const fx = a.fallX || -Math.cos(a.f), fz = a.fallZ || -Math.sin(a.f), fl = Math.hypot(fx, fz) || 1, [vx, vz] = cap(a.vx * 0.7, a.vz * 0.7, 3.2); rd.start(new THREE.Vector3(vx, 0.5, vz), { push: new THREE.Vector3(fx / fl * 1.9, 0, fz / fl * 1.9), limp: a.dead, tone0: a.dead ? 0.2 : 0.3, toneEnd: a.dead ? 0.02 : 0.06, relax: 1.6 }); }
         this.snap = null;
       }
-      if (rd.on && st === 'thrown' && this.wasLifted) { rd.pin(null); rd.kick(new THREE.Vector3(a.vx, a.vy || 3, a.vz), { spin: 1.3, ax: a.vx / (sp || 1), az: a.vz / (sp || 1) }); }
       this.wasLifted = lifted;
       if (rd.on && !rag) { // back to our feet: blend out of wherever the body ended up
         const pel = rd.P('pelvis').x; if (!lifted && this.walls) { a.x = pel.x; a.z = pel.z; this.root.position.set(a.x, a.y || 0, a.z); } // get up where the body lies
@@ -1242,14 +1257,7 @@
         rd.stop();
       }
       if (rd.on) {
-        if (lifted) {
-          const H = a.holder, f = H ? H.f : a.f + Math.PI, cx = a.x - Math.cos(f) * 0.15, cz = a.z - Math.sin(f) * 0.15, rx = -Math.sin(f), rz = Math.cos(f);
-          this.pins = this.pins || { neck: new THREE.Vector3(), shL: new THREE.Vector3(), shR: new THREE.Vector3() };
-          this.pins.neck.set(cx, 1.62, cz); this.pins.shL.set(cx - rx * 0.34, 1.52, cz - rz * 0.34); this.pins.shR.set(cx + rx * 0.34, 1.52, cz + rz * 0.34);
-          rd.pin(this.pins);
-          if (Math.random() < dt * 3) rd.kick(new THREE.Vector3((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2), { legs: true }); // struggling
-        }
-        rd.step(dt, this.walls ? (p, r) => this.collide(p, r) : null, lifted ? null : { x: a.x, z: a.z });
+        rd.step(dt, this.walls ? (p, r) => this.collide(p, r) : null, { x: a.x, z: a.z });
         rd.apply(this.hips, this.root);
         const pel = rd.P('pelvis').x; this.shadow.position.set(pel.x, 0.014, pel.z);
       } else {
@@ -1283,7 +1291,7 @@
       if (this.body) {
         this.root.updateMatrixWorld(true);
         for (const k in this.J) this.rd.joints[k].getWorldPosition(this.J[k]);
-        this.body.drive(this.J, this.root, this.root.visible && !a.gone, !rd.on && !this.snap && st !== 'thrown');
+        this.body.drive(this.J, this.root, this.root.visible && !a.gone, !rd.on && !this.snap && st !== 'thrown' && !lifted);
         const fr = a.frozen > 0; this.body.flash(fr ? 0x9fe6ff : a.burn ? 0xff7a1a : 0xffffff, fr ? 0.55 : this.flashT * 0.7);
         if (this.body.setFace) this.body.setFace(a.dead || st === 'down' || st === 'thrown' ? 2 : this.hitK > 0.35 || st === 'held' || st === 'dazed' ? 1 : 0);
       }
@@ -1340,6 +1348,18 @@
       M.atkW += (aw - M.atkW) * Math.min(1, dt * (aw > M.atkW ? 14 : 6));
       if (M.atk && M.atkW > 0.001) { A.sample(M.atk, M.atkT, tmp); for (let i = 0; i < N; i++) out[i].lerp(tmp[i], M.atkW); }
       // holding someone: arms forward, braced
+      // held up by the collar: hanging upright, legs kicking, hands clawing at the holder's wrists
+      if (st === 'held' || st === 'clawed') {
+        A.sample('stance', 0.3, out);
+        const nk = out[1], hip = [out[9], out[12]];
+        for (const [i, sg] of [[5, -1], [8, 1]]) out[i].set(nk.x + sg * 0.1, nk.y + 0.08, nk.z + 0.26);          // hands at the collar
+        for (const [i, sg] of [[4, -1], [7, 1]]) out[i].set(nk.x + sg * 0.3, nk.y - 0.12, nk.z + 0.16);         // elbows out
+        [[10, 11, 0], [13, 14, 1]].forEach(([kn, ft, side]) => {
+          const s1 = Math.sin(T * 9 + side * 2.6), h = hip[side];
+          out[kn].set(h.x, h.y - 0.42, h.z + 0.12 + s1 * 0.16); out[ft].set(h.x, h.y - 0.82, h.z - 0.05 + s1 * 0.3);
+        });
+        for (const v of out) v.y -= 0.18; // the root already sits off the ground; let the feet hang just clear of it
+      }
       // hit flinch and daze sway: tip the upper body about the pelvis
       const pel = out[0], upper = [1, 2, 3, 4, 5, 6, 7, 8];
       let tipX = 0, tipZ = 0, headX = 0;
@@ -1383,6 +1403,7 @@
     return x0 >= bx0 && x0 <= bx1 && z0 >= bz0 && z0 <= bz1 ? null : t0; // already inside the margin: don't fight it
   }
   const mul = (c, k) => { const C = new THREE.Color(c); C.multiplyScalar(k); return C.getHex(); };
+  const fmtT = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0') + '.' + Math.floor((t * 10) % 10);
 
   S.Campaign = Campaign;
   S.CAMP = { PROPS, KINDS, POOL };

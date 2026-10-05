@@ -67,7 +67,7 @@
       // strongly at first (a person tenses and braces), relaxing as they settle. Dead bodies relax faster.
       this._frame(tm); tm2.copy(tm).transpose(); const pel = this.P('pelvis').x;
       for (const q of this.p) q.rest = (q.rest || V()).subVectors(q.x, pel).applyMatrix4(tm2);
-      this.tone0 = opt.limp ? 0.08 : 0.16; this.toneEnd = opt.limp ? 0.01 : 0.035;
+      this.tone0 = opt.tone0 !== undefined ? opt.tone0 : opt.limp ? 0.08 : 0.16; this.toneEnd = opt.toneEnd !== undefined ? opt.toneEnd : opt.limp ? 0.01 : 0.035; this.relax = opt.relax || 2.2;
       this.kick(vel, opt);
       this.on = true; this.age = 0; this.rest = 0;
     }
@@ -115,7 +115,7 @@
           }
           this._knees();
           if (it === 5 && this.tone0) {
-            const tone = this.toneEnd + (this.tone0 - this.toneEnd) * Math.exp(-this.age * 2.2), pel = this.P('pelvis').x;
+            const tone = this.toneEnd + (this.tone0 - this.toneEnd) * Math.exp(-this.age * this.relax), pel = this.P('pelvis').x;
             this._frame(tm);
             for (const q of this.p) {
               if (q.pin || /pelvis|neck|hip|sh/.test(q.n)) continue; // the torso box is already rigid
@@ -130,7 +130,7 @@
         }
         // stay with the gameplay body (it handles walls, gates and knockback)
         if (anchor) {
-          const pel = this.P('pelvis').x, dx = anchor.x - pel.x, dz = anchor.z - pel.z, d = Math.hypot(dx, dz), lim = 1.8; // a loose safety tether only
+          const pel = this.P('pelvis').x, dx = anchor.x - pel.x, dz = anchor.z - pel.z, d = Math.hypot(dx, dz), lim = 1.0; // a loose tether: the body stays with the gameplay character
           if (d > lim) { const k = (d - lim) / d; for (const q of this.p) { q.x.x += dx * k; q.x.z += dz * k; q.o.x += dx * k; q.o.z += dz * k; } }
         }
       }

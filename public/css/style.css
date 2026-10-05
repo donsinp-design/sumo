@@ -476,3 +476,7 @@ html.touch .rules b, html.touch .bet b, html.touch .foot { display: none; }
 #campHud .ch-pause button:hover, #campHud .ch-over button:hover { background: var(--gold); }
 #campHud .ch-pause p, #campHud .ch-over p { font-size: 15px; opacity: 0.8; max-width: 440px; margin: 14px auto 0; line-height: 1.4; }
 body.campaign #hud, body.campaign #hint { display: none !important; }
+
+#campHud .ch-time { position: absolute; top: 14px; right: 18px; font: 800 22px 'Barlow Condensed', sans-serif; color: #fff8ec; letter-spacing: 0.06em; text-shadow: 0 2px 0 #1a0e14; font-variant-numeric: tabular-nums; }
+#campHud .ch-badge { display: inline-block; margin: 6px 4px 0; padding: 3px 8px; font: 800 14px 'Barlow Condensed', sans-serif; border: 2px solid #555; color: #777; letter-spacing: 0.04em; }
+#campHud .ch-badge.on { border-color: #f2c14e; color: #1a0e14; background: #f2c14e; }

@@ -282,14 +282,18 @@
       }
       c.closePath();
     };
+    // cel puddle: one solid dark water shape with a crisp edge, a flat sky-reflection band clipped inside it, sharp glints
     const pudTexs = [0, 1, 2, 3].map((v) => W.canvasTex(256, 256, (c) => {
       const sd = v * 1.7 + 0.4;
-      c.fillStyle = 'rgba(18,22,40,0.16)'; blob(c, 128, 128, 98, 4, sd); c.fill();                 // the wet stain
-      c.fillStyle = 'rgba(120,160,205,0.38)'; blob(c, 126, 126, 88, 4, sd + 0.4); c.fill();          // sky reflection
-      c.fillStyle = 'rgba(205,232,250,0.5)'; blob(c, 108, 106, 34, 2, sd + 4.3); c.fill();
-      c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineCap = 'round';
-      c.lineWidth = 6; c.beginPath(); c.moveTo(78, 112); c.lineTo(126, 92); c.stroke();               // glints
-      c.lineWidth = 4; c.beginPath(); c.moveTo(140, 150); c.lineTo(162, 141); c.stroke();
+      blob(c, 128, 128, 100, 2, sd); c.fillStyle = 'rgba(70,88,124,0.72)'; c.fill();
+      c.strokeStyle = 'rgba(28,32,52,0.75)'; c.lineWidth = 4; c.stroke();                                   // edge line
+      c.save(); blob(c, 128, 128, 97, 2, sd); c.clip();
+      c.fillStyle = 'rgba(128,152,198,0.9)'; c.beginPath(); c.moveTo(0, 150 - v * 8); c.lineTo(256, 70 - v * 8); c.lineTo(256, 112 - v * 8); c.lineTo(0, 196 - v * 8); c.fill(); // sky band
+      c.fillStyle = 'rgba(186,208,240,0.92)'; c.beginPath(); c.moveTo(0, 168 - v * 8); c.lineTo(256, 88 - v * 8); c.lineTo(256, 98 - v * 8); c.lineTo(0, 178 - v * 8); c.fill(); // its bright core
+      c.restore();
+      c.strokeStyle = '#ffffff'; c.lineCap = 'round';
+      c.lineWidth = 6; c.beginPath(); c.moveTo(70, 104); c.lineTo(116, 86); c.stroke();
+      c.lineWidth = 3.5; c.beginPath(); c.moveTo(150, 158); c.lineTo(176, 148); c.stroke();
     }));
     for (const p of puddles) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(p.r * 2.3 * p.sx, p.r * 2.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: pudTexs[(Math.random() * 4) | 0], transparent: true, depthWrite: false }));
