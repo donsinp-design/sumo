@@ -184,32 +184,47 @@
       // head
       this.head = new THREE.Group(); this.head.position.set(0, 0.95 * s, 0.1 * s); this.body.add(this.head);
       add(this.head, SG, skin, [0, 0.1 * s, 0], [0.24 * s, 0.26 * s, 0.25 * s]);
-      add(this.head, SG, hair, [0, 0.17 * s, -0.04 * s], [0.25 * s, 0.24 * s, 0.25 * s]);
-      add(this.head, SG, hair, [0, 0.38 * s, 0.03 * s], [0.075 * s, 0.06 * s, 0.17 * s], 0.018);
-      add(this.head, SG, belt, [0, 0.36 * s, -0.09 * s], [0.05 * s, 0.05 * s, 0.03 * s], 0);
+      // hair: a cut that hugs the scalp (hairline above the brow, low at the nape, sideburns), and the
+      // oicho-mage on top: the ginkgo-leaf topknot, tied with a white cord and folded forward over the crown
+      const cap = add(this.head, new THREE.SphereGeometry(1, 30, 18, 0, Math.PI * 2, 0, Math.PI * 0.6), hair, [0, 0.105 * s, -0.008 * s], [0.258 * s, 0.272 * s, 0.262 * s], 0.02);
+      cap.rotation.x = -0.55;
+      for (const sd of [-1, 1]) add(this.head, SG, hair, [sd * 0.232 * s, 0.07 * s, 0.05 * s], [0.026 * s, 0.075 * s, 0.05 * s], 0.008); // sideburns
+      const stem = add(this.head, new THREE.CylinderGeometry(0.036 * s, 0.044 * s, 0.11 * s, 12), hair, [0, 0.31 * s, -0.12 * s], null, 0.012); stem.rotation.x = 0.55;
+      const tie = add(this.head, new THREE.TorusGeometry(0.045 * s, 0.012 * s, 6, 14), toon(0xf6f2ea, { shade: 0xa8a0a8 }), [0, 0.3 * s, -0.125 * s], null, 0.006); tie.rotation.x = Math.PI / 2 + 0.55;
+      const leaf = add(this.head, SG, hair, [0, 0.37 * s, 0.015 * s], [0.17 * s, 0.038 * s, 0.11 * s], 0.016); leaf.rotation.x = 0.22;
+      add(this.head, SG, hair, [0, 0.35 * s, -0.07 * s], [0.06 * s, 0.045 * s, 0.07 * s], 0.012); // the fold where it turns forward
       for (const sd of [-1, 1]) {
         this.eyes = this.eyes || []; this.eyes.push(add(this.head, SG, ink, [sd * 0.085 * s, 0.1 * s, 0.225 * s], [0.03 * s, 0.024 * s, 0.02 * s], 0));
         const br = add(this.head, GEO.box, ink, [sd * 0.09 * s, 0.155 * s, 0.215 * s], [0.085 * s, 0.022 * s, 0.03 * s], 0);
         br.rotation.z = sd * 0.32;
       }
       add(this.head, GEO.box, ink, [0, 0.0, 0.235 * s], [0.07 * s, 0.012 * s, 0.02 * s], 0);
-      // mawashi
-      const band = new THREE.CylinderGeometry(0.665 * s, 0.6 * s, 0.32 * s, 40, 1);
-      add(this.body, band, belt, [0, -0.04 * s, 0.035 * s], [1.0, 1.0, 0.95]);
-      const lip = new THREE.TorusGeometry(0.655 * s, 0.028 * s, 6, 40);
-      const lp = add(this.body, lip, belt, [0, 0.115 * s, 0.035 * s], [1.0, 0.95, 1.0], 0.012); lp.rotation.x = Math.PI / 2;
-      add(this.body, GEO.box, belt, [0, -0.2 * s, 0.5 * s], [0.34 * s, 0.34 * s, 0.12 * s]).rotation.x = -0.25;
-      add(this.body, GEO.box, belt, [0, -0.28 * s, 0.05 * s], [0.3 * s, 0.18 * s, 0.9 * s]);
-      add(this.body, GEO.box, belt, [0, -0.02 * s, -0.63 * s], [0.3 * s, 0.34 * s, 0.14 * s]);
-      add(this.body, GEO.box, belt, [0, -0.2 * s, -0.5 * s], [0.18 * s, 0.4 * s, 0.1 * s]).rotation.x = 0.35;
-      this.sagari = new THREE.Group(); this.sagari.position.set(0, -0.06 * s, 0.6 * s); this.body.add(this.sagari);
-      const sg = new THREE.CylinderGeometry(0.022 * s, 0.018 * s, 0.34 * s, 5); sg.translate(0, -0.17 * s, 0);
-      for (let k = 0; k < 9; k++) {
-        const a = (k / 8 - 0.5) * 1.6;
-        const st = mesh(sg, belt, 0.012);
-        st.position.set(Math.sin(a) * 0.55 * s, 0, (Math.cos(a) - 1) * 0.55 * s + 0.02 * s);
+      // mawashi: thick silk wound round several times (proud folds with creases between), the front panel,
+      // a folded knot at the back, and the sagari: a fringe of stiff cords tucked under the front
+      add(this.body, new THREE.CylinderGeometry(0.66 * s, 0.6 * s, 0.34 * s, 48, 1), belt, [0, -0.04 * s, 0.035 * s], [1.0, 1.0, 0.95]);
+      for (const [y, r] of [[0.115, 0.668], [0.005, 0.657], [-0.105, 0.638]]) {
+        const ring = add(this.body, new THREE.TorusGeometry(r * s, 0.034 * s, 8, 48), belt, [0, (y - 0.04) * s, 0.035 * s], [1.0, 0.95, 1.0], 0.012); ring.rotation.x = Math.PI / 2;
+      }
+      // folded cloth: rounded slabs, not boxes
+      const cloth = (w, h, d) => { const r = Math.min(w, h) * 0.28, sh = new THREE.Shape(); sh.moveTo(-w / 2 + r, -h / 2); sh.lineTo(w / 2 - r, -h / 2); sh.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r); sh.lineTo(w / 2, h / 2 - r); sh.quadraticCurveTo(w / 2, h / 2, w / 2 - r, h / 2); sh.lineTo(-w / 2 + r, h / 2); sh.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r); sh.lineTo(-w / 2, -h / 2 + r); sh.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2);
+        const g = new THREE.ExtrudeGeometry(sh, { depth: d * 0.5, bevelEnabled: true, bevelThickness: d * 0.25, bevelSize: d * 0.22, bevelSegments: 3, curveSegments: 5 }); g.translate(0, 0, -d * 0.25); g.computeVertexNormals(); return g; };
+      add(this.body, cloth(0.34 * s, 0.3 * s, 0.1 * s), belt, [0, -0.2 * s, 0.52 * s]).rotation.x = -0.28;          // front panel
+      add(this.body, cloth(0.28 * s, 0.9 * s, 0.14 * s), belt, [0, -0.28 * s, 0.05 * s]).rotation.x = Math.PI / 2;  // between the legs
+      add(this.body, cloth(0.24 * s, 0.44 * s, 0.12 * s), belt, [0, -0.04 * s, -0.66 * s]);                           // the knot: upright fold
+      add(this.body, cloth(0.42 * s, 0.12 * s, 0.13 * s), belt, [0, 0.03 * s, -0.69 * s]);                            //   crossed by the wrap
+      add(this.body, cloth(0.2 * s, 0.14 * s, 0.1 * s), belt, [0, 0.2 * s, -0.62 * s]).rotation.x = 0.35;             //   its folded top
+      add(this.body, cloth(0.16 * s, 0.36 * s, 0.09 * s), belt, [0, -0.25 * s, -0.52 * s]).rotation.x = 0.35;         //   the tail down to the legs
+      this.sagari = new THREE.Group(); this.sagari.position.set(0, -0.05 * s, 0.6 * s); this.body.add(this.sagari);
+      const sg = new THREE.CylinderGeometry(0.012 * s, 0.009 * s, 1, 5); sg.translate(0, -0.5, 0);
+      const tip = new THREE.ConeGeometry(0.014 * s, 0.03 * s, 5); tip.rotateX(Math.PI); tip.translate(0, -0.015 * s, 0);
+      for (let k = 0; k < 17; k++) {
+        const a = (k / 16 - 0.5) * 1.7, L = (k % 2 ? 0.3 : 0.35) * s;
+        const st = mesh(sg, belt, 0.008); st.scale.set(1, L, 1);
+        st.position.set(Math.sin(a) * 0.57 * s, 0, (Math.cos(a) - 1) * 0.57 * s + 0.02 * s); st.rotation.set(-0.06, 0, -Math.sin(a) * 0.08);
+        const tp = mesh(tip, belt, 0); tp.position.y = -1; tp.scale.set(1, 1 / L, 1); st.add(tp);
         this.sagari.add(st);
       }
+      const rope = mesh(new THREE.TorusGeometry(0.57 * s, 0.014 * s, 5, 24, 1.8), belt, 0.006); rope.rotation.set(Math.PI / 2, 0, Math.PI / 2 - 0.9); rope.position.set(0, 0, -0.55 * s); this.sagari.add(rope);
       // limbs
       const capA = new THREE.CapsuleGeometry(0.185 * s, 0.28 * s, 4, 14);
       const capF = new THREE.CapsuleGeometry(0.165 * s, 0.26 * s, 4, 14);

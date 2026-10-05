@@ -202,6 +202,7 @@
     // the boss wakes when you step onto the auction floor; beating him wins.
     flow(dt) {
       const P = this.P;
+      const here = this.zones.findIndex((z) => P.z <= z.z0 && P.z > z.z1); if (here > (this.cp || 0)) this.cp = here; // checkpoint: the furthest area you've reached
       for (const Z of this.zones) {
         for (const e of Z.ens) {
           if (!e.sleep || e.dead) continue;
@@ -232,13 +233,13 @@
       }
     }
     retry() {
-      const zi = Math.max(0, this.zones.findIndex((z) => this.P.z <= z.z0 + 2 && this.P.z > z.z1 - 2)), Z = this.zones[zi]; this.zi = zi;
+      const zi = this.cp || 0, Z = this.zones[zi]; this.zi = zi;
       this.over = null; this.el('.ch-over').classList.remove('on');
       this.actors = this.actors.filter((a) => { if (a !== this.P && a.zone === Z) { this.dropCarry(a); if (a.bang) this.scene.remove(a.bang); if (a.view.dispose) a.view.dispose(this.scene); return false; } return true; });
       Z.state = 'wait'; Z.bossDone = false; this.B = null; this.el('.ch-boss').classList.remove('on');
       this.populate(Z, this.zi);
       const P = this.P; P.hp = P.maxHp; P.dead = false; P.st = 'free'; P.t = 0; P.held = null; P.holder = null;
-      P.x = 0; P.z = Z.z0 + 3; P.vx = P.vz = 0; this.shots = [];
+      P.x = 0; P.z = Z.z0 - 1; P.vx = P.vz = 0; this.shots = [];
     }
     win() {
       this.over = 'win'; this.slow = 1.2;
@@ -311,7 +312,7 @@
           if (!H || H.dead || (H.st && H.st !== 'held' && !H.D)) { P.held = null; this.set(P, 'free'); break; }
           if (!H.D) { // holding an enemy: J knees them, K throws; they break free after a while
             if (c.push.pressed && (P.knees || 0) < 3) { P.knees = (P.knees || 0) + 1; this.damage(H, 7, P, 0, 0, false); this.g.audio.thump(3); this.R && this.hitFx(H.x, H.z, 0.6); }
-            if (c.grab.pressed) { if (Math.hypot(c.mx, c.mz) > 0.3) this.throwHeld(P); else this.slam(P); } // K + direction throws; K on its own slams
+            if (c.grab.pressed) { if (Math.hypot(c.mx, c.mz) > 0.3) P.f = Math.atan2(c.mz, c.mx); this.slam(P); } // K slams them down (aimed where you push)
             else if (c.push.pressed && P.knees >= 3) this.throwHeld(P);
             else if (P.t > 2.6) { this.release(P, true); }
           } else if (c.grab.pressed || c.push.pressed) this.throwHeld(P);
@@ -600,7 +601,7 @@
         case 'recover': if (E.t >= E.dur) this.set(E, 'free'); break;
         case 'hurt': if (E.t >= E.dur) this.set(E, 'free'); break;
         case 'dazed': if (E.t >= E.dur) this.set(E, 'free'); break;
-        case 'down': if (E.t >= E.dur) this.set(E, 'getup', 0.7); break;
+        case 'down': if (E.t >= E.dur) this.set(E, 'getup', 0.85); break;
         case 'getup': if (E.t >= E.dur) this.set(E, 'free'); break;
         case 'hold': { // a grappler holding you: throw after a beat
           face(toP, 4);
@@ -1287,7 +1288,7 @@
       }
       this.hitK = Math.max(0, this.hitK - dt * 3.2);
       // ----- ragdoll: thrown, knocked down, dead, or dangling in someone's grip
-      const lifted = st === 'held' || st === 'clawed', rag = st === 'thrown' || st === 'down' || a.dead; // held: animated, not a rag doll
+      const lifted = st === 'held' || st === 'clawed', rag = st === 'thrown' && !(S.Anim && S.Anim.ready && this.mo && this.mo.fall); // hits, knockouts and slams are authored falls (see mocap); physics only for a full throw
       if (rag && !rd.on) {
         this.root.updateMatrixWorld(true);
         // launch speeds are capped and the body stays tensed: a person falls, a doll flies
@@ -1337,7 +1338,7 @@
       if (this.body) {
         this.root.updateMatrixWorld(true);
         for (const k in this.J) this.rd.joints[k].getWorldPosition(this.J[k]);
-        this.body.drive(this.J, this.root, this.root.visible && !a.gone, !rd.on && !this.snap && st !== 'thrown' && !lifted);
+        this.body.drive(this.J, this.root, this.root.visible && !a.gone, !rd.on && !this.snap && st !== 'thrown' && !lifted && st !== 'down' && st !== 'getup' && !a.dead && !(this.mo && this.mo.fall));
         const fr = a.frozen > 0; this.body.flash(fr ? 0x9fe6ff : a.burn ? 0xff7a1a : 0xffffff, fr ? 0.55 : this.flashT * 0.7);
         if (this.body.setFace) this.body.setFace(a.dead || st === 'down' || st === 'thrown' ? 2 : this.hitK > 0.35 || st === 'held' || st === 'dazed' ? 1 : 0);
       }
@@ -1406,10 +1407,44 @@
         });
         for (const v of out) v.y -= 0.18; // the root already sits off the ground; let the feet hang just clear of it
       }
+      // KNOCKDOWN: an authored fall, not a rag doll. The body topples away from the blow, pivoting on its feet and
+      // accelerating like a fall, lands on its back with a small bounce, lies there, then gets up through a kneel.
+      const falling = st === 'down' || a.dead;
+      if (falling && !M.fall) {
+        const stand = mk(); A.sample('stance', 0.2, stand);
+        const wd = new THREE.Vector3(a.fallX || -Math.cos(a.f), 0, a.fallZ || -Math.sin(a.f)); if (wd.lengthSq() < 1e-6) wd.set(-Math.cos(a.f), 0, -Math.sin(a.f));
+        wd.normalize().applyQuaternion(this.root.quaternion.clone().invert()); wd.y = 0; wd.normalize(); // into our own frame
+        const axis = new THREE.Vector3(0, 1, 0).cross(wd).normalize(), pivot = stand[11].clone().add(stand[14]).multiplyScalar(0.5); pivot.y = 0;
+        const lie = stand.map((v) => v.clone().sub(pivot).applyAxisAngle(axis, Math.PI / 2).add(pivot));
+        let lo = 9; for (const v of lie) lo = Math.min(lo, v.y); for (const v of lie) v.y += 0.13 - lo;
+        const land = out[0].clone().addScaledVector(wd, 0.25); const off = new THREE.Vector3(land.x - lie[0].x, 0, land.z - lie[0].z); for (const v of lie) v.add(off);
+        M.fall = { t: 0, from: out.map((v) => v.clone()), stand, axis, pivot, lie, off, lift: 0.13 - lo, T: a.slammed ? 0.2 : 0.5 };
+        a.slammed = false;
+      }
+      if (M.fall && (falling || st === 'getup')) {
+        const F = M.fall; F.t += tdt;
+        if (falling) {
+          const p = Math.min(1, F.t / F.T), ang = p * p * Math.PI / 2, wb = Math.min(1, F.t / 0.14);
+          for (let i = 0; i < N; i++) {
+            const b = tmp[i].copy(F.from[i]).lerp(F.stand[i], wb);
+            out[i].copy(b).sub(F.pivot).applyAxisAngle(F.axis, ang).add(F.pivot).addScaledVector(F.off, p); out[i].y += F.lift * p;
+          }
+          if (F.t > F.T && F.t < F.T + 0.28) { const bb = Math.sin(Math.PI * (F.t - F.T) / 0.28) * 0.07; for (const i of [0, 1, 2, 3, 6, 9, 12]) out[i].y += bb; } // the bounce
+          if (F.t >= F.T) F.lay = out.map((v) => v.clone());
+        } else { // getting up: lying -> one knee -> standing
+          const L0 = F.lay || F.lie, g = clamp(a.t / Math.max(0.1, a.dur), 0, 1), ez = (x) => x * x * (3 - 2 * x);
+          const K = F.stand.map((v) => v.clone()), drop = K[0].y - 0.58;
+          for (let i = 0; i < 9; i++) { K[i].y -= drop; K[i].z += 0.12; }
+          K[9].y = K[12].y = 0.58; K[10].set(K[9].x, 0.1, K[9].z + 0.05); K[11].set(K[9].x, 0.08, K[9].z - 0.42);
+          K[13].set(K[12].x, 0.55, K[12].z + 0.45); K[14].set(K[12].x, 0.08, K[12].z + 0.48); K[8].copy(K[13]).add(new THREE.Vector3(0, 0.06, 0));
+          if (g < 0.5) { const w = ez(g / 0.5); for (let i = 0; i < N; i++) out[i].copy(L0[i]).lerp(K[i], w); }
+          else { const w = ez((g - 0.5) / 0.5); for (let i = 0; i < N; i++) out[i].copy(K[i]).lerp(out[i], w); }
+        }
+      } else if (M.fall && !falling && st !== 'getup') M.fall = null;
       // hit flinch and daze sway: tip the upper body about the pelvis
       const pel = out[0], upper = [1, 2, 3, 4, 5, 6, 7, 8];
       let tipX = 0, tipZ = 0, headX = 0;
-      if (this.hitK > 0) { tipX = -0.45 * this.hitK * this.hitF; tipZ = 0.3 * this.hitK * this.hitS; headX = -0.35 * this.hitK * this.hitF; }
+      if (this.hitK > 0 && !M.fall) { tipX = -0.45 * this.hitK * this.hitF; tipZ = 0.3 * this.hitK * this.hitS; headX = -0.35 * this.hitK * this.hitF; }
       if (st === 'dazed' || a.blind > 0) { tipX += 0.12 + Math.sin(T * 4.3) * 0.1; tipZ += Math.sin(T * 3.1) * 0.12; }
       if (tipX || tipZ) {
         const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(tipX, 0, tipZ));
