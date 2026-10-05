@@ -288,6 +288,8 @@
         concrete: { base: '#76868e', lo: '#62727a', hi: '#90a0a8', agg: 0.4, joints: 512, stones: 0, wet: 1 },
         bay: { base: '#6c6860', lo: '#5a564e', hi: '#86827a', agg: 0.6, joints: 512, stones: 0 },
         auction: { base: '#8c9294', lo: '#7a8082', hi: '#a4aaac', agg: 0.35, joints: 256, stones: 0, wet: 0.6 },
+        roof: { base: '#5e5a5c', lo: '#4a4648', hi: '#76727a', agg: 1.0, joints: 341, stones: 0 },
+        roofG: { base: '#4e6058', lo: '#3c4c44', hi: '#64786e', agg: 0.6, joints: 256, stones: 0 },
       }[kind];
       const wrap = (f) => { for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) { c.save(); c.translate(ox, oy); f(); c.restore(); } };
       c.fillStyle = P.base; c.fillRect(0, 0, w, h);
@@ -408,6 +410,68 @@
     }
   }
 
+
+  // ---------------------------------------------------------------- rooftops: the city around the market, dense enough to read as Tokyo
+  // blocks: [{ x0, x1, z0, z1, h, front }] (front = x of the face toward the street, for hanging signs)
+  function roofs(g, blocks) {
+    const kit = {
+      ac: batch(g, new THREE.BoxGeometry(1, 1, 1), S.toon(0xd4d8dc, { shade: 0x707880, spec: 0.3 }), 0.012),
+      fan: batch(g, new THREE.CylinderGeometry(1, 1, 1, 14), S.toon(0x30343a, { shade: 0x101216 }), 0),
+      tank: batch(g, new THREE.CylinderGeometry(1, 1, 1, 16), S.toon(0x8ab0c4, { shade: 0x34505e, spec: 0.4 }), 0.02),
+      leg: batch(g, new THREE.BoxGeometry(1, 1, 1), S.toon(0x5a5e66, { shade: 0x22242a }), 0),
+      hut: batch(g, new THREE.BoxGeometry(1, 1, 1), S.toon(0xb8aea4, { shade: 0x5a4e48 }), 0.02),
+      pipe: batch(g, new THREE.CylinderGeometry(1, 1, 1, 8), S.toon(0x9a9ea6, { shade: 0x3e424a, spec: 0.5 }), 0.008),
+      dish: batch(g, new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2.4), S.toon(0xeeeeea, { shade: 0x8a8a92 }), 0.01),
+      green: batch(g, new THREE.SphereGeometry(1, 8, 6), S.toon(0x4a8a4a, { shade: 0x1e3e24 }), 0.01),
+      wall: batch(g, new THREE.BoxGeometry(1, 1, 1), S.toon(0x6a5e64, { shade: 0x2c2228 }), 0.02),
+      solar: batch(g, new THREE.BoxGeometry(1, 1, 1), S.toon(0x2a3a6a, { shade: 0x101830, spec: 0.9 }), 0.006),
+    };
+    const neon = [['居酒屋', '#ff3a6a'], ['カラオケ', '#46f2ff'], ['寿司', '#ffd23a'], ['パチンコ', '#ff8a2a'], ['薬', '#7aff7a'], ['酒', '#ff5a5a'], ['ホテル', '#c87aff'], ['定食', '#ffffff'], ['焼鳥', '#ffb03a'], ['麻雀', '#5ab0ff']];
+    const signTex = (txt, col) => tex('neon' + txt + col, 96, 384, (c, w, h) => {
+      c.fillStyle = '#16101a'; c.fillRect(0, 0, w, h); c.strokeStyle = col; c.lineWidth = 6; c.strokeRect(5, 5, w - 10, h - 10);
+      c.shadowColor = col; c.shadowBlur = 14; c.fillStyle = col; c.textAlign = 'center'; c.textBaseline = 'middle';
+      const ch = [...txt], fs = Math.min(70, (h - 40) / ch.length); c.font = fs + 'px "Dela Gothic One", sans-serif';
+      ch.forEach((k, i) => c.fillText(k, w / 2, 20 + fs / 2 + i * fs + ((h - 40) - fs * ch.length) / 2));
+    });
+    const board = (txt, sub, col) => tex('bb' + txt, 512, 192, (c, w, h) => {
+      const gr = c.createLinearGradient(0, 0, w, h); gr.addColorStop(0, col); gr.addColorStop(1, '#1a1020'); c.fillStyle = gr; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 8; c.strokeRect(6, 6, w - 12, h - 12);
+      c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '86px "Dela Gothic One", sans-serif'; c.fillText(txt, w / 2, 112); c.font = '800 30px "Barlow Condensed", sans-serif'; c.fillText(sub, w / 2, 166);
+    });
+    const boards = [['魚河岸', 'UOGASHI MARKET', '#c8231d'], ['ラーメン', 'NOODLE KING', '#e8572a'], ['飲料', 'COLD DRINKS', '#2a6ad0'], ['築地丸', 'MARUTOYO GROUP', '#2e9e6a'], ['銭湯', 'BATH HOUSE', '#7a4ab0']];
+    let ni = 0, bi = 0;
+    for (const B of blocks) {
+      const w = B.x1 - B.x0, d = B.z0 - B.z1, cx = (B.x0 + B.x1) / 2, cz = (B.z0 + B.z1) / 2, h = B.h;
+      // roof surface and a parapet round the edge
+      const rf = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), groundMat(Math.random() < 0.25 ? 'roofG' : 'roof', w, d)); rf.position.set(cx, h + 0.005, cz); g.add(rf);
+      for (const [px, pz, sx, sz] of [[cx, B.z0 - 0.08, w, 0.16], [cx, B.z1 + 0.08, w, 0.16], [B.x0 + 0.08, cz, 0.16, d], [B.x1 - 0.08, cz, 0.16, d]]) kit.wall.add(px, h + 0.22, pz, 0, 0, 0, sx, 0.44, sz);
+      const r = (a, b) => a + Math.random() * (b - a), inX = () => r(B.x0 + 0.9, B.x1 - 0.9), inZ = () => r(B.z1 + 0.9, B.z0 - 0.9);
+      // AC condenser clusters (with fans on top)
+      const nac = Math.max(2, Math.round(w * d / 9));
+      for (let i = 0; i < nac; i++) { const x = inX(), z = inZ(), ry = Math.random() < 0.5 ? 0 : Math.PI / 2; kit.ac.add(x, h + 0.33, z, 0, ry, 0, 0.95, 0.66, 0.62); kit.fan.add(x, h + 0.67, z, 0, 0, 0, 0.26, 0.02, 0.26); if (Math.random() < 0.6) kit.pipe.add(x + 0.5, h + 0.06, z, 0, 0, Math.PI / 2, 0.035, 1.2, 0.035); }
+      // a water tank on a steel stand
+      if (w * d > 14 && Math.random() < 0.8) { const x = inX(), z = inZ(); for (const [ox, oz] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) kit.leg.add(x + ox, h + 0.5, z + oz, 0, 0, 0, 0.08, 1.0, 0.08); kit.tank.add(x, h + 1.55, z, 0, 0, 0, 0.75, 1.1, 0.75); }
+      // a stairwell hut with a door
+      if (w * d > 18 && Math.random() < 0.7) { const x = inX(), z = inZ(); kit.hut.add(x, h + 1.1, z, 0, 0, 0, 1.6, 2.2, 1.4); }
+      // vents, a satellite dish, potted greenery or solar panels
+      for (let i = 0; i < 3; i++) kit.pipe.add(inX(), h + 0.45, inZ(), 0, 0, 0, 0.09, 0.9, 0.09);
+      if (Math.random() < 0.5) { const x = inX(), z = inZ(); kit.dish.add(x, h + 0.9, z, -0.9, r(0, 6), 0, 0.42, 0.42, 0.42); kit.leg.add(x, h + 0.45, z, 0, 0, 0, 0.05, 0.9, 0.05); }
+      if (Math.random() < 0.45) for (let i = 0; i < 5; i++) kit.green.add(r(B.x0 + 0.4, B.x1 - 0.4), h + 0.25, B.z1 + 0.4 + i * 0.6, 0, 0, 0, 0.3, 0.28, 0.3);
+      if (w * d > 24 && Math.random() < 0.4) { const x = inX(), z = inZ(); for (let i = 0; i < 3; i++) kit.solar.add(x, h + 0.35, z - 0.9 + i * 0.9, -0.35, 0, 0, 1.6, 0.05, 0.8); }
+      // a billboard on the roof, angled up toward the camera
+      if (Math.random() < 0.35 && w > 4) { const [t, sb, col] = boards[bi++ % boards.length]; const m = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.2), new THREE.MeshBasicMaterial({ map: board(t, sb, col), side: THREE.DoubleSide })); m.position.set(cx, h + 1.9, B.z1 + 0.6); m.rotation.set(-0.45, 0, 0); g.add(m); kit.leg.add(cx - 1.2, h + 0.7, B.z1 + 0.7, 0, 0, 0, 0.08, 1.4, 0.08); kit.leg.add(cx + 1.2, h + 0.7, B.z1 + 0.7, 0, 0, 0, 0.08, 1.4, 0.08); }
+      // vertical neon signs hanging off the street face, glowing
+      if (B.front !== undefined) for (let z = B.z0 - 1.2; z > B.z1 + 0.8; z -= r(2.6, 4.2)) {
+        if (Math.random() < 0.3) continue;
+        const [t, col] = neon[ni++ % neon.length], sx = B.front + Math.sign(B.front) * -0.05;
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 2.4), new THREE.MeshBasicMaterial({ map: signTex(t, col), side: THREE.DoubleSide }));
+        m.position.set(sx - Math.sign(B.front) * 0.32, h - 0.6, z); m.rotation.set(-0.5, 0, 0); g.add(m);
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: S.CampMap.glowTex(), color: new THREE.Color(col), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.35 })); glow.scale.set(1.6, 3, 1); glow.position.copy(m.position); g.add(glow);
+      }
+    }
+    for (const k in kit) kit[k].done();
+  }
+
   // ---------------------------------------------------------------- awning: curved striped canvas, scalloped valance, steel frame
   // placed along z from z0..z1, x is its back edge; sd = which side of the street (it slopes toward -sd*x)
   function awning(g, x, z0, z1, sd, c1, c2, opt) {
@@ -437,5 +501,6 @@
     return { fx, fy };
   }
 
-  S.CampArt = { prop, awning, fishBatch, iceMat, merge, M4, tex, mat, groundMat, batch, stall, stallKit };
+  S.CampArt = { roofs,
+    prop, awning, fishBatch, iceMat, merge, M4, tex, mat, groundMat, batch, stall, stallKit };
 })();

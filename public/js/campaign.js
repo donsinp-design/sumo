@@ -918,7 +918,7 @@
         w.lifted = st === 'held' || st === 'clawed';
         a.view.update(w, Math.max(dt, 1e-4), T);
         a.view.root.visible = !(a.iframe > 0 && st === 'getup' && Math.sin(T * 40) > 0);
-      } else a.view.update(a, dt, T);
+      } else { if (a.team === 1) a.engage = !a.dead && Math.hypot(this.P.x - a.x, this.P.z - a.z) < 5.5; a.view.update(a, dt, T); }
     }
     telegraphs(T) {
       // red warnings under anyone winding up an attack, so every hit can be read and answered
@@ -1103,64 +1103,106 @@
       this.flashT = 0; this.lastHp = null;
     }
     // a full-body pose for this moment: keyframes with anticipation, a fast strike with overshoot, and follow-through
+    // ANIMATION. Built the way action games animate fighters (Souls-likes in particular):
+    //  - a bladed combat stance when engaged: lead (left) foot forward, guard up, never both arms mirrored
+    //  - every strike is driven from the hips: hips turn first, then the shoulder, elbow, hand (the kinetic chain)
+    //  - anticipation is slow and readable, the strike is fast, the end pose holds a beat, recovery is weighted
+    //  - one hand works while the other guards or counterbalances; steps and lunges carry the weight forward
+    //  - joints are springs with different stiffness (core stiff, arms looser, head slowest), so distal parts lag
+    //    and overshoot: follow-through and overlapping action come out of the physics, not hand-tuned frames
+    //  - hits push the body (velocity impulses), they don't snap it to a pose
     pose(a, T) {
       const st = a.st, sp = Math.hypot(a.vx, a.vz), mv = Math.min(1, sp / 2.4), k = a.dur ? clamp(a.t / a.dur, 0, 1) : 0;
-      const ez = (x) => x * x * (3 - 2 * x), back = (x) => { const c = 1.9; x = clamp(x, 0, 1) - 1; return 1 + (c + 1) * x * x * x + c * x * x; };
-      const P = { y: 0.9, lean: 0, roll: 0, tw: 0, hx: 0, hz: 0, aR: [0.06, 0, -0.12], eR: -0.3, aL: [0.06, 0, 0.12], eL: -0.3, lL: 0, kL: 0.15, lR: 0, kR: 0.15 }; // arms hang relaxed
-      const mix = (A, B, w) => { const o = {}; for (const key in A) o[key] = Array.isArray(A[key]) ? A[key].map((v, i) => v + (B[key][i] - v) * w) : A[key] + (B[key] - A[key]) * w; return o; };
-      // idle and walking: guard up, knees soft, a little breath
-      const cyc = this.walk, sw = Math.sin(cyc);
-      P.y = 0.88 + Math.sin(T * 2.2 + this.ph) * 0.012 - Math.abs(Math.cos(cyc)) * 0.04 * mv - 0.02;
-      P.lL = sw * 0.75 * mv; P.lR = -sw * 0.75 * mv;
-      P.kL = 0.15 + Math.max(0, Math.sin(cyc + 1.6)) * 1.0 * mv; P.kR = 0.15 + Math.max(0, Math.sin(cyc + 1.6 + Math.PI)) * 1.0 * mv;
-      P.aR[0] += -sw * 0.45 * mv; P.aL[0] += sw * 0.45 * mv; P.eR -= 0.25 * mv; P.eL -= 0.25 * mv; P.lean = 0.08 * mv; P.tw = sw * 0.12 * mv;
-      if (a.kind === 'staff') { P.aR = [-0.25 + -sw * 0.3 * mv, 0, -0.1]; P.eR = -0.5; }
-      if (a.kind === 'commander') { P.aL = [0.1, 0, 0.25]; P.eL = -0.3; }
-      let rate = 16;
+      const ez = (x) => x * x * (3 - 2 * x), out = (x) => 1 - Math.pow(1 - clamp(x, 0, 1), 3);
+      const cyc = this.walk, sw = Math.sin(cyc), cw = Math.cos(cyc);
+      this.eng = (this.eng || 0) + (((a.engage && st !== 'recover') || st === 'wind' || st === 'act' ? 1 : 0) - (this.eng || 0)) * 0.08;
+      const e = this.eng, breathe = Math.sin(T * 2.1 + this.ph);
+      // relaxed: arms hang with a soft elbow, weight settles from foot to foot
+      const P = { y: 0.89 + breathe * 0.008, lean: 0.03, roll: Math.sin(T * 0.7 + this.ph) * 0.025, hy: 0, tw: 0, hx: 0.05, hz: 0,
+        aR: [0.04, 0, -0.1], eR: -0.35, aL: [0.06, 0, 0.1], eL: -0.3, lL: 0.02, kL: 0.12, lR: -0.02, kR: 0.14 };
+      // engaged: bladed stance, lead hand out at chin height, rear fist by the cheek, a little bounce
+      if (e > 0.01) {
+        const G = { y: 0.84 + Math.sin(T * 4.2 + this.ph) * 0.012, lean: 0.12, roll: Math.sin(T * 2.1 + this.ph) * 0.03, hy: -0.38, tw: 0.16, hx: 0.12, hz: 0,
+          aL: [-0.95, 0.15, 0.32], eL: -1.45, aR: [-0.45, -0.1, -0.42], eR: -2.15, lL: -0.32, kL: 0.32, lR: 0.22, kR: 0.4 };
+        if (a.kind === 'staff') { G.aR = [-0.75, 0, -0.25]; G.eR = -0.9; G.aL = [-0.9, 0, 0.45]; G.eL = -1.2; }
+        if (a.kind === 'thrower') { G.aR = [-0.2, 0, -0.25]; G.eR = -1.0; }
+        for (const key in G) P[key] = Array.isArray(G[key]) ? P[key].map((v, i) => v + (G[key][i] - v) * e) : P[key] + (G[key] - P[key]) * e;
+      }
+      // walking: pelvis dips over the planted foot and swings, the chest counter-rotates, arms swing opposite the legs
+      if (mv > 0.01) {
+        P.y -= Math.abs(cw) * 0.035 * mv; P.roll += sw * 0.06 * mv; P.hy += sw * 0.12 * mv; P.tw -= sw * 0.2 * mv; P.lean += 0.06 * mv;
+        P.lL += sw * 0.7 * mv; P.lR -= sw * 0.7 * mv;
+        P.kL += Math.max(0, Math.sin(cyc + 1.7)) * 0.95 * mv; P.kR += Math.max(0, Math.sin(cyc + 1.7 + Math.PI)) * 0.95 * mv;
+        const arm = mv * (1 - e * 0.7);
+        P.aR[0] -= sw * 0.42 * arm; P.aL[0] += sw * 0.42 * arm; P.eR -= (0.2 + Math.max(0, -sw) * 0.35) * arm; P.eL -= (0.2 + Math.max(0, sw) * 0.35) * arm;
+      }
+      const set = (o) => { for (const key in o) P[key] = o[key]; };
+      // strikes: [load, hit]. Lead = left, power hand = right.
+      const W = {
+        jab: [ // rear-hand palm strike: coil the hips back, then drive through with a lunge; the lead hand pulls back to guard
+          { hy: -0.75, tw: -0.45, lean: -0.05, y: 0.82, aR: [0.3, -0.2, -0.55], eR: -1.95, aL: [-1.25, 0.1, 0.12], eL: -0.55, lL: -0.24, kL: 0.25, lR: 0.2, kR: 0.55, hx: 0.15 },
+          { hy: 0.42, tw: 0.5, lean: 0.34, y: 0.76, aR: [-1.58, 0.05, 0.16], eR: -0.12, aL: [-0.55, 0.2, 0.55], eL: -2.0, lL: -0.43, kL: 0.62, lR: 0.38, kR: 0.12, hx: 0.2 }],
+        grab: [ // collar grab: drop the weight, reach with the lead hand first, the rear hand follows
+          { hy: -0.3, tw: -0.15, lean: 0.25, y: 0.76, aL: [-0.75, 0.1, 0.38], eL: -0.85, aR: [-0.35, 0, -0.45], eR: -1.5, lL: -0.26, kL: 0.5, lR: 0.22, kR: 0.55, hx: 0.2 },
+          { hy: 0.12, tw: 0.2, lean: 0.52, y: 0.71, aL: [-1.52, 0.05, -0.08], eL: -0.1, aR: [-1.2, 0, 0.18], eR: -0.55, lL: -0.51, kL: 0.75, lR: 0.38, kR: 0.08, hx: 0.25 }],
+        sweep: [ // two-handed pole swing: wound far round, the hips lead and the pole trails, a wide braced stance
+          { hy: 0.95, tw: 0.75, lean: 0.02, y: 0.8, aR: [-1.05, 0, -1.15], eR: -0.55, aL: [-1.15, 0, 0.42], eL: -1.2, lL: -0.28, kL: 0.5, lR: 0.3, kR: 0.5, hx: 0 },
+          { hy: -0.95, tw: -0.85, lean: 0.28, y: 0.74, aR: [-1.35, 0, 0.35], eR: -0.15, aL: [-1.0, 0, 0.95], eL: -0.55, lL: -0.34, kL: 0.62, lR: 0.34, kR: 0.4, hx: 0.1 }],
+        bottle: [ // overhand throw: step in with the lead foot, point with the lead hand, bottle cocked behind the head
+          { hy: -0.75, tw: -0.55, lean: -0.22, y: 0.85, aR: [-2.45, 0.2, -0.6], eR: -1.7, aL: [-1.45, 0, 0.28], eL: -0.18, lL: -0.26, kL: 0.28, lR: 0.19, kR: 0.5, hx: -0.1 },
+          { hy: 0.55, tw: 0.6, lean: 0.45, y: 0.78, aR: [-0.95, 0, 0.32], eR: -0.1, aL: [-0.35, 0, 0.62], eL: -1.85, lL: -0.4, kL: 0.6, lR: 0.38, kR: 0.12, hx: 0.25 }],
+        shout: [ // the commander: fist up, other hand on the hip, chest out
+          { hy: 0, tw: 0.1, lean: -0.15, y: 0.9, hx: -0.35, aR: [-2.75, 0, -0.25], eR: -0.45, aL: [0.25, 0, 0.62], eL: -1.7, lL: -0.14, kL: 0.15, lR: 0.14, kR: 0.18 },
+          { hy: 0, tw: 0.15, lean: -0.25, y: 0.92, hx: -0.5, aR: [-2.95, 0, -0.15], eR: -0.2, aL: [0.25, 0, 0.62], eL: -1.7, lL: -0.14, kL: 0.15, lR: 0.14, kR: 0.18 }],
+      };
+      W.slap = W.jab; W.rush = W.grab; W.charge = W.grab;
+      let stiff = 1;
       if (st === 'wind' || st === 'act') {
-        const W = {
-          jab: [{ tw: -0.55, lean: -0.08, y: 0.84, aR: [0.55, 0, -0.55], eR: -1.9, aL: [-1.0, 0, 0.2], eL: -1.2, lL: -0.35, kL: 0.35, lR: 0.25, kR: 0.3 },
-            { tw: 0.65, lean: 0.32, y: 0.8, aR: [-1.62, 0, 0.12], eR: -0.05, aL: [-0.3, 0, 0.45], eL: -1.9, lL: -0.6, kL: 0.55, lR: 0.45, kR: 0.25 }],
-          grab: [{ tw: 0, lean: 0.28, y: 0.78, aR: [-0.7, 0, -1.0], eR: -0.6, aL: [-0.7, 0, 1.0], eL: -0.6, lL: -0.3, kL: 0.5, lR: 0.3, kR: 0.5 },
-            { tw: 0, lean: 0.5, y: 0.74, aR: [-1.45, 0, 0.2], eR: -0.25, aL: [-1.45, 0, -0.2], eL: -0.25, lL: -0.7, kL: 0.7, lR: 0.55, kR: 0.2 }],
-          rush: [{ tw: -0.2, lean: 0.75, y: 0.7, aR: [0.9, 0, -0.35], eR: -1.2, aL: [0.9, 0, 0.35], eL: -1.2, lL: -0.6, kL: 1.0, lR: 0.5, kR: 0.6 },
-            { tw: 0.35, lean: 0.7, y: 0.78, aR: [-0.3, 0, -0.7], eR: -1.6, aL: [-1.1, 0, 0.3], eL: -1.6, lL: sw * 1.1, kL: 0.4 + Math.max(0, Math.sin(cyc + 1.6)) * 1.3, lR: -sw * 1.1, kR: 0.4 + Math.max(0, Math.sin(cyc + 1.6 + Math.PI)) * 1.3 }],
-          sweep: [{ tw: 1.35, lean: -0.05, y: 0.8, aR: [-1.3, 0, -1.25], eR: -0.3, aL: [-1.2, 0, 0.6], eL: -0.9, lL: -0.45, kL: 0.5, lR: 0.45, kR: 0.4 },
-            { tw: -1.5, lean: 0.25, y: 0.74, aR: [-1.4, 0, 0.3], eR: -0.1, aL: [-1.0, 0, 0.9], eL: -0.6, lL: -0.5, kL: 0.6, lR: 0.5, kR: 0.5 }],
-          bottle: [{ tw: -0.7, lean: -0.25, y: 0.86, aR: [-2.85, 0, -0.35], eR: -1.3, aL: [-1.3, 0, 0.25], eL: -0.2, lL: -0.4, kL: 0.3, lR: 0.3, kR: 0.35 },
-            { tw: 0.55, lean: 0.38, y: 0.8, aR: [-0.75, 0, 0.1], eR: -0.1, aL: [-0.2, 0, 0.5], eL: -1.4, lL: -0.65, kL: 0.55, lR: 0.5, kR: 0.2 }],
-          shout: [{ tw: 0, lean: -0.22, y: 0.9, hx: -0.4, aR: [-2.7, 0, -0.45], eR: -0.25, aL: [-2.7, 0, 0.45], eL: -0.25, lL: -0.25, kL: 0.2, lR: 0.25, kR: 0.2 },
-            { tw: 0, lean: -0.3, y: 0.92, hx: -0.5, aR: [-2.9, 0, -0.55], eR: -0.1, aL: [-2.9, 0, 0.55], eL: -0.1, lL: -0.25, kL: 0.2, lR: 0.25, kR: 0.2 }],
-        };
-        W.slap = W.jab; W.charge = W.rush;
         const K = W[a.atk] || W.jab;
-        if (st === 'wind') { // ease into the anticipation, then a held, trembling load-up
-          Object.assign(P, mix(P, Object.assign({}, P, K[0]), ez(Math.min(1, a.t / 0.22))));
-          P.tw += Math.sin(T * 40) * 0.015; rate = 22;
-        } else { // strike: snap past the hit pose, then settle
-          const w = back(Math.min(1, a.t / 0.09));
-          Object.assign(P, mix(Object.assign({}, P, K[0]), Object.assign({}, P, K[1]), w));
-          if (a.atk === 'sweep') P.tw = 1.35 + (-1.5 - 1.35) * ez(k);
-          rate = 60;
+        if (st === 'wind') { // ease into the load over the first part of the wind-up, then creep further back (tension)
+          const w = ez(Math.min(1, a.t / 0.28)), creep = 1 + 0.12 * k;
+          for (const key in K[0]) { const v = K[0][key]; P[key] = Array.isArray(v) ? P[key].map((p0, i) => p0 + (v[i] * (i === 0 ? creep : 1) - p0) * w) : P[key] + (v * (key === 'hy' || key === 'tw' ? creep : 1) - P[key]) * w; }
+          stiff = 0.8;
+        } else { // the strike: a fast drive to the hit pose (springs supply the lag and whip), hold it, then let go
+          set(JSON.parse(JSON.stringify(K[1])));
+          if (a.atk === 'sweep') { const s2 = out(a.t / Math.max(0.05, a.dur * 0.7)); P.hy = 0.95 + (-0.95 - 0.95) * s2; P.tw = 0.75 + (-0.85 - 0.75) * s2; }
+          stiff = 3.2;
         }
-      } else if (st === 'recover') { P.lean = 0.2; P.y = 0.82; P.aR = [-0.9, 0, 0.2]; P.eR = -0.6; rate = 8; }
-      else if (st === 'hold') { P.aR = [-1.35, 0, 0.35]; P.aL = [-1.35, 0, -0.35]; P.eR = P.eL = -0.35; P.lean = -0.1; P.y = 0.84; P.lL = -0.3; P.kL = 0.4; P.lR = 0.3; P.kR = 0.4; }
+      } else if (st === 'recover') { // weight still forward from the strike, settling back into the stance
+        const K = W[a.atk] || W.jab, h = K[1], w = 1 - ez(k);
+        for (const key of ['lean', 'y', 'lL', 'kL', 'lR', 'kR', 'hy']) if (h[key] !== undefined) P[key] = P[key] + (h[key] - P[key]) * w * 0.7;
+        stiff = 0.55;
+      } else if (st === 'hold') { set({ aR: [-1.3, 0, 0.32], aL: [-1.25, 0, -0.3], eR: -0.45, eL: -0.6, lean: -0.12, y: 0.82, lL: -0.35, kL: 0.45, lR: 0.32, kR: 0.4, hy: 0, tw: 0 }); }
       else if (st === 'dazed' || a.blind > 0) {
-        P.lean = 0.1 + Math.sin(T * 5) * 0.12; P.roll = Math.sin(T * 3.3) * 0.15; P.hz = Math.sin(T * 4) * 0.35; P.y = 0.84;
-        P.aR = [0.15, 0, -0.25]; P.aL = [0.15, 0, 0.25]; P.eR = P.eL = -0.3; P.kL = 0.35 + Math.sin(T * 5) * 0.15; P.kR = 0.35 - Math.sin(T * 5) * 0.15;
+        set({ lean: 0.12 + Math.sin(T * 4.6) * 0.1, roll: Math.sin(T * 3.1) * 0.13, hz: Math.sin(T * 3.7) * 0.32, hx: 0.25, y: 0.83, hy: Math.sin(T * 1.9) * 0.2,
+          aR: [0.12, 0, -0.22], aL: [0.18, 0, 0.26], eR: -0.25, eL: -0.4, kL: 0.35 + Math.sin(T * 4.6) * 0.14, kR: 0.35 - Math.sin(T * 4.6) * 0.14 });
+        stiff = 0.6;
+      } else if (st === 'hurt') { set({ lean: -0.18, hx: -0.25, y: 0.84, aR: [-0.2, 0, -0.5], eR: -1.3, aL: [-0.3, 0, 0.55], eL: -1.4 }); stiff = 0.9; }
+      if (a.frozen > 0) stiff = 99;
+      return { P, stiff };
+    }
+    // spring stiffness per joint (rad/s^2 per rad): the core leads, limbs lag behind it, the head lags most
+    static get K() { return { y: 300, lean: 210, roll: 200, hy: 230, tw: 170, hx: 85, hz: 85, aR: 150, aL: 150, eR: 100, eL: 100, lL: 340, lR: 340, kL: 340, kR: 340 }; }
+    springTo(P, stiff, dt) {
+      if (!this.cur) { this.cur = JSON.parse(JSON.stringify(P)); this.vel = {}; for (const key in P) this.vel[key] = Array.isArray(P[key]) ? P[key].map(() => 0) : 0; }
+      const KK = WorkerView.K, n = Math.max(1, Math.ceil(dt * 240)), h = dt / n;
+      for (const key in P) {
+        if (this.cur[key] === undefined) { this.cur[key] = JSON.parse(JSON.stringify(P[key])); this.vel[key] = Array.isArray(P[key]) ? P[key].map(() => 0) : 0; }
+        const kk = Math.min(4000, (KK[key] || 150) * stiff), c = 2 * Math.sqrt(kk) * 0.78; // slightly under-damped: a touch of overshoot
+        for (let s = 0; s < n; s++) {
+          if (Array.isArray(P[key])) for (let i = 0; i < P[key].length; i++) { this.vel[key][i] += (kk * (P[key][i] - this.cur[key][i]) - c * this.vel[key][i]) * h; this.cur[key][i] += this.vel[key][i] * h; }
+          else { this.vel[key] += (kk * (P[key] - this.cur[key]) - c * this.vel[key]) * h; this.cur[key] += this.vel[key] * h; }
+        }
       }
-      if (a.frozen > 0) { P.lL = P.lR = 0; P.kL = P.kR = 0.15; rate = 99; }
-      // flinch: thrown back away from the hit, head snapping, then recovering
-      if (this.hitK > 0) {
-        const h = this.hitK, f = this.hitF, sd = this.hitS;
-        P.lean += -0.65 * h * f; P.roll += 0.45 * h * sd; P.hx += -0.6 * h * f; P.hz += 0.5 * h * sd; P.tw += 0.3 * h * sd; P.y -= 0.08 * h;
-        P.aR = P.aR.map((v, i) => v + [0.7, 0, -0.6][i] * h); P.aL = P.aL.map((v, i) => v + [0.7, 0, 0.6][i] * h); P.eR += 0.8 * h; P.eL += 0.8 * h;
-        P.lL += 0.3 * h * f; P.kR += 0.4 * h; rate = 40;
-      }
-      return { P, rate };
+    }
+    // a hit: knock the joints (velocity), away from the blow
+    impulse(f, sd, big) {
+      if (!this.vel) return; const v = this.vel, m = big ? 1.5 : 1;
+      v.lean += -7 * f * m; v.hx += -11 * f * m; v.hz += 7 * sd * m; v.roll += 5 * sd * m; v.tw += 6 * sd * m; v.y -= 0.8 * m;
+      v.aR[0] += 7 * m; v.aL[0] += 7 * m; v.aR[2] -= 5 * m; v.aL[2] += 5 * m; v.eR += 6 * m; v.eL += 6 * m;
     }
     setPose(P) {
-      this.hips.position.set(0, P.y, 0); this.hips.rotation.set(P.lean, 0, P.roll);
+      this.hips.position.set(0, P.y, 0); this.hips.rotation.set(P.lean, P.hy || 0, P.roll);
       this.torso.rotation.set(0, P.tw, 0); this.head.rotation.set(P.hx, -P.tw * 0.5, P.hz);
       const [L, R] = this.arms;
       R.sh.rotation.set(P.aR[0], P.aR[1], P.aR[2]); R.el.rotation.set(P.eR, 0, 0);
@@ -1170,7 +1212,7 @@
     }
     update(a, dt, T) {
       const sp = Math.hypot(a.vx, a.vz), st = a.st, rd = this.rd;
-      if (this.ph === undefined) { this.ph = Math.random() * 6; this.cur = null; this.hitK = 0; }
+      if (this.ph === undefined) { this.ph = Math.random() * 6; this.cur = null; this.vel = null; this.hitK = 0; }
       this.root.position.set(a.x, a.y || 0, a.z); this.root.rotation.set(0, Math.PI / 2 - a.f, 0);
       this.walk += dt * sp * 3.4;
       // a new hit: remember which way it shoved us (in our own frame)
@@ -1178,6 +1220,7 @@
         this.flashT = 1; this.hitK = 1;
         const hx = a.hitX || -Math.cos(a.f), hz = a.hitZ || -Math.sin(a.f), hl = Math.hypot(hx, hz) || 1;
         this.hitF = -((hx * Math.cos(a.f) + hz * Math.sin(a.f)) / hl) >= -0.2 ? 1 : -1; this.hitS = (-hx * Math.sin(a.f) + hz * Math.cos(a.f)) / hl > 0 ? -1 : 1;
+        this.impulse(this.hitF, this.hitS, this.lastHp - a.hp > 12);
       }
       this.hitK = Math.max(0, this.hitK - dt * 3.2);
       // ----- ragdoll: thrown, knocked down, dead, or dangling in someone's grip
@@ -1208,10 +1251,8 @@
         rd.apply(this.hips, this.root);
         const pel = rd.P('pelvis').x; this.shadow.position.set(pel.x, 0.014, pel.z);
       } else {
-        const { P, rate } = this.pose(a, T);
-        if (!this.cur) this.cur = JSON.parse(JSON.stringify(P));
-        const w = 1 - Math.exp(-dt * rate);
-        for (const key in P) { if (Array.isArray(P[key])) P[key].forEach((v, i) => (this.cur[key][i] += (v - this.cur[key][i]) * w)); else this.cur[key] += (P[key] - this.cur[key]) * w; }
+        const { P, stiff } = this.pose(a, T);
+        this.springTo(P, stiff, Math.min(dt, 1 / 20));
         this.setPose(this.cur);
         // blending out of the ragdoll: through a kneel (getting up) or straight back (released)
         if (this.snap) {
@@ -1227,7 +1268,7 @@
           }
           this.rdBones.forEach((o, i) => o.quaternion.slerpQuaternions(from[i], to[i], w2));
           this.hips.position.lerpVectors(fromHp, toHp, w2);
-          if (kk >= 1) { this.snap = null; this.cur = null; }
+          if (kk >= 1) { this.snap = null; this.cur = null; this.vel = null; }
         }
         this.shadow.position.set(a.x, 0.014, a.z);
       }
@@ -1243,6 +1284,7 @@
         for (const k in this.J) this.rd.joints[k].getWorldPosition(this.J[k]);
         this.body.drive(this.J, this.root, this.root.visible && !a.gone);
         const fr = a.frozen > 0; this.body.flash(fr ? 0x9fe6ff : a.burn ? 0xff7a1a : 0xffffff, fr ? 0.55 : this.flashT * 0.7);
+        if (this.body.setFace) this.body.setFace(a.dead || st === 'down' || st === 'thrown' ? 2 : this.hitK > 0.35 || st === 'held' || st === 'dazed' ? 1 : 0);
       }
     }
     // halfway up: on one knee (from lying on the back: sat up; from the front: pushed up on the hands)

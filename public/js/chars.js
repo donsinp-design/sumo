@@ -1,19 +1,26 @@
 'use strict';
-// CHARACTERS: real skinned bodies for the market workers (Kenney "animated characters", CC0), painted with
-// worker outfits, toon-shaded with ink outlines. They are driven by the procedural rig in campaign.js
-// (keyframed moves and the ragdoll): each frame the rig's bone directions are copied onto the skeleton.
+// CHARACTERS: anime bodies for the market workers. The models are the VRoid Project's sample avatars
+// (AvatarSample A/B/C; their VRoid Hub licence allows commercial use, modification, redistribution and
+// violent content, no credit needed), slimmed to web-size GLBs: 512px textures, three face expressions.
+// They are toon-shaded with ink outlines, recoloured per enemy role, and driven by the procedural rig in
+// campaign.js (keyframed moves and the ragdoll): each frame the rig's bone directions are copied onto
+// the skeleton.
 (function () {
-  const C = S.Chars = { ready: false };
+  const C = S.Chars = { ready: false, models: [] };
   const SH = () => S.R3.SH;
+  const FILES = ['assets/models/vroid_c.glb', 'assets/models/vroid_a.glb', 'assets/models/vroid_b.glb']; // c: man, a/b: women
   const VS = `
     #include <common>
+    #include <morphtarget_pars_vertex>
     #include <skinning_pars_vertex>
     varying vec3 vN; varying vec3 vV; varying vec3 vIC; varying vec2 vUv;
     void main(){
       #include <beginnormal_vertex>
+      #include <morphnormal_vertex>
       #include <skinbase_vertex>
       #include <skinnormal_vertex>
       #include <begin_vertex>
+      #include <morphtarget_vertex>
       #include <skinning_vertex>
       vIC = vec3(1.0); vUv = uv;
       vec4 mv = modelViewMatrix * vec4(transformed, 1.0);
@@ -22,26 +29,36 @@
     }`;
   const OLVS = `
     #include <common>
+    #include <morphtarget_pars_vertex>
     #include <skinning_pars_vertex>
     uniform float uThick; uniform float uOL;
     void main(){
       #include <beginnormal_vertex>
+      #include <morphnormal_vertex>
       #include <skinbase_vertex>
       #include <skinnormal_vertex>
       #include <begin_vertex>
+      #include <morphtarget_vertex>
       #include <skinning_vertex>
       vec4 mv = modelViewMatrix * vec4(transformed, 1.0);
       vec3 nv = normalize(normalMatrix * objectNormal);
       mv.xyz += nv * uThick * uOL * (0.5 + 0.035 * -mv.z);
       gl_Position = projectionMatrix * mv;
     }`;
-  function skinToon(map) {
-    const m = S.toon(0xffffff, { map, shade: 0x9a86a6, rimAmt: 0.55, rim: 0xfff0d8 });
-    m.vertexShader = VS; return m;
+  // toon material for a skinned part: texture alpha cut-out (hair tips, lashes) or blended (eye highlights)
+  function skinToon(map, mode, flat) {
+    const m = S.toon(0xffffff, { map, shade: flat ? 0xf0e6f2 : 0xd8cae2, rimAmt: flat ? 0 : 0.55, rim: 0xfff0d8 });
+    m.vertexShader = VS; m.uniforms.uColor.value.setScalar(flat ? 1.0 : 1.18); // VRoid textures are painted for soft shading: lift them
+    m.fragmentShader = m.fragmentShader
+      .replace('vec3 tx = uHasMap > 0.5 ? texture2D(uMap, vUv).rgb : vec3(1.0);', 'vec4 t4 = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0); if (t4.a < ' + (mode === 'BLEND' ? '0.02' : '0.5') + ') discard; vec3 tx = t4.rgb;')
+      .replace('gl_FragColor = vec4(col, uAlpha);', 'gl_FragColor = vec4(col, uAlpha * ' + (mode === 'BLEND' ? 't4.a' : '1.0') + ');');
+    if (mode === 'BLEND') { m.transparent = true; m.depthWrite = false; }
+    m.side = THREE.DoubleSide;
+    return m;
   }
   let olMat = null;
   const outline = () => olMat || (olMat = new THREE.ShaderMaterial({
-    uniforms: { uThick: { value: 0.022 }, uOL: SH().uOL, uColor: { value: new THREE.Color(0x1c0f15) }, uAlpha: { value: 1 } },
+    uniforms: { uThick: { value: 0.016 }, uOL: SH().uOL, uColor: { value: new THREE.Color(0x1c0f15) }, uAlpha: { value: 1 } },
     vertexShader: OLVS, fragmentShader: S.R3.OL_FS, side: THREE.BackSide,
   }));
 
@@ -49,63 +66,35 @@
     if (C.loading) return C.loading;
     C.loading = new Promise((res) => {
       if (!THREE.GLTFLoader) { res(); return; }
-      new THREE.GLTFLoader().load('assets/models/worker.glb', (g) => {
-        C.gltf = g; C.heads = []; let n = 0;
-        const done = () => { if (++n === 5) { C.ready = true; res(); } };
-        for (let i = 0; i < 5; i++) { const im = new Image(); im.onload = done; im.onerror = done; im.src = 'assets/models/head' + i + '.png'; C.heads.push(im); }
-      }, undefined, () => res());
+      let n = 0;
+      FILES.forEach((f, i) => new THREE.GLTFLoader().load(f, (g) => { C.models[i] = g; if (++n === FILES.length) { C.ready = C.models.every(Boolean); res(); } }, undefined, () => { if (++n === FILES.length) { C.ready = C.models.every(Boolean); res(); } }));
     });
     return C.loading;
   };
 
-  // ---------------------------------------------------------------- outfits, painted onto the model's texture layout
-  const css = (c) => '#' + new THREE.Color(c).getHexString();
-  const shadeC = (c, k) => { const o = new THREE.Color(c); o.multiplyScalar(k); return '#' + o.getHexString(); };
+  // ---------------------------------------------------------------- outfits: recolour the clothes per enemy role
   const texCache = {};
-  function outfit(kind, K, head, fat) {
-    const key = kind + head + (fat ? 'f' : '');
+  function recolour(tex, col, key, keepHi) {
     if (texCache[key]) return texCache[key];
-    const cv = document.createElement('canvas'); cv.width = cv.height = 1024; const c = cv.getContext('2d');
-    const skin = ['#e9b894', '#d9a47e', '#f0c4a0', '#c98e68', '#e2ae88'][head], shirt = css(K.shirt), apron = css(K.apron), band = css(K.band);
-    const pants = kind === 'commander' ? '#1a1a22' : ['#2a2e44', '#33302a', '#24303a'][head % 3], boots = head % 2 ? '#f2f2ec' : '#1e2230';
-    c.fillStyle = skin; c.fillRect(0, 0, 1024, 1024);
-    // head: one of five faces / haircuts, then the headband (hachimaki) round the forehead
-    if (C.heads[head] && C.heads[head].complete) c.drawImage(C.heads[head], 0, 0);
-    if (!K.cap) { c.fillStyle = band; c.fillRect(0, 148, 640, 26); c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(0, 170, 640, 4); c.fillStyle = band; c.fillRect(0, 140, 60, 50); c.fillRect(580, 140, 60, 50); }
-    else { c.fillStyle = '#2a5a9a'; c.fillRect(0, 0, 640, 165); c.fillStyle = '#1a3a6a'; c.fillRect(0, 155, 640, 14); }
-    if (K.glasses) { c.strokeStyle = '#141018'; c.lineWidth = 7; for (const x of [292, 352]) { c.beginPath(); c.arc(x, 226, 22, 0, 7); c.stroke(); } c.beginPath(); c.moveTo(314, 224); c.lineTo(330, 224); c.stroke(); }
-    // angry brows over the eyes
-    c.fillStyle = '#1a1014'; c.save(); c.translate(292, 196); c.rotate(0.25); c.fillRect(-22, -5, 44, 9); c.restore(); c.save(); c.translate(352, 196); c.rotate(-0.25); c.fillRect(-22, -5, 44, 9); c.restore();
-    // shirt (torso block), neck opening
-    c.fillStyle = shirt; c.fillRect(150, 486, 340, 538);
-    c.fillStyle = shadeC(K.shirt, 0.8); for (let y = 500; y < 1024; y += 40) c.fillRect(150, y, 340, 3); // fabric folds
-    c.fillStyle = skin; c.beginPath(); c.ellipse(320, 742, 40, 34, 0, 0, 7); c.fill();
-    if (K.coat) { c.fillStyle = '#f6eddc'; c.fillRect(300, 770, 40, 254); c.fillStyle = '#f2c14e'; c.font = '60px "Dela Gothic One", sans-serif'; c.textAlign = 'center'; c.fillText('祭', 320, 640); }
-    // apron: the front of the torso runs from the neck (y 742) down to the waist (y 1024); the back is above it
-    if (!K.coat) {
-      c.fillStyle = apron; c.fillRect(222, 812, 196, 212); c.fillRect(256, 776, 128, 44);
-      c.strokeStyle = 'rgba(0,0,0,0.3)'; c.lineWidth = 4; c.strokeRect(224, 814, 192, 210);
-      c.fillStyle = 'rgba(255,255,255,0.16)'; c.fillRect(232, 822, 14, 190);
-      c.strokeStyle = apron; c.lineWidth = 16; c.beginPath(); c.moveTo(262, 780); c.lineTo(290, 742); c.moveTo(378, 780); c.lineTo(350, 742);
-      c.moveTo(290, 742); c.lineTo(410, 500); c.moveTo(350, 742); c.lineTo(230, 500); c.stroke();
-      c.fillStyle = apron; c.fillRect(150, 486, 340, 18);
+    const im = tex.image, w = Math.min(512, im.width), h = Math.min(512, im.height);
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d');
+    c.drawImage(im, 0, 0, w, h);
+    const d = c.getImageData(0, 0, w, h), p = d.data, tc = new THREE.Color(col);
+    for (let i = 0; i < p.length; i += 4) {
+      const l = (0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2]) / 255, k = Math.min(1.3, 0.62 + l * 0.75);
+      const hi = keepHi && l > 0.85 ? (l - 0.85) / 0.15 : 0; // keep bright trims and stitching light
+      p[i] = Math.min(255, (tc.r * k * (1 - hi) + l * hi) * 255); p[i + 1] = Math.min(255, (tc.g * k * (1 - hi) + l * hi) * 255); p[i + 2] = Math.min(255, (tc.b * k * (1 - hi) + l * hi) * 255);
     }
-    // sleeves: rolled up to the elbow (forearms bare), a rolled cuff
-    const sleeve = K.coat ? 120 : 52;
-    c.fillStyle = shirt; c.fillRect(160 - sleeve, 640, sleeve, 200); c.fillRect(480, 640, sleeve, 200);
-    c.fillStyle = shadeC(K.shirt, 0.7); c.fillRect(160 - sleeve - 8, 640, 12, 200); c.fillRect(480 + sleeve - 4, 640, 12, 200);
-    // trousers and rubber boots
-    c.fillStyle = pants; c.fillRect(624, 760, 400, 264);
-    c.fillStyle = 'rgba(0,0,0,0.25)'; for (let x = 640; x < 1024; x += 64) c.fillRect(x, 760, 3, 200);
-    c.fillStyle = boots; c.fillRect(624, 930, 400, 94); c.fillRect(630, 0, 196, 530); c.fillRect(826, 0, 198, 130);
-    c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(624, 930, 400, 6);
-    
-    const t = new THREE.CanvasTexture(cv); t.flipY = false; t.anisotropy = 4;
+    c.putImageData(d, 0, 0);
+    const t = new THREE.CanvasTexture(cv); t.flipY = tex.flipY; t.wrapS = tex.wrapS; t.wrapT = tex.wrapT; t.encoding = THREE.LinearEncoding; t.anisotropy = 4;
     return (texCache[key] = t);
   }
 
   // ---------------------------------------------------------------- one character instance
-  // pairs: skeleton bone <- procedural joints. The rig's sd=-1 side is the model's Right side (x<0).
+  // canonical joints <- VRM humanoid bones. The rig's sd=-1 side is the model's Right side.
+  const NAMES = { Hips: 'J_Bip_C_Hips', Chest: 'J_Bip_C_Chest', Head: 'J_Bip_C_Head',
+    RightArm: 'J_Bip_R_UpperArm', RightForeArm: 'J_Bip_R_LowerArm', RightHand: 'J_Bip_R_Hand', LeftArm: 'J_Bip_L_UpperArm', LeftForeArm: 'J_Bip_L_LowerArm', LeftHand: 'J_Bip_L_Hand',
+    RightUpLeg: 'J_Bip_R_UpperLeg', RightLeg: 'J_Bip_R_LowerLeg', RightFoot: 'J_Bip_R_Foot', LeftUpLeg: 'J_Bip_L_UpperLeg', LeftLeg: 'J_Bip_L_LowerLeg', LeftFoot: 'J_Bip_L_Foot' };
   const DRIVE = {
     Hips: { frame: ['pelvis', 'neck', 'hipL', 'hipR'] }, Chest: { frame: ['pelvis', 'neck', 'shL', 'shR'] }, Head: { frame: ['neck', 'head', 'shL', 'shR'] },
     RightArm: { aim: ['shL', 'elL'] }, RightForeArm: { aim: ['elL', 'haL'] }, LeftArm: { aim: ['shR', 'elR'] }, LeftForeArm: { aim: ['elR', 'haR'] },
@@ -113,62 +102,102 @@
   };
   const CHILD = { RightArm: 'RightForeArm', RightForeArm: 'RightHand', LeftArm: 'LeftForeArm', LeftForeArm: 'LeftHand', RightUpLeg: 'RightLeg', RightLeg: 'RightFoot', LeftUpLeg: 'LeftLeg', LeftLeg: 'LeftFoot' };
   const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), q1 = new THREE.Quaternion(), m1 = new THREE.Matrix4(), mInv = new THREE.Matrix4();
+  const HIPS = 1.018, BASE = 0.9 / HIPS, BIG = 1.32; // the rig's hips sit at 0.9; the characters are drawn a third larger so they read at the game camera
 
   class Body {
-    constructor(scene, kind, K, fat, head) {
+    constructor(scene, kind, K, fat, pick) {
       this.scene = scene;
-      const src = C.gltf.scene, root = THREE.SkeletonUtils.clone(src);
-      this.wrap = new THREE.Group(); this.wrap.add(root); scene.add(this.wrap);
-      const sc = 0.9 / 0.8; this.sc = sc; root.scale.set(sc * (fat ? 1.32 : 1), sc, sc * (fat ? 1.25 : 1));
-      let sk = null; root.traverse((o) => { if (o.isSkinnedMesh) sk = o; });
-      this.mesh = sk; sk.frustumCulled = false;
-      sk.material = skinToon(outfit(kind, K, head, fat)); this.mat = sk.material;
-      const ol = new THREE.SkinnedMesh(sk.geometry, outline()); ol.frustumCulled = false; ol.bind(sk.skeleton, sk.bindMatrix); sk.parent.add(ol);
+      const female = kind !== 'grappler' && kind !== 'commander' && (pick === 2 || pick === 4), mi = female ? (pick === 2 ? 1 : 2) : 0; // mostly men, some women
+      const src = C.models[mi].scene, root = THREE.SkeletonUtils.clone(src);
+      this.wrap = new THREE.Group(); scene.add(this.wrap);
+      this.inner = new THREE.Group(); this.inner.rotation.y = Math.PI; this.wrap.add(this.inner); // VRM 0.x faces -z
+      this.inner.add(root);
+      root.scale.set(BASE * BIG * (fat ? 1.3 : 1), BASE * BIG, BASE * BIG * (fat ? 1.22 : 1));
+      this.meshes = []; this.mats = []; this.face = null;
+      const shirt = K.shirt, pants = kind === 'commander' ? 0x1a1a22 : 0x2a2e44;
+      root.traverse((o) => {
+        if (!o.isSkinnedMesh) return;
+        o.frustumCulled = false;
+        const om = o.material, name = om.name || '', mode = om.transparent ? 'BLEND' : om.alphaTest > 0 ? 'MASK' : 'OPAQUE';
+        let map = om.map;
+        if (map) { map.encoding = THREE.LinearEncoding; map.needsUpdate = true; } // the toon shader works on raw texture colours, like every other map in the game
+        if (map && /Tops/.test(name)) map = recolour(map, kind === 'commander' ? 0xc8231d : shirt, 'tops' + mi + kind, true);
+        if (map && /Bottoms/.test(name)) map = recolour(map, pants, 'bot' + mi + kind, false);
+        if (map && /Shoes/.test(name)) map = recolour(map, pick % 2 ? 0xf2f2ec : 0x22262e, 'shoe' + mi + (pick % 2), false);
+        const faceBit = /FACE|EYE/.test(name) && !/SKIN/.test(name);
+        const m = skinToon(map, mode, faceBit);
+        o.material = m; this.mats.push(m); this.meshes.push(o);
+        if (o.morphTargetInfluences && o.morphTargetInfluences.length && !this.face) this.face = o;
+        if (!faceBit && mode !== 'BLEND') { const ol = new THREE.SkinnedMesh(o.geometry, outline()); ol.frustumCulled = false; ol.morphTargetInfluences = o.morphTargetInfluences; ol.morphTargetDictionary = o.morphTargetDictionary; ol.bind(o.skeleton, o.bindMatrix); o.parent.add(ol); }
+      });
       // bones and their rest pose in model space (relative to `root`)
-      this.bones = {}; for (const b of sk.skeleton.bones) this.bones[b.name] = b;
-      root.updateMatrixWorld(true);
+      this.bones = {}; root.traverse((o) => { if (o.isBone) for (const k in NAMES) if (NAMES[k] === o.name) this.bones[k] = o; });
+      this.wrap.updateMatrixWorld(true); // the whole chain, including the 180° turn, before reading the rest pose
+      const rootQ = new THREE.Quaternion(); root.matrixWorld.decompose(v3, rootQ, v2); const rootQi = rootQ.clone().invert();
       mInv.copy(root.matrixWorld).invert();
-      this.rest = {};
-      const modelQ = (o) => { o.matrixWorld.decompose(v1, q1, v2); const rq = new THREE.Quaternion(); root.matrixWorld.decompose(v3, rq, v2); return rq.invert().multiply(q1.clone()); };
+      const modelQ = (o) => { o.matrixWorld.decompose(v1, q1, v2); return rootQi.clone().multiply(q1); };
       const modelP = (o) => o.getWorldPosition(new THREE.Vector3()).applyMatrix4(mInv);
-      this.order = sk.skeleton.bones.slice().sort((a, b) => depth(a) - depth(b));
-      for (const b of this.order) {
-        const r = this.rest[b.name] = { q: modelQ(b), p: modelP(b), lq: b.quaternion.clone(), pq: b.parent ? modelQ(b.parent) : new THREE.Quaternion() };
-        if (CHILD[b.name]) r.dir = modelP(this.bones[CHILD[b.name]]).sub(r.p).normalize();
+      const depth = (o) => { let d = 0; while (o.parent) { d++; o = o.parent; } return d; };
+      this.order = Object.keys(this.bones).map((k) => this.bones[k]).sort((a, b) => depth(a) - depth(b));
+      this.rest = {};
+      for (const k of Object.keys(this.bones)) {
+        const b = this.bones[k], r = this.rest[k] = { q: modelQ(b), p: modelP(b), lq: b.quaternion.clone(), pq: modelQ(b.parent) };
+        if (CHILD[k]) r.dir = modelP(this.bones[CHILD[k]]).sub(r.p).normalize();
+        b.userData.canon = k;
       }
+      // driven bones must also carry their undriven parents (spine, neck, shoulders) as they were at rest
+      this.restLocal = new Map(); root.traverse((o) => { if (o.isBone) this.restLocal.set(o, o.quaternion.clone()); });
       const hp = this.bones.Hips.parent; hp.updateMatrixWorld(true);
-      this.hipsParentInv = new THREE.Matrix4().copy(hp.matrixWorld).invert().multiply(root.matrixWorld); // model -> hips-parent local
-      this.parentRestQ = modelQ(hp);
-      if (this.bones.Head) this.bones.Head.scale.setScalar(0.62); // adult proportions, not a big-headed toy
-      for (const n of ['LeftHand', 'RightHand']) if (this.bones[n]) this.bones[n].scale.setScalar(0.62);
-      this.root = root; this.Q = {};
-      function depth(o) { let d = 0; while (o.parent) { d++; o = o.parent; } return d; }
+      this.hipsParentInv = new THREE.Matrix4().copy(hp.matrixWorld).invert().multiply(root.matrixWorld);
+      this.yawFix = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI); // the rig's standing frame, seen from the model
+      // a headband (hachimaki) on the role's colour, knotted at the back
+      if (false && K.band !== undefined && !K.cap && this.bones.Head) { // (off: VRoid hair volumes swallow it)
+        const bm = S.toon(K.band, { shade: new THREE.Color(K.band).multiplyScalar(0.5), rimAmt: 0.4 });
+        const band = S.R3.mesh(new THREE.TorusGeometry(0.105, 0.017, 6, 28), bm, 0.008); band.rotation.x = Math.PI / 2 + 0.25; band.position.set(0, 0.07, 0.008); band.scale.set(1.08, 1.18, 1);
+        this.bones.Head.add(band);
+        const knot = S.R3.mesh(new THREE.SphereGeometry(0.022, 8, 6), bm, 0.006); knot.position.set(0, 0.085, 0.125); this.bones.Head.add(knot);
+      }
+      // relaxed hands: fingers half curled toward the palm, thumb tucked (VRoid ships them flat, straight from the T-pose)
+      root.traverse((o) => {
+        const m = o.isBone && /J_Bip_([LR])_(Index|Middle|Ring|Little|Thumb)(\d)/.exec(o.name); if (!m) return;
+        const sg = m[1] === 'L' ? 1 : -1, j = +m[3];
+        if (m[2] === 'Thumb') { o.rotation.y += sg * -0.35 * (j === 1 ? 1 : 0.5); o.rotation.z += sg * 0.2; }
+        else o.rotation.z += sg * [0.75, 0.95, 0.7][j - 1] * (m[2] === 'Index' ? 0.8 : 1);
+      });
+      this.root = root; this.Q = new Map(); this.expr = -1;
     }
-    // copy the rig: J = { name: world position } of the procedural joints, rootObj = the rig's root group
-    drive(J, rootObj, visible) {
+    // copy the rig: J = { name: world position } of the procedural joints, rigRoot = the rig's root group
+    drive(J, rigRoot, visible) {
       this.wrap.visible = visible;
       if (!visible) return;
-      this.wrap.position.copy(rootObj.position); this.wrap.quaternion.copy(rootObj.quaternion);
+      this.wrap.position.copy(rigRoot.position); this.wrap.quaternion.copy(rigRoot.quaternion);
       this.wrap.updateMatrixWorld(true);
-      mInv.copy(this.root.matrixWorld).invert();
-      const P = {}; for (const k in J) P[k] = J[k].clone().applyMatrix4(mInv); // into model space
+      // rig positions into model space, at the rig's own scale (the BIG factor then enlarges the result)
+      m1.copy(this.root.matrixWorld); mInv.copy(m1).invert();
+      const P = {}; for (const k in J) { P[k] = J[k].clone().sub(this.wrap.position).multiplyScalar(BIG).add(this.wrap.position).applyMatrix4(mInv); }
       const Q = this.Q;
       for (const b of this.order) {
-        const r = this.rest[b.name], d = DRIVE[b.name];
-        const pq = b.parent && Q[b.parent.name] ? Q[b.parent.name] : r.pq;
+        const k = b.userData.canon, r = this.rest[k], d = DRIVE[k];
+        // parent's model-space rotation: driven parents from this frame, undriven chains from their rest pose
+        let pq = r.pq;
+        if (b.parent) { let a = b.parent; const chain = []; while (a && a.isBone && !a.userData.canon) { chain.push(a); a = a.parent; } if (a && a.userData.canon && Q.has(a)) { pq = Q.get(a).clone(); for (let i = chain.length - 1; i >= 0; i--) pq.multiply(this.restLocal.get(chain[i])); } }
         let q;
         if (d && d.aim) { v1.subVectors(P[d.aim[1]], P[d.aim[0]]).normalize(); q = new THREE.Quaternion().setFromUnitVectors(r.dir, v1).multiply(r.q); }
         else if (d && d.frame) {
           const Y = v1.subVectors(P[d.frame[1]], P[d.frame[0]]).normalize(), X = v2.subVectors(P[d.frame[3]], P[d.frame[2]]), Z = v3.crossVectors(X, Y).normalize(); X.crossVectors(Y, Z).normalize();
-          q = new THREE.Quaternion().setFromRotationMatrix(m1.makeBasis(X, Y, Z)).multiply(r.q);
+          q = new THREE.Quaternion().setFromRotationMatrix(m1.makeBasis(X, Y, Z)).multiply(this.yawFix).multiply(r.q);
         } else q = pq.clone().multiply(r.lq);
-        Q[b.name] = q;
+        Q.set(b, q);
         b.quaternion.copy(pq.clone().invert().multiply(q));
       }
-      // pelvis position
       this.bones.Hips.position.copy(P.pelvis).applyMatrix4(this.hipsParentInv);
     }
-    flash(col, amt) { this.mat.uniforms.uFlashCol.value.set(col); this.mat.uniforms.uFlash.value = amt; }
+    // 0 angry (default), 1 surprised (hit), 2 eyes shut (down / out)
+    setFace(i) {
+      if (!this.face || i === this.expr) return; this.expr = i;
+      for (const o of this.meshes) if (o.morphTargetInfluences && o.morphTargetInfluences.length >= 3) { o.morphTargetInfluences.fill(0); o.morphTargetInfluences[i] = 1; }
+    }
+    flash(col, amt) { for (const m of this.mats) { m.uniforms.uFlashCol.value.set(col); m.uniforms.uFlash.value = amt; } }
     dispose() { this.scene.remove(this.wrap); }
   }
   C.Body = Body;

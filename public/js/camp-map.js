@@ -75,7 +75,19 @@
     wall(gacha.x - 0.7, gacha.x + 0.7, gacha.z - 0.5, gacha.z + 0.5);
     // ordinary drink machines on the right (solid scenery)
     for (const [z, col] of [[-2.2, 0x2f7fd8], [-3.6, 0xf6f2ea]]) {
-      box(g, 0.95, 1.9, 0.8, col, 0x4a5a7a, 6.4, 0.95, z, 0.03); box(g, 0.75, 0.9, 0.05, 0x1a2a3a, 0x0a1018, 6.0, 1.25, z, 0.0);
+      // a Japanese drink machine: body, lit display of bottles facing the plaza, a coin slot and pickup tray
+      const vm = new THREE.Group(); vm.position.set(6.4, 0, z); vm.rotation.y = -Math.PI / 2; g.add(vm);
+      box(vm, 0.8, 1.85, 0.7, col, mul3(col, 0.5), 0, 0.925, 0, 0.025);
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.05), new THREE.MeshBasicMaterial({ map: W.canvasTex(140, 210, (c, w, h) => {
+        c.fillStyle = '#e8f4ff'; c.fillRect(0, 0, w, h);
+        const cols = ['#e2322b', '#2f6fd0', '#2e9e6a', '#f2c14e', '#8a4ab0', '#f6f2ea', '#1a1a1a', '#e8572a'];
+        for (let r = 0; r < 4; r++) for (let k = 0; k < 5; k++) { const x = 10 + k * 25, y = 12 + r * 48; c.fillStyle = cols[(r * 5 + k * 3) % cols.length]; c.fillRect(x + 4, y + 6, 14, 30); c.fillStyle = '#ddd'; c.fillRect(x + 7, y, 8, 7); c.fillStyle = '#c8231d'; c.fillRect(x + 2, y + 38, 18, 6); }
+        c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(0, 0, w * 0.18, h);
+      }) }));
+      face.position.set(0, 1.28, 0.352); vm.add(face);
+      box(vm, 0.5, 0.16, 0.06, 0x1a1a22, 0x050508, 0, 0.32, 0.36, 0.01);
+      box(vm, 0.12, 0.2, 0.04, 0xc8ccd0, 0x6a7078, 0.24, 0.72, 0.36, 0.006);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xc8e8ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.4 })); glow.scale.set(1.6, 1.8, 1); glow.position.set(6.0, 1.3, z); g.add(glow);
       wall(5.9, 6.9, z - 0.45, z + 0.45);
     }
     // entrance arch: two red posts and a big sign
@@ -226,15 +238,12 @@
       const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 220).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a2228 }));
       ground.position.set(0, -0.03, -70); g.add(ground);
       const roofs = [0x6a4c52, 0x5a5a6a, 0x7a5a48, 0x4e5a62, 0x6e6458, 0x584858];
-      const block = (x0, x1, z0, z1, h, col, steel) => {
+      const city = [];
+      const block = (x0, x1, z0, z1, h, col, steel, front) => {
         const w = x1 - x0, d = z0 - z1, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
         box(g, w, h, d, col, mul3(col, 0.45), cx, h / 2, cz, 0.03);
         if (steel) { for (let i = 0; i < Math.floor(d / 1.6); i++) box(g, w * 0.98, 0.06, 0.08, mul3(col, 1.25), mul3(col, 0.5), cx, h + 0.03, z0 - 0.8 - i * 1.6, 0.0); return; }
-        // rooftop clutter: AC units, a water tank, a skylight
-        const r = (a, b) => a + Math.random() * (b - a);
-        for (let i = 0; i < Math.max(1, Math.floor(w * d / 14)); i++) box(g, r(0.7, 1.2), 0.5, r(0.6, 1.0), 0xc8ccd0, 0x6a7078, r(x0 + 0.8, x1 - 0.8), h + 0.25, r(z1 + 0.8, z0 - 0.8), 0.015);
-        if (Math.random() < 0.6) cyl(g, 0.55, 0.55, 1.1, 0x8aa0b0, 0x3a4a58, r(x0 + 1.2, x1 - 1.2), h + 0.55, r(z1 + 1.2, z0 - 1.2), 14, 0.02);
-        if (Math.random() < 0.5) box(g, r(1.4, 2.2), 0.12, r(1.0, 1.6), 0x9ad0e8, 0x3a6a88, r(x0 + 1.5, x1 - 1.5), h + 0.06, r(z1 + 1.5, z0 - 1.5), 0.012);
+        city.push({ x0, x1, z0, z1, h, front });
       };
       // the street: a row of small buildings each side, varied heights and roof colours
       for (const sd of [-1, 1]) {
@@ -244,10 +253,14 @@
           // the side alley on the left (z -22.5 .. -26.5) stays open: break the row around it
           if (sd < 0 && z > -22.5 && z1 < -22.5) z1 = -22.5;
           const alley = sd < 0 && z <= -22.5 && z > -26.5; if (alley) z1 = -26.5;
-          block(sd > 0 ? 8.4 : -30, sd > 0 ? 30 : alley ? -12.2 : -8.4, z, z1, 3.6 + Math.random() * 2.2, roofs[(Math.random() * roofs.length) | 0]); z = z1;
+          // split the row into narrow buildings of different heights (a Tokyo street is many thin buildings)
+          const xa = sd > 0 ? 8.4 : -30, xb = sd > 0 ? 30 : alley ? -12.2 : -8.4, inner = sd > 0 ? xa : xb, mid = inner + sd * (5 + Math.random() * 3);
+          block(Math.min(inner, mid), Math.max(inner, mid), z, z1, 3.6 + Math.random() * 2.6, roofs[(Math.random() * roofs.length) | 0], false, alley ? undefined : inner);
+          block(Math.min(mid, sd > 0 ? xb : xa), Math.max(mid, sd > 0 ? xb : xa), z, z1, 5 + Math.random() * 4, roofs[(Math.random() * roofs.length) | 0]); z = z1;
         }
       }
       block(-30, 30, 14, 5, 4.2, 0x5a4a52);                                   // behind the entrance
+      S.CampArt.roofs(g, city);
       // big steel roofs around the market hall, loading bay and auction
       block(-30, -13.6, -48.5, -100, 5.2, 0x5e6a76, true); block(13.6, 30, -48.5, -100, 5.2, 0x5e6a76, true);
       block(-30, -11.4, -100, -112, 4.6, 0x545e68, true); block(11.4, 30, -100, -112, 4.6, 0x545e68, true);
