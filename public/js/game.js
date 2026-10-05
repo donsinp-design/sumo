@@ -51,7 +51,11 @@
       });
       this.startAttract();
       // open with one banner wipe straight onto the menu (the page starts behind a black cover): wait for the banner art first
-      if (S.Banners && S.Banners.whenReady) S.Banners.whenReady(() => this.ui.show('title'), 3000); else this.ui.show('title');
+      // ...and for the logo, decoded, so the title never appears without it
+      const logo = new Image(); logo.src = 'assets/logo.webp?v=2';
+      const logoReady = new Promise((res) => { (logo.decode ? logo.decode() : Promise.reject()).then(res, () => { logo.onload = res; logo.onerror = res; if (logo.complete) res(); }); setTimeout(res, 3000); });
+      const showTitle = () => logoReady.then(() => this.ui.show('title'));
+      if (S.Banners && S.Banners.whenReady) S.Banners.whenReady(showTitle, 3000); else showTitle();
       // background ticker: browsers pause hidden windows, which would freeze an online opponent
       try {
         const tk = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 16)'], { type: 'text/javascript' })));

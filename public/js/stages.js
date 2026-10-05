@@ -16,7 +16,13 @@
     { id: 'lily', name: 'LILY PAD' }, { id: 'petri', name: 'PETRI DISH' }, { id: 'sushi', name: 'SUSHI TRAIN' },
     { id: 'random', name: 'RANDOM' },
   ];
-  S.stageFor = (id) => (id === 'random' ? S.STAGES[1 + ((Math.random() * (S.STAGES.length - 2)) | 0)].id : S.STAGES.some((s) => s.id === id) ? id : 'dohyo');
+  // RANDOM: a different stage every match, never the one you just played (the classic dohyo is in the pool too)
+  let lastRandom = null;
+  S.stageFor = (id) => {
+    if (id !== 'random') return S.STAGES.some((s) => s.id === id) ? id : 'dohyo';
+    const pool = S.STAGES.filter((s) => s.id !== 'random' && s.id !== lastRandom);
+    lastRandom = pool[(Math.random() * pool.length) | 0].id; return lastRandom;
+  };
 
   // ---------------------------------------------------------------- shared pieces
   const W = 1024, C = W / 2, RR = C * R / RD; // canvas size, centre, ring radius in pixels

@@ -151,6 +151,9 @@
     prop('cart', -3.4, -43.4); prop('foam', 4.3, -32.5); prop('foam', 4.3, -33.4); prop('bin', 4.3, -43.2);
     prop('chair', -4.6, -33.0); prop('chair', -4.4, -34.6); prop('bottle', -4.5, -36.0); prop('bottle', -4.6, -36.5);
     prop('bucket', 0.6, -45.5);
+    // fish knives left lying about, and spare bottles near the throwers
+    for (const [x, z] of [[-4.6, -18.8], [4.7, -29.0], [-4.9, -41.0], [4.6, -46.2], [-2.4, -60.5], [6.9, -69.0], [-6.8, -84.0], [2.4, -92.0], [-7.6, -104.5], [7.2, -108.0]]) prop('knife', x, z, Math.random() * 6);
+    for (const [x, z] of [[-1.6, -44.0], [3.0, -44.6], [4.6, -47.0], [8.2, -70.4], [9.6, -73.6], [-2.2, -95.6], [-4.0, -98.0], [-1.0, -62.0]]) prop('bottle', x, z);
     puddle(1.0, -33.8, 1.2, 1.4); puddle(-2.4, -45.2, 1.3, 1.1);
     for (const z of [-15, -28, -38, -46]) { lantern(-6.9, 3.0, z, 0xf2c14e); lantern(6.9, 3.0, z, 0xf2c14e); }
 

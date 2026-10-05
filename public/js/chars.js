@@ -207,6 +207,18 @@
       if (!this.face || i === this.expr) return; this.expr = i;
       for (const o of this.meshes) if (o.morphTargetInfluences && o.morphTargetInfluences.length >= 3) { o.morphTargetInfluences.fill(0); o.morphTargetInfluences[i] = 1; }
     }
+    // hold an object in the palm. The object is authored in metres with its grip axis along +Y; it ends up across the
+    // fist (the hand bone's local Z), blade/neck forward. side: 'R' (the striking hand) or 'L'.
+    attach(obj, side, along) {
+      const b = this.bones[side === 'L' ? 'LeftHand' : 'RightHand']; if (!b) return false;
+      b.add(obj);
+      const sx = side === 'L' ? -1 : 1, k = 1 / this.root.scale.y;
+      obj.position.set(sx * 0.072, -0.03, 0); obj.scale.setScalar(k);
+      obj.rotation.set(-Math.PI / 2, 0, 0);
+      if (along) obj.position.z += along * k; // slide the grip along the object (e.g. hold a pole a third of the way up)
+      return true;
+    }
+    handPos(side, out) { const b = this.bones[side === 'L' ? 'LeftHand' : 'RightHand']; return b ? b.getWorldPosition(out) : null; }
     flash(col, amt) { for (const m of this.mats) { m.uniforms.uFlashCol.value.set(col); m.uniforms.uFlash.value = amt; } }
     dispose() { this.scene.remove(this.wrap); }
   }

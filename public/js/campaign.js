@@ -28,6 +28,7 @@
     cart:    { r: 0.6,  h: 0.9,  hp: 99, pick: false, wt: 'heavy', dmg: 0,  breaks: false, col: 0x8a96a2, shade: 0x3a4652, roll: true },
     barrier: { r: 0.55, h: 0.9,  hp: 99, pick: false, wt: 'heavy', dmg: 0,  breaks: false, col: 0xf2c14e, shade: 0x1a1a1a },
     tuna:    { r: 0.5,  h: 0.45, hp: 99, pick: true,  wt: 'tuna',  dmg: 30, breaks: false, col: 0x4a5a78, shade: 0x1a2236 },
+    knife:   { r: 0.16, h: 0.06, hp: 99, pick: true, wt: 'light', dmg: 20, breaks: false, col: 0xd8dde4, shade: 0x6a7280, blade: true },
     onigiri: { r: 0.22, h: 0.25, hp: 1, pick: false, wt: 'light',  dmg: 0,  breaks: false, col: 0xf6f2ea, shade: 0xb8b0a0, heal: true },
   };
 
@@ -128,7 +129,7 @@
     buildHud() {
       const h = this.hud = document.createElement('div'); h.id = 'campHud';
       h.innerHTML = '<div class="ch-time">0:00.0</div><div class="ch-me"><b>YOU</b><span class="ch-bar"><i></i></span><div class="ch-ab"><em>NO ABILITY</em><span class="ch-cd"><i></i></span><kbd>SPACE</kbd></div></div>' +
-        '<div class="ch-zone"></div><div class="ch-go">GO ↑</div><div class="ch-say"><b></b><span></span></div><div class="ch-prompt"></div>' +
+        '<div class="ch-zone"></div><div class="ch-say"><b></b><span></span></div><div class="ch-prompt"></div>' +
         '<div class="ch-boss"><b></b><span class="ch-bar"><i></i></span></div><div class="ch-bars"></div>' +
         '<div class="ch-card"><div class="ch-cap"></div><b></b><span></span><em>K or SPACE to keep it</em></div>' +
         '<div class="ch-pause"><h2>PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART AREA</button><button data-c="quit">QUIT TO TITLE</button><p>J slap ×3 · K grab / throw · L parry · L+dir dodge, hold to CHARGE · SPACE ability</p></div>' +
@@ -192,29 +193,22 @@
       this.fireStep(dt);
       if (this.abCd > 0) this.abCd -= dt;
       // tidy up the knocked-out
-      for (const a of this.actors) if (a !== this.P && a.dead && a.t > 2.2 && !a.gone) { a.gone = true; a.view.dispose ? a.view.dispose(this.scene) : 0; }
+      for (const a of this.actors) if (a !== this.P && a.dead && a.t > 2.2 && !a.gone) { this.dropCarry(a); a.gone = true; a.view.dispose ? a.view.dispose(this.scene) : 0; }
       this.actors = this.actors.filter((a) => !a.gone);
     }
 
     // zones: wake enemies when you walk in, open the way on when the zone is clear
+    // one open market: no gates or areas. Each sleeper notices you on its own (close enough, or a neighbour already fighting);
+    // the boss wakes when you step onto the auction floor; beating him wins.
     flow(dt) {
-      const P = this.P, Z = this.zones[this.zi];
-      if (!Z) return;
-      if (Z.state === 'wait' && P.z < Z.z0 + 1.5) {
-        Z.state = 'fight'; this.wakeZone(Z);
-        this.el('.ch-zone').textContent = Z.name; this.el('.ch-zone').classList.add('on'); this.el('.ch-go').classList.remove('on');
-        setTimeout(() => this.el('.ch-zone') && this.el('.ch-zone').classList.remove('on'), 2200);
-      }
-      if (Z.state === 'fight') {
-        const alive = Z.ens.filter((e) => !e.dead);
-        if (!alive.length && (!Z.boss || Z.bossDone)) {
-          Z.state = 'clear';
-          if (Z.boss) { this.win(); return; }
-          this.zi++; const N = this.zones[this.zi]; this.gate = N ? N.z1 : -999;
-          P.hp = Math.min(P.maxHp, P.hp + 20);
-          this.el('.ch-go').classList.add('on'); this.g.audio.blip(true); this.g.audio.swell(0.3, 0.8);
-          this.say('CLEAR', N ? 'Head deeper: ' + N.name.toLowerCase() : '', 2);
+      const P = this.P;
+      for (const Z of this.zones) {
+        for (const e of Z.ens) {
+          if (!e.sleep || e.dead) continue;
+          const d = Math.hypot(P.x - e.x, P.z - e.z), near = Z.boss ? P.z < Z.z0 - 1 : d < 9.5 || Z.ens.some((o) => !o.sleep && !o.dead && Math.hypot(o.x - e.x, o.z - e.z) < 6 && Math.hypot(P.x - o.x, P.z - o.z) < 9);
+          if (near) { e.sleep = false; if (Z.state === 'wait') { Z.state = 'fight'; this.wakeZone(Z); } }
         }
+        if (Z.state === 'fight' && Z.boss && Z.ens.every((e) => e.dead) && !this.over) { Z.state = 'clear'; this.win(); }
       }
     }
     // put a zone's people in their fixed places, asleep
@@ -225,12 +219,10 @@
     }
     // you walked in: they notice you
     wakeZone(Z) {
-      for (const e of Z.ens) e.sleep = false;
       if (Z.boss) {
         this.B = Z.ens[0]; this.B.st = 'intro'; this.B.t = 0;
         this.el('.ch-boss').classList.add('on'); this.el('.ch-boss b').textContent = KINDS.boss.name;
         this.say(KINDS.boss.name, 'Champion of the tuna auction', 3); this.g.audio.roar(); this.g.audio.taiko();
-        this.backGate = Z.z0 + 1; // the curtains close behind you
         return;
       }
       if (Z.spawns.some((sp) => sp[0] === 'sumo') && !this.sumoTip) { // first sumo: say how to beat him
@@ -238,12 +230,11 @@
         this.prompt('SUMO: too heavy to push. Make him crash into a cart or wall, parry him (tap L), or throw crates at him, then grab (K)');
         clearTimeout(this.tipT); this.tipT = setTimeout(() => this.prompt(''), 9000);
       }
-      this.backGate = Z.z0 + 1.2;
     }
     retry() {
-      const Z = this.zones[this.zi];
+      const zi = Math.max(0, this.zones.findIndex((z) => this.P.z <= z.z0 + 2 && this.P.z > z.z1 - 2)), Z = this.zones[zi]; this.zi = zi;
       this.over = null; this.el('.ch-over').classList.remove('on');
-      this.actors = this.actors.filter((a) => { if (a !== this.P && a.zone === Z) { if (a.bang) this.scene.remove(a.bang); if (a.view.dispose) a.view.dispose(this.scene); return false; } return true; });
+      this.actors = this.actors.filter((a) => { if (a !== this.P && a.zone === Z) { this.dropCarry(a); if (a.bang) this.scene.remove(a.bang); if (a.view.dispose) a.view.dispose(this.scene); return false; } return true; });
       Z.state = 'wait'; Z.bossDone = false; this.B = null; this.el('.ch-boss').classList.remove('on');
       this.populate(Z, this.zi);
       const P = this.P; P.hp = P.maxHp; P.dead = false; P.st = 'free'; P.t = 0; P.held = null; P.holder = null;
@@ -308,13 +299,20 @@
           if (P.t >= P.dur && P.st === 'grab') this.set(P, 'free');
           break;
         }
+        case 'slam': {
+          P.tvx = 0; P.tvz = 0;
+          if (P.t >= 0.24 && !P.slamDone) { P.slamDone = true; if (P.held && !P.held.D && !P.held.dead) this.slamHit(P, P.held); }
+          if (P.t >= P.dur) this.set(P, 'recover', 0.22);
+          break;
+        }
         case 'hold': {
           wantMove(3.0, 12);
           const H = P.held;
           if (!H || H.dead || (H.st && H.st !== 'held' && !H.D)) { P.held = null; this.set(P, 'free'); break; }
           if (!H.D) { // holding an enemy: J knees them, K throws; they break free after a while
             if (c.push.pressed && (P.knees || 0) < 3) { P.knees = (P.knees || 0) + 1; this.damage(H, 7, P, 0, 0, false); this.g.audio.thump(3); this.R && this.hitFx(H.x, H.z, 0.6); }
-            if (c.grab.pressed || (c.push.pressed && P.knees >= 3)) this.throwHeld(P);
+            if (c.grab.pressed) { if (Math.hypot(c.mx, c.mz) > 0.3) this.throwHeld(P); else this.slam(P); } // K + direction throws; K on its own slams
+            else if (c.push.pressed && P.knees >= 3) this.throwHeld(P);
             else if (P.t > 2.6) { this.release(P, true); }
           } else if (c.grab.pressed || c.push.pressed) this.throwHeld(P);
           break;
@@ -415,7 +413,7 @@
           this.say('BELLY TOSS!', '', 1); return true;
         }
         if (best.holdP) this.escapeFrom(best);
-        best.st = 'held'; best.t = 0; best.holder = P; P.held = best; P.knees = 0; this.set(P, 'hold'); this.g.audio.grab();
+        this.dropCarry(best); best.st = 'held'; best.t = 0; best.holder = P; P.held = best; P.knees = 0; this.set(P, 'hold'); this.g.audio.grab();
         return true;
       }
       // or a prop
@@ -427,6 +425,17 @@
       }
       if (bp) { bp.held = P; P.held = bp; this.set(P, 'hold'); this.g.audio.grab(); return true; }
       return false;
+    }
+    // the slam: hoist them overhead and drive them straight down into the floor
+    slam(P) { this.set(P, 'slam', 0.55); P.slamDone = false; this.g.audio.whoosh(0.35); }
+    slamHit(P, H) {
+      P.held = null; H.holder = null;
+      const fx = Math.cos(P.f), fz = Math.sin(P.f);
+      H.x = P.x + fx * 0.95; H.z = P.z + fz * 0.95; H.y = 0; H.vx = fx * 0.8; H.vz = fz * 0.8; H.slammed = true; H.st = 'free';
+      this.damage(H, H.kind === 'sumo' ? 34 : 30, P, fx * 0.8, fz * 0.8, true); if (!H.dead) this.set(H, 'down', 1.4);
+      this.shake = 0.75; this.hitstop = 0.1; this.g.audio.thump(10); this.g.audio.taiko && this.g.audio.taiko();
+      this.fx.dust(H.x, 0.05, H.z, 16, 0.9, 0.7, 0.5); this.hitFx(H.x, H.z, 1.2);
+      for (const T of this.actors) if (T !== H && T.team === 1 && !T.dead && Math.hypot(T.x - H.x, T.z - H.z) < 2.2) { const a = Math.atan2(T.z - H.z, T.x - H.x); this.damage(T, 6, P, Math.cos(a) * 3, Math.sin(a) * 3, false); }
     }
     throwHeld(P) {
       const H = P.held; P.held = null; this.set(P, 'throw', 0.28);
@@ -494,6 +503,7 @@
       }
       if (T === this.P && dmg > 0) this.hits = (this.hits || 0) + 1;
       T.hp -= dmg; T.lastHit = this.t;
+      if (T.carry && (heavy || T.hp <= 0)) this.dropCarry(T);
       if (A && A !== T) { T.hitX = T.x - A.x; T.hitZ = T.z - A.z; } else { T.hitX = kx; T.hitZ = kz; }
       if (A && T.st === 'held' && A !== T.holder) { /* hit while held */ }
       const resist = clamp(1.6 / (T.mass || 1), 0.12, 1.2) * (slick ? 1.5 : 1);
@@ -546,12 +556,22 @@
         case 'free': case 'approach': {
           face(toP);
           const token = this.hasToken(E);
-          const want = { fighter: 1.0, rusher: 1.0, technical: 1.0, grappler: 0.9, thrower: 6, staff: 1.9, commander: 2.6, sumo: 1.4 }[E.kind];
-          if (E.kind === 'thrower') { // keep the distance, step away when you get close
+          const want = E.kind === 'thrower' && !E.carry ? 1.0 : { fighter: 1.0, rusher: 1.0, technical: 1.0, grappler: 0.9, thrower: 6, staff: 1.9, commander: 2.6, sumo: 1.4 }[E.kind];
+          // items: throwers run to a bottle (or knife) on the market and pick it up; brawlers grab a knife lying close by
+          if (!E.carry && E.view && E.view.body && E.view.body.attach) {
+            const want = E.kind === 'thrower' ? ['bottle', 'knife'] : ['fighter', 'technical', 'rusher'].includes(E.kind) ? ['knife'] : null;
+            if (want) {
+              let best = null, bd = E.kind === 'thrower' ? 16 : 4.5;
+              for (const p of this.props) { if (p.dead || p.held || p.thrown || p.hop || !want.includes(p.type) || (p.claim && p.claim !== E && !p.claim.dead && !p.claim.carry)) continue; const dd = Math.hypot(p.x - E.x, p.z - E.z); if (dd < bd) { bd = dd; best = p; } }
+              if (best) { best.claim = E; if (bd < E.r + best.D.r + 0.45) this.pickUp(E, best); else { go(best.x, best.z, sp); face(Math.atan2(best.z - E.z, best.x - E.x), 10); break; } }
+            }
+          }
+          if (E.kind === 'thrower' && E.carry) { // keep the distance, step away when you get close
             if (d < 4) go(E.x - dx, E.z - dz, sp); else if (d > 8) go(P.x, P.z, sp); else this.strafe(E, toP, sp * 0.5);
             if (E.cd <= 0 && d < 11 && token) this.begin(E, 'bottle', 0.55);
             break;
           }
+          if (E.carry && E.carry.type === 'knife' && d > 5 && d < 10 && E.cd <= 0 && token && Math.random() < 0.3) { this.begin(E, 'bottle', 0.5); break; } // sometimes the knife gets thrown
           if (E.kind === 'commander' && E.cd <= 0 && (E.shout || 0) < this.t - 7) { E.shout = this.t; this.begin(E, 'shout', 0.6); break; }
           if (!token) { // wait their turn in a ring around you (readable fights)
             const slot = (E.slot === undefined ? (E.slot = Math.random() * TAU) : E.slot) + this.t * 0.15;
@@ -588,7 +608,7 @@
           if (E.t > 1.35) { const Pp = E.holdP; this.escapeFrom(E); this.damage(Pp, 17, null, Math.cos(E.f) * 7, Math.sin(E.f) * 7, true); this.set(E, 'recover', 0.6); this.g.audio.thump(8); this.shake = 0.3; }
           break;
         }
-        case 'held': { const H = E.holder; if (!H) { this.set(E, 'free'); break; } E.x = H.x + Math.cos(H.f) * (H.r + E.r * 0.6); E.z = H.z + Math.sin(H.f) * (H.r + E.r * 0.6); E.y = 0.5; E.vx = E.vz = 0; E.f = H.f + Math.PI; break; }
+        case 'held': { const H = E.holder; if (!H) { this.set(E, 'free'); break; } const L = H.st === 'slam' ? Math.min(1, H.t / 0.2) : 0, R0 = (H.r + E.r * 0.6) * (1 - 0.55 * L); E.x = H.x + Math.cos(H.f) * R0; E.z = H.z + Math.sin(H.f) * R0; E.y = 0.5 + L * 1.1; E.vx = E.vz = 0; E.f = H.f + Math.PI; break; }
         case 'thrown': break; // flies (physics)
       }
       void K;
@@ -625,7 +645,7 @@
     enemyAct(E, dt, d, toP) {
       const P = this.P;
       switch (E.atk) {
-        case 'jab': if (!E.hitDone && E.t > 0.05) { E.hitDone = true; this.meleeHit(E, 1.15, 0.9, E.fat ? 11 : 8, 2.5, false); } break;
+        case 'jab': if (!E.hitDone && E.t > 0.05) { E.hitDone = true; const kn = E.carry && E.carry.type === 'knife'; this.meleeHit(E, kn ? 1.3 : 1.15, 0.9, (E.fat ? 11 : 8) * (kn ? 1.6 : 1), 2.5, false); } break; // a knife cuts deeper
         case 'slap': if (!E.hitDone && E.t > 0.06) { E.hitDone = true; this.meleeHit(E, 1.7, 0.9, 14, 6, true); } break;
         case 'grab':
           if (!E.hitDone && E.t > 0.05) {
@@ -647,15 +667,21 @@
           break;
         }
         case 'sweep':
-          if (!E.hitDone && E.t > 0.1) { E.hitDone = true; this.meleeHit(E, 2.3, 1.9, 14, 6, true); this.fx.ring(E.x, E.z, 2.4, 0.3); this.g.audio.whoosh(0.4); }
+          if (!E.hitDone && E.t > 0.1) { E.hitDone = true; this.meleeHit(E, 2.3, 1.9, 14, 6, true); this.g.audio.whoosh(0.4); }
           break;
-        case 'bottle':
-          if (!E.hitDone) { E.hitDone = true; const lead = 0.5, tx = P.x + P.vx * lead, tz = P.z + P.vz * lead; const a = Math.atan2(tz - E.z, tx - E.x), l = Math.hypot(tx - E.x, tz - E.z), T = l / 10;
-            this.shots.push({ kind: 'bottle', x: E.x, z: E.z, y: 1.5, vx: Math.cos(a) * 10, vz: Math.sin(a) * 10, vy: (1.0 - 1.5) / Math.max(0.15, T) + 9 * Math.max(0.15, T), by: E, mesh: shotMesh(this.scene, 'bottle'), t: 0 });
-            this.g.audio.whoosh(0.2); }
+        case 'bottle': // throw whatever is in the hand (a bottle or a knife picked up off the market)
+          if (!E.hitDone) {
+            E.hitDone = true; const it = E.carry; if (!it) break;
+            const lead = 0.5, tx = P.x + P.vx * lead, tz = P.z + P.vz * lead; const a = Math.atan2(tz - E.z, tx - E.x), l = Math.hypot(tx - E.x, tz - E.z), T = l / 10;
+            let hp = E.view.body && E.view.body.handPos('R', new THREE.Vector3()); if (!hp || Math.hypot(hp.x - E.x, hp.z - E.z) > 1.5) hp = new THREE.Vector3(E.x, 1.5, E.z); // (not drawn this frame: from the body)
+            const kind = it.type === 'knife' ? 'knife' : 'bottle';
+            this.dropCarry(E, true);
+            this.shots.push({ kind, dmg: kind === 'knife' ? 16 : 10, x: hp.x, z: hp.z, y: hp.y, vx: Math.cos(a) * 10, vz: Math.sin(a) * 10, vy: (1.0 - hp.y) / Math.max(0.15, T) + 9 * Math.max(0.15, T), by: E, mesh: shotMesh(this.scene, kind), t: 0 });
+            this.g.audio.whoosh(0.2);
+          }
           break;
         case 'shout':
-          if (!E.hitDone) { E.hitDone = true; this.popAt(E, 'GET HIM!'); this.fx.ring(E.x, E.z, 7, 0.6); this.g.audio.clap(); for (const a of this.actors) if (a.team === 1 && !a.dead && a !== E) a.cd = Math.min(a.cd, 0.2); }
+          if (!E.hitDone) { E.hitDone = true; this.popAt(E, 'GET HIM!'); this.g.audio.clap(); for (const a of this.actors) if (a.team === 1 && !a.dead && a !== E) a.cd = Math.min(a.cd, 0.2); }
           break;
       }
       if (E.st === 'act' && E.t >= E.dur && E.flurry > 0 && E.atk === 'jab' && !E.dead) { E.flurry--; this.begin(E, 'jab', 0.16); return; }
@@ -783,8 +809,6 @@
       // walls (axis-aligned boxes) and the zone gates
       for (const w of this.map.walls) this.pushOut(a, w);
       if (a.team === 0 || a.st === 'thrown') {
-        if (a.z < this.gate + a.r && this.zones[this.zi] && this.zones[this.zi].state !== 'clear') { a.z = this.gate + a.r; if (a.vz < 0) a.vz = 0; }
-        if (this.backGate !== undefined && a.team === 0 && a.z > this.backGate - a.r && this.zones[this.zi] && this.zones[this.zi].state === 'fight') { a.z = this.backGate - a.r; if (a.vz > 0) a.vz = 0; }
       }
       // dust when moving fast, slide streaks on wet floor
       const sp = Math.hypot(a.vx, a.vz);
@@ -821,7 +845,13 @@
     propStep(dt) {
       for (const p of this.props) {
         if (p.dead) continue;
-        if (p.held) { const H = p.held; p.x = H.x + Math.cos(H.f) * 0.2; p.z = H.z + Math.sin(H.f) * 0.2; p.y = 1.55 * (H.w ? H.w.szCur : 1); p.ry = -H.f; continue; }
+        if (p.held) {
+          const H = p.held; if (p.attached) continue; // in an enemy's hand (parented to the bone)
+          const sz = H.w ? H.w.szCur : 1, small = p.D.r < 0.2;
+          if (small && H.view && H.view.arms && H.view.arms[1] && H.view.arms[1].hand) { const v = H.view.arms[1].hand.getWorldPosition(new THREE.Vector3()); p.x = v.x; p.y = v.y - 0.08; p.z = v.z; }
+          else { p.x = H.x + Math.cos(H.f) * 0.78 * sz; p.z = H.z + Math.sin(H.f) * 0.78 * sz; p.y = 0.95 * sz; } // hugged against the chest
+          p.ry = -H.f; continue;
+        }
         if (p.thrown || p.hop) {
           p.vy -= 18 * dt; p.y += p.vy * dt; p.x += p.vx * dt; p.z += p.vz * dt; p.spin += dt * 12;
           if (p.thrown) {
@@ -867,6 +897,20 @@
       else if (p.type === 'crate' && Math.random() < 0.2) this.addProp('onigiri', p.x, p.z);
       this.killProp(p);
     }
+    pickUp(E, p) {
+      p.held = E; p.claim = null; E.carry = p;
+      if (p.mesh.userData.k) p.mesh.userData.k.rotation.set(0, 0, 0); // a knife comes off the counter into the grip
+      p.attached = !!(E.view.body && E.view.body.attach(p.mesh, 'R'));
+      this.g.audio.blip(false);
+    }
+    // let go of a carried item (thrown: it's gone into a shot; otherwise it drops to the floor)
+    dropCarry(E, used) {
+      const p = E.carry; if (!p) return; E.carry = null; p.held = null; p.claim = null;
+      if (p.attached) { this.scene.attach(p.mesh); p.attached = false; }
+      if (used) { this.killProp(p); return; }
+      p.mesh.scale.setScalar(1); if (p.mesh.userData.k) p.mesh.userData.k.rotation.set(0, 0, Math.PI / 2);
+      p.x = E.x + rnd(-0.3, 0.3); p.z = E.z + rnd(-0.3, 0.3); p.y = 0.6; p.vy = 2; p.vx = rnd(-1, 1); p.vz = rnd(-1, 1); p.hop = true;
+    }
     killProp(p) { p.dead = true; if (p.mesh.parent) p.mesh.parent.remove(p.mesh); }
     addPuddleMesh(x, z) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.8).rotateX(-Math.PI / 2), this.map.decor.find((d) => d.kind === 'puddle').m.material);
@@ -877,13 +921,13 @@
         s.t += dt; s.vy -= 18 * dt; s.x += s.vx * dt; s.z += s.vz * dt; s.y += s.vy * dt;
         s.mesh.position.set(s.x, s.y, s.z); s.mesh.rotation.x += dt * 14;
         const P = this.P;
-        if (s.kind === 'bottle' && !s.done && s.by !== P && Math.hypot(P.x - s.x, P.z - s.z) < P.r + 0.35 && s.y < 1.9) {
+        if ((s.kind === 'bottle' || s.kind === 'knife') && !s.done && s.by !== P && Math.hypot(P.x - s.x, P.z - s.z) < P.r + 0.35 && s.y < 1.9) {
           if (P.st === 'parry' && P.t < 0.26) { // PARRY: swat it back at whoever threw it
             const T = s.by && !s.by.dead ? s.by : null, a = T ? Math.atan2(T.z - s.z, T.x - s.x) : P.f + Math.PI, l = T ? Math.hypot(T.x - s.x, T.z - s.z) : 6, ft = Math.max(0.2, l / 14);
             s.by = P; s.vx = Math.cos(a) * 14; s.vz = Math.sin(a) * 14; s.vy = (1.0 - s.y) / ft + 9 * ft; s.back = true;
             this.popAt(P, 'PARRY!'); this.g.audio.hyoshigi(); this.g.audio.slap(6); this.hitFx(s.x, s.z, 0.9, true);
           } else if (P.st === 'block') { s.done = true; this.g.audio.thump(2); }
-          else if (P.st !== 'dodge' && P.iframe <= 0) { s.done = true; this.damage(P, 10, s.by, s.vx * 0.3, s.vz * 0.3, false); this.g.audio.slap(4); }
+          else if (P.st !== 'dodge' && P.iframe <= 0) { s.done = true; this.damage(P, s.dmg || 10, s.by, s.vx * 0.3, s.vz * 0.3, false); this.g.audio.slap(4); }
         }
         if (s.back && !s.done) for (const T of this.actors) if (T.team === 1 && !T.dead && Math.hypot(T.x - s.x, T.z - s.z) < T.r + 0.3 && s.y < 2) { s.done = true; this.damage(T, 18, P, s.vx * 0.4, s.vz * 0.4, true); this.g.audio.slap(6); break; }
         let wall = false; for (const w of this.map.walls) if (s.x > w.x0 && s.x < w.x1 && s.z > w.z0 && s.z < w.z1) wall = true;
@@ -907,6 +951,7 @@
         this.drawActor(a, dt, T);
       }
       for (const p of this.props) if (!p.dead) {
+        if (p.attached) continue;
         p.mesh.position.set(p.x, p.y, p.z);
         p.mesh.rotation.set(p.thrown || p.hop ? p.spin : 0, p.held || p.thrown ? -p.ry : p.ry, 0);
       }
@@ -933,7 +978,7 @@
         const w = a.w, st = a.st;
         w.x = a.x; w.z = a.z; w.y = a.y; w.f = a.f; w.fx = Math.cos(a.f); w.fz = Math.sin(a.f); w.vx = a.vx; w.vz = a.vz; w.spd = Math.hypot(a.vx, a.vz);
         const map = { free: 'free', strike: 'palm', grab: 'grab', hold: 'grab', throw: 'heavy', lprep: 'brace', dodge: 'dash', charge: 'charge', parry: 'brace', block: 'brace',
-          recover: 'recover', bonk: 'stun', hurt: 'stun', down: 'fall', getup: 'recover', grabbed: 'stun', intro: 'free', roar: 'win', wind: a.atk === 'stomp' ? 'bigstomp' : a.atk === 'charge' ? 'wind' : 'wind',
+          recover: 'recover', slam: 'heavy', bonk: 'stun', hurt: 'stun', down: 'fall', getup: 'recover', grabbed: 'stun', intro: 'free', roar: 'win', wind: a.atk === 'stomp' ? 'bigstomp' : a.atk === 'charge' ? 'wind' : 'wind',
           act: a.atk === 'stomp' ? 'bigstomp' : a.atk === 'charge' ? 'charge' : 'slap', dazed: 'stun', held: 'stun', thrown: 'fall', clawed: 'stun' };
         const nst = map[st] || 'free';
         if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = st === 'hold' ? 0.12 : a.t;
@@ -981,10 +1026,6 @@
           if (a.gone) { this.scene.remove(a.bang); a.bang = null; }
         }
       }
-      // the gate ahead: a glowing strip on the floor when the way is open
-      if (!this.goM) { this.goM = new THREE.Mesh(new THREE.PlaneGeometry(6, 0.6).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x3fe0a0, transparent: true, opacity: 0.5, depthWrite: false })); this.scene.add(this.goM); }
-      const Z = this.zones[this.zi], open = this.zi > 0 && Z && Z.state === 'wait';
-      this.goM.visible = !!open; if (open) { this.goM.position.set(0, 0.03, Z.z0 + 1); this.goM.material.opacity = 0.3 + 0.25 * Math.sin(T * 6); }
     }
     drawHud() {
       const P = this.P;
@@ -1026,6 +1067,7 @@
   }
   function shotMesh(scene, kind) {
     const g = new THREE.Group();
+    if (kind === 'knife') { const k = S.CampArt.prop('knife'); k.userData.k.rotation.set(0, 0, 0); k.userData.k.position.y = -0.1; scene.add(k); return k; }
     S.CampMap.cyl(g, 0.05, 0.07, 0.24, kind === 'molotov' ? 0xc84a1a : 0x3a9a5a, 0x2a1a10, 0, 0, 0, 8, 0.012);
     if (kind === 'molotov') { const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: S.CampMap.glowTex(), color: 0xff8a2a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); f.scale.setScalar(0.5); f.position.y = 0.2; g.add(f); }
     scene.add(g); return g;
@@ -1082,7 +1124,6 @@
       });
       if (K.pole) { const p = add(this.arms[1].el, new THREE.CylinderGeometry(0.035, 0.035, 2.4, 8), M(0xc8a070, 0x6a4a2a), 0, -1.05, 0.04, 1, 1, 1, 0.012); add(p, SG, M(0x3a3a40, 0x101014), 0.06, -1.15, 0, 0.16, 0.08, 0.06, 0.01); p.userData.acc = true; }
       if (kind === 'thrower') { const bt = this.bottle = add(this.arms[1].el, new THREE.CylinderGeometry(0.045, 0.055, 0.24, 10), M(0x3a9a5a, 0x1a4a2a, { spec: 0.5 }), 0, -0.56, 0.02, 1, 1, 1, 0.01); bt.userData.acc = true; add(bt, new THREE.CylinderGeometry(0.018, 0.026, 0.1, 8), M(0x3a9a5a, 0x1a4a2a), 0, 0.15, 0, 1, 1, 1, 0.008); } // held by the neck, clear of the fist
-      if (K.coat) { const mg = add(this.arms[0].el, new THREE.ConeGeometry(0.11, 0.28, 12, 1, true), M(0xf6f2ea, 0x9a9080), 0, -0.45, 0.09, 1, 1, 1, 0.01); mg.rotation.x = -Math.PI / 2; mg.userData.acc = true; }
       // legs: work trousers and round rubber boots, a real knee so they can bend and fold
       this.legs = [-1, 1].map((sd) => {
         const hp = new THREE.Group(); hp.position.set(sd * 0.15 * fw, 0, 0); this.hips.add(hp);
@@ -1108,7 +1149,12 @@
       // a real skinned body (when loaded): the shapes above become an invisible rig that drives it
       if (S.Chars && S.Chars.ready) {
         this.body = new S.Chars.Body(scene, kind, K, fat, pick === undefined ? Math.floor(Math.random() * 5) : pick);
-        this.root.traverse((o) => { if (o.isMesh && !o.userData.acc && !(o.parent && o.parent.userData.acc)) o.visible = false; });
+        this.root.traverse((o) => { if (o.isMesh) o.visible = false; });
+        if (kind === 'staff') { // a market hook-pole, 1.5 m, gripped a third of the way up in the striking hand
+          const pole = new THREE.Group(), shaft = S.R3.mesh(new THREE.CylinderGeometry(0.028, 0.032, 1.5, 8), S.toon(0xc8a070, { shade: 0x6a4a2a }), 0.01); shaft.position.y = 0.45; pole.add(shaft);
+          const hook = S.R3.mesh(new THREE.TorusGeometry(0.07, 0.014, 6, 12, Math.PI * 1.2), S.toon(0x4a4e56, { shade: 0x16181c, spec: 0.5 }), 0.008); hook.position.y = 1.22; hook.rotation.z = Math.PI / 2; pole.add(hook);
+          this.body.attach(pole, 'R');
+        }
         this.J = {}; for (const k in this.rd.joints) this.J[k] = new THREE.Vector3();
       }
       // ground shadow
@@ -1246,7 +1292,8 @@
         this.root.updateMatrixWorld(true);
         // launch speeds are capped and the body stays tensed: a person falls, a doll flies
         const cap = (vx, vz, m) => { const l = Math.hypot(vx, vz), k = l > m ? m / l : 1; return [vx * k, vz * k]; };
-        if (st === 'thrown') { const [vx, vz] = cap(a.vx, a.vz, 5.5); rd.start(new THREE.Vector3(vx, Math.min(a.vy || 2, 2.6), vz), { spin: 0.55, ax: vx / (Math.hypot(vx, vz) || 1), az: vz / (Math.hypot(vx, vz) || 1), tone0: 0.34, toneEnd: 0.07, relax: 1.2 }); }
+        if (a.slammed) { a.slammed = false; rd.start(new THREE.Vector3(a.vx, -7, a.vz), { push: new THREE.Vector3(Math.cos(a.f + Math.PI), 0, Math.sin(a.f + Math.PI)), tone0: 0.32, toneEnd: 0.07, relax: 1.4 }); }
+        else if (st === 'thrown') { const [vx, vz] = cap(a.vx, a.vz, 5.5); rd.start(new THREE.Vector3(vx, Math.min(a.vy || 2, 2.6), vz), { spin: 0.55, ax: vx / (Math.hypot(vx, vz) || 1), az: vz / (Math.hypot(vx, vz) || 1), tone0: 0.34, toneEnd: 0.07, relax: 1.2 }); }
         else { const fx = a.fallX || -Math.cos(a.f), fz = a.fallZ || -Math.sin(a.f), fl = Math.hypot(fx, fz) || 1, [vx, vz] = cap(a.vx * 0.7, a.vz * 0.7, 3.2); rd.start(new THREE.Vector3(vx, 0.5, vz), { push: new THREE.Vector3(fx / fl * 1.9, 0, fz / fl * 1.9), limp: a.dead, tone0: a.dead ? 0.2 : 0.3, toneEnd: a.dead ? 0.02 : 0.06, relax: 1.6 }); }
         this.snap = null;
       }
@@ -1282,7 +1329,6 @@
         this.shadow.position.set(a.x, 0.014, a.z);
       }
       this.shadow.visible = !a.gone;
-      if (this.bottle) this.bottle.visible = !(a.atk === 'bottle' && (st === 'act' || st === 'recover')); // it's in the air now
       // hit flash and ice tint
       this.lastHp = a.hp; this.flashT = Math.max(0, this.flashT - dt * 7);
       for (const m of this.mats) { const fr = a.frozen > 0; m.uniforms.uFlashCol.value.set(fr ? 0x9fe6ff : a.burn ? 0xff7a1a : 0xffffff); m.uniforms.uFlash.value = fr ? 0.55 : this.flashT * 0.7; }

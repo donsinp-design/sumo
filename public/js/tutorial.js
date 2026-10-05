@@ -65,6 +65,7 @@
   const L = (title, text, opts) => Object.assign({ title, text, need: 1 }, opts);
   const LESSONS = [
     L('HOW TO WIN', 'You win a bout when they step out of the ring, or when anything but the soles of their feet touches the clay: a hand, a knee, their back. First to win 2 bouts wins the match. Press J or Enter to start.', { check: 'info' }),
+    L('ROCK, PAPER, SCISSORS', 'Kumite is a fast game of rock, paper, scissors. Every move has an answer, so read what they like doing and pick the move that beats it:<br><b>PUSH (J)</b> beats <b>GRAB (K)</b>: it knocks their reaching hands away.<br><b>GRAB (K)</b> beats <b>BRACE / PARRY (L)</b>: someone planted cannot stop you taking the belt.<br><b>BRACE / PARRY (L)</b> beats <b>PUSH (J)</b>: hold L to soak it, or tap L as it lands to stun them.<br><b>CHARGE</b> flattens someone standing still, but a <b>SIDESTEP</b> (L + direction) beats the charge.<br>Press J or Enter.', { check: 'info' }),
     L('MOVE', 'Walk into the glowing circle with W A S D.', { setup: 'marker', check: 'marker' }),
     L('DASH', 'Hold a direction and tap L to dash. You can dash almost any time, even mid-slap. Dash 3 times.', { need: 3, ev: (e, p) => e.type === 'dash' && e.w === p }),
     L('PUSH', 'Walk up close and tap J to push. Land 3 pushes.', { need: 3, ev: (e, p) => (e.type === 'hit' && e.w === p) || (e.type === 'impact' && e.a === p && e.agg) }),

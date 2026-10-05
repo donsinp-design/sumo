@@ -248,6 +248,16 @@
         break;
       }
       case 'tuna': add(G.tuna(), mat(tunaTex(), 0x6a7290, { spec: 0.5, rimAmt: 0.6, rim: 0xe0f0ff }), 0.025, 0.28); break;
+      case 'knife': { // a fish knife (deba): wooden handle, wide steel blade. Built along +Y; lies flat on the floor until picked up
+        const k = new THREE.Group();
+        const handle = W.mesh(new THREE.CylinderGeometry(0.016, 0.019, 0.12, 8), S.toon(0x8a5a32, { shade: 0x3e2410 }), 0.006); handle.position.y = 0.0; k.add(handle);
+        const ferrule = W.mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.018, 8), S.toon(0x2a2a2e, { shade: 0x0a0a0c }), 0); ferrule.position.y = 0.068; k.add(ferrule);
+        const sh = new THREE.Shape(); sh.moveTo(-0.004, 0); sh.lineTo(0.042, 0); sh.quadraticCurveTo(0.04, 0.12, 0.004, 0.2); sh.lineTo(-0.004, 0.2); sh.lineTo(-0.004, 0);
+        const bg = new THREE.ExtrudeGeometry(sh, { depth: 0.006, bevelEnabled: false }); bg.translate(-0.012, 0.076, -0.003);
+        k.add(W.mesh(bg, S.toon(0xe4e8ee, { shade: 0x7a8494, spec: 0.9, rimAmt: 0.6 }), 0.006));
+        k.rotation.z = Math.PI / 2; k.position.y = 0.025; g.add(k); g.userData.k = k;
+        break;
+      }
       case 'onigiri': {
         const t = tex('oni', 8, 64, (c, w, h) => { c.fillStyle = '#f8f4ea'; c.fillRect(0, 0, w, h); c.fillStyle = '#1a2a1e'; c.fillRect(0, h * 0.6, w, h * 0.4); });
         const o = add(G.onigiri(), mat(t, 0xb8b0a0), 0.014); o.position.y = 0.18; o.rotation.x = -0.25;
