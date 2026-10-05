@@ -6,7 +6,7 @@
 // Controls (same buttons as the main game):
 //   J  slap string (3 hits)            K  grab an enemy or a prop / throw what you hold
 //   L  tap alone: PARRY (hold: block)  L + direction, tap: dodge · hold: CHARGE (breaks light and medium things)
-//   SPACE  your gacha ability (recharges)     Esc  pause
+//   SPACE  your skill (from a drink machine; recharges)     Esc  pause
 (function () {
   const STEP = 1 / 120;
   const TAU = Math.PI * 2;
@@ -46,7 +46,7 @@
     boss:      { hp: 420, spd: 2.4, r: 1.05, mass: 12,  name: 'ŌZEKI MAGURO-YAMA', wrestler: 1, size: 1.6 },
   };
 
-  // ---------------------------------------------------------------- gacha: a curated, combat-useful pool only
+  // ---------------------------------------------------------------- skills (sold by the drink machines): a curated, combat-useful pool only
   const POOL = [
     { id: 'molotov', name: 'MOLOTOV COCKTAIL', desc: 'Throw a fire bottle ahead: a burning patch that hurts anyone in it.', cd: 18 },
     { id: 'hundred', name: 'THOUSAND HANDS', desc: 'A blur of slaps in front of you: big damage, pushes everyone back.', cd: 16 },
@@ -88,13 +88,13 @@
       this.camT = new THREE.Vector3(this.P.x, 0, this.P.z - 2.5);
       // everyone is already in place when the market opens: fixed spots (learnable for speedruns), asleep until you walk in
       this.zones.forEach((Z, i) => this.populate(Z, i));
-      this.runT = 0; this.hits = 0; this.usedGacha = false;
+      this.runT = 0; this.hits = 0; this.usedSkill = false;
       try { this.R.r.compile(this.scene, this.cam); } catch (e) { /* warm the shaders up front: no hitch when an area wakes */ }
       this.buildHud();
       this.resize = () => { this.cam.aspect = innerWidth / innerHeight; this.cam.updateProjectionMatrix(); this.fx.pmat.uniforms.uScale.value = innerHeight * this.R.r.getPixelRatio() / (2 * Math.tan(this.cam.fov * Math.PI / 360)); };
       addEventListener('resize', this.resize); this.resize();
       this.say('UOGASHI MARKET', 'Fight your way to the tuna auction', 3.5);
-      this.prompt('Grab a free gacha from the red machine (walk up, press K)');
+      this.prompt('Get a skill from the drink machine (walk up, press K)');
       g.audio.swell(0.4, 1.5);
     }
     stop() {
@@ -142,7 +142,7 @@
         '<div class="ch-boss"><b></b><span class="ch-bar"><i></i></span></div><div class="ch-bars"></div>' +
         '<div class="ch-card"><div class="ch-cap"></div><b></b><span></span><em>' + (S.touch && S.touch.on ? 'GRAB or SKILL' : 'K or SPACE') + ' to keep it</em></div>' +
         '<div class="ch-pause"><h2>PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART AREA</button><button data-c="quit">QUIT TO TITLE</button><p>J slap ×3 · K grab / throw · L parry · L+dir dodge, hold to CHARGE · SPACE ability</p></div>' +
-        '<div class="ch-over"><h2></h2><p></p><button data-c="retry">TRY AGAIN <kbd>J</kbd></button><button data-c="quit">QUIT TO TITLE <kbd>K</kbd></button></div>';
+        '<div class="ch-over"><h2></h2><p></p><button data-c="retry">TRY AGAIN <kbd>J</kbd></button><button data-c="quit">QUIT TO TITLE <kbd>Esc</kbd></button></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
       this.el = (s) => h.querySelector(s);
@@ -161,7 +161,7 @@
     onKey(e) {
       if (e.code === 'Escape' || e.code === 'KeyP') { if (this.over) return; this.setPause(!this.paused); return true; }
       if (this.paused) { if (e.code === 'KeyR') this.command('retry'); else if (e.code === 'KeyQ') this.command('quit'); else if (e.code === 'Enter' || e.code === 'KeyJ') this.command('resume'); return true; }
-      if (this.over) { if (!this.el('.ch-over').classList.contains('on')) return true; if (e.code === 'Enter' || e.code === 'KeyJ' || e.code === 'KeyR' || e.code === 'Space') this.command(this.over === 'win' ? 'quit' : 'retry'); else if (e.code === 'KeyK' || e.code === 'KeyQ' || e.code === 'Escape') this.command('quit'); return true; }
+      if (this.over) { if (!this.el('.ch-over').classList.contains('on')) return true; if (e.code === 'Enter' || e.code === 'KeyJ' || e.code === 'KeyR' || e.code === 'Space') this.command(this.over === 'win' ? 'quit' : 'retry'); else if (e.code === 'KeyQ' || e.code === 'Escape') this.command('quit'); /* K (grab) never quits: mashing it must not throw the run away */ return true; }
       return false;
     }
 
@@ -175,7 +175,7 @@
           const ts = this.slow > 0 ? 0.35 : 1; if (this.slow > 0) this.slow -= dt;
           this.acc += dt * ts; let n = 0;
           while (this.acc >= STEP && n < 12) { this.ctrl.update(STEP);
-            if (this.overT > 0.4 && (this.ctrl.push.pressed || this.ctrl.grab.pressed)) { const q = this.ctrl.grab.pressed; this.acc = 0; this.command(q || this.over === 'win' ? 'quit' : 'retry'); return; }
+            if (this.overT > 0.4 && this.ctrl.push.pressed) { this.acc = 0; this.command(this.over === 'win' ? 'quit' : 'retry'); return; }
             this.step(STEP); S.kb.flush && 0; this.acc -= STEP; n++; }
           if (n >= 12) this.acc = 0;
         }
@@ -256,12 +256,12 @@
       this.over = 'win'; this.slow = 1.2;
       setTimeout(() => {
         const o = this.el('.ch-over'); o.querySelector('h2').textContent = 'VICTORY';
-        const t = this.runT || 0, PAR = 360, noHit = !this.hits, noGacha = !this.usedGacha, fast = t < PAR;
+        const t = this.runT || 0, PAR = 360, noHit = !this.hits, noSkill = !this.usedSkill, fast = t < PAR;
         let best = 0; try { best = +localStorage.getItem('kumite.campBest') || 0; if (!best || t < best) localStorage.setItem('kumite.campBest', String(t)); } catch (e) { /* private mode */ }
-        const yen = 200000 + (noHit ? 100000 : 0) + (noGacha ? 50000 : 0) + (fast ? 50000 : 0);
+        const yen = 200000 + (noHit ? 100000 : 0) + (noSkill ? 50000 : 0) + (fast ? 50000 : 0);
         const badge = (on, txt) => '<span class="ch-badge' + (on ? ' on' : '') + '">' + txt + '</span>';
         o.querySelector('p').innerHTML = 'TIME <b>' + fmtT(t) + '</b>' + (best && t >= best ? ' · best ' + fmtT(best) : best ? ' · NEW BEST' : '') + ' · hits taken <b>' + (this.hits || 0) + '</b><br>' +
-          badge(noHit, 'NO HIT +100,000') + badge(noGacha, 'NO GACHA +50,000') + badge(fast, 'UNDER ' + fmtT(PAR).slice(0, -2) + ' +50,000') + '<br>+' + yen.toLocaleString() + ' yen';
+          badge(noHit, 'NO HIT +100,000') + badge(noSkill, 'NO SKILL +50,000') + badge(fast, 'UNDER ' + fmtT(PAR).slice(0, -2) + ' +50,000') + '<br>+' + yen.toLocaleString() + ' yen';
         o.querySelector('[data-c="retry"]').style.display = 'none'; o.classList.add('on');
         S.profile.yen += yen; S.profile.save && S.profile.save(); this.g.ui.setYen && this.g.ui.setYen();
       }, 1600);
@@ -285,15 +285,15 @@
       const giant = P.giant > 0 ? 1.35 : 1;
       // the ability (space)
       if (c.skill.pressed && this.ability && this.abCd <= 0 && ['free', 'hold', 'strike'].includes(P.st)) this.useAbility();
-      // interacting with the gacha machine
-      const gm = this.map.gacha, nearG = !this.ability && Math.hypot(P.x - gm.x, P.z - gm.z) < 1.9;
-      const atStart = P.z > -11 && !this.ability;
-      if (nearG !== this.nearGacha || atStart !== this.atStart) { this.nearGacha = nearG; this.atStart = atStart; this.prompt(nearG ? 'K: spin the gacha' : atStart ? 'Grab a free gacha from the red machine (walk up, press K)' : ''); }
+      // drink machines sell skills: one each (a new one replaces the one you have)
+      let vm = null; for (const b of this.map.breakables) if (b.kind === 'vend' && !b.broken && !b.used && Math.hypot(P.x - (b.x + b.fx * 0.7), P.z - (b.z + b.fz * 0.7)) < 1.5) vm = b;
+      const nearG = !!vm, atStart = P.z > -11 && !this.ability;
+      if (nearG !== this.nearSkill || atStart !== this.atStart) { this.nearSkill = nearG; this.atStart = atStart; this.prompt(nearG ? (this.ability ? 'K: swap your skill' : 'K: get a skill') : atStart ? 'Get a skill from the drink machine (walk up, press K)' : ''); }
       switch (P.st) {
         case 'free': {
           wantMove(4.3 * giant);
           if (c.push.pressed) this.strike(P);
-          else if (c.grab.pressed) { if (nearG) this.spinGacha(); else { this.aim(P, 1.8); this.set(P, 'grab', 0.22); } }
+          else if (c.grab.pressed) { if (vm) this.getSkill(vm); else { this.aim(P, 1.8); this.set(P, 'grab', 0.22); } }
           else if (c.dash.pressed) { if (mag > 0.3) { this.set(P, 'lprep', 0.14); P.ldir = dirA; } else { this.set(P, 'parry', 0.26); this.g.audio.whoosh(0.08); } }
           break;
         }
@@ -755,11 +755,12 @@
       for (const p of this.props) if (!p.dead && Math.hypot(p.x - B.x, p.z - B.z) < R && p.D.wt !== 'heavy') { p.vy = 3; p.y = 0.05; p.vx += (p.x - B.x) * 1.2; p.vz += (p.z - B.z) * 1.2; p.hop = true; }
     }
 
-    // ============================================================== abilities (the gacha)
-    spinGacha() {
-      this.usedGacha = true;
-      const A = POOL[Math.floor(Math.random() * POOL.length)];
-      this.ability = A; this.abCd = 0; this.cardOpen = true; this.nearGacha = false; this.prompt('');
+    // ============================================================== skills (from the drink machines)
+    getSkill(vm) {
+      this.usedSkill = true;
+      if (vm) { vm.used = true; if (vm.glow) vm.glow.material.color.set(0x5a6070); this.g.audio.thump(4); } // sold out: its light goes dim
+      const L = POOL.filter((a) => a !== this.ability), A = L[Math.floor(Math.random() * L.length)];
+      this.ability = A; this.abCd = 0; this.cardOpen = true; this.nearSkill = false; this.prompt('');
       const c = this.el('.ch-card'); c.querySelector('b').textContent = A.name; c.querySelector('span').textContent = A.desc; c.classList.add('on');
       this.el('.ch-ab em').textContent = A.name; this.g.audio.clack(); this.g.audio.swell(0.5, 1.2);
     }

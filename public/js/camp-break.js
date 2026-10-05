@@ -130,6 +130,7 @@
         for (let i = 0; i < 10; i++) { const s = rnd(0.03, 0.07); P.glass.spawn(b.x, rnd(0.9, 1.6), b.z, -dx * rnd(1, 3) + rnd(-1.5, 1.5), rnd(1, 4), -dz * rnd(1, 3) + rnd(-1.5, 1.5), [s, s * 0.3, s * 1.4], { bounce: 0.2 }); }
         if (b.hp > 0) { b.group.rotation.z = rnd(-0.06, 0.06); b.group.position.x += dx * 0.08; b.group.position.z += dz * 0.08; b.group.updateMatrix(); b.group.updateMatrixWorld(true); c.popAt(by, 'DENT!'); return false; }
         b.broken = true; this.dropWall(b);
+        if (!b.used && by === c.P) c.getSkill(b); // you smashed it open: the skill is yours anyway
         this.falling.push({ g: b.group, t: 0, ax: new THREE.Vector3(-dz, 0, dx), q0: b.group.quaternion.clone(), p0: b.group.position.clone(), dx, dz });
         if (b.glow) b.glow.visible = false;
         c.popAt(by, 'SMASH!'); c.hitstop = Math.max(c.hitstop || 0, 0.06); return true;

@@ -1,7 +1,7 @@
 'use strict';
 // CAMPAIGN MAP: the Uogashi fish market (a made-up Tokyo wholesale market), built for a high-angle action camera.
 // The route runs from +z (entrance) to -z (tuna auction):
-//   entrance plaza (gacha machine) -> outdoor street (stalls, restaurants, alley) -> market hall (vendor rows)
+//   entrance plaza (skill machine) -> outdoor street (stalls, restaurants, alley) -> market hall (vendor rows)
 //   -> loading bay -> tuna auction floor (boss).
 // Everything here is static scenery plus data for campaign.js: wall boxes, prop spawns, puddles, combat zones.
 (function () {
@@ -66,15 +66,6 @@
     }));
     wall(-10, 10, 3.2, 5); // behind the start
     box(g, 20, 3, 1.2, 0x3a2c34, 0x1a1218, 0, 1.5, 4.2, 0.03);
-    // the GACHA vending machine (left, glowing): guaranteed, right at the start
-    const gacha = { x: -6.2, z: -3.2 };
-    const gm = new THREE.Group(); gm.position.set(gacha.x, 0, gacha.z); g.add(gm);
-    box(gm, 1.3, 2.1, 0.9, 0xe2322b, 0x7a1418, 0, 1.05, 0, 0.03);
-    box(gm, 1.05, 1.1, 0.06, 0xfff4cc, 0xc8b070, 0.0, 1.35, 0.46, 0.0);
-    for (let i = 0; i < 6; i++) { const b = W.mesh(W.GEO.sphere, S.toon([0xf2c14e, 0x3fc2b4, 0x4d8de6, 0xe8579c, 0x9be15d, 0xffffff][i], { shade: 0x6a5a6a, spec: 0.5 }), 0.01); b.scale.setScalar(0.13); b.position.set(-0.32 + (i % 3) * 0.32, 1.15 + Math.floor(i / 3) * 0.32, 0.5); gm.add(b); }
-    box(gm, 0.5, 0.25, 0.1, 0x2a1a22, 0x100810, 0.3, 0.55, 0.47, 0.01);
-    sign(gm, 'ガチャ', 'GACHA · 1 FREE', 1.25, 0.5, '#f2c14e', '#2a1218', 0, 2.35, 0.2, 0, -0.5);
-    wall(gacha.x - 0.7, gacha.x + 0.7, gacha.z - 0.5, gacha.z + 0.5);
     // Japanese drink machines: body, lit display of bottles, coin slot and pickup tray. Breakable: dent, then over it goes.
     const vending = (x, z, ry, col) => {
       const vm = new THREE.Group(); vm.position.set(x, 0, z); vm.rotation.y = ry; g.add(vm);
@@ -86,10 +77,11 @@
       const fx = Math.sin(ry), fz = Math.cos(ry); // the way its front faces
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xc8e8ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.4 })); glow.scale.set(1.6, 1.8, 1); glow.position.set(x + fx * 0.4, 1.3, z + fz * 0.4); g.add(glow);
       const hx = Math.abs(fx) > 0.5 ? 0.45 : 0.5, hz = Math.abs(fx) > 0.5 ? 0.5 : 0.45;
-      breakable({ kind: 'vend', x, z, ry, group: vm, glow, hp: 2, w: wall(x - hx, x + hx, z - hz, z + hz) });
+      sign(vm, 'スキル', 'SKILL · 1', 0.95, 0.42, '#f2c14e', '#2a1218', 0, 2.2, 0.1, 0, -0.5);
+      breakable({ kind: 'vend', x, z, ry, fx, fz, group: vm, glow, hp: 2, w: wall(x - hx, x + hx, z - hz, z + hz) });
     };
-    vending(6.4, -2.2, -Math.PI / 2, 0x2f7fd8); vending(6.4, -3.6, -Math.PI / 2, 0xf6f2ea);
-    vending(6.6, -39.5, -Math.PI / 2, 0xe2322b); vending(-6.6, -34.2, Math.PI / 2, 0x2e9e6a); vending(11.65, -77.5, -Math.PI / 2, 0x2f7fd8);
+    // one per area, each sells one SKILL (walk up, press K): the plaza, the street, the market hall, the loading bay before the boss
+    vending(-6.2, -3.2, Math.PI / 2, 0xe2322b); vending(-6.6, -34.2, Math.PI / 2, 0x2e9e6a); vending(11.65, -77.5, -Math.PI / 2, 0x2f7fd8); vending(9.65, -106, -Math.PI / 2, 0xf2c14e);
     // entrance arch: two red posts and a big sign
     for (const x of [-6.6, 6.6]) { cyl(g, 0.22, 0.25, 4.2, 0xc8231d, 0x6e1018, x, 2.1, -9.5); wall(x - 0.3, x + 0.3, -9.8, -9.2); }
     box(g, 14, 0.35, 0.4, 0xc8231d, 0x6e1018, 0, 4.15, -9.5, 0.03);
@@ -317,7 +309,7 @@
 
     fishes.done(); A.stallKit(g).done();
     return {
-      group: g, walls, props, puddles, zones, gacha, breakables, fishMat: fishes.mats.maguro, start: { x: 0, z: -0.5 }, halfWidth, decor,
+      group: g, walls, props, puddles, zones, breakables, fishMat: fishes.mats.maguro, start: { x: 0, z: -0.5 }, halfWidth, decor,
       update(t) {
         for (const d of decor) {
           if (d.kind === 'lantern') d.m.rotation.z = Math.sin(t * 1.3 + d.p) * 0.06;
