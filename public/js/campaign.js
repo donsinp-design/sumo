@@ -131,6 +131,7 @@
       const name = (this.arch && this.arch.name) || 'TAKAKAZE';
       h.innerHTML = '<div class="ch-me"><div class="ch-score">0000000</div><span class="ch-bar"><i></i></span><span class="ch-stam"><i></i></span><b class="ch-name">' + name + '</b></div>' +
         '<div class="ch-time">0:00</div><div class="ch-hurt"></div>' +
+        '<div class="ch-yen"><span class="jp">円</span><b>0</b><span>YEN</span></div>' +
         '<div class="ch-sifu"><div class="ch-mul"><b>x1</b><small>Multiplier</small></div><i></i><div class="ch-sc"><b>0</b><small>Level Score</small></div></div>' +
         '<div class="ch-ab"><em>NO SKILL</em><kbd>SPACE</kbd><span class="ch-cd"><i></i></span></div>' +
         '<div class="ch-zone"></div><div class="ch-say"><b></b><span></span></div><div class="ch-prompt"></div>' +
@@ -1166,6 +1167,7 @@
       this.el('.ch-me .ch-bar i').style.width = Math.max(0, P.hp / P.maxHp * 100) + '%';
       const tm = this.el('.ch-time'); if (tm) tm.textContent = fmtT(this.runT || 0).replace(/\.\d$/, '');
       this.el('.ch-me .ch-score').textContent = String(this.score || 0).padStart(7, '0');
+      { const yb = this.el('.ch-yen b'), y = Math.round(S.profile.yen || 0); if (yb.dataset.v !== String(y)) { yb.dataset.v = String(y); yb.textContent = y.toLocaleString('en-US'); } }
       { const sc = this.el('.ch-sc b'), mu = this.el('.ch-mul b'); sc.textContent = (this.score || 0).toLocaleString('en-US'); mu.textContent = 'x' + (this.mult || 1);
         const sb = this.scoreBump || 0, mb = this.mulBump || 0; sc.style.transform = 'scale(' + (1 + sb * 0.12) + ')'; mu.style.transform = 'scale(' + (1 + mb * 0.25) + ')';
         this.scoreBump = Math.max(0, sb - 0.08); this.mulBump = Math.max(0, mb - 0.05); this.el('.ch-mul').classList.toggle('hot', (this.mult || 1) > 1); }
