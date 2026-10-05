@@ -120,7 +120,7 @@
     const dors = new THREE.Shape(); dors.moveTo(-0.3, 0); dors.lineTo(0.05, 0.42); dors.lineTo(0.3, 0); dors.lineTo(-0.3, 0);
     const finG = new THREE.ExtrudeGeometry(fin, { depth: 0.04, bevelEnabled: false }), dG = new THREE.ExtrudeGeometry(dors, { depth: 0.03, bevelEnabled: false });
     return merge([
-      { geo: new THREE.SphereGeometry(1, 18, 12), m: M4(0, 0, 0, 0, 0, 0, 0.32, 0.36, 1) },
+      { geo: new THREE.SphereGeometry(1, 12, 7), m: M4(0, 0, 0, 0, 0, 0, 0.32, 0.36, 1) }, // hundreds of these on the counters: keep them light
       { geo: finG, m: M4(0, 0, -0.92, 0, Math.PI / 2, 0, 0.75, 0.75, 1), uv: at(0.99, 0.98) },
       { geo: dG, m: M4(-0.015, 0.3, -0.05, 0, Math.PI / 2, 0, 0.9, 0.55, 1), uv: at(0.99, 0.98) },
     ]);

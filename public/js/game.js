@@ -180,7 +180,7 @@
       g.putImageData(img, 0, 0);
       g.drawImage(this.ui.cv, 0, 0, w, h);
       const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
-      R.r.setPixelRatio(Math.min(2, devicePixelRatio || 1)); R.resize();
+      R.r.setPixelRatio(R.pr); R.resize();
       await fetch('/__shot?name=' + name, { method: 'POST', body: blob });
       return name;
     }
@@ -190,7 +190,7 @@
       if (!bg) requestAnimationFrame((t) => this.frame(t));
       if (!bg && this.lastBg && now - this.lastBg < 50) { this.last = now; }
       // online keeps real time even when the browser ticks slowly, so the two players don't drift apart
-      const dt = Math.min(this.kind === 'online' ? 0.25 : 0.05, (now - this.last) / 1000); this.last = now;
+      const dt = Math.min(this.kind === 'online' ? 0.25 : 0.05, (now - this.last) / 1000); if (!bg && !document.hidden) this.R.perf((now - this.last) / 1000); this.last = now;
       if (this.camp) { this.pollPad(); this.camp.frame(dt); this.ui.draw(dt); return; } // CAMPAIGN: its own engine and scene
       this.pollPad();
       let animDt = 0;

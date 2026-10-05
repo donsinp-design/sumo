@@ -1146,7 +1146,7 @@
   class AnimePost {
     constructor(r) {
       this.r = r;
-      const ms = r.capabilities.isWebGL2 ? 4 : 0;
+      const ms = r.capabilities.isWebGL2 ? (S.touch && S.touch.on ? 2 : 4) : 0; // phones: lighter anti-aliasing (the ink pass draws the edges anyway)
       this.rt = new THREE.WebGLRenderTarget(4, 4, { samples: ms });
       this.rt.depthTexture = new THREE.DepthTexture(4, 4); this.rt.depthTexture.type = THREE.UnsignedIntType;
       const lin = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
@@ -1185,7 +1185,9 @@
     constructor(el) {
       this.el = el;
       const r = this.r = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-      r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+      // resolution: phones start a little under their (very high) native density; perf() then trims or restores it
+      this.prMax = Math.min(S.touch && S.touch.on ? 1.5 : 2, window.devicePixelRatio || 1); this.pr = this.prMax; this.ft = 1 / 60; this.ftT = 0;
+      r.setPixelRatio(this.pr);
       el.appendChild(r.domElement);
       this.scene = new THREE.Scene();
       this.scene.background = new THREE.Color(0x150c14);
@@ -1218,6 +1220,20 @@
       if (this.banners) for (const b of this.banners) b.visible = classic && !boss;
       if (this.coneM) this.coneM.visible = classic && !boss; // against pure black the beam reads as a grey slab
       if (classic) this.scene.background.set(boss ? 0x000000 : 0x150c14); // themed stages set their own sky
+    }
+    // adaptive resolution: if frames run slow for a moment, render fewer pixels; if there is plenty of headroom, add them back
+    perf(dt) {
+      if (!(dt > 0) || dt > 0.25) return; // tab switches and hitches are not the steady frame rate
+      this.ft += (dt - this.ft) * 0.05; this.ftT += dt;
+      if (this.ftT < 1.2) return;
+      let pr = this.pr;
+      if (this.ft > 1 / 45) pr = Math.max(0.75, pr - 0.15);
+      else if (this.ft < 1 / 58 && this.ftT > 4) pr = Math.min(this.prMax, pr + 0.1);
+      else return;
+      this.ftT = 0;
+      if (Math.abs(pr - this.pr) < 0.01) return;
+      this.pr = pr; this.r.setPixelRatio(pr); this.resize();
+      if (S.game && S.game.camp && S.game.camp.resize) S.game.camp.resize();
     }
     resize() {
       const w = innerWidth, h = innerHeight;

@@ -69,7 +69,13 @@
       this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0x0d0a10);
       this.cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 220);
       this.fx = new S.FX(this.scene); this.fx.noMarks = true; // no footprints piling up over a whole level
+      const nFx = this.scene.children.length;
       this.map = S.CampMap.build(this.scene);
+      { // the market never moves: work out its transforms once instead of for thousands of objects every frame
+        const swing = new Set(this.map.decor.filter((d) => d.kind === 'lantern').map((d) => d.m));
+        this.scene.updateMatrixWorld(true);
+        for (const o of this.scene.children.slice(nFx)) o.traverse((q) => { if (!swing.has(q)) q.matrixAutoUpdate = false; });
+      }
       this.ctrl = new S.Controller(new S.KeySource(S.MAPS.solo, 0));
       this.actors = []; this.props = []; this.shots = []; this.zones = this.map.zones.map((z) => Object.assign({ state: 'wait', ens: [] }, z));
       this.zi = 0; this.gate = this.zones[0].z1; this.ability = null; this.abCd = 0; this.fires = [];
@@ -127,11 +133,12 @@
 
     // ============================================================== HUD
     buildHud() {
+      { const tp = document.getElementById('tutPanel'); if (tp) tp.classList.remove('on'); }
       const h = this.hud = document.createElement('div'); h.id = 'campHud';
       h.innerHTML = '<div class="ch-time">0:00.0</div><div class="ch-me"><b>YOU</b><span class="ch-bar"><i></i></span><div class="ch-ab"><em>NO ABILITY</em><span class="ch-cd"><i></i></span><kbd>SPACE</kbd></div></div>' +
         '<div class="ch-zone"></div><div class="ch-say"><b></b><span></span></div><div class="ch-prompt"></div>' +
         '<div class="ch-boss"><b></b><span class="ch-bar"><i></i></span></div><div class="ch-bars"></div>' +
-        '<div class="ch-card"><div class="ch-cap"></div><b></b><span></span><em>K or SPACE to keep it</em></div>' +
+        '<div class="ch-card"><div class="ch-cap"></div><b></b><span></span><em>' + (S.touch && S.touch.on ? 'GRAB or SKILL' : 'K or SPACE') + ' to keep it</em></div>' +
         '<div class="ch-pause"><h2>PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART AREA</button><button data-c="quit">QUIT TO TITLE</button><p>J slap ×3 · K grab / throw · L parry · L+dir dodge, hold to CHARGE · SPACE ability</p></div>' +
         '<div class="ch-over"><h2></h2><p></p><button data-c="retry">TRY AGAIN <kbd>J</kbd></button><button data-c="quit">QUIT TO TITLE <kbd>K</kbd></button></div>';
       document.body.appendChild(h);
@@ -140,7 +147,9 @@
       this.barEls = [];
     }
     say(big, small, dur) { const e = this.el('.ch-say'); e.querySelector('b').textContent = big; e.querySelector('span').textContent = small || ''; e.classList.add('on'); clearTimeout(this.sayT); this.sayT = setTimeout(() => e.classList.remove('on'), (dur || 2.5) * 1000); }
-    prompt(t) { const e = this.el('.ch-prompt'); e.textContent = t || ''; e.classList.toggle('on', !!t); }
+    prompt(t) {
+      if (t && S.touch && S.touch.on) t = t.replace(/\b([Pp])ress (J|K|L|SPACE)\b|\b(J|K|L|SPACE)\b/g, (m, P, k1, k2) => { const k = k1 || k2, n = { J: 'PUSH', K: 'GRAB', L: 'DEFEND', SPACE: 'SKILL' }[k]; return P ? (P === 'P' ? 'Tap ' : 'tap ') + n : n; });
+      const e = this.el('.ch-prompt'); e.textContent = t || ''; e.classList.toggle('on', !!t); }
     command(c) {
       if (c === 'resume') this.setPause(false);
       else if (c === 'retry') { this.setPause(false); this.retry(); }

@@ -23,7 +23,9 @@
   // holding a finger on the game or the controls must never zoom, magnify or select
   document.addEventListener('touchstart', (e) => {
     const t = e.target;
-    if (t && t.closest && (t.closest('#tpad') || t.closest('#gl') || document.body.classList.contains('playing') && !t.closest('#screen'))) e.preventDefault();
+    if (!t || !t.closest) return;
+    if (!t.closest('#tpad') && t.closest('button, a, input, [data-c], [data-tut], [data-train], [data-shop], .tp-btn')) return; // menus, pause and retry buttons, lesson buttons: let the tap through as a click
+    if (t.closest('#tpad') || t.closest('#gl') || document.body.classList.contains('playing') && !t.closest('#screen')) e.preventDefault();
   }, { passive: false });
 
   // first tap: go fullscreen and lock to landscape where the browser allows it
@@ -75,8 +77,9 @@
   // action buttons (several fingers at once are fine)
   for (const b of pad.querySelectorAll('#tbtns button')) {
     const k = b.dataset.b;
-    const on = (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); S.touch[k] = true; b.classList.add('down'); };
-    const off = () => { S.touch[k] = false; b.classList.remove('down'); };
+    const code = { push: 'KeyJ', grab: 'KeyK', dash: 'KeyL', skill: 'Space' }[k];
+    const on = (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); S.touch[k] = true; b.classList.add('down'); dispatchEvent(new KeyboardEvent('keydown', { code })); };
+    const off = () => { if (!S.touch[k]) return; S.touch[k] = false; b.classList.remove('down'); dispatchEvent(new KeyboardEvent('keyup', { code })); };
     b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off);
   }
   pad.querySelector('#tpause').addEventListener('pointerdown', (e) => {

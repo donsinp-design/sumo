@@ -103,10 +103,22 @@
     L('GACHA MODE', 'Two ways to play: PURE (just sumo) or GACHA, picked with Tab on character select. In Gacha, both of you draw a random one-shot skill at the start of every round. Use it or lose it. Try some: Space uses it, G draws another. Press Enter when you are done.', { setup: 'gacha', check: 'gacha' }),
   ];
 
+  // the lessons name keyboard keys; on a phone name the on-screen buttons instead
+  const forTouch = (t) => t.replace(/Press J or Enter( to [a-z ]+)?/g, 'Tap NEXT$1').replace(/Press Enter when you are done/g, 'Tap NEXT when you are done')
+    .replace(/\bJ\b/g, 'PUSH').replace(/\bK\b/g, 'GRAB').replace(/\bL\b/g, 'DEFEND').replace(/\bSpace\b/g, 'SKILL').replace(/,? ?G draws another/g, ', DRAW SKILL draws another')
+    .replace(/W A S D/g, 'the stick').replace(/\s?\((PUSH|GRAB|DEFEND)\)/g, '').replace(/\b([Pp])ress (PUSH|GRAB|DEFEND|SKILL)/g, (m, P, b) => (P === 'P' ? 'Tap ' : 'tap ') + b);
   class Tutorial {
     constructor(game) {
       this.g = game; this.i = 0; this.count = 0; this.done = false; this.wait = 0;
       this.el = document.getElementById('tutPanel');
+      // phones: the bottom line is a row of buttons (there are no Q / R / E / Enter / G keys to press)
+      this.el.addEventListener('pointerdown', (e) => { // pointerdown: the panel redraws often, a click could land on a replaced node
+        const b = e.target.closest('[data-tut]'); if (!b) return; e.preventDefault();
+        const a = b.dataset.tut;
+        if (a === 'next') this.complete(); else if (a === 'prev') this.prev(); else if (a === 'replay') this.replay();
+        else if (a === 'skip') this.skip(); else if (a === 'draw') this.drawSkill();
+        else if (a === 'pause') dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape' }));
+      });
     }
     get p() { return this.g.match.w[0]; }
     lesson() { return LESSONS[this.i]; }
@@ -159,14 +171,17 @@
       if (idx === 0) { A.hyoshigi(); this.nowT = d.t; } else A.tick();
     }
     render() {
-      const Ls = LESSONS[this.i];
+      const Ls = LESSONS[this.i], touch = S.touch && S.touch.on;
       if (!Ls) return;
       let ticks = '';
       for (let k = 0; k < LESSONS.length; k++) ticks += '<i class="' + (k < this.i ? 'on' : k === this.i ? 'cur' : '') + '"></i>';
       const prog = Ls.need > 1 ? ' <b>' + Math.min(this.count, Ls.need) + ' / ' + Ls.need + '</b>' : '';
       this.el.innerHTML = '<div class="tp-head"><span>LESSON ' + (this.i + 1) + ' / ' + LESSONS.length + '</span>' + Ls.title + prog + '</div>' +
-        '<div class="tp-text">' + Ls.text + '</div><div class="tp-ticks">' + ticks + '</div>' +
-        (this.done ? '<div class="tp-ok">NICE!</div>' : '') + '<div class="tp-skip">Q previous · R replay · E skip · Esc pause</div>';
+        '<div class="tp-text">' + (touch ? forTouch(Ls.text) : Ls.text) + '</div><div class="tp-ticks">' + ticks + '</div>' +
+        (this.done ? '<div class="tp-ok">NICE!</div>' : '') + (touch
+          ? '<div class="tp-skip">' + (Ls.check === 'info' || Ls.check === 'gacha' ? '<span class="tp-btn tp-go" data-tut="next">NEXT ▶</span>' : '') + (Ls.check === 'gacha' ? '<span class="tp-btn" data-tut="draw">DRAW SKILL</span>' : '') +
+            '<span class="tp-btn" data-tut="prev">◀ BACK</span><span class="tp-btn" data-tut="replay">REPLAY</span><span class="tp-btn" data-tut="skip">SKIP</span></div>'
+          : '<div class="tp-skip">Q previous · R replay · E skip · Esc pause</div>');
       this.el.classList.add('on');
     }
     complete() {

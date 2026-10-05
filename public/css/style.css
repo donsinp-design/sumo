@@ -166,6 +166,11 @@ kbd { font-family: var(--ui); font-weight: 800; font-size: 22px; padding: 4px 12
 .tp-ticks i.on { background: var(--gold); } .tp-ticks i.cur { background: var(--paper); }
 .tp-ok { position: absolute; right: 18px; top: 10px; font-family: var(--heavy); font-size: 30px; color: var(--teal); animation: pop 1.2s both; }
 .tp-skip { font-size: 13px; letter-spacing: 1px; color: rgba(246,237,220,0.7); margin-top: 6px; }
+#tutPanel { pointer-events: auto; }
+#tutPanel .tp-btn { display: inline-block; margin: 6px 8px 0 0; padding: 7px 12px; border: 1px solid rgba(246,237,220,0.35); cursor: pointer; white-space: nowrap; font-weight: 700; }
+#tutPanel .tp-go { background: var(--gold); color: #1a0c10; border-color: var(--gold); }
+html.touch #tutPanel { top: 8px; padding: 8px 14px 8px; }
+html.touch .tp-head { font-size: 20px; } html.touch .tp-text { font-size: 15px; }
 
 /* ---------- clinch hint ---------- */
 #clinchHint { position: fixed; z-index: 6; transform: translate(-50%, 0); pointer-events: none; opacity: 0; transition: opacity .2s;
@@ -480,3 +485,7 @@ body.campaign #hud, body.campaign #hint { display: none !important; }
 #campHud .ch-time { position: absolute; top: 14px; right: 18px; font: 800 22px 'Barlow Condensed', sans-serif; color: #fff8ec; letter-spacing: 0.06em; text-shadow: 0 2px 0 #1a0e14; font-variant-numeric: tabular-nums; }
 #campHud .ch-badge { display: inline-block; margin: 6px 4px 0; padding: 3px 8px; font: 800 14px 'Barlow Condensed', sans-serif; border: 2px solid #555; color: #777; letter-spacing: 0.04em; }
 #campHud .ch-badge.on { border-color: #f2c14e; color: #1a0e14; background: #f2c14e; }
+
+/* phones: no keyboard hints in the campaign HUD (the buttons say what they are) */
+html.touch #campHud kbd { display: none; }
+html.touch #campHud .ch-pause p { display: none; }
