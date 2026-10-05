@@ -1097,7 +1097,9 @@
         this.J = {}; for (const k in this.rd.joints) this.J[k] = new THREE.Vector3();
       }
       // ground shadow
-      this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.45 * fw, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x1a0a20, transparent: true, opacity: 0.4, depthWrite: false }));
+      // a soft contact shadow (light enough that the comic halftone pass doesn't print its dot grid over it)
+      WorkerView.shTex = WorkerView.shTex || S.R3.canvasTex(128, 128, (c) => { const gr = c.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(20,10,24,0.55)'); gr.addColorStop(0.55, 'rgba(20,10,24,0.32)'); gr.addColorStop(1, 'rgba(20,10,24,0)'); c.fillStyle = gr; c.fillRect(0, 0, 128, 128); });
+      this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.15 * fw, 0.95 * fw).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: WorkerView.shTex, transparent: true, opacity: 0.55, depthWrite: false }));
       this.shadow.renderOrder = 1; scene.add(this.shadow);
       this.walk = 0; this.mats = [skin, shirt, apron, pants];
       this.flashT = 0; this.lastHp = null;
@@ -1302,8 +1304,15 @@
       M.eng = (M.eng || 0) + ((eng ? 1 : 0) - (M.eng || 0)) * Math.min(1, dt * 4);
       const walkN = a.fat ? 'heavy' : 'walk', cW = A.clip(walkN), cR = A.clip('run');
       const rW = clamp(sp / (cW.speed * big), 0.55, 1.7), rR = clamp(sp / (cR.speed * big), 0.7, 1.5);
+      // which way are we actually going? Sidestepping or circling: turn the body toward the travel direction.
+      // Backing away from the player: keep facing them and play the gait in reverse (a backpedal). Attacks face the target.
+      const busy = st === 'wind' || st === 'act' || st === 'recover' || st === 'hold' || st === 'hurt' || st === 'dazed';
+      let dYaw = 0, back = false;
+      if (sp > 0.35 && !busy) { const d = Math.atan2(Math.sin(Math.atan2(a.vz, a.vx) - a.f), Math.cos(Math.atan2(a.vz, a.vx) - a.f)); if (Math.abs(d) > 2.2) back = true; else dYaw = d; }
+      M.yaw = (M.yaw || 0) + (dYaw - (M.yaw || 0)) * Math.min(1, dt * 7);
+      M.back = (M.back || 0) + ((back ? 1 : 0) - (M.back || 0)) * Math.min(1, dt * 8);
       // one shared gait phase, so walk and run stay in step while they blend
-      M.ph += tdt * ((1 - M.run) * rW / cW.dur + M.run * rR / cR.dur) * (M.mv > 0.02 ? 1 : 0);
+      M.ph += tdt * ((1 - M.run) * rW / cW.dur + M.run * rR / cR.dur) * (M.mv > 0.02 ? 1 : 0) * (M.back > 0.5 ? -0.8 : 1);
       M.idleT += tdt * (st === 'dazed' ? 0.6 : 1);
       const out = M.out, tmp = M.tmp, add = (w) => { if (w > 0.001) for (let i = 0; i < N; i++) out[i].addScaledVector(tmp[i], w); };
       for (const v of out) v.set(0, 0, 0);
@@ -1341,6 +1350,8 @@
         for (const i of upper) out[i].sub(pel).applyQuaternion(q).add(pel);
         if (headX) { const qh = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), headX); out[2].sub(out[1]).applyQuaternion(qh).add(out[1]); }
       }
+      // turn toward the travel direction (about the pelvis)
+      if (Math.abs(M.yaw) > 0.01) { const qy = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -M.yaw), c0 = pel.clone(); for (let i = 0; i < N; i++) out[i].sub(c0).applyQuaternion(qy).add(c0); }
       // into the world and onto the rig
       this.root.updateMatrixWorld(true);
       const W = M.world || (M.world = mk());

@@ -9,7 +9,7 @@ const NAMES = ['pelvis', 'neck', 'head', 'shL', 'elL', 'haL', 'shR', 'elR', 'haR
 const MAP = { pelvis: 'Hips', neck: 'Neck', shL: 'RightArm', elL: 'RightForeArm', haL: 'RightHand', shR: 'LeftArm', elR: 'LeftForeArm', haR: 'LeftHand', hipL: 'RightUpLeg', knL: 'RightLeg', ftL: 'RightFoot', hipR: 'LeftUpLeg', knR: 'LeftLeg', ftR: 'LeftFoot' };
 const CLIPS = [
   { name: 'idle', file: '137_28', t0: 2, t1: 14, loop: [2.5, 6] },
-  { name: 'stance', file: '13_17', t0: 5.5, t1: 8.5, loop: [1.0, 2.6] },
+  { name: 'stance', file: '14_01', t0: 8.9, t1: 11.2, loop: [1.0, 1.9] }, // a calm guard: no stray jabs (those read as unannounced attacks)
   { name: 'walk', file: '137_29', t0: 1, t1: 9, loop: [1.0, 2.6], move: true },
   { name: 'stalk', file: '17_01', t0: 2, t1: 14, loop: [1.0, 2.6], move: true },
   { name: 'heavy', file: '137_42', t0: 1, t1: 12, loop: [1.0, 3.0], move: true },
@@ -72,6 +72,14 @@ for (const C of CLIPS) {
     let dd = 0; for (let i = best[0] + 1; i < best[1]; i++) dd += Math.hypot(pxT[i] - pxT[i - 1], pzT[i] - pzT[i - 1]); speed = dd / ((best[1] - best[0]) / FPS);
     const X = Math.min(6, Math.floor(seg.length / 4));
     for (let k = 0; k < X; k++) { const w = (k + 1) / (X + 1), a = seg[seg.length - X + k], b = rel[best[1] + k] || seg[k]; for (const n of NAMES) a[n].lerp(b[n], w); }
+    // no drift: remove any net travel across the loop (it would snap back at the seam), centre the sway
+    for (const ax of ['x', 'z']) {
+      const a0 = seg[0].pelvis[ax], a1 = seg[seg.length - 1].pelvis[ax], L = seg.length - 1;
+      let mean = 0; seg.forEach((r, i) => { mean += r.pelvis[ax] - (a0 + (a1 - a0) * i / L); }); mean /= seg.length;
+      seg.forEach((r, i) => { const d = a0 + (a1 - a0) * i / L + mean; for (const n of NAMES) r[n][ax] -= d; });
+    }
+    // gait loops start on the same event (left heel strike: left foot furthest forward), so walk and run blend in step
+    if (C.move) { let bi = 0, bv = -1e9; seg.forEach((r, i) => { const v = r.ftL.z - r.ftR.z; if (v > bv) { bv = v; bi = i; } }); seg = seg.slice(bi).concat(seg.slice(0, bi)); }
     console.log(C.name, 'loop', ((best[1] - best[0]) / FPS).toFixed(2) + 's', 'err', best[2].toFixed(3), 'speed', speed.toFixed(2));
   } else console.log(C.name, (seg.length / FPS).toFixed(2) + 's', 'peak at', (C.peak - C.t0).toFixed(2));
   // pack: int16 millimetres

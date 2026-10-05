@@ -29,9 +29,6 @@
     if (im.decode) im.decode().then(go, () => {});
   }))).then(() => {
     ready = imgs.every((im) => im && im.naturalWidth); prepareSoon();
-    // first load: the page starts behind a black cover; open on a full wall of banners, never on a bare stage
-    const cover = document.getElementById('bootcover');
-    if (cover) { if (ready && phase === 'idle') start({ hold: 0.15, speed: 1 }, true); cover.remove(); }
   });
 
   const cv = document.createElement('canvas');
@@ -151,6 +148,7 @@
     c.restore();
   }
 
+  const dropCover = () => { const c = document.getElementById('bootcover'); if (c) c.remove(); };
   function start(opts, covered) {
     if (!ready || document.hidden) { // assets not there, or nobody watching: never hold the game up
       if (opts.onCovered) opts.onCovered();
@@ -179,6 +177,7 @@
       if (!covered) { b.x = b.sx; b.px = b.sx; }
     }
     phase = covered ? 'hold' : 'in'; T = 0;
+    if (covered) dropCover();
     if (covered) { run.fired = true; if (opts.onCovered) opts.onCovered(); }
     else if (S.game && S.game.audio) S.game.audio.whoosh(0.35);
     cv.classList.add('on');
@@ -198,7 +197,7 @@
       }
       if (all) {
         for (const b of list) b.x = b.cx;
-        phase = 'hold'; T = 0;
+        phase = 'hold'; T = 0; dropCover();
         if (A) A.clack();
         if (!run.fired) { run.fired = true; if (run.opts.onCovered) run.opts.onCovered(); }
       }
@@ -239,6 +238,8 @@
     rate: 1, // testing: slow the transition down
     get busy() { return phase !== 'idle'; },
     get covered() { return phase === 'hold'; },
+    // run cb once the banner art is decoded (or after `wait` ms, whichever comes first)
+    whenReady(cb, wait) { let done = false; const go = () => { if (!done) { done = true; cb(); } }; load.then(go); setTimeout(go, wait || 3000); },
     wall(opts) { start(opts || {}, true); },
     flood(opts) { start(opts || {}, false); },
     stop,

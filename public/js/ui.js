@@ -242,6 +242,7 @@
       this.showNow(name, data);
     }
     showNow(name, data) {
+      if (!S.Banners || !S.Banners.busy) { const c = document.getElementById('bootcover'); if (c) c.remove(); } // no wipe ran (art missing): just show it
       this.name = name; this.data = data || {}; this.focus = 0;
       this.render();
       const yen = $('yen'); this.setYen();

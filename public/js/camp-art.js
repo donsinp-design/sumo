@@ -300,12 +300,12 @@
         c.fillStyle = 'rgba(20,14,22,0.55)'; c.fillRect((x + off + P.stones - 6) % w, y, 6, P.stones); c.fillRect((x + off) % w, y + P.stones - 6, P.stones, 6);
       }
       // cel-style tone patches: a few hard-edged, flat shapes one step darker or lighter (no soft blotches)
-      const blob = (x, y, r, n) => { c.beginPath(); for (let k = 0; k <= n; k++) { const t = k / n * Math.PI * 2, rr = r * (0.75 + 0.35 * Math.sin(t * 3 + x) * Math.cos(t * 2 + y)); c.lineTo(x + Math.cos(t) * rr, y + Math.sin(t) * rr * 0.8); } c.fill(); };
-      for (let i = 0; i < 9; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(70, 170), dark = i % 3 !== 0; wrap(() => { c.fillStyle = dark ? P.lo : P.hi; c.globalAlpha = dark ? 0.45 : 0.35; blob(x, y, r, 14); c.globalAlpha = 1; }); }
+      const blob = (x, y, r) => { const ph = Math.random() * 6, ph2 = Math.random() * 6; c.beginPath(); for (let k = 0; k <= 40; k++) { const t = k / 40 * Math.PI * 2, rr = r * (0.86 + 0.1 * Math.sin(t * 2 + ph) + 0.05 * Math.sin(t * 3 + ph2)); c.lineTo(x + Math.cos(t) * rr, y + Math.sin(t) * rr * 0.72); } c.fill(); }; // smooth, low-frequency edges
+      for (let i = 0; i < 9; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(70, 170), dark = i % 3 !== 0; wrap(() => { c.fillStyle = dark ? P.lo : P.hi; c.globalAlpha = dark ? 0.32 : 0.25; blob(x, y, r); c.globalAlpha = 1; }); }
       // stains: small flat darker shapes
-      for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(22, 60); wrap(() => { c.fillStyle = 'rgba(14,10,20,0.22)'; blob(x, y, r, 10); }); }
+      for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(22, 60); wrap(() => { c.fillStyle = 'rgba(14,10,20,0.22)'; blob(x, y, r); }); }
       // wet patches: a crisp lighter shape with a sharp highlight stroke (hosed-down floor)
-      if (P.wet) for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(50, 120); wrap(() => { c.fillStyle = 'rgba(190,220,240,' + 0.22 * P.wet + ')'; blob(x, y, r, 12); c.strokeStyle = 'rgba(235,248,255,' + 0.5 * P.wet + ')'; c.lineWidth = 3; c.beginPath(); c.moveTo(x - r * 0.4, y - r * 0.15); c.lineTo(x + r * 0.15, y - r * 0.35); c.stroke(); }); }
+      if (P.wet) for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(50, 120); wrap(() => { c.fillStyle = 'rgba(190,220,240,' + 0.22 * P.wet + ')'; blob(x, y, r); c.strokeStyle = 'rgba(235,248,255,' + 0.5 * P.wet + ')'; c.lineWidth = 3; c.beginPath(); c.moveTo(x - r * 0.4, y - r * 0.15); c.lineTo(x + r * 0.15, y - r * 0.35); c.stroke(); }); }
       // aggregate: sparse crisp dots
       const n = Math.round(2600 * P.agg);
       for (let i = 0; i < n; i++) { c.fillStyle = Math.random() < 0.6 ? P.lo : P.hi; const sz = Math.random() < 0.85 ? 2 : 3; c.fillRect(Math.round(Math.random() * w), Math.round(Math.random() * h), sz, sz); }

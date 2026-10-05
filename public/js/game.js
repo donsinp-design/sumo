@@ -50,7 +50,8 @@
         }
       });
       this.startAttract();
-      this.ui.show('title');
+      // open with one banner wipe straight onto the menu (the page starts behind a black cover): wait for the banner art first
+      if (S.Banners && S.Banners.whenReady) S.Banners.whenReady(() => this.ui.show('title'), 3000); else this.ui.show('title');
       // background ticker: browsers pause hidden windows, which would freeze an online opponent
       try {
         const tk = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 16)'], { type: 'text/javascript' })));
