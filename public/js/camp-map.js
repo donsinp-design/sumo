@@ -55,6 +55,10 @@
     const A = S.CampArt, fishes = A.fishBatch(g);
     const tbox = (m, w, h, d, x, y, z, ol) => { const o = W.mesh(W.GEO.box, m, ol === undefined ? 0.02 : ol); o.scale.set(w, h, d); o.position.set(x, y, z); g.add(o); return o; };
     const wall = (x0, x1, z0, z1) => { const w = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) }; walls.push(w); return w; };
+    // grounding: a soft dark patch under anything standing on the floor, and pools of light where lamps hang
+    const shadowTex = W.canvasTex(128, 128, (c) => { const gr = c.createRadialGradient(64, 64, 10, 64, 64, 62); gr.addColorStop(0, 'rgba(0,0,0,0.75)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, 128, 128); });
+    const shadowAt = (parent, x, z, w, d, op) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, opacity: op || 0.7 })); m.position.set(x, 0.014, z); m.renderOrder = 1; parent.add(m); return m; };
+    const lightPool = (x, z, w, d, col, op) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: glowTex(), color: col, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: op || 0.35 })); m.position.set(x, 0.016, z); m.renderOrder = 1; g.add(m); return m; };
     const breakables = []; // stalls, tables and drink machines a charge (or a thrown body) smashes through
     const breakable = (b) => { b.w.brk = b; breakables.push(b); return b; };
     // a long counter is built as sections about a metre and a half long: a charge smashes the section it hits, not the whole row
@@ -62,6 +66,8 @@
       const n = Math.max(1, Math.round(Math.abs(z1 - z0) / seg)), d = (z1 - z0) / n;
       for (let i = 0; i < n; i++) {
         const a = z0 + i * d, b = a + d, rec = A.stall(g, fishes, x, a, b, sd, k + i, table);
+        shadowAt(rec.group, x + 0.25, (a + b) / 2, hw * 2 + 1.0, Math.abs(d) + 0.9, table ? 0.55 : 0.8);
+        if (!table) lightPool(x - sd * 1.7, (a + b) / 2, 3.2, Math.abs(d) * 1.4, 0xffb060, 0.28); // the bulbs under the awning
         breakable({ kind, x, z: (a + b) / 2, len: Math.abs(d), sd, rec, w: wall(x - hw, x + hw, a, b) });
       }
     };
@@ -89,6 +95,7 @@
       decor.push({ m: arrow, kind: 'arrow', p: x + z }, { m: glow, kind: 'vglow', p: x * 0.7 + z });
       const hx = Math.abs(fx) > 0.5 ? 0.45 : 0.5, hz = Math.abs(fx) > 0.5 ? 0.5 : 0.45;
       sign(vm, 'スキル', 'SKILL · 1', 0.95, 0.42, '#f2c14e', '#2a1218', 0, 2.2, 0.1, 0, -0.5);
+      shadowAt(vm, 0.1, -0.05, 1.3, 1.2, 0.7); lightPool(x + fx * 0.9, z + fz * 0.9, 2.6, 2.6, 0xffe08a, 0.35);
       breakable({ kind: 'vend', x, z, ry, fx, fz, group: vm, glow, arrow, hp: 2, w: wall(x - hx, x + hx, z - hz, z + hz) });
     };
     // one per area, each sells one SKILL (walk up, press K): the plaza, the street, the market hall, the loading bay before the boss
@@ -187,6 +194,7 @@
     }
     // fluorescent tubes (cool light inside vs warm lanterns outside)
     for (let z = -54; z > -99; z -= 6) for (const x of [-9, -3, 3, 9]) {
+      lightPool(x, z, 5.5, 3.6, 0x9fd8ff, 0.16);
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xb8e8ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.22 }));
       glow.scale.set(3.2, 1.6, 1); glow.position.set(x, 4.2, z); g.add(glow);
     }
@@ -288,18 +296,18 @@
     // cel puddle: one solid dark water shape with a crisp edge, a flat sky-reflection band clipped inside it, sharp glints
     const pudTexs = [0, 1, 2, 3].map((v) => W.canvasTex(256, 256, (c) => {
       const sd = v * 1.7 + 0.4;
-      blob(c, 128, 128, 100, 2, sd); c.fillStyle = 'rgba(70,88,124,0.72)'; c.fill();
-      c.strokeStyle = 'rgba(28,32,52,0.75)'; c.lineWidth = 4; c.stroke();                                   // edge line
+      blob(c, 128, 128, 100, 2, sd); c.fillStyle = 'rgba(26,30,42,0.6)'; c.fill();
+      c.strokeStyle = 'rgba(12,14,22,0.35)'; c.lineWidth = 3; c.stroke();                                   // edge line
       c.save(); blob(c, 128, 128, 97, 2, sd); c.clip();
-      c.fillStyle = 'rgba(128,152,198,0.9)'; c.beginPath(); c.moveTo(0, 150 - v * 8); c.lineTo(256, 70 - v * 8); c.lineTo(256, 112 - v * 8); c.lineTo(0, 196 - v * 8); c.fill(); // sky band
-      c.fillStyle = 'rgba(186,208,240,0.92)'; c.beginPath(); c.moveTo(0, 168 - v * 8); c.lineTo(256, 88 - v * 8); c.lineTo(256, 98 - v * 8); c.lineTo(0, 178 - v * 8); c.fill(); // its bright core
+      c.fillStyle = 'rgba(96,112,150,0.35)'; c.beginPath(); c.moveTo(0, 150 - v * 8); c.lineTo(256, 70 - v * 8); c.lineTo(256, 112 - v * 8); c.lineTo(0, 196 - v * 8); c.fill(); // sky band
+      c.fillStyle = 'rgba(170,190,225,0.4)'; c.beginPath(); c.moveTo(0, 168 - v * 8); c.lineTo(256, 88 - v * 8); c.lineTo(256, 98 - v * 8); c.lineTo(0, 178 - v * 8); c.fill(); // its bright core
       c.restore();
       c.strokeStyle = '#ffffff'; c.lineCap = 'round';
-      c.lineWidth = 6; c.beginPath(); c.moveTo(70, 104); c.lineTo(116, 86); c.stroke();
+      c.globalAlpha = 0.55; c.lineWidth = 4; c.beginPath(); c.moveTo(70, 104); c.lineTo(116, 86); c.stroke();
       c.lineWidth = 3.5; c.beginPath(); c.moveTo(150, 158); c.lineTo(176, 148); c.stroke();
     }));
     for (const p of puddles) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.r * 2.3 * p.sx, p.r * 2.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: pudTexs[(Math.random() * 4) | 0], transparent: true, depthWrite: false }));
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.r * 2.3 * p.sx, p.r * 2.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: pudTexs[(Math.random() * 4) | 0], transparent: true, depthWrite: false, opacity: 0.85 }));
       m.rotation.y = Math.random() * Math.PI; m.position.set(p.x, 0.012, p.z); m.renderOrder = 1; g.add(m); decor.push({ m, kind: 'puddle', p: Math.random() * 6 });
     }
 

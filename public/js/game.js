@@ -1526,6 +1526,7 @@
       const up = edge('up', p.mz < -0.5), dn = edge('dn', p.mz > 0.5), lf = edge('lf', p.mx < -0.5), rt = edge('rt', p.mx > 0.5);
       const a = edge('a', p.push), b = edge('b', p.grab), st = edge('st', p.start);
       if (st || a || b || up || dn) this.audio.init();
+      if (this.camp && this.camp.maskOpen) { if (up) this.camp.maskMove(-1); if (dn) this.camp.maskMove(1); if (a || st) this.camp.pickMask(this.camp.maskI); return; } // the mask picker: one step per push
       if (ui.name === 'select') {
         if (lf || up) this.selectKey('KeyA'); if (rt || dn) this.selectKey('KeyD'); if (a) this.lockSel(1); if (b) this.selectKey('Escape');
       } else if (ui.name) {

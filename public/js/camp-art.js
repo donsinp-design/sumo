@@ -313,20 +313,20 @@
       }
       // cel-style tone patches: a few hard-edged, flat shapes one step darker or lighter (no soft blotches)
       const blob = (x, y, r) => { const ph = Math.random() * 6, ph2 = Math.random() * 6; c.beginPath(); for (let k = 0; k <= 40; k++) { const t = k / 40 * Math.PI * 2, rr = r * (0.86 + 0.1 * Math.sin(t * 2 + ph) + 0.05 * Math.sin(t * 3 + ph2)); c.lineTo(x + Math.cos(t) * rr, y + Math.sin(t) * rr * 0.72); } c.fill(); }; // smooth, low-frequency edges
-      for (let i = 0; i < 9; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(70, 170), dark = i % 3 !== 0; wrap(() => { c.fillStyle = dark ? P.lo : P.hi; c.globalAlpha = dark ? 0.32 : 0.25; blob(x, y, r); c.globalAlpha = 1; }); }
+      for (let i = 0; i < 9; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(70, 170), dark = i % 3 !== 0; wrap(() => { c.fillStyle = dark ? P.lo : P.hi; c.globalAlpha = dark ? 0.12 : 0.08; blob(x, y, r); c.globalAlpha = 1; }); }
       // stains: small flat darker shapes
-      for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(22, 60); wrap(() => { c.fillStyle = 'rgba(14,10,20,0.22)'; blob(x, y, r); }); }
+      for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(22, 60); wrap(() => { c.fillStyle = 'rgba(14,10,20,0.09)'; blob(x, y, r); }); }
       // wet patches: a crisp lighter shape with a sharp highlight stroke (hosed-down floor)
-      if (P.wet) for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(50, 120); wrap(() => { c.fillStyle = 'rgba(190,220,240,' + 0.22 * P.wet + ')'; blob(x, y, r); c.strokeStyle = 'rgba(235,248,255,' + 0.5 * P.wet + ')'; c.lineWidth = 3; c.beginPath(); c.moveTo(x - r * 0.4, y - r * 0.15); c.lineTo(x + r * 0.15, y - r * 0.35); c.stroke(); }); }
+      if (P.wet) for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(50, 120); wrap(() => { c.fillStyle = 'rgba(190,220,240,' + 0.07 * P.wet + ')'; blob(x, y, r); c.strokeStyle = 'rgba(235,248,255,' + 0.5 * P.wet + ')'; c.lineWidth = 3; c.beginPath(); c.moveTo(x - r * 0.4, y - r * 0.15); c.lineTo(x + r * 0.15, y - r * 0.35); c.stroke(); }); }
       // aggregate: sparse crisp dots
       const n = Math.round(2600 * P.agg);
       for (let i = 0; i < n; i++) { c.fillStyle = Math.random() < 0.6 ? P.lo : P.hi; const sz = Math.random() < 0.85 ? 2 : 3; c.fillRect(Math.round(Math.random() * w), Math.round(Math.random() * h), sz, sz); }
       // cracks
-      c.strokeStyle = 'rgba(16,12,20,0.6)'; c.lineCap = 'round';
-      for (let i = 0; i < 7; i++) {
-        let x = Math.random() * w, y = Math.random() * h, a = Math.random() * 6.28; const pts = [[x, y]];
-        for (let k = 0; k < 22; k++) { a += rnd(-0.6, 0.6); x += Math.cos(a) * 9; y += Math.sin(a) * 9; pts.push([x, y]); }
-        wrap(() => { c.lineWidth = rnd(1, 2.2); c.beginPath(); pts.forEach(([px, py], k) => (k ? c.lineTo(px, py) : c.moveTo(px, py))); c.stroke(); });
+      c.strokeStyle = 'rgba(16,12,20,0.32)'; c.lineCap = 'butt'; c.lineJoin = 'miter';
+      for (let i = 0; i < 3; i++) { // hairline cracks: long, mostly straight, kinked (concrete cracks, not squiggles)
+        let x = Math.random() * w, y = Math.random() * h; const a0 = Math.random() * 6.28, pts = [[x, y]];
+        for (let k = 0; k < 9; k++) { const a = a0 + rnd(-0.35, 0.35); const l = rnd(14, 34); x += Math.cos(a) * l; y += Math.sin(a) * l; pts.push([x, y]); }
+        wrap(() => { c.lineWidth = 1.2; c.beginPath(); pts.forEach(([px, py], k) => (k ? c.lineTo(px, py) : c.moveTo(px, py))); c.stroke(); });
       }
       // expansion joints (cut lines with a lit edge)
       if (P.joints) for (let t = 0; t < w; t += P.joints) {

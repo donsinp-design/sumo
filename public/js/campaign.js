@@ -57,7 +57,7 @@
       const g = this.g;
       this.R = g.R; this.t = 0; this.acc = 0; this.paused = false; this.over = null; this.slow = 0; this.hitstop = 0;
       this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0x0d0a10);
-      this.cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 220);
+      this.cam = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 220);
       this.fx = new S.FX(this.scene); this.fx.noMarks = true; // no footprints piling up over a whole level
       const nFx = this.scene.children.length;
       this.map = S.CampMap.build(this.scene);
@@ -160,7 +160,7 @@
     }
     setPause(on) { this.paused = on; this.el('.ch-pause').classList.toggle('on', on); }
     onKey(e) {
-      if (this.maskOpen) { if (e.code === 'ArrowUp' || e.code === 'KeyW') this.maskMove(-1); else if (e.code === 'ArrowDown' || e.code === 'KeyS') this.maskMove(1); else if (e.code === 'Enter' || e.code === 'Space') this.pickMask(this.maskI); return true; }
+      if (this.maskOpen) { if (e.repeat) return true; if (e.code === 'ArrowUp' || e.code === 'KeyW') this.maskMove(-1); else if (e.code === 'ArrowDown' || e.code === 'KeyS') this.maskMove(1); else if (e.code === 'Enter' || e.code === 'NumpadEnter') this.pickMask(this.maskI); return true; } // keys move one step per press; Enter wears it
       if (this.shopping) { if (e.code === 'Escape') this.sk.pick('x'); return true; }
       if (e.code === 'Escape' || e.code === 'KeyP') { if (this.over) return; this.setPause(!this.paused); return true; }
       if (this.paused) { if (e.code === 'KeyR') this.command('retry'); else if (e.code === 'KeyQ') this.command('quit'); else if (e.code === 'Enter' || e.code === 'KeyJ') this.command('resume'); return true; }
@@ -821,12 +821,12 @@
     drawMasks() {
       const M = S.CampSkills.MASKS, touch = S.touch && S.touch.on;
       this.el('.ch-mask').innerHTML = '<h2 data-jp="面">CHOOSE A MASK</h2>' + M.map((m, i) => '<button data-mask="' + i + '" class="' + (i === this.maskI ? 'sel' : '') + '"><span class="jp">' + m.jp + '</span>' + m.name + '<small>' + m.desc + '</small></button>').join('') +
-        '<p>' + (touch ? 'Tap a mask' : 'W / S to choose · J or Enter to wear it') + '</p>';
+        '<p>' + (touch ? 'Tap a mask' : 'W / S to choose · Enter to wear it') + '</p>';
     }
     maskMove(d) { const n = S.CampSkills.MASKS.length; this.maskI = (this.maskI + d + n) % n; this.drawMasks(); this.g.audio.tick && this.g.audio.tick(); }
-    maskInput() {
-      const k = this.ctrl; if (k.push.pressed) { this.pickMask(this.maskI); return; }
-      const v = k.mz; if (Math.abs(v) > 0.5) { if (this.maskHold <= 0) { this.maskMove(v > 0 ? 1 : -1); this.maskHold = 0.22; } this.maskHold -= 1 / 60; } else this.maskHold = 0;
+    maskInput() { // the phone stick (keys: onKey; a gamepad: game.pollPad; each one step per press)
+      const pad = S.touch && S.touch.on ? S.touch.mz : 0;
+      if (Math.abs(pad) > 0.5) { if (!(this.maskHold > 0)) { this.maskMove(pad > 0 ? 1 : -1); this.maskHold = 0.25; } else this.maskHold -= 1 / 60; } else this.maskHold = 0;
     }
     pickMask(i) {
       const M = S.CampSkills.MASKS[i]; if (!M || !this.maskOpen) return;
@@ -1084,12 +1084,13 @@
       const hw = this.map.halfWidth(P.z), tx = clamp(P.x * 0.65, -Math.max(0, hw - 6), Math.max(0, hw - 6));
       const want = new THREE.Vector3(boss ? clamp((P.x + (this.B ? this.B.x : 0)) / 2, -4, 4) : tx, 0, boss ? (P.z + (this.B ? this.B.z : P.z)) / 2 : P.z - 2.6);
       this.camT.lerp(want, 1 - Math.exp(-dt * 4));
-      const dist = boss ? 22 : 18.5, sh = this.shake > 0 ? this.shake : 0; this.shake = Math.max(0, (this.shake || 0) - dt * 1.6);
-      this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh * 0.5, dist * 0.78 + (Math.random() - 0.5) * sh * 0.5, this.camT.z + dist * 0.62);
+      // a lower, closer three-quarter view (about 40 degrees): you see the shopfronts and the people, not a board game
+      const dist = boss ? 19 : 15, sh = this.shake > 0 ? this.shake : 0; this.shake = Math.max(0, (this.shake || 0) - dt * 1.6);
+      this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh * 0.5, dist * 0.64 + (Math.random() - 0.5) * sh * 0.5, this.camT.z + dist * 0.77);
       this.cam.lookAt(this.camT.x, 0.6, this.camT.z);
       this.cam.updateMatrixWorld();
       S.R3.setLight(this.cam, R.anime);
-      if (R.anime && R.post) R.post.render(this.scene, this.cam, T); else R.r.render(this.scene, this.cam);
+      if (R.anime && R.post) { const u = R.post.comp.uniforms; u.uCine.value = 1; R.post.render(this.scene, this.cam, T); u.uCine.value = 0; } else R.r.render(this.scene, this.cam);
       this.drawHud();
     }
     drawActor(a, dt, T) {

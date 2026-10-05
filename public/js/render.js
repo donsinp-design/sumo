@@ -1116,7 +1116,7 @@
       c += (texture2D(tColor, vUv + uDir * 3.231).rgb + texture2D(tColor, vUv - uDir * 3.231).rgb) * 0.070;
       gl_FragColor = vec4(c, 1.0); }`;
   const COMP_FS = `uniform sampler2D tColor; uniform sampler2D tDepth; uniform sampler2D tBloom;
-    uniform vec2 uRes; uniform float uNear; uniform float uFar; uniform float uTime; uniform float uPx;
+    uniform vec2 uRes; uniform float uNear; uniform float uFar; uniform float uTime; uniform float uPx; uniform float uCine; uniform vec3 uHaze;
     varying vec2 vUv;
     float D(vec2 uv){ float z = texture2D(tDepth, uv).r; return uNear * uFar / (uFar - z * (uFar - uNear)); }
     vec3 C(vec2 uv){ return texture2D(tColor, uv).rgb; }
@@ -1132,23 +1132,39 @@
       vec3 cl = C(vUv - vec2(px.x, 0.0)), cr = C(vUv + vec2(px.x, 0.0)), cu = C(vUv + vec2(0.0, px.y)), cd = C(vUv - vec2(0.0, px.y));
       float edgeC = smoothstep(0.45, 0.8, length(cl - cr) + length(cu - cd)) * step(d0, uFar * 0.8);
       float edge = max(edgeD, edgeC * 0.45);
+      // CINEMATIC (campaign): contact shadows from the depth buffer, distance haze, a warmer/cooler grade
+      if (uCine > 0.5) {
+        float ao = 0.0, rad = 0.55 / (d0 * 0.70);
+        for (int i = 0; i < 12; i++) {
+          float a = float(i) * 2.39996 + mod(floor(gl_FragCoord.x) + floor(gl_FragCoord.y) * 2.0, 4.0) * 0.39; // a tiny 4-step rotation, not noise
+          float rr = rad * (0.3 + 0.7 * fract(float(i) * 0.618));
+          vec2 o = vec2(cos(a) * uRes.y / uRes.x, sin(a)) * rr;
+          float ds = D(vUv + o), diff = d0 - ds;
+          ao += smoothstep(0.03, 0.35, diff) * (1.0 - smoothstep(0.9, 2.6, diff));
+        }
+        ao = clamp(ao / 12.0, 0.0, 1.0);
+        c *= 1.0 - ao * 0.62;
+        float hz = smoothstep(18.0, 46.0, d0) * 0.55 + (1.0 - step(d0, uFar * 0.8)) * 0.0;
+        c = mix(c, uHaze, hz);
+      }
       // anime grade
       float l = L(c);
       c = mix(vec3(l), c, 1.15);
       c = mix(c, c * c * (3.0 - 2.0 * c), 0.2);
       c *= mix(vec3(0.93, 0.9, 1.0), vec3(1.0, 0.98, 0.93), smoothstep(0.1, 0.6, l)); // a faint cool shadow, not violet
+      if (uCine > 0.5) { c = mix(c, c * mix(vec3(0.82, 0.92, 1.08), vec3(1.08, 0.99, 0.88), smoothstep(0.15, 0.7, l)), 0.7); c = (c - 0.5) * 1.08 + 0.5; } // teal shadows, warm light, a little more contrast
       // halftone dots in the shadows (comic print)
       float cell = 4.5 * max(1.0, uPx);
       vec2 g = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy;
       float r = length(mod(g, cell) - cell * 0.5) / (cell * 0.5);
       float shade = smoothstep(0.34, 0.1, l);
-      c *= 1.0 - step(r, shade * 0.95) * 0.22;
+      c *= 1.0 - step(r, shade * 0.95) * (uCine > 0.5 ? 0.0 : 0.22); // the comic dots belong to versus
       // glow, ink, vignette, grain
       c += texture2D(tBloom, vUv).rgb * 0.35;
       c = mix(c, vec3(0.1, 0.045, 0.085), edge * 0.92);
-      vec2 vg = vUv - 0.5; c *= 1.0 - dot(vg, vg) * 0.6;
+      vec2 vg = vUv - 0.5; c *= 1.0 - dot(vg, vg) * (uCine > 0.5 ? 1.05 : 0.6);
       float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 91.7, vec2(12.9898, 78.233))) * 43758.5453);
-      c += (n - 0.5) * 0.035;
+      c += (n - 0.5) * (uCine > 0.5 ? 0.018 : 0.035);
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`;
   class AnimePost {
@@ -1164,7 +1180,7 @@
       const mk = (fs, u) => new THREE.ShaderMaterial({ uniforms: u, vertexShader: POST_VS, fragmentShader: fs, depthTest: false, depthWrite: false });
       this.bright = mk(BRIGHT_FS, { tColor: { value: null } });
       this.blur = mk(BLUR_FS, { tColor: { value: null }, uDir: { value: new THREE.Vector2() } });
-      this.comp = mk(COMP_FS, { tColor: { value: null }, tDepth: { value: null }, tBloom: { value: null }, uRes: { value: new THREE.Vector2() }, uNear: { value: 0.1 }, uFar: { value: 200 }, uTime: { value: 0 }, uPx: { value: 1 } });
+      this.comp = mk(COMP_FS, { tColor: { value: null }, tDepth: { value: null }, tBloom: { value: null }, uRes: { value: new THREE.Vector2() }, uNear: { value: 0.1 }, uFar: { value: 200 }, uTime: { value: 0 }, uCine: { value: 0 }, uHaze: { value: new THREE.Color(0x1c1830) }, uPx: { value: 1 } });
     }
     setSize(w, h, pr) {
       const W = Math.max(4, Math.round(w * pr)), H = Math.max(4, Math.round(h * pr));
