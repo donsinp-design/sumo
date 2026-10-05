@@ -43,7 +43,7 @@
     staff:     { hp: 50,  spd: 2.9, r: 0.42, mass: 1.1, name: 'STAFF',     shirt: 0x7a4ab0, apron: 0x2a2a30, band: 0xf6f6f0, pole: true },
     commander: { hp: 70,  spd: 2.7, r: 0.45, mass: 1.3, name: 'COMMANDER', shirt: 0xc8231d, apron: 0xf2c14e, band: 0xf2c14e, coat: true },
     sumo:      { hp: 110, spd: 2.5, r: 0.85, mass: 6,   name: 'SUMO',      wrestler: 1, size: 1.25 },
-    boss:      { hp: 650, spd: 2.4, r: 1.05, mass: 12,  name: 'ŌZEKI MAGURO-YAMA', wrestler: 1, size: 1.6 },
+    boss:      { hp: 420, spd: 2.4, r: 1.05, mass: 12,  name: 'ŌZEKI MAGURO-YAMA', wrestler: 1, size: 1.6 },
   };
 
   // ---------------------------------------------------------------- gacha: a curated, combat-useful pool only
@@ -717,7 +717,7 @@
           if (B.cd <= 0) {
             if (d > 4.5) this.bossBegin(B, 'charge', 0.85 * k);
             else if (d < 2.9 && Math.random() < 0.55) this.bossBegin(B, 'slap', 0.55 * k);
-            else this.bossBegin(B, 'stomp', 1.0 * k);
+            else this.bossBegin(B, 'stomp', 1.45 * (B.phase === 2 ? 0.88 : 1)); // a long, readable wind-up: time to back out of range
           }
           B.cd -= dt;
           break;
@@ -737,7 +737,7 @@
             if (!B.hitDone && B.t > 0.06) { B.hitDone = true; this.meleeHit(B, 2.0, 0.85, 18, 7, true); }
             if (B.t >= B.dur) this.set(B, 'recover', 0.45);
           } else if (B.t >= B.dur) {
-            if (B.phase === 2 && !B.double) { B.double = true; this.bossBegin(B, 'stomp', 0.55); } else { B.double = false; this.set(B, 'recover', 0.75); }
+            if (B.phase === 2 && !B.double) { B.double = true; this.bossBegin(B, 'stomp', 1.0); } else { B.double = false; this.set(B, 'recover', 1.0); }
           }
           break;
         }
