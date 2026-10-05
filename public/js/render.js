@@ -1113,7 +1113,7 @@
       float l = L(c);
       c = mix(vec3(l), c, 1.15);
       c = mix(c, c * c * (3.0 - 2.0 * c), 0.2);
-      c *= mix(vec3(0.84, 0.8, 1.04), vec3(1.0, 0.98, 0.93), smoothstep(0.1, 0.6, l));
+      c *= mix(vec3(0.93, 0.9, 1.0), vec3(1.0, 0.98, 0.93), smoothstep(0.1, 0.6, l)); // a faint cool shadow, not violet
       // halftone dots in the shadows (comic print)
       float cell = 4.5 * max(1.0, uPx);
       vec2 g = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy;

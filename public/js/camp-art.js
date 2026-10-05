@@ -299,26 +299,18 @@
         c.fillStyle = Math.random() < 0.5 ? P.lo : P.hi; c.globalAlpha = 0.25 + Math.random() * 0.25; c.fillRect((x + off) % w, y, P.stones - 6, P.stones - 6); c.globalAlpha = 1;
         c.fillStyle = 'rgba(20,14,22,0.55)'; c.fillRect((x + off + P.stones - 6) % w, y, 6, P.stones); c.fillRect((x + off) % w, y + P.stones - 6, P.stones, 6);
       }
-      // broad mottling
-      for (let i = 0; i < 70; i++) {
-        const x = Math.random() * w, y = Math.random() * h, r = rnd(60, 220), dark = Math.random() < 0.55;
-        wrap(() => { const gr = c.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, dark ? 'rgba(10,8,16,0.13)' : 'rgba(255,255,255,0.07)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(x - r, y - r, r * 2, r * 2); });
-      }
-      // oil / water stains
-      for (let i = 0; i < 9; i++) {
-        const x = Math.random() * w, y = Math.random() * h, r = rnd(30, 90);
-        wrap(() => { c.fillStyle = 'rgba(14,10,20,0.12)'; c.beginPath(); for (let k = 0; k <= 12; k++) { const a = k / 12 * Math.PI * 2, rr = r * rnd(0.7, 1.15); c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.7); } c.fill(); });
-      }
-      // wet sheen (the market floor is hosed down all day)
-      if (P.wet) for (let i = 0; i < 14; i++) {
-        const x = Math.random() * w, y = Math.random() * h, r = rnd(50, 160);
-        wrap(() => { const gr = c.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(170,205,230,' + 0.13 * P.wet + ')'); gr.addColorStop(1, 'rgba(170,205,230,0)'); c.fillStyle = gr; c.fillRect(x - r, y - r, r * 2, r * 2); });
-      }
-      // aggregate: fine stones in the surface
-      const n = Math.round(26000 * P.agg);
-      for (let i = 0; i < n; i++) { const v = Math.random(); c.fillStyle = v < 0.45 ? P.lo : v < 0.9 ? P.hi : 'rgba(255,255,255,0.35)'; const sz = Math.random() < 0.9 ? 2 : 3; c.fillRect(Math.random() * w, Math.random() * h, sz, sz); }
+      // cel-style tone patches: a few hard-edged, flat shapes one step darker or lighter (no soft blotches)
+      const blob = (x, y, r, n) => { c.beginPath(); for (let k = 0; k <= n; k++) { const t = k / n * Math.PI * 2, rr = r * (0.75 + 0.35 * Math.sin(t * 3 + x) * Math.cos(t * 2 + y)); c.lineTo(x + Math.cos(t) * rr, y + Math.sin(t) * rr * 0.8); } c.fill(); };
+      for (let i = 0; i < 9; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(70, 170), dark = i % 3 !== 0; wrap(() => { c.fillStyle = dark ? P.lo : P.hi; c.globalAlpha = dark ? 0.45 : 0.35; blob(x, y, r, 14); c.globalAlpha = 1; }); }
+      // stains: small flat darker shapes
+      for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(22, 60); wrap(() => { c.fillStyle = 'rgba(14,10,20,0.22)'; blob(x, y, r, 10); }); }
+      // wet patches: a crisp lighter shape with a sharp highlight stroke (hosed-down floor)
+      if (P.wet) for (let i = 0; i < 6; i++) { const x = Math.random() * w, y = Math.random() * h, r = rnd(50, 120); wrap(() => { c.fillStyle = 'rgba(190,220,240,' + 0.22 * P.wet + ')'; blob(x, y, r, 12); c.strokeStyle = 'rgba(235,248,255,' + 0.5 * P.wet + ')'; c.lineWidth = 3; c.beginPath(); c.moveTo(x - r * 0.4, y - r * 0.15); c.lineTo(x + r * 0.15, y - r * 0.35); c.stroke(); }); }
+      // aggregate: sparse crisp dots
+      const n = Math.round(2600 * P.agg);
+      for (let i = 0; i < n; i++) { c.fillStyle = Math.random() < 0.6 ? P.lo : P.hi; const sz = Math.random() < 0.85 ? 2 : 3; c.fillRect(Math.round(Math.random() * w), Math.round(Math.random() * h), sz, sz); }
       // cracks
-      c.strokeStyle = 'rgba(16,12,20,0.45)'; c.lineCap = 'round';
+      c.strokeStyle = 'rgba(16,12,20,0.6)'; c.lineCap = 'round';
       for (let i = 0; i < 7; i++) {
         let x = Math.random() * w, y = Math.random() * h, a = Math.random() * 6.28; const pts = [[x, y]];
         for (let k = 0; k < 22; k++) { a += rnd(-0.6, 0.6); x += Math.cos(a) * 9; y += Math.sin(a) * 9; pts.push([x, y]); }
@@ -472,6 +464,55 @@
     for (const k in kit) kit[k].done();
   }
 
+
+  // ---------------------------------------------------------------- facades: the walls you fight beside. Flat cel colours, crisp shapes.
+  function facadeTex(style, v) {
+    return tex('fac' + style + v, 256, 224, (c, w, h) => {
+      const R = (a, b) => a + ((v * 9301 + 49297) % 233280) / 233280 * (b - a); // deterministic per variant
+      if (style === 'shop') {
+        const walls = ['#8a7a6a', '#6e6a78', '#7a5a4a', '#5e6a6e', '#8a8478'], wc = walls[v % walls.length];
+        c.fillStyle = wc; c.fillRect(0, 0, w, h);
+        c.fillStyle = 'rgba(0,0,0,0.18)'; for (let y = 8; y < h * 0.36; y += 14) c.fillRect(0, y, w, 2); // siding / tile courses
+        // upper floor: two windows with frames, one with an AC unit under it
+        for (const x of [36, 150]) { c.fillStyle = '#2a2c38'; c.fillRect(x, 14, 70, 44); c.fillStyle = '#5e7aa0'; c.fillRect(x + 4, 18, 62, 36); c.fillStyle = '#9ab8d8'; c.fillRect(x + 6, 20, 18, 32); c.fillStyle = '#2a2c38'; c.fillRect(x + 34, 18, 3, 36); }
+        if (v % 2) { c.fillStyle = '#d4d8dc'; c.fillRect(150, 62, 54, 22); c.fillStyle = '#30343a'; c.beginPath(); c.arc(166, 73, 8, 0, 7); c.fill(); }
+        // shop sign band
+        const sc = ['#c8231d', '#2f6fd0', '#2e9e6a', '#f2c14e', '#1a1a22'][v % 5];
+        c.fillStyle = sc; c.fillRect(0, h * 0.4, w, 30); c.fillStyle = sc === '#f2c14e' ? '#1a1014' : '#fff8ec';
+        c.font = '22px "Dela Gothic One", sans-serif'; c.textAlign = 'center'; c.fillText(['鮮魚店', '乾物', '刃物', '海苔', '玉子焼', '茶', '漬物', '昆布'][v % 8], w / 2, h * 0.4 + 23);
+        // ground floor: shutter, lit shop window, or a door
+        const gy = h * 0.4 + 30, gh = h - gy;
+        const kind = v % 3;
+        if (kind === 0) { c.fillStyle = '#9aa2aa'; c.fillRect(10, gy, w - 20, gh); c.fillStyle = '#6a7278'; for (let y = gy + 4; y < h; y += 7) c.fillRect(10, y, w - 20, 2); c.fillStyle = '#2a2c32'; c.fillRect(10, h - 6, w - 20, 6); }
+        else if (kind === 1) { c.fillStyle = '#2a1e18'; c.fillRect(10, gy, w - 20, gh); c.fillStyle = '#f2c98a'; c.fillRect(16, gy + 6, w - 32, gh - 26); c.fillStyle = '#c88a4a'; for (let x = 24; x < w - 30; x += 34) c.fillRect(x, gy + gh * 0.45, 22, 14); c.fillStyle = '#7a1a14'; for (let i = 0; i < 5; i++) c.fillRect(20 + i * 44, gy + 6, 38, 26); }
+        else { c.fillStyle = '#4a3a30'; c.fillRect(10, gy, w - 20, gh); c.fillStyle = '#c8d8e4'; c.fillRect(30, gy + 10, 70, gh - 16); c.fillRect(156, gy + 10, 70, gh - 16); c.fillStyle = '#4a3a30'; c.fillRect(64, gy + 10, 3, gh - 16); c.fillRect(190, gy + 10, 3, gh - 16); }
+        c.fillStyle = '#3a3a42'; c.fillRect(w - 10, 0, 6, h); // drain pipe
+      } else if (style === 'hall') {
+        c.fillStyle = v % 2 ? '#7a8a96' : '#6e7e8a'; c.fillRect(0, 0, w, h);
+        c.fillStyle = 'rgba(0,0,0,0.16)'; for (let x = 0; x < w; x += 16) c.fillRect(x, 0, 3, h); // corrugation
+        c.fillStyle = '#4a5662'; c.fillRect(0, h * 0.62, w, 10); c.fillStyle = '#e8c547'; c.fillRect(0, h - 14, w, 14);
+        if (v % 3 === 0) { c.fillStyle = '#c8231d'; c.fillRect(40, h * 0.3, 40, 54); c.fillStyle = '#fff'; c.font = '800 12px "Barlow Condensed"'; c.fillText('消火栓', 44, h * 0.3 + 30); }
+        if (v % 3 === 1) { c.fillStyle = '#c8ccd0'; c.fillRect(150, h * 0.25, 60, 70); c.fillStyle = '#30343a'; c.fillRect(158, h * 0.25 + 10, 44, 6); }
+        c.fillStyle = '#f6f2ea'; c.font = '28px "Dela Gothic One"'; c.fillText(String(10 + v), 200, h * 0.55);
+      } else if (style === 'bay') {
+        c.fillStyle = '#5a626a'; c.fillRect(0, 0, w, h);
+        c.fillStyle = '#9aa2a8'; c.fillRect(20, 30, w - 40, h - 30); c.fillStyle = '#7a8288'; for (let y = 34; y < h; y += 9) c.fillRect(20, y, w - 40, 3);
+        c.fillStyle = '#1a1a1a'; for (let x = 0; x < w; x += 32) { c.beginPath(); c.moveTo(x, h); c.lineTo(x + 16, h); c.lineTo(x + 32, h - 16); c.lineTo(x + 16, h - 16); c.fill(); }
+        c.fillStyle = '#e8c547'; c.globalCompositeOperation = 'destination-over'; c.fillRect(0, h - 16, w, 16); c.globalCompositeOperation = 'source-over';
+        c.fillStyle = '#fff'; c.font = '30px "Dela Gothic One"'; c.textAlign = 'center'; c.fillText(String(v + 1), w / 2, 24);
+      }
+    });
+  }
+  // a run of facade panels along a wall face. sd: which side (the panel faces -sd * x)
+  function facade(g, x, z0, z1, h, sd, style, seg) {
+    seg = seg || 4; const za = Math.min(z0, z1), len = Math.abs(z1 - z0), n = Math.max(1, Math.round(len / seg)), sl = len / n;
+    for (let i = 0; i < n; i++) {
+      const v = (Math.floor(Math.abs(za * 7 + i * 13 + sd * 5)) % 7);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(sl, h), S.toon(0xffffff, { map: facadeTex(style, v), shade: 0x9088a0, rimAmt: 0 }));
+      m.position.set(x, h / 2, za + (i + 0.5) * sl); m.rotation.y = -sd * Math.PI / 2; g.add(m);
+    }
+  }
+
   // ---------------------------------------------------------------- awning: curved striped canvas, scalloped valance, steel frame
   // placed along z from z0..z1, x is its back edge; sd = which side of the street (it slopes toward -sd*x)
   function awning(g, x, z0, z1, sd, c1, c2, opt) {
@@ -501,6 +542,6 @@
     return { fx, fy };
   }
 
-  S.CampArt = { roofs,
+  S.CampArt = { roofs, facade,
     prop, awning, fishBatch, iceMat, merge, M4, tex, mat, groundMat, batch, stall, stallKit };
 })();

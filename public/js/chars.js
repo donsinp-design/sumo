@@ -47,10 +47,12 @@
     }`;
   // toon material for a skinned part: texture alpha cut-out (hair tips, lashes) or blended (eye highlights)
   function skinToon(map, mode, flat) {
-    const m = S.toon(0xffffff, { map, shade: flat ? 0xf4ecf6 : 0xe6dcee, rimAmt: flat ? 0 : 0.6, rim: 0xfff0d8 });
-    m.vertexShader = VS; m.uniforms.uColor.value.setScalar(flat ? 1.05 : 1.32); // VRoid textures are painted for soft shading: lift them
+    const m = S.toon(0xffffff, { map, shade: flat ? 0xf2f0ee : 0xd6d0cc, rimAmt: flat ? 0 : 0.5, rim: 0xfff0d8 });
+    m.vertexShader = VS; m.uniforms.uColor.value.setScalar(flat ? 1.05 : 1.22); // VRoid textures are painted for soft shading: lift them
     m.fragmentShader = m.fragmentShader
       .replace('vec3 tx = uHasMap > 0.5 ? texture2D(uMap, vUv).rgb : vec3(1.0);', 'vec4 t4 = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0); if (t4.a < ' + (mode === 'BLEND' ? '0.02' : '0.5') + ') discard; vec3 tx = t4.rgb;')
+      .replace('sh *= mix(vec3(1.0), vec3(0.8, 0.76, 1.1), uAnime);', '') // no violet shadow on people: they read as purple at night
+      .replace('vec3 col = mix(sh * mix(0.78, 0.66, uAnime), sh, deep);', 'vec3 col = mix(sh * 0.9, sh, deep);')
       .replace('gl_FragColor = vec4(col, uAlpha);', 'gl_FragColor = vec4(col, uAlpha * ' + (mode === 'BLEND' ? 't4.a' : '1.0') + ');');
     if (mode === 'BLEND') { m.transparent = true; m.depthWrite = false; }
     m.side = THREE.DoubleSide;

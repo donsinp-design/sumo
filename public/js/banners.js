@@ -27,7 +27,12 @@
     let once = false; const go = () => { if (!once && im.naturalWidth) { once = true; done(); } };
     im.onload = go; im.onerror = res;
     if (im.decode) im.decode().then(go, () => {});
-  }))).then(() => { ready = imgs.every((im) => im && im.naturalWidth); prepareSoon(); });
+  }))).then(() => {
+    ready = imgs.every((im) => im && im.naturalWidth); prepareSoon();
+    // first load: the page starts behind a black cover; open on a full wall of banners, never on a bare stage
+    const cover = document.getElementById('bootcover');
+    if (cover) { if (ready && phase === 'idle') start({ hold: 0.15, speed: 1 }, true); cover.remove(); }
+  });
 
   const cv = document.createElement('canvas');
   cv.id = 'bnr';

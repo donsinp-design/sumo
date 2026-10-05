@@ -9,11 +9,11 @@
 
   // flat-shaded toon box with an ink outline
   function box(g, w, h, d, col, shade, x, y, z, ol, ry) {
-    const m = W.mesh(W.GEO.box, S.toon(col, { shade, rimAmt: 0.25 }), ol === undefined ? 0.02 : ol);
+    const m = W.mesh(W.GEO.box, S.toon(col, { shade, rimAmt: 0 }), ol === undefined ? 0.02 : ol); // no rim light: walls are matte, not glossy
     m.scale.set(w, h, d); m.position.set(x, y, z); if (ry) m.rotation.y = ry; g.add(m); return m;
   }
   function cyl(g, rt, rb, h, col, shade, x, y, z, seg, ol) {
-    const m = W.mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 16), S.toon(col, { shade, rimAmt: 0.3 }), ol === undefined ? 0.02 : ol);
+    const m = W.mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 16), S.toon(col, { shade, rimAmt: 0.1 }), ol === undefined ? 0.02 : ol);
     m.position.set(x, y, z); g.add(m); return m;
   }
   // a flat painted plane on the ground
@@ -104,7 +104,7 @@
     }));
     // building fronts along both sides (the street's walls)
     wall(-11, -7.2, -12, -48); wall(7.2, 11, -12, -48);
-    for (const sd of [-1, 1]) box(g, 1.2, 3.4, 36, 0x3e3038, 0x1c1418, sd * 7.8, 1.7, -30, 0.03);
+    for (const sd of [-1, 1]) { box(g, 1.2, 3.4, 36, 0x3e3038, 0x1c1418, sd * 7.8, 1.7, -30, 0.03); S.CampArt.facade(g, sd * 7.19, -12, -48, 3.4, sd, 'shop'); }
     // market stalls: counter, awning, display of fish on ice; restaurant fronts with noren curtains
     const awningCols = [[0xe2322b, 0xf6eddc], [0x2f6fd0, 0xf6eddc], [0xf2c14e, 0x3a2c34], [0x2e9e6a, 0xf6eddc]];
     const stall = (sd, z0, z1, k) => {
@@ -167,7 +167,7 @@
       c.fillStyle = 'rgba(230,200,60,0.85)'; for (let i = 0; i < 50; i += 2) { c.fillRect(w * 0.05, i * h / 50, 6, h / 60); c.fillRect(w * 0.95, i * h / 50, 6, h / 60); }
     }));
     wall(-15, -12.2, -48, -100); wall(12.2, 15, -48, -100);
-    for (const sd of [-1, 1]) box(g, 1.4, 4.6, 52, 0x6a7884, 0x2e3a44, sd * 12.9, 2.3, -74, 0.035);
+    for (const sd of [-1, 1]) { box(g, 1.4, 4.6, 52, 0x6a7884, 0x2e3a44, sd * 12.9, 2.3, -74, 0.035); S.CampArt.facade(g, sd * 12.19, -48, -100, 4.6, sd, 'hall', 5); }
     // vendor rows: three rows of tables, broken by cross-aisles so fights move between rows
     const tableRow = (x, z0, z1, k) => {
       const zc = (z0 + z1) / 2, len = Math.abs(z1 - z0);
@@ -200,7 +200,7 @@
       c.fillStyle = '#1a1a1a'; for (let i = 0; i < 20; i += 2) { c.fillRect(i * w / 20, h * 0.94, w / 20, 8); }
     }));
     wall(-15, -10.2, -100, -112); wall(10.2, 15, -100, -112);
-    for (const sd of [-1, 1]) box(g, 1.2, 4.4, 12, 0x4e5660, 0x22282e, sd * 10.8, 2.2, -106, 0.035);
+    for (const sd of [-1, 1]) { box(g, 1.2, 4.4, 12, 0x4e5660, 0x22282e, sd * 10.8, 2.2, -106, 0.035); S.CampArt.facade(g, sd * 10.19, -100, -112, 4.4, sd, 'bay', 4); }
     for (const [t, x, z] of [['pallet', -6.5, -102.5], ['pallet', 6.8, -104], ['cart', 5.8, -108.5], ['crate2', -7.2, -108], ['crate', -6.4, -109], ['barrier', -2.6, -103.5], ['barrier', 3.0, -107], ['foam', 0.4, -110.2]]) prop(t, x, z);
     puddle(-3.5, -106.5, 1.2, 1.5);
     sign(g, 'セリ場', 'TUNA AUCTION  ↑', 5.6, 1.3, '#1a0e14', '#f2c14e', 0, 4.3, -111.6, 0, -0.25);
@@ -216,7 +216,7 @@
       for (let i = 0; i < 12; i++) c.fillText(String(101 + i), w * 0.12 + (i % 6) * w * 0.13, i < 6 ? h * 0.3 : h * 0.62); // lot numbers
     }));
     wall(-16, -13.2, -112, -142); wall(13.2, 16, -112, -142); wall(-16, 16, -141.2, -144);
-    for (const sd of [-1, 1]) box(g, 1.2, 5, 30, 0x50505a, 0x22222a, sd * 13.8, 2.5, -127, 0.035);
+    for (const sd of [-1, 1]) { box(g, 1.2, 5, 30, 0x50505a, 0x22222a, sd * 13.8, 2.5, -127, 0.035); S.CampArt.facade(g, sd * 13.19, -112, -142, 5, sd, 'hall', 5); }
     box(g, 28, 5, 1.2, 0x50505a, 0x22222a, 0, 2.5, -141.8, 0.035);
     // the auctioneer's stand at the back
     box(g, 3.4, 1.4, 1.6, 0x8a5a3a, 0x4a2a1a, 0, 0.7, -139.2, 0.03); box(g, 3.6, 0.15, 1.8, 0xc8a070, 0x6a4a2a, 0, 1.45, -139.2, 0.02);
