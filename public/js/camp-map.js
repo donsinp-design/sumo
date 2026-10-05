@@ -21,6 +21,17 @@
     if (draw && draw.kind) { // tiled ground (4 m tiles, 1024 px) plus a transparent layer for paint, grates, numbers
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), S.CampArt.groundMat(draw.kind, w, d));
       m.position.set(x, y || 0, z); g.add(m);
+      // one big non-repeating layer over the whole floor: broad grime, darker edges where nobody walks, wet sheen down
+      // the middle. It hides the 4 m tiling (a repeating tile is what makes a floor look cheap)
+      const R = Math.max(w, d) / Math.min(w, d), cw = w >= d ? 1024 : Math.round(1024 / R), ch = w >= d ? Math.round(1024 / R) : 1024;
+      const macro = W.canvasTex(Math.max(64, cw), Math.max(64, ch), (c, cW, cH) => {
+        const sp = (px, py, r, col) => { const gr = c.createRadialGradient(px, py, 0, px, py, r); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(px - r, py - r, r * 2, r * 2); };
+        for (let i = 0; i < 26; i++) sp(Math.random() * cW, Math.random() * cH, (0.08 + Math.random() * 0.22) * Math.max(cW, cH), 'rgba(8,6,12,' + (0.1 + Math.random() * 0.14) + ')');
+        for (let i = 0; i < 10; i++) sp(Math.random() * cW, Math.random() * cH, (0.06 + Math.random() * 0.14) * Math.max(cW, cH), 'rgba(210,225,240,' + (0.04 + Math.random() * 0.05) + ')');
+        const e = c.createLinearGradient(0, 0, cW, 0); e.addColorStop(0, 'rgba(6,4,10,0.38)'); e.addColorStop(0.16, 'rgba(6,4,10,0)'); e.addColorStop(0.84, 'rgba(6,4,10,0)'); e.addColorStop(1, 'rgba(6,4,10,0.38)'); c.fillStyle = e; c.fillRect(0, 0, cW, cH);
+      });
+      const mo = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: macro, transparent: true, depthWrite: false }));
+      mo.position.set(x, (y || 0) + 0.002, z); mo.renderOrder = 0; g.add(mo);
       if (draw.lines) {
         const tex = W.canvasTex(1024, Math.max(64, Math.round(1024 * d / w)), draw.lines);
         const o = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
