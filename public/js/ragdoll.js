@@ -36,6 +36,19 @@
       for (const C of this.cons) if (C.min) C.L *= C.A.n.startsWith('sh') ? 0.45 : 0.55;
       this.built = true;
     }
+    // capture the bones' reference orientation against the current joint positions (no physics)
+    calibrate() {
+      for (const b of this.bones) b.obj.updateMatrixWorld(true);
+      for (const q of this.p) this.joints[q.n].getWorldPosition(q.x);
+      for (const b of this.bones) {
+        b.obj.getWorldQuaternion(b.q0 = b.q0 || new THREE.Quaternion());
+        if (b.aim) b.d0 = (b.d0 || V()).subVectors(this.P(b.aim[1]).x, this.P(b.aim[0]).x).normalize();
+        else b.m0 = this._basis(b.frame, b.m0 || new THREE.Matrix4());
+      }
+      this.calibrated = true;
+    }
+    // kinematic: put the points where an animation says (world space, same order as NAMES)
+    setPoints(arr) { for (let i = 0; i < this.p.length; i++) { this.p[i].o.copy(this.p[i].x); this.p[i].x.copy(arr[i]); } }
     // read the current animated pose and start simulating from it
     start(vel, opt) {
       opt = opt || {};
@@ -135,8 +148,8 @@
     // pin points (for being held): { name: Vector3 } or null
     pin(map) { for (const q of this.p) q.pin = map && map[q.n] ? map[q.n] : null; }
     // turn the bones to match the simulated body
-    apply(hips, root) {
-      if (!this.on) return;
+    apply(hips, root, force) {
+      if (!this.on && !force) return;
       root.updateMatrixWorld(true);
       // hips sit on the pelvis point
       tv.copy(this.P('pelvis').x); hips.parent.worldToLocal(tv); hips.position.copy(tv);
@@ -157,5 +170,6 @@
     }
     speed() { let s = 0; for (const q of this.p) s = Math.max(s, q.x.distanceTo(q.o)); return s * 120; }
   }
+  Ragdoll.NAMES = NAMES;
   S.Ragdoll = Ragdoll;
 })();

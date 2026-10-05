@@ -1251,9 +1251,8 @@
         rd.apply(this.hips, this.root);
         const pel = rd.P('pelvis').x; this.shadow.position.set(pel.x, 0.014, pel.z);
       } else {
-        const { P, stiff } = this.pose(a, T);
-        this.springTo(P, stiff, Math.min(dt, 1 / 20));
-        this.setPose(this.cur);
+        if (S.Anim && S.Anim.ready) this.mocap(a, dt, T);
+        else { const { P, stiff } = this.pose(a, T); this.springTo(P, stiff, Math.min(dt, 1 / 20)); this.setPose(this.cur); }
         // blending out of the ragdoll: through a kneel (getting up) or straight back (released)
         if (this.snap) {
           const S0 = this.snap; S0.t += dt;
@@ -1282,10 +1281,71 @@
       if (this.body) {
         this.root.updateMatrixWorld(true);
         for (const k in this.J) this.rd.joints[k].getWorldPosition(this.J[k]);
-        this.body.drive(this.J, this.root, this.root.visible && !a.gone);
+        this.body.drive(this.J, this.root, this.root.visible && !a.gone, !rd.on && !this.snap && st !== 'thrown');
         const fr = a.frozen > 0; this.body.flash(fr ? 0x9fe6ff : a.burn ? 0xff7a1a : 0xffffff, fr ? 0.55 : this.flashT * 0.7);
         if (this.body.setFace) this.body.setFace(a.dead || st === 'down' || st === 'thrown' ? 2 : this.hitK > 0.35 || st === 'held' || st === 'dazed' ? 1 : 0);
       }
+    }
+    // MOTION CAPTURE: real recorded movement (CMU mocap, see anim.js) drives the rig. Locomotion blends idle /
+    // fighting stance / walk / run by the actor's actual speed, played at the rate that keeps the feet planted;
+    // attacks play a recorded strike timed to the game's wind-up and hit; hits add a flinch on top.
+    mocap(a, dt, T) {
+      const A = S.Anim, st = a.st, sp = Math.hypot(a.vx, a.vz), rd = this.rd;
+      if (!rd.calibrated) { this.root.updateMatrixWorld(true); rd.calibrate(); }
+      const N = 15, mk = () => Array.from({ length: N }, () => new THREE.Vector3());
+      const M = this.mo || (this.mo = { out: mk(), tmp: mk(), ph: Math.random(), idleT: Math.random() * 3, atkW: 0, atkT: 0, atk: null, mv: 0, run: 0 });
+      const frozen = a.frozen > 0, tdt = frozen ? 0 : dt;
+      const big = (S.Chars && S.Chars.BIG) || 1, eng = a.engage || st === 'wind' || st === 'act' || st === 'recover' || st === 'hold';
+      // locomotion weights, smoothed so starts and stops ease
+      M.mv += (clamp((sp - 0.25) / 0.6, 0, 1) - M.mv) * Math.min(1, dt * 8);
+      M.run += (clamp((sp - 1.8) / 0.9, 0, 1) - M.run) * Math.min(1, dt * 6);
+      M.eng = (M.eng || 0) + ((eng ? 1 : 0) - (M.eng || 0)) * Math.min(1, dt * 4);
+      const walkN = a.fat ? 'heavy' : 'walk', cW = A.clip(walkN), cR = A.clip('run');
+      const rW = clamp(sp / (cW.speed * big), 0.55, 1.7), rR = clamp(sp / (cR.speed * big), 0.7, 1.5);
+      // one shared gait phase, so walk and run stay in step while they blend
+      M.ph += tdt * ((1 - M.run) * rW / cW.dur + M.run * rR / cR.dur) * (M.mv > 0.02 ? 1 : 0);
+      M.idleT += tdt * (st === 'dazed' ? 0.6 : 1);
+      const out = M.out, tmp = M.tmp, add = (w) => { if (w > 0.001) for (let i = 0; i < N; i++) out[i].addScaledVector(tmp[i], w); };
+      for (const v of out) v.set(0, 0, 0);
+      const wIdle = 1 - M.mv;
+      if (wIdle > 0.001) {
+        A.sample('idle', M.idleT, tmp); add(wIdle * (1 - M.eng));
+        A.sample('stance', M.idleT, tmp); add(wIdle * M.eng);
+      }
+      if (M.mv > 0.001) {
+        A.sample(walkN, M.ph * cW.dur, tmp); add(M.mv * (1 - M.run));
+        A.sample('run', M.ph * cR.dur, tmp); add(M.mv * M.run);
+      }
+      // attack layer
+      const ATK = { jab: 'jab', slap: 'jab', grab: 'grab', bottle: 'throw', sweep: 'sweep', shout: 'shout', rush: 'run', charge: 'run' };
+      let aw = 0;
+      if (st === 'wind' || st === 'act' || st === 'hold') {
+        const name = ATK[a.atk] || 'jab', c = A.clip(name), hit = c.peak || c.dur * 0.5, lead = Math.min(0.22, hit * 0.4);
+        M.atk = name;
+        if (st === 'wind') M.atkT = (Math.min(1, a.t / Math.max(0.05, a.dur)) ** 1.4) * (hit - lead); // the wind-up stretches to fill the telegraph
+        else if (st === 'act') M.atkT = hit - lead + a.t;                                              // the strike plays at real speed
+        else M.atkT = hit + 0.1;
+        aw = 1;
+      } else if (st === 'recover' && M.atk) { M.atkT += tdt; aw = 1 - clamp(a.t / Math.max(0.1, a.dur), 0, 1); }
+      else M.atk = aw > 0 ? M.atk : null;
+      M.atkW += (aw - M.atkW) * Math.min(1, dt * (aw > M.atkW ? 14 : 6));
+      if (M.atk && M.atkW > 0.001) { A.sample(M.atk, M.atkT, tmp); for (let i = 0; i < N; i++) out[i].lerp(tmp[i], M.atkW); }
+      // holding someone: arms forward, braced
+      // hit flinch and daze sway: tip the upper body about the pelvis
+      const pel = out[0], upper = [1, 2, 3, 4, 5, 6, 7, 8];
+      let tipX = 0, tipZ = 0, headX = 0;
+      if (this.hitK > 0) { tipX = -0.45 * this.hitK * this.hitF; tipZ = 0.3 * this.hitK * this.hitS; headX = -0.35 * this.hitK * this.hitF; }
+      if (st === 'dazed' || a.blind > 0) { tipX += 0.12 + Math.sin(T * 4.3) * 0.1; tipZ += Math.sin(T * 3.1) * 0.12; }
+      if (tipX || tipZ) {
+        const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(tipX, 0, tipZ));
+        for (const i of upper) out[i].sub(pel).applyQuaternion(q).add(pel);
+        if (headX) { const qh = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), headX); out[2].sub(out[1]).applyQuaternion(qh).add(out[1]); }
+      }
+      // into the world and onto the rig
+      this.root.updateMatrixWorld(true);
+      const W = M.world || (M.world = mk());
+      for (let i = 0; i < N; i++) W[i].copy(out[i]).applyMatrix4(this.root.matrixWorld);
+      rd.setPoints(W); rd.apply(this.hips, this.root, true);
     }
     // halfway up: on one knee (from lying on the back: sat up; from the front: pushed up on the hands)
     kneel(face, side) {

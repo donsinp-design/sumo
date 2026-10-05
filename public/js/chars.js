@@ -47,8 +47,8 @@
     }`;
   // toon material for a skinned part: texture alpha cut-out (hair tips, lashes) or blended (eye highlights)
   function skinToon(map, mode, flat) {
-    const m = S.toon(0xffffff, { map, shade: flat ? 0xf0e6f2 : 0xd8cae2, rimAmt: flat ? 0 : 0.55, rim: 0xfff0d8 });
-    m.vertexShader = VS; m.uniforms.uColor.value.setScalar(flat ? 1.0 : 1.18); // VRoid textures are painted for soft shading: lift them
+    const m = S.toon(0xffffff, { map, shade: flat ? 0xf4ecf6 : 0xe6dcee, rimAmt: flat ? 0 : 0.6, rim: 0xfff0d8 });
+    m.vertexShader = VS; m.uniforms.uColor.value.setScalar(flat ? 1.05 : 1.32); // VRoid textures are painted for soft shading: lift them
     m.fragmentShader = m.fragmentShader
       .replace('vec3 tx = uHasMap > 0.5 ? texture2D(uMap, vUv).rgb : vec3(1.0);', 'vec4 t4 = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0); if (t4.a < ' + (mode === 'BLEND' ? '0.02' : '0.5') + ') discard; vec3 tx = t4.rgb;')
       .replace('gl_FragColor = vec4(col, uAlpha);', 'gl_FragColor = vec4(col, uAlpha * ' + (mode === 'BLEND' ? 't4.a' : '1.0') + ');');
@@ -167,7 +167,7 @@
       this.root = root; this.Q = new Map(); this.expr = -1;
     }
     // copy the rig: J = { name: world position } of the procedural joints, rigRoot = the rig's root group
-    drive(J, rigRoot, visible) {
+    drive(J, rigRoot, visible, grounded) {
       this.wrap.visible = visible;
       if (!visible) return;
       this.wrap.position.copy(rigRoot.position); this.wrap.quaternion.copy(rigRoot.quaternion);
@@ -191,6 +191,14 @@
         b.quaternion.copy(pq.clone().invert().multiply(q));
       }
       this.bones.Hips.position.copy(P.pelvis).applyMatrix4(this.hipsParentInv);
+      // plant the feet: the lower ankle sits at its rest height (the mocap performers' proportions differ from the model's)
+      if (grounded) {
+        this.root.updateMatrixWorld(true);
+        const yL = this.bones.LeftFoot.getWorldPosition(v1).y, yR = this.bones.RightFoot.getWorldPosition(v2).y, ground = this.wrap.position.y + this.rest.LeftFoot.p.y * this.root.scale.y;
+        const want = Math.min(yL, yR) - ground; this.drop = (this.drop || 0) + (want - (this.drop || 0)) * 0.35;
+        v3.set(0, -this.drop, 0); const hp = this.bones.Hips.parent; hp.updateMatrixWorld(true);
+        const a = this.bones.Hips.getWorldPosition(new THREE.Vector3()).add(v3); hp.worldToLocal(a); this.bones.Hips.position.copy(a);
+      } else this.drop = 0;
     }
     // 0 angry (default), 1 surprised (hit), 2 eyes shut (down / out)
     setFace(i) {
@@ -200,7 +208,7 @@
     flash(col, amt) { for (const m of this.mats) { m.uniforms.uFlashCol.value.set(col); m.uniforms.uFlash.value = amt; } }
     dispose() { this.scene.remove(this.wrap); }
   }
-  C.Body = Body;
+  C.Body = Body; C.BIG = BIG;
 })();
 // load early so the market's workers are ready by the time the campaign starts
 if (document.readyState === 'complete') S.Chars.load(); else window.addEventListener('load', () => S.Chars.load());

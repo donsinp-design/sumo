@@ -1,0 +1,6 @@
+Enemy motion: the data used in this project was obtained from mocap.cs.cmu.edu
+(CMU Graphics Lab Motion Capture Database, funded by NSF EIA-0196217),
+BVH conversion by Bruce Hahne (cgspeed.com). Converted to the campaign's 15-joint rig.
+
+Enemy characters: VRoid Project AvatarSample_A, _B, _C (pixiv). VRoid Hub licence:
+everyone may use; commercial use, modification, redistribution and violent content allowed; no credit required.
