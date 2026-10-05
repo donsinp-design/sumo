@@ -145,7 +145,9 @@
         const sb = e.target.closest('[data-shop]'); if (sb) this.sk.pick(sb.dataset.shop === 'x' ? 'x' : +sb.dataset.shop);
         const mb = e.target.closest('[data-mask]'); if (mb) this.pickMask(+mb.dataset.mask);
       });
-      h.addEventListener('mouseover', (e) => { const mb = e.target.closest('[data-mask]'); if (mb && this.maskOpen) { this.maskI = +mb.dataset.mask; this.drawMasks(); } });
+      h.addEventListener('mousemove', (e) => { // only a real mouse move picks a row (redrawing under a still cursor must not steal the keyboard's choice)
+        if (!this.maskOpen || (e.movementX === 0 && e.movementY === 0)) return; const mb = e.target.closest('[data-mask]'); if (mb && +mb.dataset.mask !== this.maskI) { this.maskI = +mb.dataset.mask; this.markMask(); }
+      });
       this.el = (s) => h.querySelector(s);
       this.barEls = [];
     }
@@ -827,7 +829,8 @@
       this.el('.ch-mask').innerHTML = '<h2 data-jp="面">CHOOSE A MASK</h2>' + M.map((m, i) => '<button data-mask="' + i + '" class="' + (i === this.maskI ? 'sel' : '') + '"><span class="jp">' + m.jp + '</span>' + m.name + '<small>' + m.desc + '</small></button>').join('') +
         '<p>' + (touch ? 'Tap a mask' : 'W / S to choose · Enter to wear it') + '</p>';
     }
-    maskMove(d) { const n = S.CampSkills.MASKS.length; this.maskI = (this.maskI + d + n) % n; this.drawMasks(); this.g.audio.tick && this.g.audio.tick(); }
+    maskMove(d) { const n = S.CampSkills.MASKS.length; this.maskI = (this.maskI + d + n) % n; this.markMask(); this.g.audio.tick && this.g.audio.tick(); }
+    markMask() { this.el('.ch-mask').querySelectorAll('[data-mask]').forEach((b) => b.classList.toggle('sel', +b.dataset.mask === this.maskI)); }
     maskInput() { // the phone stick (keys: onKey; a gamepad: game.pollPad; each one step per press)
       const pad = S.touch && S.touch.on ? S.touch.mz : 0;
       if (Math.abs(pad) > 0.5) { if (!(this.maskHold > 0)) { this.maskMove(pad > 0 ? 1 : -1); this.maskHold = 0.25; } else this.maskHold -= 1 / 60; } else this.maskHold = 0;
