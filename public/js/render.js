@@ -678,6 +678,7 @@
       const frozen = w.fxs && w.fxs.frozen > 0;
       if (frozen) dt = 1e-5; // ice: hold the pose
       const tp = this.targetPose(w, T);
+      if (w.hunch > 0) { tp.p += w.hunch * 0.3; tp.c += w.hunch * 0.16; tp.hp += w.hunch * 0.22; } // campaign: badly hurt, he hunches over
       root.rotation.y = Math.PI / 2 - w.f + (this.turnAway || 0) * Math.PI;
       this.head.rotation.y = this.hyT || 0;
       if (this.halo) this.halo.rotation.z += dt * 2;
@@ -699,6 +700,7 @@
       else if (f.slow > 0) { tint = 0x8a6cff; tAmt = 0.22; }
       else if (f.giant > 0) { tint = 0xff6a3a; tAmt = 0.12 * pulse; }
       else if (w.charges > 0) { tint = 0xff3a2a; tAmt = 0.12 * w.charges * pulse; }
+      else if (w.bruise > 0) { tint = 0x7a1e34; tAmt = 0.34 * w.bruise; } // campaign: hurt shows on the skin, purple-red bruising
       // vanish: the owner sees a ghost of themselves, the opponent sees nothing at all
       const alpha = f.invis > 0 ? (this.viewer === w.idx || this.viewer === -1 ? 0.3 : 0) : 1;
       const morph = w.fxs.ball > 0 || w.fxs.chicken > 0;
@@ -727,12 +729,15 @@
         else { m.uniforms.uFlashCol.value.set(0xffffff); m.uniforms.uFlash.value = this.flash * 0.75; }
       }
 
-      const breathe = Math.sin(T * 2.4 + w.idx * 2) * 0.012 * s;
+      const bk = w.breath || 0, bph = (this.bph = (this.bph || 0) + dt * (2.4 + bk * 5.5)); // campaign: out of breath = big, fast breaths
+      const breathe = Math.sin(bph + w.idx * 2) * (0.012 + bk * 0.03) * s;
       const H = s * (0.84 - 0.3 * ps.c) + breathe - ps.drop * 0.42 * s;
       this.body.position.set(0, H, -ps.drop * 0.1 * s);
       this.body.rotation.set(ps.p, ps.tw, ps.r);
       const q = w.squash;
-      this.body.scale.set(1 + 0.08 * q, 1 - 0.12 * q, 1 + 0.08 * q);
+      const heave = bk * Math.max(0, Math.sin(bph)) * 0.045;
+      this.body.scale.set(1 + 0.08 * q + heave, 1 - 0.12 * q, 1 + 0.08 * q + heave * 1.4);
+      if (w.sweat > 0 && this.fx && Math.random() < dt * 9 * w.sweat) { const a = Math.random() * 6.28; this.fx.salt(w.x + Math.cos(a) * 0.3 * s, 1.9 * s, w.z + Math.sin(a) * 0.3 * s, Math.cos(a) * 1.2, Math.sin(a) * 1.2); } // sweat flicking off
       this.head.rotation.x = ps.hp;
       // sagari swing
       const lvf = w.vx * w.fx + w.vz * w.fz;

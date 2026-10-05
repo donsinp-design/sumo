@@ -58,7 +58,7 @@
       this.R = g.R; this.t = 0; this.acc = 0; this.paused = false; this.over = null; this.slow = 0; this.hitstop = 0;
       this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0x0d0a10);
       this.cam = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 220);
-      this.fx = new S.FX(this.scene); this.fx.noMarks = true; // no footprints piling up over a whole level
+      this.fx = new S.FX(this.scene); this.fx.scene = this.scene; this.fx.noMarks = true; // no footprints piling up over a whole level
       const nFx = this.scene.children.length;
       this.map = S.CampMap.build(this.scene);
       { // the market never moves: work out its transforms once instead of for thousands of objects every frame
@@ -78,7 +78,7 @@
       this.camT = new THREE.Vector3(this.P.x, 0, this.P.z - 2.5);
       // everyone is already in place when the market opens: fixed spots (learnable for speedruns), asleep until you walk in
       this.zones.forEach((Z, i) => this.populate(Z, i));
-      this.runT = 0; this.hits = 0; this.usedSkill = false;
+      this.runT = 0; this.hits = 0; this.usedSkill = false; this.mult = 1; this.chain = 0; this.chainT = 0; this.beat = 0;
       try { this.R.r.compile(this.scene, this.cam); } catch (e) { /* warm the shaders up front: no hitch when an area wakes */ }
       this.buildHud();
       this.resize = () => { this.cam.aspect = innerWidth / innerHeight; this.cam.updateProjectionMatrix(); this.fx.pmat.uniforms.uScale.value = innerHeight * this.R.r.getPixelRatio() / (2 * Math.tan(this.cam.fov * Math.PI / 360)); };
@@ -130,7 +130,8 @@
       const h = this.hud = document.createElement('div'); h.id = 'campHud';
       const name = (this.arch && this.arch.name) || 'TAKAKAZE';
       h.innerHTML = '<div class="ch-me"><div class="ch-score">0000000</div><span class="ch-bar"><i></i></span><span class="ch-stam"><i></i></span><b class="ch-name">' + name + '</b></div>' +
-        '<div class="ch-time">0:00</div>' +
+        '<div class="ch-time">0:00</div><div class="ch-hurt"></div>' +
+        '<div class="ch-sifu"><div class="ch-mul"><b>x1</b><small>Multiplier</small></div><i></i><div class="ch-sc"><b>0</b><small>Level Score</small></div></div>' +
         '<div class="ch-ab"><em>NO SKILL</em><kbd>SPACE</kbd><span class="ch-cd"><i></i></span></div>' +
         '<div class="ch-zone"></div><div class="ch-say"><b></b><span></span></div><div class="ch-prompt"></div>' +
         '<div class="ch-boss"><div class="ch-score">BOSS</div><span class="ch-bar"><i></i></span><b class="ch-name"></b></div><div class="ch-bars"></div>' +
@@ -148,7 +149,9 @@
       this.el = (s) => h.querySelector(s);
       this.barEls = [];
     }
-    addScore(n) { if (!this.over) this.score = (this.score || 0) + Math.round(n * (this.sk && this.sk.mask.id === 'hannya' ? 2 : 1)); }
+    addScore(n, raw) { if (this.over) return; const g = Math.round(n * (raw ? 1 : this.mult || 1) * (this.sk && this.sk.mask.id === 'hannya' ? 2 : 1)); this.score = (this.score || 0) + g; this.scoreBump = 1; }
+    chainHit() { this.chain = (this.chain || 0) + 1; this.chainT = 0; const m = Math.min(8, 1 + Math.floor(this.chain / 4)); if (m > (this.mult || 1)) { this.mult = m; this.mulBump = 1; } }
+    chainBreak() { if ((this.mult || 1) > 1) this.mulBump = 1; this.chain = 0; this.mult = 1; }
     say(big, small, dur) { const e = this.el('.ch-say'); e.querySelector('b').textContent = big; e.querySelector('span').textContent = small || ''; e.classList.add('on'); clearTimeout(this.sayT); this.sayT = setTimeout(() => e.classList.remove('on'), (dur || 2.5) * 1000); }
     prompt(t) {
       if (t && S.touch && S.touch.on) t = t.replace(/\b([Pp])ress (J|K|L|SPACE)\b|\b(J|K|L|SPACE)\b/g, (m, P, k1, k2) => { const k = k1 || k2, n = { J: 'PUSH', K: 'GRAB', L: 'DEFEND', SPACE: 'SKILL' }[k]; return P ? (P === 'P' ? 'Tap ' : 'tap ') + n : n; });
@@ -196,7 +199,8 @@
 
     // ============================================================== simulation
     step(dt) {
-      if (!this.over) this.runT = (this.runT || 0) + dt; // the speedrun clock
+      if (!this.over) this.runT = (this.runT || 0) + dt; // the speedrun clock (shown on the result, not on screen)
+      this.chainT = (this.chainT || 0) + dt; if (this.chainT > 6 && this.mult > 1) { this.mult--; this.chain = (this.mult - 1) * 4; this.chainT = 3; this.mulBump = 1; }
       this.t += dt;
       const P = this.P;
       this.flow(dt);
@@ -265,7 +269,7 @@
         let best = 0; try { best = +localStorage.getItem('kumite.campBest') || 0; if (!best || t < best) localStorage.setItem('kumite.campBest', String(t)); } catch (e) { /* private mode */ }
         const yen = 200000 + (noHit ? 100000 : 0) + (noSkill ? 50000 : 0) + (fast ? 50000 : 0);
         const badge = (on, txt) => '<span class="ch-badge' + (on ? ' on' : '') + '">' + txt + '</span>';
-        const bonus = (noHit ? 50000 : 0) + (noSkill ? 20000 : 0) + (fast ? 20000 : 0); this.addScore(bonus);
+        const bonus = (noHit ? 50000 : 0) + (noSkill ? 20000 : 0) + (fast ? 20000 : 0); this.addScore(bonus, true);
         o.querySelector('p').innerHTML = '<div class="ch-total">' + String(this.score).padStart(7, '0') + '</div>' +
           'Time ' + fmtT(t) + (best && t >= best ? ' · best ' + fmtT(best) : best ? ' · new best' : '') + ' · hits taken ' + (this.hits || 0) + '<br>' +
           badge(noHit, 'NO HIT') + badge(noSkill, 'NO SKILL') + badge(fast, 'UNDER ' + fmtT(PAR).slice(0, -2)) + '<br>+' + yen.toLocaleString() + ' yen';
@@ -540,7 +544,7 @@
     }
     // incoming damage, with the player's parry and block
     damage(T, dmg, A, kx, kz, heavy) {
-      if (A === this.P && T.team === 1 && dmg > 0 && !T.dead) this.addScore(dmg * 10);
+      if (A === this.P && T.team === 1 && dmg > 0 && !T.dead) { this.chainHit(); this.addScore(dmg * 10); }
       if (A && this.tired(A)) { dmg *= 0.6; kx = (kx || 0) * 0.6; kz = (kz || 0) * 0.6; } // swinging on empty
       if (T.dead) return;
       { const km = this.sk.dmgMul(T, A, dmg); if (km === 0) return; dmg *= km; }
@@ -557,7 +561,7 @@
         T.hits = (T.hits || 0) + (dmg >= 5 ? 1 : dmg / 12);
         dmg = T.hits >= 2 ? T.hp + 1 : Math.min(dmg, T.hp * 0.5);
       }
-      if (T === this.P && dmg > 0) this.hits = (this.hits || 0) + 1;
+      if (T === this.P && dmg > 0) { this.hits = (this.hits || 0) + 1; this.chainBreak(); }
       T.hp -= dmg; T.lastHit = this.t;
       if (T.carry && (heavy || T.hp <= 0)) this.dropCarry(T);
       if (A && A !== T) { T.hitX = T.x - A.x; T.hitZ = T.z - A.z; } else { T.hitX = kx; T.hitZ = kz; }
@@ -1107,7 +1111,11 @@
         if (st === 'act' && a.atk === 'stomp') w.t = 0.46 + a.t;
         w.dur = a.dur || 1; w.hand = a.hand || 0; w.down = st === 'down' && a.t > 0.25; w.fallX = a.fallX || 0; w.fallZ = a.fallZ || 1; w.ddx = Math.cos(a.f); w.ddz = Math.sin(a.f);
         w.fxs = { dizzy: a.stun > 0 || st === 'dazed' ? 1 : 0, frozen: a.frozen > 0 ? 1 : 0, invuln: a.iron > 0 ? 1 : 0 };
-        if (a === this.P) { Object.assign(w.fxs, this.sk.fxs()); w.ballRoll = a.sk && a.sk.roll; w.torpedo = !!(a.sk && a.sk.kind === 'torp'); a.view.viewer = -1; }
+        if (a === this.P) {
+          const hpr = a.dead ? 0 : a.hp / a.maxHp, st0 = a.stam === undefined ? 1 : a.stam;
+          w.bruise = clamp((0.85 - hpr) / 0.65, 0, 1); w.hunch = st === 'free' ? clamp((0.45 - hpr) / 0.35, 0, 1) : 0;
+          w.breath = clamp((0.7 - st0) / 0.55, 0, 1); w.sweat = Math.max(clamp((0.45 - st0) / 0.35, 0, 1), clamp((0.3 - hpr) / 0.3, 0, 0.6));
+          Object.assign(w.fxs, this.sk.fxs()); w.ballRoll = a.sk && a.sk.roll; w.torpedo = !!(a.sk && a.sk.kind === 'torp'); a.view.viewer = -1; }
         if (a.clone) { w.fxs.invuln = 0; }
         w.lifted = st === 'held' || st === 'clawed' || st === 'tossed';
         a.view.update(w, Math.max(dt, 1e-4), T);
@@ -1155,6 +1163,17 @@
       this.el('.ch-me .ch-bar i').style.width = Math.max(0, P.hp / P.maxHp * 100) + '%';
       const tm = this.el('.ch-time'); if (tm) tm.textContent = fmtT(this.runT || 0).replace(/\.\d$/, '');
       this.el('.ch-me .ch-score').textContent = String(this.score || 0).padStart(7, '0');
+      { const sc = this.el('.ch-sc b'), mu = this.el('.ch-mul b'); sc.textContent = (this.score || 0).toLocaleString('en-US'); mu.textContent = 'x' + (this.mult || 1);
+        const sb = this.scoreBump || 0, mb = this.mulBump || 0; sc.style.transform = 'scale(' + (1 + sb * 0.12) + ')'; mu.style.transform = 'scale(' + (1 + mb * 0.25) + ')';
+        this.scoreBump = Math.max(0, sb - 0.08); this.mulBump = Math.max(0, mb - 0.05); this.el('.ch-mul').classList.toggle('hot', (this.mult || 1) > 1); }
+      // LOW HEALTH: no bar. Under 30% the screen edges go red and pulse with a heartbeat you can hear
+      { const hp = P.dead ? 0 : P.hp / P.maxHp, k = clamp((0.3 - hp) / 0.3, 0, 1), el = this.el('.ch-hurt');
+        if (k > 0 && !P.dead && !this.over) {
+          const bpm = 78 + 70 * k, per = 60 / bpm, now = performance.now() / 1000; this.beat = (this.beat || 0) + Math.min(0.1, now - (this.beatNow || now)); this.beatNow = now;
+          const ph = (this.beat % per) / per; if (ph < (this.lastPh || 0)) { this.g.audio.thump(1.2 + k * 1.5); setTimeout(() => this.g.audio.thump(0.8 + k), 160); } this.lastPh = ph; // lub-dub
+          const pulse = Math.exp(-ph * 10) + 0.6 * Math.exp(-Math.max(0, ph - 0.16) * 12) * (ph > 0.16 ? 1 : 0);
+          el.style.opacity = (0.35 + 0.35 * k + 0.3 * k * Math.min(1, pulse)).toFixed(3);
+        } else { el.style.opacity = '0'; this.beat = 0; } }
       this.el('.ch-me .ch-bar').classList.toggle('low', P.hp < 30);
       const sb = this.el('.ch-stam'); sb.firstChild.style.width = Math.round((P.stam === undefined ? 1 : P.stam) * 100) + '%'; sb.classList.toggle('tired', this.tired(P));
       const A = this.ability; this.el('.ch-ab').classList.toggle('ready', !!A && this.abCd <= 0);

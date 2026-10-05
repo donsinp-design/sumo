@@ -525,3 +525,16 @@ html.touch #campHud .ch-ab { left: 50%; transform: translateX(-50%); bottom: 10p
 html.touch #campHud .ch-time { font-size: 26px; top: 8px; }
 html.touch #campHud .ch-me, html.touch #campHud .ch-boss { top: 10px; width: 34vw; }
 @keyframes chtired { 50% { opacity: 0.45; } }
+
+/* campaign HUD v3: no health or stamina on screen (his body shows it), no name, no clock. Score and multiplier in the
+   Sifu style: a big italic multiplier, a thin rule, the level score in red, small labels under each */
+#campHud .ch-me, #campHud .ch-time { display: none; }
+#campHud .ch-sifu { position: absolute; right: 5vw; top: 16vh; display: flex; align-items: flex-end; gap: 14px; text-shadow: 0 2px 12px rgba(0,0,0,0.55); }
+#campHud .ch-sifu > i { width: 2px; align-self: stretch; background: rgba(244,239,230,0.85); }
+#campHud .ch-sifu b { display: block; font: italic 900 48px/1 'Barlow Condensed', sans-serif; letter-spacing: -0.01em; transform-origin: 50% 80%; }
+#campHud .ch-sifu small { display: block; font: italic 500 14px 'Barlow Condensed', sans-serif; letter-spacing: 0.04em; opacity: 0.8; margin-top: 2px; }
+#campHud .ch-mul { text-align: right; } #campHud .ch-mul b { color: #f4efe6; }
+#campHud .ch-mul.hot b { color: #fff; }
+#campHud .ch-sc b { color: #c8323f; font-size: 40px; }
+#campHud .ch-hurt { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(120,0,10,0) 42%, rgba(120,0,12,0.55) 78%, rgba(90,0,8,0.9) 100%); transition: opacity 0.08s linear; }
+html.touch #campHud .ch-sifu { top: 10px; right: 12px; } html.touch #campHud .ch-sifu b { font-size: 32px; } html.touch #campHud .ch-sc b { font-size: 28px; }
