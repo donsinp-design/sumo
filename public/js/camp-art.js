@@ -271,13 +271,15 @@
   function fishBatch(scene) {
     const list = { maguro: [], tai: [], saba: [], sake: [] };
     return {
-      add(sp, x, y, z, ry, s) { list[sp].push(M4(x, y, z, 0, ry, 0, s, s, s)); },
+      meshes: {}, mats: {},
+      add(sp, x, y, z, ry, s) { list[sp].push(M4(x, y, z, 0, ry, 0, s, s, s)); return [sp, list[sp].length - 1]; },
+      at(sp, i) { return list[sp][i]; },
       addRandom(x, y, z, ry, s) { const k = Object.keys(list); this.add(k[Math.floor(Math.random() * k.length)], x, y, z, ry, s); },
       done() {
         for (const sp in list) {
           const L = list[sp]; if (!L.length) continue;
           const m = new THREE.InstancedMesh(G.fish(), mat(fishTex(sp), 0x6a6a8a, { spec: 0.9, rimAmt: 0.5 }), L.length);
-          L.forEach((M, i) => m.setMatrixAt(i, M)); scene.add(m);
+          L.forEach((M, i) => m.setMatrixAt(i, M)); scene.add(m); this.meshes[sp] = m; this.mats[sp] = m.material;
         }
       },
     };
@@ -342,9 +344,11 @@
   // ---------------------------------------------------------------- instanced batches (many small things, one draw)
   function batch(scene, geo, material, th) {
     const L = [];
-    return { add(x, y, z, rx, ry, rz, sx, sy, sz) { L.push(M4(x, y, z, rx, ry, rz, sx, sy, sz)); },
-      done() { if (!L.length) return; const m = new THREE.InstancedMesh(geo, material, L.length); L.forEach((M, i) => m.setMatrixAt(i, M)); scene.add(m);
-        if (th) { const o = new THREE.InstancedMesh(geo, W.mesh(geo, material, th).children[0].material, L.length); L.forEach((M, i) => o.setMatrixAt(i, M)); scene.add(o); } } };
+    const B = { meshes: [], add(x, y, z, rx, ry, rz, sx, sy, sz) { L.push(M4(x, y, z, rx, ry, rz, sx, sy, sz)); return L.length - 1; },
+      at(i) { return L[i]; },
+      done() { if (!L.length) return; const m = new THREE.InstancedMesh(geo, material, L.length); L.forEach((M, i) => m.setMatrixAt(i, M)); scene.add(m); B.meshes.push(m);
+        if (th) { const o = new THREE.InstancedMesh(geo, W.mesh(geo, material, th).children[0].material, L.length); L.forEach((M, i) => o.setMatrixAt(i, M)); scene.add(o); B.meshes.push(o); } } };
+    return B;
   }
 
   // ---------------------------------------------------------------- a fishmonger's stall
@@ -369,8 +373,13 @@
     SB = { shell, shrimp, saku, tray, tako, done() { for (const k of ['shell', 'shrimp', 'saku', 'tray', 'tako']) SB[k].done(); SB = null; } };
     return SB;
   }
-  function stall(g, fishes, x, z0, z1, sd, k, table) {
-    const len = Math.abs(z1 - z0), zc = (z0 + z1) / 2, za = Math.min(z0, z1), kit = stallKit(g);
+  function stall(g0, fishes, x, z0, z1, sd, k, table) {
+    const len = Math.abs(z1 - z0), zc = (z0 + z1) / 2, za = Math.min(z0, z1), K0 = stallKit(g0);
+    const g = new THREE.Group(); g0.add(g);
+    const fishes0 = fishes;
+    const rec = { group: g, inst: [], fish: [], fishes: fishes0 }; // everything this stall owns (a charge smashes the lot)
+    const kit = {}; for (const n of ['shell', 'shrimp', 'saku', 'tray', 'tako']) kit[n] = { add: (...a) => rec.inst.push([K0[n], K0[n].add(...a), n]) };
+    fishes = { add: (...a) => { const r = fishes0.add(...a); rec.fish.push(r); return r; } };
     const steel = S.toon(0xb8c2cc, { shade: 0x4a5662, spec: 0.7, rimAmt: 0.5 });
     if (!table) { const body = W.mesh(new THREE.BoxGeometry(1.7, 0.86, len), mat(plankTex(), 0x6a5060), 0.025); body.position.set(x, 0.43, zc); g.add(body); }
     else { // an open stainless table: legs, a lower shelf stacked with foam boxes
@@ -410,6 +419,7 @@
         const cs = table ? (s % 4 ? 1 : -1) : sd; cd.position.set(x - cs * 0.62, yAt(-cs * 0.62) + 0.2, zs + sl * 0.3); cd.rotation.set(-0.55, 0, 0); g.add(cd);
       }
     }
+    return rec;
   }
 
 
@@ -553,5 +563,5 @@
   }
 
   S.CampArt = { roofs, facade,
-    prop, awning, fishBatch, iceMat, merge, M4, tex, mat, groundMat, batch, stall, stallKit };
+    prop, awning, fishBatch, iceMat, merge, M4, tex, mat, groundMat, batch, stall, stallKit, fishGeo: () => G.fish() };
 })();

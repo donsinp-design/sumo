@@ -54,7 +54,9 @@
     const walls = [], props = [], puddles = [], decor = [];
     const A = S.CampArt, fishes = A.fishBatch(g);
     const tbox = (m, w, h, d, x, y, z, ol) => { const o = W.mesh(W.GEO.box, m, ol === undefined ? 0.02 : ol); o.scale.set(w, h, d); o.position.set(x, y, z); g.add(o); return o; };
-    const wall = (x0, x1, z0, z1) => walls.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) });
+    const wall = (x0, x1, z0, z1) => { const w = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) }; walls.push(w); return w; };
+    const breakables = []; // stalls, tables and drink machines a charge (or a thrown body) smashes through
+    const breakable = (b) => { b.w.brk = b; breakables.push(b); return b; };
     const prop = (type, x, z, ry) => props.push({ type, x, z, ry: ry || 0 });
     const puddle = (x, z, r, sx) => puddles.push({ x, z, r, sx: sx || 1 });
 
@@ -73,23 +75,21 @@
     box(gm, 0.5, 0.25, 0.1, 0x2a1a22, 0x100810, 0.3, 0.55, 0.47, 0.01);
     sign(gm, 'ガチャ', 'GACHA · 1 FREE', 1.25, 0.5, '#f2c14e', '#2a1218', 0, 2.35, 0.2, 0, -0.5);
     wall(gacha.x - 0.7, gacha.x + 0.7, gacha.z - 0.5, gacha.z + 0.5);
-    // ordinary drink machines on the right (solid scenery)
-    for (const [z, col] of [[-2.2, 0x2f7fd8], [-3.6, 0xf6f2ea]]) {
-      // a Japanese drink machine: body, lit display of bottles facing the plaza, a coin slot and pickup tray
-      const vm = new THREE.Group(); vm.position.set(6.4, 0, z); vm.rotation.y = -Math.PI / 2; g.add(vm);
+    // Japanese drink machines: body, lit display of bottles, coin slot and pickup tray. Breakable: dent, then over it goes.
+    const vending = (x, z, ry, col) => {
+      const vm = new THREE.Group(); vm.position.set(x, 0, z); vm.rotation.y = ry; g.add(vm);
       box(vm, 0.8, 1.85, 0.7, col, mul3(col, 0.5), 0, 0.925, 0, 0.025);
-      const face = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.05), new THREE.MeshBasicMaterial({ map: W.canvasTex(140, 210, (c, w, h) => {
-        c.fillStyle = '#e8f4ff'; c.fillRect(0, 0, w, h);
-        const cols = ['#e2322b', '#2f6fd0', '#2e9e6a', '#f2c14e', '#8a4ab0', '#f6f2ea', '#1a1a1a', '#e8572a'];
-        for (let r = 0; r < 4; r++) for (let k = 0; k < 5; k++) { const x = 10 + k * 25, y = 12 + r * 48; c.fillStyle = cols[(r * 5 + k * 3) % cols.length]; c.fillRect(x + 4, y + 6, 14, 30); c.fillStyle = '#ddd'; c.fillRect(x + 7, y, 8, 7); c.fillStyle = '#c8231d'; c.fillRect(x + 2, y + 38, 18, 6); }
-        c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(0, 0, w * 0.18, h);
-      }) }));
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.05), new THREE.MeshBasicMaterial({ map: vendTex() }));
       face.position.set(0, 1.28, 0.352); vm.add(face);
       box(vm, 0.5, 0.16, 0.06, 0x1a1a22, 0x050508, 0, 0.32, 0.36, 0.01);
       box(vm, 0.12, 0.2, 0.04, 0xc8ccd0, 0x6a7078, 0.24, 0.72, 0.36, 0.006);
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xc8e8ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.4 })); glow.scale.set(1.6, 1.8, 1); glow.position.set(6.0, 1.3, z); g.add(glow);
-      wall(5.9, 6.9, z - 0.45, z + 0.45);
-    }
+      const fx = Math.sin(ry), fz = Math.cos(ry); // the way its front faces
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xc8e8ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.4 })); glow.scale.set(1.6, 1.8, 1); glow.position.set(x + fx * 0.4, 1.3, z + fz * 0.4); g.add(glow);
+      const hx = Math.abs(fx) > 0.5 ? 0.45 : 0.5, hz = Math.abs(fx) > 0.5 ? 0.5 : 0.45;
+      breakable({ kind: 'vend', x, z, ry, group: vm, glow, hp: 2, w: wall(x - hx, x + hx, z - hz, z + hz) });
+    };
+    vending(6.4, -2.2, -Math.PI / 2, 0x2f7fd8); vending(6.4, -3.6, -Math.PI / 2, 0xf6f2ea);
+    vending(6.6, -39.5, -Math.PI / 2, 0xe2322b); vending(-6.6, -34.2, Math.PI / 2, 0x2e9e6a); vending(11.65, -77.5, -Math.PI / 2, 0x2f7fd8);
     // entrance arch: two red posts and a big sign
     for (const x of [-6.6, 6.6]) { cyl(g, 0.22, 0.25, 4.2, 0xc8231d, 0x6e1018, x, 2.1, -9.5); wall(x - 0.3, x + 0.3, -9.8, -9.2); }
     box(g, 14, 0.35, 0.4, 0xc8231d, 0x6e1018, 0, 4.15, -9.5, 0.03);
@@ -109,11 +109,11 @@
     const awningCols = [[0xe2322b, 0xf6eddc], [0x2f6fd0, 0xf6eddc], [0xf2c14e, 0x3a2c34], [0x2e9e6a, 0xf6eddc]];
     const stall = (sd, z0, z1, k) => {
       const x = sd * 6.1, zc = (z0 + z1) / 2, len = Math.abs(z1 - z0);
-      A.stall(g, fishes, x, z0, z1, sd, k); void zc; void len;
+      const rec = A.stall(g, fishes, x, z0, z1, sd, k); void len;
       const [c1, c2] = awningCols[k % awningCols.length];
-      const aw = A.awning(g, x + sd * 0.95, z0, z1, sd, c1, c2, { depth: 2.2, y: 2.95, drop: 0.6 });
-      for (const zz of [z0, z1]) cyl(g, 0.04, 0.04, aw.fy, 0x6a6e78, 0x22242c, aw.fx, aw.fy / 2, zz, 6, 0.01);
-      wall(x - 0.9, x + 0.9, z0, z1);
+      const aw = A.awning(rec.group, x + sd * 0.95, z0, z1, sd, c1, c2, { depth: 2.2, y: 2.95, drop: 0.6 });
+      for (const zz of [z0, z1]) cyl(rec.group, 0.04, 0.04, aw.fy, 0x6a6e78, 0x22242c, aw.fx, aw.fy / 2, zz, 6, 0.01);
+      breakable({ kind: 'stall', x, z: zc, len, sd, rec, w: wall(x - 0.9, x + 0.9, z0, z1) });
     };
     const restaurant = (sd, z0, z1, name, sub, col) => {
       const zc = (z0 + z1) / 2, len = Math.abs(z1 - z0), x = sd * 7.0;
@@ -174,8 +174,8 @@
     // vendor rows: three rows of tables, broken by cross-aisles so fights move between rows
     const tableRow = (x, z0, z1, k) => {
       const zc = (z0 + z1) / 2, len = Math.abs(z1 - z0);
-      A.stall(g, fishes, x, z0, z1, 0, k, true); void zc; void len;                              // steel tables with displays
-      wall(x - 0.8, x + 0.8, z1, z0);
+      const rec = A.stall(g, fishes, x, z0, z1, 0, k, true);                                    // steel tables with displays
+      breakable({ kind: 'table', x, z: zc, len, sd: 0, rec, w: wall(x - 0.8, x + 0.8, z1, z0) });
       // a hanging vendor sign over each segment
       const names = [['丸豊', 'MARUTOYO'], ['魚河岸', 'UOGASHI'], ['鮮魚', 'FRESH FISH'], ['海老', 'EBI · SHRIMP'], ['鮪', 'MAGURO'], ['貝', 'SHELLFISH']];
       const [n, sb] = names[k % names.length];
@@ -317,7 +317,7 @@
 
     fishes.done(); A.stallKit(g).done();
     return {
-      group: g, walls, props, puddles, zones, gacha, start: { x: 0, z: -0.5 }, halfWidth, decor,
+      group: g, walls, props, puddles, zones, gacha, breakables, fishMat: fishes.mats.maguro, start: { x: 0, z: -0.5 }, halfWidth, decor,
       update(t) {
         for (const d of decor) {
           if (d.kind === 'lantern') d.m.rotation.z = Math.sin(t * 1.3 + d.p) * 0.06;
@@ -327,6 +327,16 @@
     };
   }
 
+  let vt = null;
+  function vendTex() {
+    if (!vt) vt = W.canvasTex(140, 210, (c, w, h) => {
+      c.fillStyle = '#e8f4ff'; c.fillRect(0, 0, w, h);
+      const cols = ['#e2322b', '#2f6fd0', '#2e9e6a', '#f2c14e', '#8a4ab0', '#f6f2ea', '#1a1a1a', '#e8572a'];
+      for (let r = 0; r < 4; r++) for (let k = 0; k < 5; k++) { const x = 10 + k * 25, y = 12 + r * 48; c.fillStyle = cols[(r * 5 + k * 3) % cols.length]; c.fillRect(x + 4, y + 6, 14, 30); c.fillStyle = '#ddd'; c.fillRect(x + 7, y, 8, 7); c.fillStyle = '#c8231d'; c.fillRect(x + 2, y + 40, 18, 5); }
+      c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(0, 0, w * 0.18, h);
+    });
+    return vt;
+  }
   function mul3(c, k) { const C = new THREE.Color(c); C.multiplyScalar(k); return C.getHex(); }
   let gt = null;
   function glowTex() {

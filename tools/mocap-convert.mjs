@@ -19,6 +19,12 @@ const CLIPS = [
   { name: 'throw', file: '33_01', t0: 1.5, t1: 3.1, peak: 2.4 },
   { name: 'sweep', file: '02_07', t0: 14.9, t1: 16.4, peak: 15.6, mirror: true },
   { name: 'shout', file: '56_03', t0: 0.3, t1: 2.6, peak: 1.4 },
+  // knockdowns and getting up (scaleAt: a standing frame, for takes that do not start in a T-pose; end: the take ends standing, so
+  // its last frame is the origin and faces +z, and the lying start sits wherever the body lay)
+  { name: 'fallBack', file: '90_18', t0: 0.55, t1: 1.9 },          // rug pulled: legs go, lands flat on the back
+  { name: 'fallSlip', file: '90_17', t0: 2.7, t1: 4.2 },           // banana peel: feet shoot forward
+  { name: 'getupBack', file: '140_09', t0: 1.4, t1: 4.9, scaleAt: 6.5, end: true },
+  { name: 'getupFront', file: '139_16', t0: 1.4, t1: 3.9, scaleAt: 5.0, end: true },
 ];
 const smooth = (arr, w) => arr.map((_, i) => { let s = 0, n = 0; for (let k = Math.max(0, i - w); k <= Math.min(arr.length - 1, i + w); k++) { s += arr[k]; n++; } return s / n; });
 const out = {};
@@ -26,7 +32,7 @@ const cache = {};
 for (const C of CLIPS) {
   const B = cache[C.file] || (cache[C.file] = parse(DIR + C.file + '.bvh'));
   const src = Math.round(1 / B.dt), step = src / FPS;
-  const T0 = positions(B, 0), scale = 0.92 / T0.Hips.y; // frame 0 is the T-pose
+  const T0 = positions(B, C.scaleAt ? Math.round(C.scaleAt * src) : 0), scale = 0.92 / T0.Hips.y; // frame 0 is the T-pose (or a standing frame we name)
   const frames = [];
   for (let f = Math.round(C.t0 * src); f < Math.min(B.frames.length, Math.round(C.t1 * src)); f += step) {
     const P = positions(B, Math.round(f)), o = {};
@@ -46,9 +52,9 @@ for (const C of CLIPS) {
   // unwrap
   for (let i = 1; i < yaw.length; i++) { while (yaw[i] - yaw[i - 1] > Math.PI) yaw[i] -= 2 * Math.PI; while (yaw[i] - yaw[i - 1] < -Math.PI) yaw[i] += 2 * Math.PI; }
   const W = Math.round(FPS * 0.6);
-  const yawS = C.loop ? smooth(yaw, W) : yaw.map(() => yaw[0]);
-  const px = frames.map((o) => o.pelvis.x), pz = frames.map((o) => o.pelvis.z);
-  const pxS = C.loop ? smooth(px, W) : px.map(() => px[0]), pzS = C.loop ? smooth(pz, W) : pz.map(() => pz[0]);
+  const yN = yaw.length - 1, yawS = C.loop ? smooth(yaw, W) : yaw.map(() => yaw[C.end ? yN : 0]);
+  const px = frames.map((o) => o.pelvis.x), pz = frames.map((o) => o.pelvis.z), kN = C.end ? px.length - 1 : 0;
+  const pxS = C.loop ? smooth(px, W) : px.map(() => px[kN]), pzS = C.loop ? smooth(pz, W) : pz.map(() => pz[kN]);
   // clip travel speed (for matching playback rate to the actor's speed)
   const pxT = smooth(px, 6), pzT = smooth(pz, 6); let speed = 0; // path speed (light smoothing removes the side-to-side sway)
   const rel = frames.map((o, i) => {
@@ -81,7 +87,10 @@ for (const C of CLIPS) {
     // gait loops start on the same event (left heel strike: left foot furthest forward), so walk and run blend in step
     if (C.move) { let bi = 0, bv = -1e9; seg.forEach((r, i) => { const v = r.ftL.z - r.ftR.z; if (v > bv) { bv = v; bi = i; } }); seg = seg.slice(bi).concat(seg.slice(0, bi)); }
     console.log(C.name, 'loop', ((best[1] - best[0]) / FPS).toFixed(2) + 's', 'err', best[2].toFixed(3), 'speed', speed.toFixed(2));
-  } else console.log(C.name, (seg.length / FPS).toFixed(2) + 's', 'peak at', (C.peak - C.t0).toFixed(2));
+  } else {
+    const a = seg[0], b = seg[seg.length - 1], up = (r) => { const X = r.hipR.clone().sub(r.hipL), Y = r.neck.clone().sub(r.pelvis); return new THREE.Vector3().crossVectors(X, Y).normalize().y.toFixed(2); };
+    console.log(C.name, (seg.length / FPS).toFixed(2) + 's', 'peak at', ((C.peak || C.t0) - C.t0).toFixed(2), 'pelvis', a.pelvis.toArray().map((v) => v.toFixed(2)).join(','), '->', b.pelvis.toArray().map((v) => v.toFixed(2)).join(','), 'head', b.head.toArray().map((v) => v.toFixed(2)).join(','), 'chest-forward.y', up(a), '->', up(b));
+  }
   // pack: int16 millimetres
   const buf = new Int16Array(seg.length * NAMES.length * 3); let k = 0;
   for (const r of seg) for (const n of NAMES) { buf[k++] = Math.round(r[n].x * 1000); buf[k++] = Math.round(r[n].y * 1000); buf[k++] = Math.round(r[n].z * 1000); }

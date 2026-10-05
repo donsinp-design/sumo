@@ -21,6 +21,7 @@
     crate2:  { r: 0.42, h: 1.0,  hp: 3, pick: false, wt: 'medium', dmg: 0,  breaks: true,  col: 0xa87040, shade: 0x553418, into: 'crate' },
     foam:    { r: 0.34, h: 0.34, hp: 1, pick: true,  wt: 'light',  dmg: 9,  breaks: true,  col: 0xf6f6f0, shade: 0xa8b0b8 },
     bottle:  { r: 0.14, h: 0.32, hp: 1, pick: true,  wt: 'light',  dmg: 12, breaks: true,  col: 0x3a9a5a, shade: 0x1a4a2a },
+    can:     { r: 0.1,  h: 0.13, hp: 1, pick: true,  wt: 'light',  dmg: 9,  breaks: true,  col: 0xe2322b, shade: 0x6e1018 },
     chair:   { r: 0.3,  h: 0.8,  hp: 1, pick: true,  wt: 'light',  dmg: 14, breaks: true,  col: 0xd84a3a, shade: 0x6a1a14 },
     bin:     { r: 0.34, h: 0.75, hp: 3, pick: true,  wt: 'medium', dmg: 20, breaks: false, col: 0x3a7ad0, shade: 0x1a3a6a },
     bucket:  { r: 0.24, h: 0.35, hp: 1, pick: true,  wt: 'light',  dmg: 7,  breaks: true,  col: 0xf2c14e, shade: 0x8a6a1a, splash: true },
@@ -76,6 +77,7 @@
         this.scene.updateMatrixWorld(true);
         for (const o of this.scene.children.slice(nFx)) o.traverse((q) => { if (!swing.has(q)) q.matrixAutoUpdate = false; });
       }
+      this.brk = new S.CampBreak(this); // stalls, tables and drink machines come apart; floors and walls crack
       this.ctrl = new S.Controller(new S.KeySource(S.MAPS.solo, 0));
       this.actors = []; this.props = []; this.shots = []; this.zones = this.map.zones.map((z) => Object.assign({ state: 'wait', ens: [] }, z));
       this.zi = 0; this.gate = this.zones[0].z1; this.ability = null; this.abCd = 0; this.fires = [];
@@ -444,7 +446,7 @@
       H.x = P.x + fx * 0.95; H.z = P.z + fz * 0.95; H.y = 0; H.vx = fx * 0.8; H.vz = fz * 0.8; H.slammed = true; H.st = 'free';
       this.damage(H, H.kind === 'sumo' ? 34 : 30, P, fx * 0.8, fz * 0.8, true); if (!H.dead) this.set(H, 'down', 1.4);
       this.shake = 0.75; this.hitstop = 0.1; this.g.audio.thump(10); this.g.audio.taiko && this.g.audio.taiko();
-      this.fx.dust(H.x, 0.05, H.z, 16, 0.9, 0.7, 0.5); this.hitFx(H.x, H.z, 1.2);
+      this.fx.dust(H.x, 0.05, H.z, 16, 0.9, 0.7, 0.5); this.hitFx(H.x, H.z, 1.2); this.brk.crater(H.x, H.z); // the floor gives
       for (const T of this.actors) if (T !== H && T.team === 1 && !T.dead && Math.hypot(T.x - H.x, T.z - H.z) < 2.2) { const a = Math.atan2(T.z - H.z, T.x - H.x); this.damage(T, 6, P, Math.cos(a) * 3, Math.sin(a) * 3, false); }
     }
     throwHeld(P) {
@@ -546,6 +548,7 @@
       E.vx = Math.cos(E.f) * -3; E.vz = Math.sin(E.f) * -3; this.popAt(P, 'BREAK!'); this.g.audio.slap(4);
     }
     escapeFrom(E) { const P = E.holdP; E.holdP = null; if (P) { P.holder = null; this.set(P, 'free'); } }
+    onIce(a) { for (const p of this.map.puddles) if (p.ice && Math.hypot((a.x - p.x) / p.sx, a.z - p.z) < p.r) return true; return false; }
     onPuddle(a) { for (const p of this.map.puddles) if (Math.hypot((a.x - p.x) / p.sx, a.z - p.z) < p.r) return true; return false; }
 
     // ============================================================== enemies
@@ -569,7 +572,7 @@
           const want = E.kind === 'thrower' && !E.carry ? 1.0 : { fighter: 1.0, rusher: 1.0, technical: 1.0, grappler: 0.9, thrower: 6, staff: 1.9, commander: 2.6, sumo: 1.4 }[E.kind];
           // items: throwers run to a bottle (or knife) on the market and pick it up; brawlers grab a knife lying close by
           if (!E.carry && E.view && E.view.body && E.view.body.attach) {
-            const want = E.kind === 'thrower' ? ['bottle', 'knife'] : ['fighter', 'technical', 'rusher'].includes(E.kind) ? ['knife'] : null;
+            const want = E.kind === 'thrower' ? ['bottle', 'can', 'knife'] : ['fighter', 'technical', 'rusher'].includes(E.kind) ? ['knife'] : null;
             if (want) {
               let best = null, bd = E.kind === 'thrower' ? 16 : 4.5;
               for (const p of this.props) { if (p.dead || p.held || p.thrown || p.hop || !want.includes(p.type) || (p.claim && p.claim !== E && !p.claim.dead && !p.claim.carry)) continue; const dd = Math.hypot(p.x - E.x, p.z - E.z); if (dd < bd) { bd = dd; best = p; } }
@@ -610,7 +613,7 @@
         case 'recover': if (E.t >= E.dur) this.set(E, 'free'); break;
         case 'hurt': if (E.t >= E.dur) this.set(E, 'free'); break;
         case 'dazed': if (E.t >= E.dur) this.set(E, 'free'); break;
-        case 'down': if (E.t >= E.dur) this.set(E, 'getup', 0.85); break;
+        case 'down': if (E.t >= Math.max(0.75, E.dur - 0.5)) this.set(E, 'getup', 1.5); break; // a real getup takes a moment (the take is played about 2x)
         case 'getup': if (E.t >= E.dur) this.set(E, 'free'); break;
         case 'hold': { // a grappler holding you: throw after a beat
           face(toP, 4);
@@ -746,7 +749,7 @@
     bossBegin(B, atk, wind) { B.atk = atk; this.set(B, 'wind', wind); B.cd = rnd(0.9, 1.6) * (B.phase === 2 ? 0.7 : 1); if (atk === 'stomp') this.g.audio.taiko(); }
     bossStomp(B) {
       const P = this.P, R = 3.7, d = Math.hypot(P.x - B.x, P.z - B.z);
-      this.fx.ring(B.x, B.z, R, 0.5); this.fx.burst(B.x, B.z, 1.4); this.shake = 0.6; this.g.audio.thump(12);
+      this.fx.ring(B.x, B.z, R, 0.5); this.fx.burst(B.x, B.z, 1.4); this.shake = 0.6; this.g.audio.thump(12); this.brk.crack(B.x, B.z, 3.4);
       for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; this.fx.dust(B.x + Math.cos(a) * R * 0.7, 0.05, B.z + Math.sin(a) * R * 0.7, 2, 0.3, 0.6, 0.4, Math.cos(a) * 3, Math.sin(a) * 3); }
       if (d < R + P.r) this.damage(P, 16, B, (P.x - B.x) / (d || 1) * 7, (P.z - B.z) / (d || 1) * 7, true);
       for (const p of this.props) if (!p.dead && Math.hypot(p.x - B.x, p.z - B.z) < R && p.D.wt !== 'heavy') { p.vy = 3; p.y = 0.05; p.vx += (p.x - B.x) * 1.2; p.vz += (p.z - B.z) * 1.2; p.hop = true; }
@@ -804,6 +807,11 @@
     // ============================================================== physics
     physics(a, dt) {
       const slick = this.onPuddle(a);
+      if (a.crackT > 0) a.crackT -= dt;
+      // smashed ice on the floor: running workers can lose their feet (you slide too, but a sumo doesn't fall over)
+      if (slick && a.team === 1 && a.kind !== 'boss' && a.kind !== 'sumo' && !a.dead && !a.sleep && ['free', 'approach', 'recover'].includes(a.st) && Math.hypot(a.vx, a.vz) > 2.2 && this.onIce(a) && Math.random() < dt * 2.5) {
+        const s = Math.hypot(a.vx, a.vz); this.set(a, 'down', 1.3); a.slipFall = true; a.fallX = -a.vx / s; a.fallZ = -a.vz / s; this.popAt(a, 'SLIP!'); this.dropCarry(a);
+      }
       const fr = a.st === 'thrown' ? 0 : slick ? 2.2 : 11;
       if (a.tvx !== undefined && !['hurt', 'down', 'thrown', 'held', 'dazed', 'getup', 'grabbed', 'clawed'].includes(a.st) && !a.dead) {
         const k = 1 - Math.exp(-dt * (slick ? 3 : 14));
@@ -812,7 +820,7 @@
       if (a.st === 'thrown') {
         a.vy -= 18 * dt; a.y += a.vy * dt;
         for (const T of this.actors) if (T !== a && T !== a.thrownBy && !T.dead && T.team === a.team && Math.hypot(T.x - a.x, T.z - a.z) < T.r + a.r && a.y < 1.4) { this.damage(T, 15, a.thrownBy, a.vx * 0.6, a.vz * 0.6, true); }
-        if (a.y <= 0) { a.y = 0; this.damage(a, 20, a.thrownBy, a.vx * 0.4, a.vz * 0.4, true); if (!a.dead) this.set(a, 'down', 1.1); this.shake = 0.3; this.g.audio.thump(8); this.fx.dust(a.x, 0.05, a.z, 8, 0.4, 0.5, 0.4); }
+        if (a.y <= 0) { a.y = 0; this.brk.crack(a.x, a.z, 1.5); this.damage(a, 20, a.thrownBy, a.vx * 0.4, a.vz * 0.4, true); if (!a.dead) this.set(a, 'down', 1.1); this.shake = 0.3; this.g.audio.thump(8); this.fx.dust(a.x, 0.05, a.z, 8, 0.4, 0.5, 0.4); }
       } else if (a.st !== 'held' && a.st !== 'clawed') a.y = 0;
       if (a.st === 'held' || a.st === 'grabbed') return;
       a.x += a.vx * dt; a.z += a.vz * dt;
@@ -827,6 +835,11 @@
     pushOut(a, w) {
       const cx = clamp(a.x, w.x0, w.x1), cz = clamp(a.z, w.z0, w.z1), dx = a.x - cx, dz = a.z - cz, d = Math.hypot(dx, dz);
       if (d >= a.r) return false;
+      const sp0 = Math.hypot(a.vx, a.vz);
+      if (w.brk && !w.brk.broken && this.brk) { // a charge, a thrown body or a charging sumo goes straight through a stall
+        const ram = (a === this.P && a.st === 'charge' && sp0 > 6) || (a.st === 'thrown' && sp0 > 3) || ((a.kind === 'boss' || a.kind === 'sumo') && a.st === 'act' && a.atk === 'charge');
+        if (ram && this.brk.smash(w.brk, a.st === 'thrown' && a.thrownBy ? a.thrownBy : a, a.vx, a.vz)) return false;
+      } else if (!w.brk && d > 1e-5 && sp0 > 5 && (a.st === 'thrown' || (a === this.P && a.st === 'charge')) && !(a.crackT > 0) && this.brk) { a.crackT = 0.5; this.brk.wallCrack(cx, cz, dx / d, dz / d, a.st === 'thrown' ? 1.0 + (a.y || 0) : 0.9); this.shake = Math.max(this.shake, 0.3); }
       if (d < 1e-5) { // centre inside the box: push out the shortest way
         const opts = [[w.x0 - a.r - a.x, 0], [w.x1 + a.r - a.x, 0], [0, w.z0 - a.r - a.z], [0, w.z1 + a.r - a.z]].sort((p, q) => Math.abs(p[0] + p[1]) - Math.abs(q[0] + q[1]));
         a.x += opts[0][0]; a.z += opts[0][1];
@@ -956,7 +969,7 @@
     draw(dt) {
       const R = this.R, T = this.t;
       for (const a of this.actors) {
-        const far = a.sleep && Math.abs(a.z - this.P.z) > 26; // asleep in an area you're nowhere near: don't draw or animate it
+        const cz = this.camT ? this.camT.z : this.P.z, far = a !== this.P && (a.z - cz > 11 || cz - a.z > 23); // off the screen (behind the camera or far up the street): don't draw or animate it
         if (far) { a.view.root.visible = false; if (a.view.body && a.view.body.wrap) a.view.body.wrap.visible = false; if (a.view.shadow) a.view.shadow.visible = false; continue; }
         this.drawActor(a, dt, T);
       }
@@ -967,7 +980,7 @@
       }
       for (const F of this.fires) F.mesh.material.opacity = 0.35 + Math.sin(T * 20 + F.x) * 0.1;
       this.map.update(T);
-      this.fx.update(dt);
+      this.fx.update(dt); this.brk.update(dt);
       this.telegraphs(T);
       // camera: high angle, follows you, frames the space ahead
       const P = this.P, Z = this.zones[this.zi], boss = Z && Z.boss && Z.state === 'fight';
@@ -1061,6 +1074,7 @@
       case 'crate2': B(g, 0.78, 0.5, 0.78, D.col, D.shade, 0, 0.25, 0, 0.022); B(g, 0.74, 0.5, 0.74, 0xb88050, D.shade, 0.04, 0.75, 0.02, 0.022); break;
       case 'foam': B(g, 0.62, 0.34, 0.5, D.col, D.shade, 0, 0.17, 0, 0.02); B(g, 0.5, 0.04, 0.4, 0x3fb0e0, 0x1a5a8a, 0, 0.35, 0, 0.0); break;
       case 'bottle': C(g, 0.06, 0.08, 0.26, D.col, D.shade, 0, 0.13, 0, 8, 0.012); C(g, 0.025, 0.04, 0.1, D.col, D.shade, 0, 0.3, 0, 6, 0.01); break;
+      case 'can': { const k = [0xe2322b, 0x2f6fd0, 0x2e9e6a, 0xf2c14e][(Math.random() * 4) | 0]; C(g, 0.045, 0.045, 0.13, k, new THREE.Color(k).multiplyScalar(0.45).getHex(), 0, 0.065, 0, 10, 0.01); C(g, 0.04, 0.045, 0.012, 0xc8ccd0, 0x6a7078, 0, 0.136, 0, 10, 0); break; }
       case 'chair': B(g, 0.46, 0.06, 0.46, D.col, D.shade, 0, 0.45, 0, 0.015); B(g, 0.46, 0.45, 0.06, D.col, D.shade, 0, 0.7, -0.2, 0.015); for (const [x, z] of [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]]) B(g, 0.05, 0.45, 0.05, 0x3a3a40, 0x101014, x, 0.22, z, 0.0); break;
       case 'bin': C(g, 0.3, 0.26, 0.72, D.col, D.shade, 0, 0.36, 0, 14, 0.02); C(g, 0.32, 0.32, 0.06, 0x2a5aa0, 0x10203a, 0, 0.74, 0, 14, 0.01); break;
       case 'bucket': C(g, 0.22, 0.17, 0.32, D.col, D.shade, 0, 0.16, 0, 12, 0.015); C(g, 0.19, 0.19, 0.02, 0x7ac8f0, 0x3a7aa0, 0, 0.29, 0, 12, 0.0); break;
@@ -1416,40 +1430,39 @@
         });
         for (const v of out) v.y -= 0.18; // the root already sits off the ground; let the feet hang just clear of it
       }
-      // KNOCKDOWN: an authored fall, not a rag doll. The body topples away from the blow, pivoting on its feet and
-      // accelerating like a fall, lands on its back with a small bounce, lies there, then gets up through a kneel.
-      const falling = st === 'down' || a.dead;
-      if (falling && !M.fall) {
-        const stand = mk(); A.sample('stance', 0.2, stand);
+      // KNOCKDOWN: motion-captured falls and getups (CMU: a rug-pull fall onto the back, a banana-peel slip on ice, a real
+      // person getting up off the floor), turned so the body falls away from the blow. No rag doll.
+      const falling = st === 'down' || a.dead, rot = (v, c, s) => { const x = v.x; v.x = x * c + v.z * s; v.z = -x * s + v.z * c; };
+      const flat = (r) => Math.atan2(r[2].x - r[0].x, r[2].z - r[0].z); // which way the head lies from the pelvis
+      if (falling && !M.fall && A.clip('fallBack')) {
+        const name = a.slipFall ? 'fallSlip' : 'fallBack', c = A.clip(name); a.slipFall = false;
         const wd = new THREE.Vector3(a.fallX || -Math.cos(a.f), 0, a.fallZ || -Math.sin(a.f)); if (wd.lengthSq() < 1e-6) wd.set(-Math.cos(a.f), 0, -Math.sin(a.f));
-        wd.normalize().applyQuaternion(this.root.quaternion.clone().invert()); wd.y = 0; wd.normalize(); // into our own frame
-        const axis = new THREE.Vector3(0, 1, 0).cross(wd).normalize(), pivot = stand[11].clone().add(stand[14]).multiplyScalar(0.5); pivot.y = 0;
-        const lie = stand.map((v) => v.clone().sub(pivot).applyAxisAngle(axis, Math.PI / 2).add(pivot));
-        let lo = 9; for (const v of lie) lo = Math.min(lo, v.y); for (const v of lie) v.y += 0.13 - lo;
-        const land = out[0].clone().addScaledVector(wd, 0.25); const off = new THREE.Vector3(land.x - lie[0].x, 0, land.z - lie[0].z); for (const v of lie) v.add(off);
-        M.fall = { t: 0, from: out.map((v) => v.clone()), stand, axis, pivot, lie, off, lift: 0.13 - lo, T: a.slammed ? 0.2 : 0.5 };
+        wd.normalize().applyQuaternion(this.root.quaternion.clone().invert());
+        A.sample(name, c.dur, tmp); const th = Math.atan2(wd.x, wd.z) - flat(tmp); // the head lands on the far side from the hit
+        const fromThrow = M.prevSt === 'thrown';
+        M.fall = { t: 0, name, c: Math.cos(th), s: Math.sin(th), from: out.map((v) => v.clone()), sp: a.slammed ? 1.7 : 1, t0: fromThrow ? c.dur : a.slammed ? 0.3 : 0 };
         a.slammed = false;
       }
       if (M.fall && (falling || st === 'getup')) {
         const F = M.fall; F.t += tdt;
         if (falling) {
-          const p = Math.min(1, F.t / F.T), ang = p * p * Math.PI / 2, wb = Math.min(1, F.t / 0.14);
+          A.sample(F.name, F.t0 + F.t * F.sp, tmp);
+          const wb = Math.min(1, F.t / 0.14);
+          for (let i = 0; i < N; i++) { rot(tmp[i], F.c, F.s); out[i].copy(F.from[i]).lerp(tmp[i], wb); }
+          F.lay = out.map((v) => v.clone());
+        } else { // up off the floor: the getup take, turned and shifted so it starts exactly where the body lies
+          const G = A.clip('getupBack'), L0 = F.lay || out.map((v) => v.clone());
+          if (!F.g) { A.sample('getupBack', 0, tmp); const th = flat(L0) - flat(tmp), c = Math.cos(th), s = Math.sin(th); const p0 = tmp[0].clone(); rot(p0, c, s); F.g = { c, s, ox: L0[0].x - p0.x, oz: L0[0].z - p0.z }; }
+          const g = clamp(a.t / Math.max(0.1, a.dur), 0, 1), sh = 1 - g * g * (3 - 2 * g);
+          A.sample('getupBack', g * G.dur, tmp);
+          const wIn = Math.min(1, a.t / 0.18), wOut = clamp((g - 0.72) / 0.28, 0, 1);
           for (let i = 0; i < N; i++) {
-            const b = tmp[i].copy(F.from[i]).lerp(F.stand[i], wb);
-            out[i].copy(b).sub(F.pivot).applyAxisAngle(F.axis, ang).add(F.pivot).addScaledVector(F.off, p); out[i].y += F.lift * p;
+            rot(tmp[i], F.g.c, F.g.s); tmp[i].x += F.g.ox * sh; tmp[i].z += F.g.oz * sh;
+            const v = L0[i].clone().lerp(tmp[i], wIn); out[i].copy(v.lerp(out[i], wOut * wOut * (3 - 2 * wOut)));
           }
-          if (F.t > F.T && F.t < F.T + 0.28) { const bb = Math.sin(Math.PI * (F.t - F.T) / 0.28) * 0.07; for (const i of [0, 1, 2, 3, 6, 9, 12]) out[i].y += bb; } // the bounce
-          if (F.t >= F.T) F.lay = out.map((v) => v.clone());
-        } else { // getting up: lying -> one knee -> standing
-          const L0 = F.lay || F.lie, g = clamp(a.t / Math.max(0.1, a.dur), 0, 1), ez = (x) => x * x * (3 - 2 * x);
-          const K = F.stand.map((v) => v.clone()), drop = K[0].y - 0.58;
-          for (let i = 0; i < 9; i++) { K[i].y -= drop; K[i].z += 0.12; }
-          K[9].y = K[12].y = 0.58; K[10].set(K[9].x, 0.1, K[9].z + 0.05); K[11].set(K[9].x, 0.08, K[9].z - 0.42);
-          K[13].set(K[12].x, 0.55, K[12].z + 0.45); K[14].set(K[12].x, 0.08, K[12].z + 0.48); K[8].copy(K[13]).add(new THREE.Vector3(0, 0.06, 0));
-          if (g < 0.5) { const w = ez(g / 0.5); for (let i = 0; i < N; i++) out[i].copy(L0[i]).lerp(K[i], w); }
-          else { const w = ez((g - 0.5) / 0.5); for (let i = 0; i < N; i++) out[i].copy(K[i]).lerp(out[i], w); }
         }
       } else if (M.fall && !falling && st !== 'getup') M.fall = null;
+      M.prevSt = st;
       // hit flinch and daze sway: tip the upper body about the pelvis
       const pel = out[0], upper = [1, 2, 3, 4, 5, 6, 7, 8];
       let tipX = 0, tipZ = 0, headX = 0;

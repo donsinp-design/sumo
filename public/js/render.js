@@ -1186,7 +1186,7 @@
       this.el = el;
       const r = this.r = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
       // resolution: phones start a little under their (very high) native density; perf() then trims or restores it
-      this.prMax = Math.min(S.touch && S.touch.on ? 1.5 : 2, window.devicePixelRatio || 1); this.pr = this.prMax; this.ft = 1 / 60; this.ftT = 0;
+      this.prMax = Math.min(S.touch && S.touch.on ? 1.5 : 2, window.devicePixelRatio || 1); this.pr = Math.min(1.5, this.prMax); this.prFail = 9; this.ft = 1 / 60; this.ftT = 0; // retina starts at 1.5x: the ink pass keeps edges crisp
       r.setPixelRatio(this.pr);
       el.appendChild(r.domElement);
       this.scene = new THREE.Scene();
@@ -1227,8 +1227,8 @@
       this.ft += (dt - this.ft) * 0.05; this.ftT += dt;
       if (this.ftT < 1.2) return;
       let pr = this.pr;
-      if (this.ft > 1 / 45) pr = Math.max(0.75, pr - 0.15);
-      else if (this.ft < 1 / 58 && this.ftT > 4) pr = Math.min(this.prMax, pr + 0.1);
+      if (this.ft > 1 / 45) { this.prFail = Math.min(this.prFail, pr); pr = Math.max(0.75, pr - 0.15); }
+      else if (this.ft < 1 / 58 && this.ftT > 4 && pr + 0.1 < this.prFail - 0.01) pr = Math.min(this.prMax, pr + 0.1); // never climb back to a level that was too slow (no see-saw)
       else return;
       this.ftT = 0;
       if (Math.abs(pr - this.pr) < 0.01) return;
