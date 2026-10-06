@@ -78,7 +78,6 @@
       for (let i = 0; i < n; i++) {
         const a = z0 + i * d, b = a + d, rec = A.stall(g, fishes, x, a, b, sd, k + i, table);
         shadowAt(rec.group, x + 0.25, (a + b) / 2, hw * 2 + 1.0, Math.abs(d) + 0.9, table ? 0.55 : 0.8);
-        if (!table) lightPool(x - sd * 1.7, (a + b) / 2, 3.2, Math.abs(d) * 1.4, 0xffb060, 0.28); // the bulbs under the awning
         breakable({ kind, x, z: (a + b) / 2, len: Math.abs(d), sd, rec, w: wall(x - hw, x + hw, a, b) });
       }
     };
@@ -203,12 +202,6 @@
     for (const [z0, z1] of [[-53, -61.5], [-64.5, -76], [-79, -88.5], [-91.5, -97.5]]) {
       tableRow(-6, z0, z1, k++); tableRow(0.0, z0 - (k % 2 ? 0 : 1.5), z1, k++); tableRow(6, z0, z1, k++);
     }
-    // fluorescent tubes (cool light inside vs warm lanterns outside)
-    for (let z = -54; z > -99; z -= 6) for (const x of [-9, -3, 3, 9]) {
-      lightPool(x, z, 5.5, 3.6, 0x9fd8ff, 0.16);
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xb8e8ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.22 }));
-      glow.scale.set(3.2, 1.6, 1); glow.position.set(x, 4.2, z); g.add(glow);
-    }
     // floor clutter in the aisles: foam boxes, crates, buckets (all usable)
     for (const [t, x, z] of [['foam', -3, -55], ['foam', -2.7, -55.8], ['crate', 3.1, -58], ['bucket', -9.5, -57], ['crate', 9.2, -60], ['foam', 9.6, -60.8],
       ['crate', -3.0, -67], ['crate2', 3.0, -70.5], ['bucket', 2.6, -66], ['foam', -9.4, -69], ['foam', -9.0, -70], ['bin', 9.6, -66],
@@ -244,11 +237,6 @@
     box(g, 3.4, 1.4, 1.6, 0x8a5a3a, 0x4a2a1a, 0, 0.7, -139.2, 0.03); box(g, 3.6, 0.15, 1.8, 0xc8a070, 0x6a4a2a, 0, 1.45, -139.2, 0.02);
     wall(-1.8, 1.8, -140.1, -138.3);
     sign(g, '競り', 'AUCTION', 3.0, 1.0, '#e2322b', '#fff8ec', 0, 3.0, -141.1, 0, 0);
-    // big lights over the floor: the arena should feel like the climax
-    for (const [x, z] of [[-6, -120], [6, -120], [-6, -132], [6, -132], [0, -126]]) {
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xfff0d0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.35 }));
-      glow.scale.setScalar(4); glow.position.set(x, 5.1, z); g.add(glow);
-    }
     // frozen tuna laid out in rows (you can pick one up as a heavy weapon), carts, crates, barriers, pallets
     for (const z of [-121, -133]) for (const x of [-8.5, -6.5, 6.5, 8.5]) prop('tuna', x, z, Math.PI / 2);
     for (const [t, x, z] of [['cart', -10.5, -126], ['cart', 10.5, -128], ['crate', -2.5, -137.5], ['crate', 2.6, -137.2], ['barrier', -10.6, -116.5], ['barrier', 10.6, -117],
@@ -304,22 +292,25 @@
       }
       c.closePath();
     };
-    // cel puddle: one solid dark water shape with a crisp edge, a flat sky-reflection band clipped inside it, sharp glints
+    // clear water: the floor shows through. Only a faint wet darkening that fades in from a damp edge, a soft
+    // sheen where the rim catches the light, a pale sky reflection and a couple of small glints.
     const pudTexs = [0, 1, 2, 3].map((v) => W.canvasTex(256, 256, (c) => {
       const sd = v * 1.7 + 0.4;
-      blob(c, 128, 128, 100, 2, sd); c.fillStyle = 'rgba(26,30,42,0.6)'; c.fill();
-      c.strokeStyle = 'rgba(12,14,22,0.35)'; c.lineWidth = 3; c.stroke();                                   // edge line
-      c.save(); blob(c, 128, 128, 97, 2, sd); c.clip();
-      c.fillStyle = 'rgba(96,112,150,0.35)'; c.beginPath(); c.moveTo(0, 150 - v * 8); c.lineTo(256, 70 - v * 8); c.lineTo(256, 112 - v * 8); c.lineTo(0, 196 - v * 8); c.fill(); // sky band
-      c.fillStyle = 'rgba(170,190,225,0.4)'; c.beginPath(); c.moveTo(0, 168 - v * 8); c.lineTo(256, 88 - v * 8); c.lineTo(256, 98 - v * 8); c.lineTo(0, 178 - v * 8); c.fill(); // its bright core
+      c.filter = 'blur(6px)'; blob(c, 128, 128, 104, 2, sd); c.fillStyle = 'rgba(30,34,40,0.16)'; c.fill(); c.filter = 'none';   // damp halo
+      blob(c, 128, 128, 96, 2, sd); c.fillStyle = 'rgba(22,30,44,0.2)'; c.fill();                                                   // the water itself
+      c.strokeStyle = 'rgba(235,242,255,0.42)'; c.lineWidth = 2.5; c.stroke();                                                         // rim sheen
+      c.save(); blob(c, 128, 128, 94, 2, sd); c.clip();
+      const gr = c.createLinearGradient(0, 200 - v * 8, 256, 60 - v * 8);
+      gr.addColorStop(0, 'rgba(190,210,240,0)'); gr.addColorStop(0.5, 'rgba(200,218,245,0.34)'); gr.addColorStop(1, 'rgba(190,210,240,0)');
+      c.fillStyle = gr; c.fillRect(0, 0, 256, 256);                                                                                   // sky reflection
       c.restore();
-      c.strokeStyle = '#ffffff'; c.lineCap = 'round';
-      c.globalAlpha = 0.55; c.lineWidth = 4; c.beginPath(); c.moveTo(70, 104); c.lineTo(116, 86); c.stroke();
-      c.lineWidth = 3.5; c.beginPath(); c.moveTo(150, 158); c.lineTo(176, 148); c.stroke();
+      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineCap = 'round';
+      c.lineWidth = 2.5; c.beginPath(); c.moveTo(78, 102); c.lineTo(104, 92); c.stroke();
+      c.lineWidth = 2; c.beginPath(); c.moveTo(152, 156); c.lineTo(166, 151); c.stroke();
     }));
     for (const p of puddles) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.r * 2.3 * p.sx, p.r * 2.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: pudTexs[(Math.random() * 4) | 0], transparent: true, depthWrite: false, opacity: 0.85 }));
-      m.rotation.y = Math.random() * Math.PI; m.position.set(p.x, 0.012, p.z); m.renderOrder = 1; g.add(m); decor.push({ m, kind: 'puddle', p: Math.random() * 6 });
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.r * 2.3 * p.sx, p.r * 2.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: pudTexs[(Math.random() * 4) | 0], transparent: true, depthWrite: false }));
+      m.rotation.y = Math.random() < 0.5 ? 0 : Math.PI; m.position.set(p.x, 0.012, p.z); /* only flipped: the wet area (an ellipse along x) must match what you see */ m.renderOrder = 1; g.add(m); decor.push({ m, kind: 'puddle', p: Math.random() * 6 });
     }
 
     // COMBAT ZONES: you enter at z0; the exit at z1 stays shut until every enemy in the zone is down

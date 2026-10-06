@@ -945,6 +945,13 @@
       // dust when moving fast, slide streaks on wet floor
       const sp = Math.hypot(a.vx, a.vz);
       if (slick && sp > 4 && Math.random() < 0.3) this.fx.dust(a.x, 0.04, a.z, 1, 0.15, 0.2, 0.25);
+      // water underfoot: a splash every stride, a big one when a body lands in it
+      a.strideD = (a.strideD || 0) + sp * dt;
+      const wet = slick && !this.onIce(a) && a.y < 0.05;
+      if (wet && a.strideD > 0.75 && sp > 0.8) { a.strideD = 0; this.fx.water(a.x + a.vx * 0.04, a.z + a.vz * 0.04, sp > 4 ? 1.6 : 1); }
+      const lying = a.st === 'down' || a.dead;
+      if (wet && lying && !a.wasLying) this.fx.water(a.x, a.z, 3);
+      a.wasLying = lying;
     }
     pushOut(a, w) {
       const cx = clamp(a.x, w.x0, w.x1), cz = clamp(a.z, w.z0, w.z1), dx = a.x - cx, dz = a.z - cz, d = Math.hypot(dx, dz);
@@ -1094,7 +1101,7 @@
       }
       for (const F of this.fires) F.mesh.material.opacity = 0.35 + Math.sin(T * 20 + F.x) * 0.1;
       this.map.update(T);
-      this.fx.update(dt); this.brk.update(dt); this.sk.draw(dt, T);
+      this.fx.update(dt); this.fx.updateSalt(dt); this.fx.updateWater(dt); this.brk.update(dt); this.sk.draw(dt, T);
       this.telegraphs(T);
       // camera: high angle, follows you, frames the space ahead
       const P = this.P, Z = this.zones[this.zi], boss = Z && Z.boss && Z.state === 'fight';

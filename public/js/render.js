@@ -1032,6 +1032,45 @@
       }
       this.saltPts.geometry.attributes.position.needsUpdate = true;
     }
+    // stepping in water: a few droplets kicked up and thin ripples spreading out (k = how hard: 1 a step, 3 a body)
+    water(x, z, k) {
+      if (!this.wPts) {
+        const n = this.wN = 120, g = new THREE.BufferGeometry();
+        this.wPos = new Float32Array(n * 3).fill(-50); this.wVel = new Float32Array(n * 3); this.wLife = new Float32Array(n).fill(9); this.wI = 0;
+        g.setAttribute('position', new THREE.BufferAttribute(this.wPos, 3));
+        this.wPts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xe6f2ff, size: 0.11, transparent: true, opacity: 0.85, depthWrite: false }));
+        this.wPts.frustumCulled = false; this.wPts.renderOrder = 4; this.scene.add(this.wPts);
+        const rg = new THREE.RingGeometry(0.84, 1, 40).rotateX(-Math.PI / 2);
+        this.ripples = [...Array(10)].map(() => {
+          const m = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0xe8f2ff, transparent: true, opacity: 0, depthWrite: false }));
+          m.renderOrder = 2; m.visible = false; this.scene.add(m); return { m, t: 9, max: 0.8, size: 1 };
+        });
+      }
+      for (let j = 0; j < 4 + k * 5; j++) {
+        const i = this.wI; this.wI = (this.wI + 1) % this.wN; const a = Math.random() * Math.PI * 2, sp = (0.6 + Math.random()) * (0.7 + k * 0.4);
+        this.wPos[i * 3] = x + Math.cos(a) * 0.08; this.wPos[i * 3 + 1] = 0.04; this.wPos[i * 3 + 2] = z + Math.sin(a) * 0.08;
+        this.wVel[i * 3] = Math.cos(a) * sp; this.wVel[i * 3 + 1] = 1.4 + Math.random() * (1 + k); this.wVel[i * 3 + 2] = Math.sin(a) * sp; this.wLife[i] = 0;
+      }
+      for (let j = 0; j < (k > 1.5 ? 2 : 1); j++) {
+        const r = this.ripples.find((o) => o.t >= o.max) || this.ripples[0];
+        r.t = -j * 0.15; r.max = 0.7 + k * 0.25; r.size = 0.35 + k * 0.3; r.m.position.set(x, 0.016, z); r.m.visible = true;
+      }
+    }
+    updateWater(dt) {
+      if (!this.wPts) return;
+      for (let i = 0; i < this.wN; i++) {
+        if (this.wLife[i] > 1) continue;
+        this.wLife[i] += dt; this.wVel[i * 3 + 1] -= 11 * dt;
+        for (let a = 0; a < 3; a++) this.wPos[i * 3 + a] += this.wVel[i * 3 + a] * dt;
+        if (this.wPos[i * 3 + 1] < 0.02 || this.wLife[i] > 1) { this.wPos[i * 3 + 1] = -50; this.wLife[i] = 9; }
+      }
+      this.wPts.geometry.attributes.position.needsUpdate = true;
+      for (const r of this.ripples) {
+        if (r.t >= r.max) { r.m.visible = false; continue; }
+        r.t += dt; const k = Math.max(0, r.t / r.max), sc = r.size * (0.15 + (1 - Math.pow(1 - k, 2)));
+        r.m.scale.set(sc, 1, sc * 0.9); r.m.material.opacity = r.t < 0 ? 0 : 0.85 * (1 - k);
+      }
+    }
     clearDecals() {
       const z = new THREE.Matrix4().makeScale(0, 0, 0);
       for (let i = 0; i < 500; i++) this.fp.setMatrixAt(i, z);
@@ -2056,7 +2095,7 @@
       }
       if (this.marker && this.marker.visible) { const k = 1 + 0.12 * Math.sin(this.time * 6); this.marker.scale.set(k, 1, k); }
       this.ref.update(rdt, T, m);
-      this.fx.update(dt); this.fx.updateSalt(dt);
+      this.fx.update(dt); this.fx.updateSalt(dt); this.fx.updateWater(dt);
       this.updateObjs(game, dt); this.updateThrown(dt);
       if (this.banners) for (const b of this.banners) b.userData.flag.rotation.y = Math.sin(this.time * 1.3 + b.position.x) * 0.12;
       this.excite += ((game.excite || 0) - this.excite) * Math.min(1, rdt * 3);
