@@ -622,7 +622,7 @@ def avoid_feet(x, y):   # keep the sumos' footprint and the gyoji's spot dry
 
 
 print('drops...')
-DROPS = drops_on(main_drop_xy, 170, 0.025, 0.11, 5, 'Drops', main_z, avoid=avoid_feet)
+DROPS = drops_on(main_drop_xy, 135, 0.025, 0.11, 5, 'Drops', main_z, avoid=avoid_feet)
 # a few bigger beads pooled in the curl of the rim
 def rim_xy(rr):
     while True:
@@ -643,7 +643,7 @@ def water_surface():
     bm = bmesh.new()
     radii = [RD - 0.6 + 0.15 * k for k in range(30)]
     while radii[-1] < 130: radii.append(radii[-1] * 1.13)
-    segs = 160; rings = []
+    segs = 128; rings = []
     for r in radii:
         ring = []
         for j in range(segs):
@@ -1074,7 +1074,8 @@ def depth_tint(mname, k=None, col=None):
 # the pad: waxy sheen micro-bumps, a little translucency under the sun
 for mname in ('PadTop', 'PadSmall', 'PadOld'):
     nt, lk = nodes(MATS[mname]); bs = BSDF[mname]
-    bs.inputs['Coat Weight'].default_value = 0.3 if mname == 'PadTop' else 0.2; bs.inputs['Coat Roughness'].default_value = 0.16
+    bs.inputs['Coat Weight'].default_value = 0.3 if mname == 'PadTop' else 0.12; bs.inputs['Coat Roughness'].default_value = 0.16 if mname == 'PadTop' else 0.25
+    if mname != 'PadTop': bs.inputs['Specular IOR Level'].default_value = 0.35
     nm = [n for n in nt if n.type == 'NORMAL_MAP'][0]
     nz = nt.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 60; nz.inputs['Detail'].default_value = 3
     bp = nt.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.08; bp.inputs['Distance'].default_value = 0.01
@@ -1297,7 +1298,8 @@ def build_splash(c):
     so = crown.modifiers.new('s', 'SOLIDIFY'); so.thickness = 0.05
     sub = crown.modifiers.new('sub', 'SUBSURF'); sub.levels = 1; sub.render_levels = 1
     disp_t = bpy.data.textures.new('spl', 'CLOUDS'); disp_t.noise_scale = 0.35
-    dsp = crown.modifiers.new('d', 'DISPLACE'); dsp.texture = disp_t; dsp.strength = 0.12
+    dsp = crown.modifiers.new('d', 'DISPLACE'); dsp.texture = disp_t; dsp.strength = 0.06
+    sub2 = crown.modifiers.new('sub2', 'SUBSURF'); sub2.levels = 1; sub2.render_levels = 1
     out.append(crown)
     # beads at the jets' tips and a spray thrown outwards
     bm = bmesh.new()
@@ -1352,7 +1354,7 @@ M_FOAM = mat('Foam', (0.92, 0.95, 0.93), 0.5, sss=0.4, sss_r=(1, 1, 1), sss_s=0.
 if SPLASH:   # aerated, frothy water: mix white scatter into the clear splash where a noise says so
     nt, lk = nodes(M_SPLASH); bs = BSDF['SplashWater']
     nz = nt.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 3.5; nz.inputs['Detail'].default_value = 5
-    rp = nt.new('ShaderNodeValToRGB'); rp.color_ramp.elements[0].position = 0.5; rp.color_ramp.elements[1].position = 0.72
+    rp = nt.new('ShaderNodeValToRGB'); rp.color_ramp.elements[0].position = 0.38; rp.color_ramp.elements[1].position = 0.62
     lk.new(nz.outputs['Fac'], rp.inputs['Fac'])
     wh = nt.new('ShaderNodeBsdfPrincipled'); wh.inputs['Base Color'].default_value = (0.95, 0.97, 0.96, 1); wh.inputs['Roughness'].default_value = 0.35
     wh.inputs['Subsurface Weight'].default_value = 0.5
@@ -1391,7 +1393,7 @@ if not NOCHARS:
         sumo('sumo2_stance.glb', W, (SPL_C.x, SPL_C.y))
         rig, roots = sumo('sumo2_red.glb', (SPL_C.x, SPL_C.y), (0, 0), keep_action=False)
         yaw = roots[0].rotation_euler.z
-        tilt = float(OPT.get('tilt', -0.85))
+        tilt = float(OPT.get('tilt', 0.75))
         for r in roots: r.rotation_euler = (tilt, 0.15, yaw)
         # arms flung up and out, legs kicking
         for sd, s in (('L', 1), ('R', float(OPT.get('rsign', 1)))):
@@ -1403,7 +1405,7 @@ if not NOCHARS:
         set_bone(rig, 'head', (-0.35, 0, 0))
         scn.frame_set(1); bpy.context.view_layer.update()
         hip = rig.matrix_world @ rig.pose.bones['hips'].head
-        want = Vector((SPL_C.x, SPL_C.y, float(OPT.get('hipz', 0.45))))
+        want = Vector((SPL_C.x, SPL_C.y, float(OPT.get('hipz', 0.4))))
         for r in roots: r.location += want - hip
         bpy.context.view_layer.update()
         GX, GY = 0.4, 5.0
