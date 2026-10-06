@@ -1,6 +1,6 @@
 # PIZZA stage, fully modelled: a giant Neapolitan-style pizza (the fighting surface) on a dark steel tray raised on a
-# chrome stand, on a trattoria table with a red/white gingham cloth, plus table props (chianti-bottle candle, wine
-# glass, parmesan + chili shakers, pizza cutter, napkins, crumbs). Built entirely by script (Blender 4.2, headless).
+# chrome stand, on a trattoria table with a red/white gingham cloth, plus table props (wine glass, parmesan + chili
+# shakers, napkins, crumbs), lit by a warm overhead pendant. Built entirely by script (Blender 4.2, headless).
 #   python tools/blender/stage_pizza.py [out_dir] [shot=game|low ...] [fast] [noexport] [norender]
 # Writes <out_dir>/pizza.glb (stage only: Z up, metres, origin at pizza centre, top of cheese ~0, textures <=1024 px)
 # and <out_dir>/ex_game.png / ex_low.png (with the game's masked sumos + gyoji imported from scratchpad/stage).
@@ -395,7 +395,7 @@ def build_top():
     ch = mix(ch, hx('d8963e'), br * 0.65)
     ch = mix(ch, hx('e6a444'), ss(0.0, 0.35, BLb)); ch = mix(ch, hx('c86e26'), ss(0.25, 0.8, BLb)); ch = mix(ch, hx('8e4214'), ss(0.7, 1.0, BLb) * 0.8)
     ch = mix(ch, hx('5e2a0e'), BLd * 0.7)
-    ch = mix(ch, hx('e88a28'), OIL * 0.45)
+    ch = mix(ch, hx('e08a2c'), OIL * 0.3)
     ch = mix(ch, hx('c8642a'), UNDER * 0.5)
     col = mix(sauce, ch, c)
     col = mix(col, hx('f4e2b0'), S)
@@ -413,7 +413,7 @@ def build_top():
     # --- roughness, sss
     rough = mix(np.full((N, N), 0.16, np.float32), 0.4 - 0.05 * ridge - 0.06 * dome, c)
     rough = mix(rough, 0.5, ss(0.3, 0.8, BLb)); rough = mix(rough, 0.66, BLd)
-    rough = mix(rough, 0.06, OIL * 0.9)
+    rough = mix(rough, 0.24, OIL * 0.7)
     rough = rough + 0.04 * nf
     sssm = np.clip(0.25 + 0.75 * c, 0, 1) * (1 - 0.6 * ss(0.3, 0.9, BLb))
     micro = 0.0004 * nmi + 0.0003 * nf + 0.0003 * herb + 0.0004 * chili + 0.0005 * pulp * (1 - c)
@@ -611,7 +611,7 @@ def build_pepperoni(TOP):
     c = (np.arange(N) + 0.5) * px - e; X, Y = np.meshgrid(c, c); R = np.hypot(X, Y); A = np.arctan2(Y, X)
     m = lambda s: s / px
     n1 = gn((N, N), m(0.12), 81); n2 = gn((N, N), m(0.035), 82); n3 = gn((N, N), m(0.01), 83)
-    col = mix(hx('bc3a1c'), hx('8a2210'), ss(-1.2, 1.5, n1 * 0.5 + n2 * 0.4 + 0.4 * n3))
+    col = mix(hx('9a2a16'), hx('6e1a0c'), ss(-1.2, 1.5, n1 * 0.5 + n2 * 0.4 + 0.4 * n3))
     FAT = np.zeros((N, N), np.float32)
     rp = np.random.default_rng(5)
     for _ in range(900):
@@ -627,17 +627,17 @@ def build_pepperoni(TOP):
     col = mix(col, hx('2a0805'), pep)
     rimw = 0.74 + 0.06 * n2
     crisp = ss(rimw - 0.06, 0.97, R)
-    col = mix(col, hx('3e0c06'), crisp * 0.9); col = mix(col, hx('1e0503'), ss(0.95, 1.0, R + 0.02 * n2))
+    col = mix(col, hx('2e0a05'), crisp * 0.95); col = mix(col, hx('1e0503'), ss(0.95, 1.0, R + 0.02 * n2))
     pool = ss(0.62 + 0.05 * n2, 0.42, R)
-    col = mix(col, hx('c4401a'), pool * 0.3)
+    col = mix(col, hx('a4361a'), pool * 0.12)
     col = mix(col, hx('5a1a0a'), ss(0.6, 1.4, n3) * crisp * 0.5)       # blistered charred bits on the rim
-    rough = np.clip(0.42 + 0.05 * n2 - 0.35 * pool + 0.2 * crisp - 0.1 * FAT, 0.04, 1)
+    rough = np.clip(0.78 + 0.04 * n2 - 0.06 * pool + 0.08 * crisp - 0.04 * FAT, 0.6, 0.92)
     wr = np.sin(A * 34 + 3 * n1) * ss(0.7, 0.98, R)                       # rim wrinkles
     cup = 0.13 * ss(0.25, 0.92, R + 0.03 * n2) ** 1.6 * ss(1.06, 0.93, R)            # the curled cup, faked in the normals
-    hgt = cup + 0.0015 * n3 + 0.0012 * n2 + 0.002 * FAT + 0.004 * wr - 0.002 * pool * ss(-1, 1, n2)
+    hgt = cup + 0.0015 * n3 + 0.0012 * n2 + 0.002 * FAT + 0.004 * wr 
     nrm = h2n(hgt, px * 0.62, px * 0.62, 1.6)
     M = pmat('m_pepperoni', img=image('pep_col', col), ormimg=image('pep_orm', orm(rough), True), nimg=image('pep_nrm', nrm, True),
-             sss=0.25, sss_r=(1.0, 0.3, 0.15), sss_s=0.02, coat=0.35, coat_r=0.08)
+             sss=0.12, sss_r=(1.0, 0.3, 0.15), sss_s=0.02, spec=0.35)
     NR, NS = 9, 44
     for k, (px0, py0, pr) in enumerate(PEPS):
         rr_ = np.random.default_rng(100 + k)
@@ -886,47 +886,6 @@ def grain_tex(name, palette, seed, size=512, flakes=False):
     return image(name + '_col', col), image(name + '_nrm', h2n(hgt, 0.4, 0.4, 1.0), True)
 
 def build_props():
-    # ---- chianti fiasco candle (back left)
-    bx, by = -7.6, 9.6; BS = 0.8
-    before = set(bpy.data.objects)
-    GL = glass_mat('m_bottle', (0.18, 0.42, 0.22), 0.04)
-    prof = [(0, 0.02), (1.25, 0.02), (1.75, 0.18), (2.0, 0.7), (2.04, 1.3), (1.92, 2.1), (1.55, 2.85), (1.0, 3.45), (0.62, 3.95),
-            (0.5, 4.5), (0.47, 5.9), (0.53, 6.05), (0.5, 6.25), (0.42, 6.3)]
-    o = lathe(chaikin(prof, 1), 36, 'bottle', GL, z0=TZ, xy=(bx, by))
-    so = o.modifiers.new('s', 'SOLIDIFY'); so.thickness = 0.06; so.offset = -1
-    sc, sn = straw_tex()
-    STR = pmat('m_straw', img=sc, nimg=sn, nstr=1.2, rough=0.75, sheen=0.4, sss=0.1, sss_s=0.01)
-    sprof = [(0, -0.0), (1.3, 0.0), (1.82, 0.16), (2.08, 0.7), (2.12, 1.3), (2.0, 2.1), (1.72, 2.65)]
-    o = lathe(chaikin(sprof, 1), 48, 'straw', STR, z0=TZ, xy=(bx, by))
-    me = o.data; rs = np.random.default_rng(44)
-    zs = np.array([v.co.z for v in me.vertices]); ztop = zs.max()
-    for v in me.vertices:
-        if v.co.z > ztop - 0.05:
-            a = math.atan2(v.co.y - by, v.co.x - bx); v.co.z -= 0.12 * (1 + math.sin(a * 23)) * rs.uniform(0.4, 1.0)
-    bandp = [(bx + 1.95 * math.cos(a), by + 1.95 * math.sin(a), TZ + 2.3) for a in np.linspace(0, TAU, 49)]
-    V, F = tube(bandp, 0.09, 8, cap=False); mk('straw_band', V, F, None, STR)
-    # candle + wax drips
-    WAX = pmat('m_wax', 'f2e8d0', rough=0.35, sss=0.6, sss_r=(1.0, 0.8, 0.5), sss_s=0.15)
-    WAXR = pmat('m_wax_red', 'a4161a', rough=0.35, sss=0.5, sss_r=(1.0, 0.3, 0.2), sss_s=0.12)
-    WAXG = pmat('m_wax_green', '2e6a3a', rough=0.35, sss=0.5, sss_r=(0.4, 1.0, 0.4), sss_s=0.12)
-    cprof = [(0, TZ + 7.35), (0.18, TZ + 7.38), (0.33, TZ + 7.5), (0.36, TZ + 7.45), (0.37, TZ + 6.1), (0, TZ + 6.1)]
-    lathe(chaikin(cprof, 2)[::-1], 32, 'candle', WAX, xy=(bx, by))
-    rd = np.random.default_rng(66)
-    for k in range(16):
-        a = rd.uniform(0, TAU); mat_ = [WAX, WAX, WAXR, WAXG][k % 4]
-        L = rd.uniform(0.6, 3.6 if mat_ is not WAX else 2.2)
-        z0 = TZ + (7.45 if mat_ is WAX else 6.25); zz = np.linspace(z0, z0 - L, 14)
-        rad_neck = np.interp(zz - TZ, [3.95, 4.5, 5.9, 6.3, 7.5], [0.62, 0.5, 0.47, 0.5, 0.37])
-        aa = a + 0.08 * np.sin(np.linspace(0, 3, 14) + k)
-        thick = np.linspace(0.07, 0.11, 14) * rd.uniform(0.7, 1.3); thick[-1] *= 1.5
-        pts = np.stack([bx + (rad_neck + thick * 0.5) * np.cos(aa), by + (rad_neck + thick * 0.5) * np.sin(aa), zz], -1)
-        V, F = tube(pts, thick, 8); mk('drip_%d' % k, V, F, None, mat_)
-    FL = pmat('m_flame', 'ffb040', emit='ffa030', emit_s=60.0)
-    fprof = [(0, TZ + 7.52), (0.1, TZ + 7.6), (0.14, TZ + 7.75), (0.1, TZ + 7.95), (0.04, TZ + 8.15), (0, TZ + 8.25)]
-    lathe(fprof, 16, 'flame', FL, xy=(bx, by), coll=BG)
-    Mb = Matrix.Translation((bx, by, TZ)) @ Matrix.Scale(BS, 4) @ Matrix.Translation((-bx, -by, -TZ))
-    for o in set(bpy.data.objects) - before: o.data.transform(Mb)
-    CANDLE_POS = tuple(Mb @ Vector((bx, by, TZ + 7.85)))
     # ---- wine glass (back right)
     gx, gy = 8.8, 8.6
     GLS = glass_mat('m_glass')
@@ -962,27 +921,6 @@ def build_props():
     shaker(-10.6, 1.4, 'parm', pc, pn, 2.1)
     cc, cn = grain_tex('chili', ['7a160a', 'a8260e', 'e0a83a', '5a1006', 'c03a12'], 132, flakes=True)
     shaker(-9.4, -2.2, 'chili', cc, cn, 1.7)
-    # ---- pizza cutter (right, lying on the cloth)
-    STEEL = pmat('m_steel', 'c8c8c6', rough=0.22, metal=1)
-    N = 512; u = (np.arange(N) + 0.5) / N; U, Vv = np.meshgrid(u, u); Rw = np.hypot(U - 0.5, Vv - 0.5) * 2; Aw = np.arctan2(Vv - 0.5, U - 0.5)
-    circ = np.sin(Rw * 900 + 3 * gn((N, N), 20, 142)) * 0.5 + 0.5
-    smear = ss(0.3, 0.9, gn((N, N), 10, 143) * 0.6 + 0.8) * ss(0.78, 0.92, Rw) * ss(0.3, 0.7, np.cos(Aw - 0.8))
-    smear = np.maximum(smear, ss(1.6, 2.2, gn((N, N), 4, 144)) * ss(0.6, 0.9, Rw))
-    wcol = mix(np.tile(hx('c9c9c6'), (N, N, 1)) * (0.92 + 0.08 * circ[..., None]), hx('8a1e0c'), smear * 0.85)
-    wrough = 0.18 + 0.08 * circ + 0.2 * smear
-    WH = pmat('m_wheel', img=image('wheel_col', wcol), ormimg=image('wheel_orm', orm(wrough, 1 - smear), True), metal=1)
-    HAND = pmat('m_handle', '1c1a19', rough=0.55, coat=0.2, coat_r=0.3)
-    parts = []
-    wp_ = [(0, 0.04), (1.35, 0.03), (1.5, 0.0), (1.35, -0.03), (0, -0.04)]
-    w = lathe(wp_[::-1], 64, 'cutter_wheel', WH, uvfn=lambda xx, yy, a, s: (0.5 + xx / 3.0, 0.5 + yy / 3.0)); parts.append(w)
-    hub = lathe([(0, 0.11), (0.28, 0.1), (0.3, 0.0), (0.28, -0.1), (0, -0.11)][::-1], 24, 'cutter_hub', STEEL); parts.append(hub)
-    V, F = tube([(0, 0.13, 0.0), (-0.9, 0.16, 0.0), (-1.9, 0.12, 0.0), (-2.2, 0.0, 0.0)], 0.07, 8); parts.append(mk('cutter_fork', V, F, None, STEEL))
-    V, F = tube([(0, -0.13, 0.0), (-0.9, -0.16, 0.0), (-1.9, -0.12, 0.0), (-2.2, 0.0, 0.0)], 0.07, 8); parts.append(mk('cutter_fork2', V, F, None, STEEL))
-    hp = np.array([(-2.2, 0, 0), (-2.6, 0, 0), (-3.4, 0, 0), (-4.6, 0, 0), (-5.6, 0, 0), (-5.9, 0, 0)])
-    V, F = tube(hp, [0.16, 0.24, 0.3, 0.33, 0.31, 0.2], 16); parts.append(mk('cutter_handle', V, F, None, HAND))
-    for p in parts: p.data.transform(Matrix.Rotation(math.radians(6), 4, 'X'))
-    for p in parts:
-        p.data.transform(Matrix.Rotation(math.radians(115), 4, 'Z')); p.data.transform(Matrix.Translation((9.6, -1.6, TZ + 0.34)))
     # ---- napkins (right, folded linen)
     Tn = 256; f_ = (np.arange(Tn) % 4 + 0.5) / 4; I_ = np.arange(Tn) // 4
     FXn, FYn = np.meshgrid(f_, f_); In, Jn = np.meshgrid(I_, I_)
@@ -1031,7 +969,7 @@ def build_props():
         F.append((o_, o_ + 1, o_ + 2, o_ + 3))
     mk('chili_flakes', V, F, None, FLK)
     log('props built')
-    return CANDLE_POS
+    return None
 
 
 # ================================================================ background room (render only)
@@ -1077,7 +1015,6 @@ def build_surroundings():
     FLOOR = TZ - 23.0
     ph_import('dining_chair_02/dining_chair_02_1k.gltf', (-8.0, HY + 7.5, FLOOR), 0.15)
     ph_import('dining_chair_02/dining_chair_02_1k.gltf', (10.0, HY + 8.0, FLOOR), -0.2)
-    ph_import('lemon/lemon_1k.gltf', (-11.8, 5.6, TZ + 1.6), 0.7)
 
 # ================================================================ build
 TOPD = build_pizza_top()
@@ -1086,7 +1023,7 @@ build_pepperoni(TOPD)
 build_basil()
 build_tray()
 build_cloth()
-CANDLE = build_props()
+build_props()
 build_room()
 build_surroundings()
 
@@ -1216,8 +1153,13 @@ def setup_light():
     area('Fill', (16, -18, 9), (0, 0, 0), 2500, 16, (1.0, 0.86, 0.72))
     area('Rim', (6, 24, 9), (0, 0, 0.5), 5000, 10, (1.0, 0.88, 0.75))
     area('Back', (-17, 16, 7), (0, 0, 0), 7000, 12, (1.0, 0.82, 0.62))
-    c = bpy.data.objects.new('Candle', bpy.data.lights.new('Candle', 'POINT')); scn.collection.objects.link(c)
-    c.data.energy = 3000; c.data.color = (1.0, 0.55, 0.22); c.data.shadow_soft_size = 0.25; c.location = CANDLE
+    # soft warm pendant lamp over the table (shade just out of frame, render only)
+    p = bpy.data.objects.new('Pendant', bpy.data.lights.new('Pendant', 'SPOT')); scn.collection.objects.link(p)
+    p.data.energy = 22000; p.data.color = (1.0, 0.72, 0.45); p.data.spot_size = math.radians(110); p.data.spot_blend = 1.0
+    p.data.shadow_soft_size = 2.5; p.location = (0.8, 1.5, 19.5); p.rotation_euler = (0, 0, 0)
+    SH = pmat('m_shade', '1a1410', rough=0.4, metal=0.6)
+    lathe([(0.6, 22.5), (2.2, 21.5), (4.2, 20.0), (4.25, 19.9)], 48, 'pendant_shade', SH, coll=BG, xy=(0.8, 1.5))
+    V, F = tube([(0.8, 1.5, 22.5), (0.8, 1.5, 60)], 0.06, 6); mk('pendant_cord', V, F, None, SH, coll=BG)
 
 def render(shot):
     cam = bpy.data.objects.get('Cam')
