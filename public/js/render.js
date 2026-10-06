@@ -688,6 +688,19 @@
     update(w, dt, T) {
       const s = this.s, root = this.root, ps = this.ps;
       root.position.set(w.x, w.y + (w.torpedo ? 0.35 : 0), w.z);
+      // LILY PAD: off the pad there is only water. Whoever goes over the edge drops in with a splash and bobs there.
+      const offPad = S.curStage === 'lily' && Math.hypot(w.x, w.z) > S.RING_R + 0.75 && w.y < 0.3;
+      if (offPad && !this.inWater) {
+        this.inWater = true;
+        for (let k = 0; k < 3; k++) this.fx.water(w.x + (Math.random() - 0.5) * 0.6, w.z + (Math.random() - 0.5) * 0.6, 6);
+        this.fx.ring(w.x, w.z, 3.2, 0.7); this.fx.ring(w.x, w.z, 1.8, 0.45); this.fx.salt(w.x, 0.2, w.z, 0, 0); // a white crown of spray
+        if (S.game && S.game.audio && S.game.audio.thump) S.game.audio.thump(10);
+      } else if (!offPad && this.inWater && Math.hypot(w.x, w.z) < S.RING_R + 0.6) this.inWater = false; // back on the pad (new round)
+      this.sink = (this.sink || 0) + ((this.inWater ? 1 : 0) - (this.sink || 0)) * Math.min(1, dt * 5);
+      if (this.sink > 0.01) {
+        root.position.y -= this.sink * 0.95 * s - Math.sin(T * 2.4 + this.s * 3) * 0.05 * this.sink;
+        if (this.inWater && Math.random() < dt * 1.5) this.fx.water(w.x + (Math.random() - 0.5), w.z + (Math.random() - 0.5), 0.6); // treading water
+      }
       root.scale.setScalar((w.szCur || 1) * (w.gulpI >= 0 ? 1.22 + Math.sin(T * 9) * 0.03 : w.st === 'inhale' ? 1.06 : 1));
       const frozen = w.fxs && w.fxs.frozen > 0;
       if (frozen) dt = 1e-5; // ice: hold the pose
@@ -803,6 +816,7 @@
       const sc = 1.9 * s * (1 - Math.min(0.5, w.y));
       this.shadow.material.map = SH.uAnime.value > 0.5 ? this.shTexHard : this.shTexSoft;
       this.shadow.position.set(w.x + 0.12, 0.015, w.z + 0.05);
+      if (this.sink > 0.3) this.shadow.visible = false;
       this.shadow.scale.set(sc, 1, sc * (1 + ps.drop * 0.6));
       this.shadow.rotation.y = Math.PI / 2 - w.f;
     }
@@ -1143,6 +1157,7 @@
       this.sl.instanceMatrix.needsUpdate = true;
     }
     dust(x, y, z, n, spread, up, size, dx, dz) {
+      if (S.curStage === 'lily' && Math.hypot(x, z) > S.RING_R + 0.75) { if (this.water) this.water(x, z, Math.min(6, 1 + n * 0.3)); return; } // no dust on a pond
       for (let k = 0; k < n; k++) {
         const i = this.next; this.next = (this.next + 1) % this.N;
         const a = Math.random() * Math.PI * 2, r = Math.random() * spread;
@@ -2262,7 +2277,7 @@
     this.fx.noMarks = !classic; // sand footprints, slide marks and step dust belong to the dohyo only
     if (this.fx.noMarks) this.fx.clearDecals();
     if (this.stageId === id) return;
-    this.stageId = id;
+    this.stageId = id; S.curStage = id;
     if (this.stageG) { this.scene.remove(this.stageG); this.stageG = null; }
     if (this.stageSpin) { this.spinG.remove(this.stageSpin); this.stageSpin = null; }
     this.stageTick = null;
