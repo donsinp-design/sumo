@@ -307,7 +307,7 @@ for f in bm.faces:
 me = bpy.data.meshes.new('Floor'); bm.to_mesh(me); bm.free(); obj('CrustTop', me, [CRUST])
 
 # ================================================================ waterfalls spilling off the edge
-FALLS = [(math.radians(a), wdt) for a, wdt in ((171, 0.06), (187, 0.035), (-6, 0.05), (9, 0.03))]
+FALLS = [(math.radians(a), wdt) for a, wdt in ((203, 0.055), (219, 0.03), (321, 0.05), (336, 0.03))]
 for n, (a0, hw) in enumerate(FALLS):
     bm = bmesh.new(); uvl = bm.loops.layers.uv.new('UVMap'); NU, NV = 6, 26; grid = []
     jit = np.random.default_rng(20 + n)
