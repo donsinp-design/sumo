@@ -86,6 +86,39 @@
     m.position.set(x, 0.012, z); m.renderOrder = 2; p.add(m); return m;
   };
 
+  // ---------------------------------------------------------------- a puddle: shallow pale-blue water lying on the ground,
+  // a soft lighter rim, slow wavering caustic light lines and a gentle sheen. Organic outline from a few sine lobes.
+  const uT = { value: 0 };
+  K.puddle = (p, x, z, rx, rz, seed) => {
+    seed = seed || 1;
+    const pts = []; const N = 64;
+    for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2; let r = 1 + 0.16 * Math.sin(a * 2 + seed) + 0.09 * Math.sin(a * 3 + seed * 2.3) + 0.05 * Math.sin(a * 5 + seed * 4.1); pts.push(new THREE.Vector2(Math.cos(a) * r * rx, Math.sin(a) * r * rz)); }
+    const geo = new THREE.ShapeGeometry(new THREE.Shape(pts), 1); geo.rotateX(-Math.PI / 2);
+    // uv = distance from centre along the outline, for the rim
+    const pos = geo.attributes.position, rim = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) { const px = pos.getX(i) / rx, pz = pos.getZ(i) / rz, a = Math.atan2(pz, px); const r = 1 + 0.16 * Math.sin(a * 2 + seed) + 0.09 * Math.sin(a * 3 + seed * 2.3) + 0.05 * Math.sin(a * 5 + seed * 4.1); rim[i] = Math.min(1, Math.hypot(px, pz) / r); }
+    geo.setAttribute('aRim', new THREE.BufferAttribute(rim, 1));
+    const m = new THREE.ShaderMaterial({
+      uniforms: { uT, uCol: { value: new THREE.Color(0x96bee6) }, uLit: { value: new THREE.Color(0xe9f3ff) } },
+      transparent: true, depthWrite: false,
+      vertexShader: 'attribute float aRim; varying float vR; varying vec3 vW; void main(){ vR = aRim; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+      fragmentShader: `uniform float uT; uniform vec3 uCol, uLit; varying float vR; varying vec3 vW;
+        float wav(vec2 p, float t){ return sin(p.x*2.1 + sin(p.y*1.7 + t*0.9)*1.4 + t*0.6) + sin(p.y*2.6 + sin(p.x*1.3 - t*0.7)*1.6 - t*0.5); }
+        void main(){
+          float edge = smoothstep(1.0, 0.86, vR);                       // soft outer boundary
+          float rimL = smoothstep(0.72, 0.9, vR) * (1.0 - smoothstep(0.9, 1.0, vR));
+          vec2 q = vW.xz * vec2(2.4, 1.3);                               // stretched: streaks rather than rings
+          float c = q.x + 0.9 * sin(q.y * 1.7 + uT * 0.8) + 0.5 * sin(q.y * 3.1 - q.x * 0.6 - uT * 1.1);
+          float lines = smoothstep(0.93, 1.0, abs(sin(c * 2.2))) * (0.55 + 0.45 * sin(q.y * 0.9 + uT * 0.4));   // thin bright wavering lines
+          vec3 col = mix(uCol, uLit, 0.7 * lines + 0.3 * rimL);
+          gl_FragColor = vec4(col, 0.85 * edge);
+        }`,
+    });
+    const mesh = new THREE.Mesh(geo, m); mesh.position.set(x, 0.009, z); mesh.renderOrder = 1;
+    mesh.onBeforeRender = () => { uT.value = performance.now() / 1000; };
+    p.add(mesh); return mesh;
+  };
+
   // ---------------------------------------------------------------- daylight rig
   K.light = (scene, focus) => {
     const sun = new THREE.DirectionalLight(0xfff3e4, 0.72);
