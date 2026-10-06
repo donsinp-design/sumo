@@ -1513,9 +1513,11 @@
               if (name === 'Mound' || name === 'Sand') col.multiply(new THREE.Color(0.8, 0.82, 0.86)); // calmer clay under the comic grade
               const m = mesh(o.geometry, toon(col.getHex(), { shade: col.clone().multiply(new THREE.Color(0.62, 0.52, 0.5)).getHex(), map: sm.map || undefined, rimAmt: 0.15 }), th);
               if (name === 'Mound') { // the clay shell came out of Blender wound inside out: draw both faces, normals facing up/out
-                m.material.side = THREE.DoubleSide;
                 const nr = o.geometry.attributes.normal; let sy = 0; for (let i = 0; i < nr.count; i++) sy += nr.getY(i);
-                if (sy < 0) { for (let i = 0; i < nr.count; i++) nr.setXYZ(i, -nr.getX(i), -nr.getY(i), -nr.getZ(i)); nr.needsUpdate = true; }
+                if (sy < 0) {
+                  for (let i = 0; i < nr.count; i++) nr.setXYZ(i, -nr.getX(i), -nr.getY(i), -nr.getZ(i)); nr.needsUpdate = true;
+                  const ix = o.geometry.index; if (ix) { for (let i = 0; i < ix.count; i += 3) { const t = ix.getX(i + 1); ix.setX(i + 1, ix.getX(i + 2)); ix.setX(i + 2, t); } ix.needsUpdate = true; }
+                }
               }
               m.applyMatrix4(o.matrixWorld); grp.add(m);
             });
