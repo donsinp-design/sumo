@@ -173,11 +173,11 @@ for s in S2:
     ell_ax(E[s] + D2[s] * 0.075, (a2, b2, c2), (0.12, 0.103, 0.1))                                             # forearm muscle
     ell(W[s], (0.067, 0.067, 0.067))
     xh, yh, nin = hand_frame(s); H0 = W[s] + xh * 0.02
-    ell_ax(H0 + xh * 0.05, (xh, yh, nin), (0.062, 0.052, 0.03))                                                # palm
-    for k, (off, L) in enumerate(((0.034, 0.075), (0.012, 0.083), (-0.011, 0.079), (-0.033, 0.064))):          # fingers
-        a = H0 + xh * 0.095 + yh * off; b = a + xh * L + nin * 0.012
-        limb(a, b, 0.0125, 0.0105)
-    limb(H0 + xh * 0.025 + yh * 0.04 + nin * 0.006, H0 + xh * 0.085 + yh * 0.07 + nin * 0.022, 0.018, 0.0135)  # thumb
+    ell_ax(H0 + xh * 0.055, (xh, yh, nin), (0.07, 0.058, 0.034))                                               # palm
+    for k, (off, L) in enumerate(((0.037, 0.078), (0.013, 0.088), (-0.012, 0.083), (-0.036, 0.068))):          # fingers
+        a = H0 + xh * 0.105 + yh * off; b = a + xh * L + nin * 0.01
+        limb(a, b, 0.0138, 0.0122)
+    limb(H0 + xh * 0.03 + yh * 0.045 + nin * 0.006, H0 + xh * 0.095 + yh * 0.078 + nin * 0.024, 0.02, 0.015)   # thumb
 # legs: massive thighs, knees, shapely calves, flat broad feet with toes
 for s in S2:
     limb(HIP[s] + Vector((0, 0, -0.02)), KNEE[s], 0.245, 0.16)
@@ -213,10 +213,10 @@ def sculpt(me):
     x, y, z = co.T; nx, ny, nz = nr.T
     d = np.zeros(n)
     back = sstep(0.15, 0.5, ny)
-    d -= 0.02 * gau(x, 0.03) * back * sstep(0.9, 1.0, z) * (1 - sstep(1.36, 1.46, z))             # spine groove
+    d -= 0.02 * gau(x, 0.03) * back * sstep(1.02, 1.12, z) * (1 - sstep(1.36, 1.46, z))           # spine groove (stops above the roll)
     for z0, a in ((1.06, 0.012), (1.15, 0.008)):                                                   # flank folds above the roll
         d -= a * gau(z - z0 - 0.15 * (np.abs(x) - 0.3), 0.009) * sstep(0.18, 0.3, np.abs(x)) * sstep(-0.05, 0.1, y) * sstep(0.2, 0.5, np.hypot(nx, ny))
-    d -= 0.006 * gau(x, 0.06) * back * sstep(0.9, 1.0, z) * (1 - sstep(1.3, 1.44, z))             # ...with soft walls
+    d -= 0.006 * gau(x, 0.06) * back * sstep(1.02, 1.12, z) * (1 - sstep(1.3, 1.44, z))           # ...with soft walls
     for z0, a in ((1.465, 0.011), (1.505, 0.009), (1.54, 0.005)):                                  # folds at the back of the neck
         d -= a * gau(z - (z0 + 0.9 * x ** 2), 0.0075) * np.exp(-(x / 0.12) ** 4) * sstep(0.1, 0.5, ny)
     for s in S2:
@@ -761,6 +761,19 @@ try:
 except Exception as ex: print('smooth weights skipped', ex)
 bpy.ops.object.mode_set(mode='OBJECT')
 bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+# under the belt the skin is bound to the hips (cloth and skin then move as one; the legs still bend below it)
+hg = body.vertex_groups['hips']
+for v in body.data.vertices:
+    c = v.co
+    if abs(c.x) > 0.56 or not (0.5 < c.z < 1.1): continue
+    th = math.atan2(c.x, -(c.y + 0.03)); dz = abs(c.z - float(belt_zc(th)))
+    k = 0.85 * float(sstep(0.15, 0.07, dz))
+    if k <= 0: continue
+    for g in v.groups:
+        if body.vertex_groups[g.group].name != 'hips': g.weight *= (1 - k)
+    cur = next((g.weight for g in v.groups if g.group == hg.index), 0.0)
+    hg.add([v.index], cur * (1 - k) + k, 'REPLACE')
+bpy.ops.object.vertex_group_normalize_all(lock_active=False)
 
 # the rest of the character: weights from the skin (nearest-vertex blend) or a rigid anchor
 GN = [g.name for g in body.vertex_groups]
@@ -793,11 +806,6 @@ for o in list(scn.objects):
         top = [t for (so, t) in SAG if so == o][0]; aw = skin_weights(top)
         aw = {g: x for g, x in aw.items() if not g.startswith(('thigh', 'shin'))} or {'hips': 1.0}
         set_weights(o, lambda p, aw=aw: aw)
-    elif nm.startswith('Wrap'):     # belt wraps: follow the skin but never the legs
-        def ww(p):
-            w_ = skin_weights(p); w_ = {g: x for g, x in w_.items() if not g.startswith(('thigh', 'shin', 'foot'))}
-            t_ = sum(w_.values()); return {g: x / t_ for g, x in w_.items()} if t_ > 0 else {'hips': 1.0}
-        set_weights(o, ww)
     else: set_weights(o, skin_weights)
 
 # ---------------------------------------------------------------- one skinned mesh
@@ -808,6 +816,9 @@ body.parent = None
 for mm in list(body.modifiers): body.modifiers.remove(mm)
 bpy.ops.object.join()
 hero = bpy.context.object; hero.name = 'Sumo'; hero.data.name = 'Sumo'
+hero.data.validate(verbose=False)
+bpy.ops.object.vertex_group_limit_total(group_select_mode='ALL', limit=4)     # glTF skins carry 4 influences
+bpy.ops.object.vertex_group_normalize_all(lock_active=False)
 for g in list(hero.vertex_groups):
     if g.name not in BONES: hero.vertex_groups.remove(g)
 hero.parent = rig
@@ -909,6 +920,16 @@ apply_pose(rig, stance_spec(), STANCE_OFF)
 shoot('stance_back', (-1.5, 3.3, 2.8), (0, -0.1, 0.8), 50)
 shoot('stance_front', (1.5, -3.4, 1.6), (0, -0.2, 0.8), 50)
 shoot('stance_top', (0.0, 2.2, 4.0), (0, -0.1, 0.8), 50)
+# the stance as a one-frame clip ("stance") for the game to pose the skinned model with
+act = bpy.data.actions.new('stance'); rig.animation_data_create(); rig.animation_data.action = act
+for pb in rig.pose.bones:
+    pb.rotation_mode = 'QUATERNION'
+    for f in (1, 2): pb.keyframe_insert('location', frame=f); pb.keyframe_insert('rotation_quaternion', frame=f)
+for o in scn.objects: o.select_set(o in (hero, rig))
+bpy.context.view_layer.objects.active = rig
+bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, 'sumo2_stance.glb'), export_format='GLB', use_selection=True, export_skins=True,
+                          export_animations=True, export_apply=False, export_rest_position_armature=True, export_yup=True)
+rig.animation_data.action = None
 # the game camera: two of them squaring up, 1.6 m apart, the hero with its back to the camera
 if not SHOTS or SHOTS & {'game', 'zoom', 'toon'}:
     rig2 = rig.copy(); scn.collection.objects.link(rig2)
