@@ -102,10 +102,13 @@ for s in S2:
     up = D1[s].cross(Vector((0, 1, 0))).normalized()
     if up.z < 0: up = -up
     ell_ax(J[s] + D1[s] * 0.14 + Vector((0, -0.01, 0)), (D1[s], Vector((0, 1, 0)), up), (0.13, 0.115, 0.115))
-    limb(E[s], W[s], 0.104, 0.072)
+    limb(E[s], W[s], 0.104, 0.09)                                                       # no pinched wrist
     xh, yh, nin = hand_frame(s); H0 = W[s] + xh * 0.02
-    ell_ax(H0 + xh * 0.085, (xh, yh, nin), (0.105, 0.066, 0.045))                                              # mitt
-    limb(H0 + xh * 0.03 + yh * 0.04 + nin * 0.006, H0 + xh * 0.09 + yh * 0.075 + nin * 0.02, 0.026, 0.022)    # thumb
+    # chunky toy mitt: a thick rounded paddle as wide as the forearm, a soft finger block, a separate rounded thumb
+    limb(W[s] - xh * 0.02, H0 + xh * 0.05, 0.088, 0.08, caps=False)                    # wrist, as thick as the forearm
+    ell_ax(H0 + xh * 0.085, (xh, yh, nin), (0.105, 0.095, 0.062))                      # palm paddle
+    ell_ax(H0 + xh * 0.15, (xh, yh, nin), (0.075, 0.092, 0.058))                        # finger block, rounded tip
+    limb(H0 + xh * 0.03 + yh * 0.06 + nin * 0.01, H0 + xh * 0.10 + yh * 0.125 + nin * 0.03, 0.042, 0.038)   # thumb
 # legs: massive smooth thighs, thick calves, simple rounded feet
 for s in S2:
     limb(HIP[s] + Vector((0, 0, -0.02)), KNEE[s], 0.285, 0.18)
@@ -529,6 +532,18 @@ bpy.ops.object.vertex_group_limit_total(group_select_mode='ALL', limit=4)
 bpy.ops.object.mode_set(mode='OBJECT')
 bpy.ops.object.vertex_group_normalize_all(lock_active=False)
 
+# the mitts belong to the hand bones (bone heat leaves part of them on the forearm, which bends the wrist into a stalk)
+for s in S2:
+    sd = '.L' if s > 0 else '.R'; xh = D2[s]
+    gh, gf = body.vertex_groups['hand' + sd], body.vertex_groups['forearm' + sd]
+    for v in body.data.vertices:
+        if v.co.x * s < 0.5: continue
+        rel = v.co - W[s]; t = rel.dot(xh)
+        if t < -0.12 or (rel - xh * t).length > 0.2: continue
+        wh = float(sstep(-0.10, 0.06, t))
+        for g in list(v.groups):
+            if g.group not in (gh.index, gf.index): body.vertex_groups[g.group].remove([v.index])
+        gh.add([v.index], wh, 'REPLACE'); gf.add([v.index], 1 - wh, 'REPLACE')
 GN = [g.name for g in body.vertex_groups]
 bco_l = [v.co.copy() for v in body.data.vertices]
 bw = [{body.vertex_groups[g.group].name: g.weight for g in v.groups if g.weight > 1e-4} for v in body.data.vertices]
@@ -635,7 +650,7 @@ def leg(sp, s, ank, pole, foot, foot_up=(0, 0, 1)):
     sp['foot' + sd] = (foot, foot_up)
 def arm(sp, s, sh, ua, fa, hd, hz):
     sd = '.L' if s > 0 else '.R'
-    sp['shoulder' + sd] = (sh, None); sp['upper_arm' + sd] = (ua, None); sp['forearm' + sd] = (fa, None); sp['hand' + sd] = (hd, hz)
+    sp['shoulder' + sd] = (sh, None); sp['upper_arm' + sd] = (ua, None); sp['forearm' + sd] = (fa, hz); sp['hand' + sd] = (hd, hz)
 # each pose: (spec builder taking a ground offset dz, hips offset); the offset is solved so the lowest skin point sits on the floor
 def stance_spec(dz=0.0):
     # shiko-dachi-like ready stance: feet wide and turned out, knees over the toes, hips low, back nearly upright,
@@ -646,7 +661,7 @@ def stance_spec(dz=0.0):
         leg(sp, s, (s * 0.56, 0.02, 0.11 + dz), (s * math.sin(out), -math.cos(out), 0.05),
             (s * 0.55 * math.sin(out) / 0.6, -0.55 * math.cos(out) / 0.6, -0.3))
         arm(sp, s, (s * 0.95, -0.28, -0.08), (s * 0.42, -0.42, -0.80), (s * 0.12, -0.95, -0.28),
-            (s * 0.02, -0.97, -0.25), (-s, 0, 0))
+            (s * 0.06, -0.86, -0.5), (-s, 0, 0.5))
     return sp
 STANCE_OFF = Vector((0, 0.03, -0.22))
 def push_spec(dz=0.0):
@@ -656,8 +671,8 @@ def push_spec(dz=0.0):
     leg(sp, 1, (0.30, -0.36, 0.11 + dz), (0.25, -0.95, 0.1), (0.18, -0.93, -0.32))
     leg(sp, -1, (-0.27, 0.55, 0.17 + dz), (-0.15, -0.6, -0.8), (-0.05, -0.5, -0.86), (0, -1, 0.3))
     for s in S2:
-        arm(sp, s, (s * 0.9, -0.42, -0.04), (s * 0.30, -0.90, -0.30), (s * 0.02, -0.98, 0.10),
-            (-s * 0.04, -0.35, 0.94), (-s, 0, 0))
+        arm(sp, s, (s * 0.9, -0.42, -0.04), (s * 0.30, -0.92, -0.22), (s * 0.02, -0.88, 0.47),
+            (-s * 0.04, -0.50, 0.86), (-s, 0, 0))
     return sp
 PUSH_OFF = Vector((0, -0.16, -0.15))
 def charge_spec(dz=0.0):
@@ -667,7 +682,7 @@ def charge_spec(dz=0.0):
     leg(sp, 1, (0.29, -0.52, 0.32 + dz), (0.15, -0.7, 0.7), (0.12, -0.75, -0.65))
     leg(sp, -1, (-0.25, 0.55, 0.20 + dz), (-0.1, -0.6, -0.8), (-0.03, -0.35, -0.94), (0, -1, 0.3))
     arm(sp, -1, (-0.88, -0.45, -0.1), (-0.2, -0.45, -0.87), (0.15, -0.80, 0.58), (0.1, -0.97, 0.1), (1, 0, 0))
-    arm(sp, 1, (0.92, -0.2, -0.1), (0.35, 0.75, -0.55), (0.10, -0.35, -0.93), (0.05, -0.5, -0.86), (0, 0, 1))
+    arm(sp, 1, (0.92, -0.2, -0.1), (0.35, 0.75, -0.55), (0.10, -0.35, -0.93), (0.05, -0.5, -0.86), (-1, 0, 0))
     return sp
 CHARGE_OFF = Vector((0, -0.2, -0.1))
 
@@ -753,8 +768,19 @@ if RENDER:
             rg = rig.copy(); scn.collection.objects.link(rg)
             hr = hero.copy(); hr.data = hero.data.copy(); scn.collection.objects.link(hr); hr.parent = rg; hr.modifiers['Armature'].object = rg
         rg.animation_data_create(); rg.animation_data.action = ACTS[nm]
+        if nm == 'push': RG_PUSH = rg
         rg.location = right * (2.05 * (i - 1)); rg.rotation_euler = (0, 0, math.radians(20 if i == 0 else -15))   # stance more frontal, the drives more in profile
     scn.frame_set(1)
     scn.render.resolution_x, scn.render.resolution_y = 1200, 500
     scn.render.filepath = os.path.join(OUT, 'prev_poses.png'); bpy.ops.render.render(write_still=True)
+    # close-up of the pushing hands, 3/4 from above
+    bpy.context.view_layer.update()
+    for o in scn.objects:
+        if o.type in ('MESH', 'ARMATURE') and o not in (RG_PUSH, gnd) and o.parent != RG_PUSH: o.hide_render = True
+    hc = sum((RG_PUSH.matrix_world @ RG_PUSH.pose.bones['hand' + sd].head for sd in ('.L', '.R')), Vector()) / 2
+    fwd = (RG_PUSH.matrix_world.to_3x3() @ Vector((0, -1, 0))).normalized(); side = Vector((-fwd.y, fwd.x, 0))
+    cam.location = hc + (fwd * 1.1 + side * 0.75 + Vector((0, 0, 0.95))) * 1.75
+    cam.rotation_euler = (hc + fwd * 0.1 - cam.location).to_track_quat('-Z', 'Y').to_euler(); cam.data.lens = 50
+    scn.render.resolution_x, scn.render.resolution_y = 800, 500
+    scn.render.filepath = os.path.join(OUT, 'prev_hands.png'); bpy.ops.render.render(write_still=True)
 print('done')
