@@ -1365,6 +1365,9 @@
       if (this.banners) for (const b of this.banners) b.visible = classic && !boss;
       if (this.coneM) this.coneM.visible = classic && !boss; // against pure black the beam reads as a grey slab
       if (classic) this.scene.background.set(boss ? 0x000000 : 0x150c14); // themed stages set their own sky
+      const d3 = boss && this.ring3d && this.ring3d.length > 0;          // the modelled dohyo replaces the painted one
+      if (this.flat2d) for (const o of this.flat2d) o.visible = !d3 && (o.parent === this.spinG ? classic : true);
+      if (this.ring3d) for (const o of this.ring3d) o.visible = d3;
     }
     // adaptive resolution: if frames run slow for a moment, render fewer pixels; if there is plenty of headroom, add them back
     perf(dt) {
@@ -1448,6 +1451,7 @@
       const rc = R + 0.3, disc = new THREE.CircleGeometry(rc, 72).rotateX(-Math.PI / 2), uv = disc.attributes.uv;
       for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.5 + (uv.getX(i) - 0.5) * rc / half, 0.5 + (uv.getY(i) - 0.5) * rc / half);
       const turn = new THREE.Mesh(disc, new THREE.MeshBasicMaterial({ map: this.ringTex })); turn.position.y = 0.004; turn.userData.dohyo = true; this.spinG.add(turn);
+      this.flat2d = [turn];
       const seam = new THREE.Mesh(new THREE.RingGeometry(rc - 0.02, rc + 0.03, 96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x5a3a24 })); seam.position.y = 0.006; this.dohyoG.add(seam);
       // tawara: straw bales ring with the four gaps
       const straw = toon(0xdcc58c, { shade: 0x9a7c52, rimAmt: 0.4 });
@@ -1455,7 +1459,7 @@
       for (let k = 0; k < 4; k++) {
         const g = new THREE.Group(); g.rotation.y = k * Math.PI / 2 + gap / 2;
         const t = mesh(new THREE.TorusGeometry(R + 0.13, 0.13, 8, 48, arc), straw, 0.02);
-        t.rotation.x = -Math.PI / 2; t.position.y = 0.03; g.add(t); g.userData.dohyo = true; this.spinG.add(g);
+        t.rotation.x = -Math.PI / 2; t.position.y = 0.03; g.add(t); g.userData.dohyo = true; this.spinG.add(g); this.flat2d.push(g);
         // straw bands
         for (let j = 1; j < 6; j++) {
           const a = j / 6 * arc;
@@ -1485,6 +1489,7 @@
         side.position.y = -0.35; bg.add(side);
         const lip = new THREE.Mesh(new THREE.TorusGeometry(rT, 0.05, 6, 96), toon(0xe2c48c, { shade: 0x7a5a3a, rimAmt: 0.6 }));
         lip.rotation.x = Math.PI / 2; lip.position.y = 0.0; bg.add(lip);
+        this.flat2d.push(topM, side, lip);
         // the spotlight falls off towards the edge of the stage
         const vig = canvasTex(512, 512, (g, w) => {
           const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
@@ -1493,6 +1498,31 @@
         });
         const vm = new THREE.Mesh(new THREE.CircleGeometry(rT + 0.02, 96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: vig, transparent: true, depthWrite: false }));
         vm.position.y = 0.009; vm.renderOrder = 1; bg.add(vm);
+        // the modelled dohyo (tools/blender/dohyo.py -> assets/models/dohyo.glb): a raised clay mound with swept sand,
+        // half-buried straw bales, the start lines and loose sand. Once it has loaded it replaces the painted stage
+        // and the toon straw in the boss arena. Bales and lines ride the turntable; the clay stays put.
+        this.ring3d = [];
+        new THREE.GLTFLoader().load('assets/models/dohyo.glb', (gl) => {
+          gl.scene.updateMatrixWorld(true);
+          for (const [name, parent, th] of [['Mound', bg, 0], ['Sand', bg, 0], ['Tawara', this.spinG, 0.012], ['Shikiri', this.spinG, 0.006]]) {
+            const src = gl.scene.getObjectByName(name); if (!src) continue;
+            const grp = new THREE.Group();
+            src.traverse((o) => {
+              if (!o.isMesh) return;
+              const sm = o.material, col = sm.color ? sm.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1);
+              if (name === 'Mound' || name === 'Sand') col.multiply(new THREE.Color(0.8, 0.82, 0.86)); // calmer clay under the comic grade
+              const m = mesh(o.geometry, toon(col.getHex(), { shade: col.clone().multiply(new THREE.Color(0.62, 0.52, 0.5)).getHex(), map: sm.map || undefined, rimAmt: 0.15 }), th);
+              if (name === 'Mound') { // the clay shell came out of Blender wound inside out: draw both faces, normals facing up/out
+                m.material.side = THREE.DoubleSide;
+                const nr = o.geometry.attributes.normal; let sy = 0; for (let i = 0; i < nr.count; i++) sy += nr.getY(i);
+                if (sy < 0) { for (let i = 0; i < nr.count; i++) nr.setXYZ(i, -nr.getX(i), -nr.getY(i), -nr.getZ(i)); nr.needsUpdate = true; }
+              }
+              m.applyMatrix4(o.matrixWorld); grp.add(m);
+            });
+            parent.add(grp); this.ring3d.push(grp);
+          }
+          this.applyArena();
+        }, undefined, () => {});
       }
       // salt box + water bucket corners
       const wood = toon(0x6d4430, { shade: 0x3c2219 });

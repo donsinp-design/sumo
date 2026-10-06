@@ -1,6 +1,6 @@
 # The "final boss" dohyo: a raised clay ring alone in a black void under one warm spotlight, built entirely by script
 # (Blender 4.2, run headless).
-#   python tools/blender/dohyo.py  [out_dir]  [shot=spot shot=close shot=top ...]  [noprev]
+#   python tools/blender/dohyo.py  [out_dir]  [shot=spot shot=close shot=top shot=edge]  [noprev]
 # Writes <out_dir>/dohyo.glb with four top-level objects, origin at the ring centre, Z up, top surface at Z=0,
 # front facing -Y, real metres matching the game (S.RING_R is read from public/js/config.js):
 #   Mound   the clay mound: flat top (radius RING_R + 1.6) and sloped trapezoid sides 0.6 m down, one mesh.
@@ -10,8 +10,8 @@
 #   Sand    loose sand grains and clumps kicked up against the bales, the rim and the start lines.
 # The recipe: the mound is a dense polar mesh displaced by one height function (macro undulation, a raised rim, clay
 # packed up against the bales) and then decimated; the fine relief (broom sweeps, the janome band, toe scuffs, grain)
-# is painted with numpy into the textures, with the cavities baked into Base Color so a flat toon shader under a
-# light from straight above still reads them. Preview renders <out_dir>/prev_*.png (Cycles, CPU).
+# is painted with numpy into the top's unique 1024 px Base Color, with the cavities baked in so a flat toon shader
+# under a light from straight above still reads them; a small tiled grain normal map rides on a second UV set. Preview renders <out_dir>/prev_*.png (Cycles, CPU).
 import bpy, bmesh, math, sys, os, re
 import numpy as np
 from mathutils import Vector
@@ -231,7 +231,7 @@ def tex_top(N=1024):
         # the broom pushes a little loose sand into a soft ridge at the end of each stroke
         endd = np.abs(np.abs(a) - span + 0.08) * D
         RIDGE[j0:j1, i0:i1] += 0.6 * np.exp(-(endd / 0.03) ** 2) * sstep(wb, wb - 0.07, np.abs(d - D)) * (a > 0)
-    breakup = 0.55 + 0.45 * sstep(-1.2, 1.0, fnoise(N, N, 3, 3, 12))
+    breakup = 0.3 + 0.7 * sstep(-1.0, 1.2, fnoise(N, N, 4, 4, 12))
     S *= breakup
     # --- janome: a band of fine, evenly brushed sand just outside the straw
     J = sstep(R + 0.25, R + 0.4, r) * sstep(R + 0.95, R + 0.8, r)
@@ -270,7 +270,7 @@ def tex_top(N=1024):
     val = 1 + 0.03 * n1 + 0.045 * n3 + 0.025 * g2 * rough + 0.02 * g1 * rough
     col = lerp(col, hx('a0703e'), (0.5 * Cc)[..., None])                        # compacted: darker, damper
     col = lerp(col, hx('dcb98e'), (0.55 * J)[..., None])                        # janome: paler, finer
-    val = val * (1 - 0.2 * S * (1 - 0.6 * Cc)) + 0.08 * np.clip(RIDGE, 0, 1)    # stripes darken their grooves
+    val = val * (1 - 0.13 * S * (1 - 0.6 * Cc)) + 0.08 * np.clip(RIDGE, 0, 1)    # stripes darken their grooves
     val = val * (1 - 0.1 * SC)
     val = val * (1 - 0.45 * np.exp(-np.maximum(bd, 0) / 0.035)) * (1 - 0.15 * np.exp(-np.maximum(bd, 0) / 0.15))
     rim = sstep(RT - 0.25, RT - 0.02, r)
@@ -408,10 +408,10 @@ def build_mound():
     hx_, hy_ = np.minimum(rr, top_r) * np.cos(A), np.minimum(rr, top_r) * np.sin(A)
     Z += H(hx_, hy_) * np.where(rr <= top_r, 1.0, wt)
     # the slope: hand-dressed waviness, pushed out along the horizontal
-    sn = fnoise(64, 1024, 2.5, 18, 7)
+    sn = fnoise(64, 1024, 7, 9, 7)
     on_side = rr > top_r + 0.005
     zz = np.clip((Z + 0.7) / 0.8, 0, 1)
-    dr = 0.012 * sample(sn, A / TAU, zz) * on_side * sstep(0.0, 0.08, -Z)
+    dr = 0.008 * sample(sn, A / TAU, zz) * on_side * sstep(0.0, 0.08, -Z)
     X += dr * np.cos(A); Y += dr * np.sin(A)
     verts = np.stack([X, Y, Z], -1).reshape(-1, 3)
     nr = len(prof)
