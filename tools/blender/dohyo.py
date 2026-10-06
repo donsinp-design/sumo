@@ -43,8 +43,8 @@ DROP = 0.6             # height of the sloped sides
 RB = RT + 0.36         # radius at the foot: a trapezoid, a little wider at the bottom
 EXT = RT + 0.12        # half-size of the square the top texture covers
 NB = 20                # bales in the ring
-BA, BRY, BZC = 0.16, 0.15, -0.03   # bale half-width, half-height, axis height (axis below ground: half-buried)
-BGW = 0.15             # bale half-width where it meets the clay
+BA, BRY, BZC = 0.17, 0.155, -0.03   # bale half-width, half-height, axis height (axis below ground: half-buried)
+BGW = 0.16             # bale half-width where it meets the clay
 SHIKIRI_X, SHIKIRI_W, SHIKIRI_L = 0.62, 0.07, 0.9
 RNG = np.random.default_rng(7)
 
@@ -97,7 +97,7 @@ def image(name, arr, data=False):
     return img
 
 
-def mat(name, base_img=None, nrm_img=None, rough=0.8, nrm_strength=1.0, spec=0.35, color=(1, 1, 1)):
+def mat(name, base_img=None, nrm_img=None, rough=0.8, nrm_strength=1.0, spec=0.35, color=(1, 1, 1), nrm_uv=None):
     m = bpy.data.materials.new(name); m.use_nodes = True
     nt = m.node_tree; b = nt.nodes['Principled BSDF']
     b.inputs['Roughness'].default_value = rough
@@ -108,7 +108,10 @@ def mat(name, base_img=None, nrm_img=None, rough=0.8, nrm_strength=1.0, spec=0.3
         nt.links.new(t.outputs['Color'], b.inputs['Base Color'])
     if nrm_img:
         t = nt.nodes.new('ShaderNodeTexImage'); t.image = nrm_img
+        if nrm_uv:
+            uvn = nt.nodes.new('ShaderNodeUVMap'); uvn.uv_map = nrm_uv; nt.links.new(uvn.outputs['UV'], t.inputs['Vector'])
         nm = nt.nodes.new('ShaderNodeNormalMap'); nm.inputs['Strength'].default_value = nrm_strength
+        if nrm_uv: nm.uv_map = nrm_uv
         nt.links.new(t.outputs['Color'], nm.inputs['Color']); nt.links.new(nm.outputs['Normal'], b.inputs['Normal'])
     return m
 
@@ -137,7 +140,7 @@ class Bale: pass
 
 BALES = []
 SLOT = TAU / NB
-BL = SLOT * (R + BA) - 0.07          # bale length along its arc: a small gap between neighbours
+BL = SLOT * (R + BA) - 0.035         # bale length along its arc: a small gap between neighbours
 for k in range(NB):
     b = Bale()
     b.toku = k % 5 == 0                    # k = 0, 5, 10, 15 sit on the cardinal points (+X, +Y, -X, -Y)
@@ -153,8 +156,8 @@ for k in range(NB):
 
 
 def end_profile(s, L):  # 1 along the bale, rounding down to 0 at its blunt ends
-    e = np.clip((L / 2 - np.abs(s)) / 0.15, 0, 1)
-    return np.sqrt(1 - (1 - e) ** 2)
+    e = np.clip((L / 2 - np.abs(s)) / 0.1, 0, 1)
+    return np.sqrt(1 - (1 - e) ** 2) * (0.85 + 0.15 * e)
 
 
 def bale_dist(x, y):
@@ -178,15 +181,22 @@ MEXT = 6.8
 def H(x, y, bd=None):
     r = np.hypot(x, y)
     u, v = (x + MEXT) / (2 * MEXT), (y + MEXT) / (2 * MEXT)
-    h = 0.005 * sample(MAC1, u, v) + 0.0015 * sample(MAC2, u, v)
+    h = 0.003 * sample(MAC1, u, v) + 0.0008 * sample(MAC2, u, v)
     h = h - 0.004 * np.exp(-(r / 2.0) ** 2)                 # the centre trodden down a little
-    h = h + 0.024 * sstep(RT - 0.55, RT - 0.08, r)          # a slightly raised rim
+    h = h + 0.03 * sstep(RT - 0.42, RT - 0.1, r)          # a slightly raised rim
     if bd is None: bd = bale_dist(x, y)
     h = h + 0.03 * np.exp(-np.maximum(bd, 0) / 0.05)        # clay packed up against the bales
     return h
 
 
 # ================================================================ textures
+def groove(q, seed):
+    """Bristle marks: narrow grooves at a spacing of 1 in q, each with its own depth."""
+    k = np.floor(q); f = q - k
+    amp = 0.35 + 0.65 * ((np.sin(k * 12.9898 + seed * 78.233) * 43758.5453) % 1.0)
+    return amp * np.exp(-((f - 0.5) / 0.16) ** 2)
+
+
 def tex_top(N=1024):
     """Base colour + normal for the top: broom-swept clay with grain, the janome band, compacted centre and
     start-line areas, toe scuffs, darkening where the clay meets the straw."""
@@ -215,7 +225,8 @@ def tex_top(N=1024):
         d = np.hypot(x, y); a = (np.arctan2(y, x) - dirn + np.pi) % TAU - np.pi
         w = warp[j0:j1, i0:i1]
         m = sstep(wb, wb - 0.07, np.abs(d - D)) * sstep(span, span - 0.25, np.abs(a))
-        stripes = (0.5 + 0.5 * np.cos(d / lam * TAU + 1.5 * w)) ** 2.5
+        q = d / lam + 0.25 * w
+        stripes = groove(q, i)
         S[j0:j1, i0:i1] = S[j0:j1, i0:i1] * (1 - m) + stripes * m
         # the broom pushes a little loose sand into a soft ridge at the end of each stroke
         endd = np.abs(np.abs(a) - span + 0.08) * D
@@ -224,7 +235,7 @@ def tex_top(N=1024):
     S *= breakup
     # --- janome: a band of fine, evenly brushed sand just outside the straw
     J = sstep(R + 0.25, R + 0.4, r) * sstep(R + 0.95, R + 0.8, r)
-    jstr = (0.5 + 0.5 * np.cos(r / 0.045 * TAU + 0.6 * warp)) ** 2
+    jstr = groove(r / 0.04 + 0.15 * warp, 999)
     S = S * (1 - J) + jstr * J * 0.6
     # --- compacted: the centre and where the two men crouch at their lines
     Cc = 0.75 * np.exp(-(r / 1.9) ** 2)
@@ -239,7 +250,7 @@ def tex_top(N=1024):
             l = rng.uniform(0.05, 0.11); wd = rng.uniform(0.03, 0.05); ang = rng.uniform(-0.4, 0.4)
             dx, dy = X - ex, Y - ey
             u_ = dx * math.cos(ang) + dy * math.sin(ang); v_ = -dx * math.sin(ang) + dy * math.cos(ang)
-            SC += np.exp(-(u_ / l) ** 2 - (v_ / wd) ** 2)
+            SC += 0.8 * np.exp(-(u_ / l) ** 2 - (v_ / wd) ** 2)
         for i in range(2):
             ex = sx * rng.uniform(0.9, 1.3); ey = rng.uniform(-0.4, 0.4)
             dx, dy = X - ex, Y - ey
@@ -253,21 +264,37 @@ def tex_top(N=1024):
     nrm = normal_from_height(hm, px)
     # --- colour (sRGB)
     n1 = fnoise(N, N, 60, 60, 21); n2 = fnoise(N, N, 25, 25, 22); n3 = fnoise(N, N, 8, 8, 23)
-    col = np.broadcast_to(hx('c4946a'), (N, N, 3)).copy()
-    col = lerp(col, hx('cf9a56'), (0.4 * sstep(-1, 1.5, n1))[..., None])       # ochre
-    col = lerp(col, hx('b88672'), (0.35 * sstep(-0.5, 1.5, n2))[..., None])    # rosy
-    val = 1 + 0.045 * n3 + 0.04 * g2 * rough + 0.05 * g1 * rough
-    col = lerp(col, hx('9a6844'), (0.5 * Cc)[..., None])                        # compacted: darker, damper
-    col = lerp(col, hx('d8b48a'), (0.45 * J)[..., None])                        # janome: paler, finer
-    val = val * (1 - 0.13 * S * (1 - 0.6 * Cc)) + 0.08 * np.clip(RIDGE, 0, 1)    # stripes darken their grooves
-    val = val * (1 - 0.22 * SC)
+    col = np.broadcast_to(hx('c69a66'), (N, N, 3)).copy()
+    col = lerp(col, hx('d0a058'), (0.45 * sstep(-1, 1.5, n1))[..., None])      # ochre
+    col = lerp(col, hx('b98a6c'), (0.25 * sstep(-0.5, 1.5, n2))[..., None])    # a little rosier
+    val = 1 + 0.03 * n1 + 0.045 * n3 + 0.025 * g2 * rough + 0.02 * g1 * rough
+    col = lerp(col, hx('a0703e'), (0.5 * Cc)[..., None])                        # compacted: darker, damper
+    col = lerp(col, hx('dcb98e'), (0.55 * J)[..., None])                        # janome: paler, finer
+    val = val * (1 - 0.2 * S * (1 - 0.6 * Cc)) + 0.08 * np.clip(RIDGE, 0, 1)    # stripes darken their grooves
+    val = val * (1 - 0.1 * SC)
     val = val * (1 - 0.45 * np.exp(-np.maximum(bd, 0) / 0.035)) * (1 - 0.15 * np.exp(-np.maximum(bd, 0) / 0.15))
     rim = sstep(RT - 0.25, RT - 0.02, r)
     col = lerp(col, hx('cfa680'), (0.4 * rim)[..., None])                       # the dry, crumbly rim
     col = col * val[..., None]
     sp = rng.uniform(size=(N, N))
-    col[sp > 0.996] = hx('ecd8b8'); col[sp < 0.0035] = hx('5a3c28')
+    col[sp > 0.9985] = col[sp > 0.9985] * 0.5 + hx('ecd8b8') * 0.5
     return col, nrm
+
+
+GRAIN_TILE = 0.6   # metres per repeat of the fine grain normal map on the top
+
+
+def tex_grain(N=512):
+    """Fine sand grain for the top (tiles every GRAIN_TILE m): grit, small pebbles pressed in, tiny pits."""
+    px = GRAIN_TILE / N
+    hm = 0.00025 * fnoise(N, N, 0.6, 0.6, 81) + 0.0002 * fnoise(N, N, 1.5, 1.5, 82) + 0.0003 * fnoise(N, N, 5, 5, 83)
+    rng = np.random.default_rng(84)
+    y, x = np.mgrid[0:N, 0:N]
+    for i in range(160):
+        cx, cy = rng.uniform(0, N, 2); rad = rng.uniform(1.2, 3.5); hgt = rng.uniform(0.0004, 0.0012) * (1 if rng.uniform() < 0.75 else -1)
+        dx = (x - cx + N / 2) % N - N / 2; dy = (y - cy + N / 2) % N - N / 2
+        hm += hgt * np.exp(-(dx * dx + dy * dy) / (rad * rad))
+    return normal_from_height(hm, px)
 
 
 def tex_side(W=512, Hh=256):
@@ -292,7 +319,7 @@ def tex_side(W=512, Hh=256):
     hm = hm + 0.0004 * g + 0.0004 * scratch
     nrm = normal_from_height(hm, px)
     n1 = fnoise(Hh, W, 30, 60, 34)
-    col = np.broadcast_to(hx('9a6a4a'), (Hh, W, 3)).copy()
+    col = np.broadcast_to(hx('a87452'), (Hh, W, 3)).copy()
     col = lerp(col, hx('8a5a44'), (0.4 * sstep(-1, 1.5, n1))[..., None])
     val = 1 + 0.035 * shade + 0.035 * g - 0.04 * np.clip(scratch, 0, 3) + 25 * hm
     v01 = Y / 1.2
@@ -303,21 +330,24 @@ def tex_side(W=512, Hh=256):
 
 def tex_straw(N=512):
     """Rice straw along u (bale length, 0.71 m per tile), around v (0..1 across the visible arc)."""
-    f = 0.55 * fnoise(N, N, 0.9, 26, 41) + 0.35 * fnoise(N, N, 2.2, 70, 42) + 0.25 * fnoise(N, N, 0.6, 7, 43)
-    clump = fnoise(N, N, 9, 90, 44)
-    t = 1 / (1 + np.exp(-(1.3 * f + 0.5 * clump)))
-    col = lerp(hx('6e5328')[None, None], hx('c9ad6c')[None, None], t[..., None] ** 0.9)
-    col = lerp(col, hx('e6d29a')[None, None], (sstep(0.75, 0.95, t))[..., None])
+    f = 0.6 * fnoise(N, N, 0.7, 22, 41) + 0.3 * fnoise(N, N, 1.6, 60, 42) + 0.25 * fnoise(N, N, 0.5, 6, 43)
+    clump = fnoise(N, N, 7, 40, 44)
+    t = 1 / (1 + np.exp(-(1.9 * f + 0.6 * clump + 1.3)))
+    col = lerp(hx('7a5c30')[None, None], hx('c9a865')[None, None], sstep(0.0, 0.7, t)[..., None])
+    col = lerp(col, hx('ecd8a2')[None, None], (0.8 * sstep(0.7, 0.98, t))[..., None])
+    hue = fnoise(N, N, 3, 120, 48)
+    col = lerp(col, col * np.array([1.06, 0.98, 0.84]), sstep(0.3, 1.5, hue)[..., None])     # golder straws
+    col = lerp(col, col * np.array([0.95, 0.97, 0.93]), sstep(0.3, 1.5, -hue)[..., None])    # paler, greyer straws
     weather = sstep(0.3, 1.6, fnoise(N, N, 40, 80, 45))
     grey = col.mean(-1, keepdims=True) * np.array([1.0, 0.98, 0.9])
-    col = lerp(col, grey, 0.45 * weather[..., None])
+    col = lerp(col, grey, 0.2 * weather[..., None])
     odd = fnoise(N, N, 0.7, 40, 46) > 2.3                   # the odd darker brown straw
     col[odd] *= np.array([0.7, 0.6, 0.5])
     v = (np.arange(N)[:, None] + 0.5) / N
     edge = np.minimum(v, 1 - v) + 0.03 * fnoise(N, N, 3, 3, 47)
     dirt = sstep(0.14, 0.02, edge)[..., None]                 # soiled where it meets the clay
     col = lerp(col, hx('8a6448')[None, None] * 0.9, 0.75 * dirt)
-    hm = 0.0012 * f + 0.0008 * clump
+    hm = 0.0008 * t + 0.0006 * clump
     nrm = normal_from_height(hm, 0.71 / N, 0.55 / N)
     return col, nrm
 
@@ -329,7 +359,7 @@ def tex_rope(W=256, Hh=64):
     strand = np.abs(np.sin(ph / 2)) ** 0.6
     fib = fnoise(Hh, W, 0.7, 6, 51)
     t = np.clip(0.75 * strand + 0.12 * fib, 0, 1)
-    col = lerp(hx('5a4220')[None, None], hx('b49456')[None, None], t[..., None])
+    col = lerp(hx('6a5230')[None, None], hx('c8ad78')[None, None], t[..., None])
     hm = 0.003 * strand + 0.0003 * fib
     nrm = normal_from_height(hm, 0.4 / W, 0.126 / Hh)
     return col, nrm
@@ -348,7 +378,7 @@ def tex_paint(W=64, Hh=512):
 
 def tex_loose(N=128):
     n = fnoise(N, N, 2, 2, 71); n2 = fnoise(N, N, 0.6, 0.6, 72)
-    col = lerp(hx('b88458')[None, None], hx('e2c098')[None, None], sstep(-1.5, 1.5, n)[..., None])
+    col = lerp(hx('c8996a')[None, None], hx('ecd2aa')[None, None], sstep(-1.5, 1.5, n)[..., None])
     return col * (1 + 0.08 * n2)[..., None]
 
 
@@ -419,6 +449,8 @@ def build_mound():
     u_side = np.where(u_side - first > reps / 2, u_side - reps, np.where(first - u_side > reps / 2, u_side + reps, u_side))
     uv = np.where(side_loop[:, None], np.stack([u_side, v_side], -1), np.stack([u_top, v_top], -1))
     me.uv_layers.new(name='UVMap').data.foreach_set('uv', uv.astype(np.float32).ravel())
+    det = np.where(side_loop[:, None], uv, lp[:, :2] / GRAIN_TILE)
+    me.uv_layers.new(name='Detail').data.foreach_set('uv', det.astype(np.float32).ravel())
     me.polygons.foreach_set('material_index', is_side.astype(np.int32))
     me.polygons.foreach_set('use_smooth', np.ones(len(me.polygons), bool))
     me.update()
@@ -433,22 +465,25 @@ def bale_surface(b, s, th, ridges=True):
     p1, p2, p3 = rng.uniform(0, TAU, 3)
     f = end_profile(s, b.L) * b.size
     pinch = sum(np.exp(-((s - sb) / 0.03) ** 2) for sb in b.bands)
-    f = f * (1 - 0.11 * pinch)
-    f = f * (1 + 0.035 * np.sin(s / b.L * TAU * 1.5 + p1) + 0.02 * np.sin(s / b.L * TAU * 3.7 + p2))  # lumps
+    f = f * (1 - 0.15 * pinch)
+    f = f * (1 + 0.035 * np.sin(s / b.L * TAU * 1.5 + p1) + 0.025 * np.sin(s / b.L * TAU * 3.7 + p2))  # lumps
+    seg = np.clip((s - b.bands[0]) / (b.bands[1] - b.bands[0]), -1, 2)                     # straw bulging between the ropes
+    f = f * (1 + 0.035 * np.sin(np.pi * np.abs(seg % 1.0)) ** 2 * (np.abs(s) < b.bands[2]))
     if ridges:   # a slow twist of straw strands
-        f = f * (1 + 0.028 * np.sin(8 * th + s / b.L * TAU * 1.1 + p3) + 0.012 * np.sin(19 * th - s / b.L * TAU * 2 + p2))
+        f = f * (1 + 0.03 * np.sin(8 * th + s / b.L * TAU * 1.1 + p3) + 0.015 * np.sin(5 * th - s / b.L * TAU * 2.3 + p2))
     ph = b.ph + s / b.rc
     a = BA * f * np.cos(th)
-    zf = BRY * f * np.sin(th) * (1 - 0.1 * np.clip(np.sin(th), 0, 1) ** 6)    # a little flattened on top
+    zf = BRY * f * np.sin(th) * (1 - 0.04 * np.clip(np.sin(th), 0, 1) ** 6)   # barely flattened on top
     x = (b.rc + a) * np.cos(ph); y = (b.rc + a) * np.sin(ph)
     return np.stack([x, y, b.zc + zf], -1)
 
 
 def build_tawara():
     verts, faces, uvs, mi = [], [], [], []
-    TH = np.linspace(-0.3, math.pi + 0.3, 21)
+    TH = np.linspace(-0.3, math.pi + 0.3, 17)
     for b in BALES:
-        ss = list(np.linspace(-b.L / 2, b.L / 2, 25))
+        ss = list(np.linspace(-b.L / 2 + 0.1, b.L / 2 - 0.1, 17))
+        for e in (0.0, 0.006, 0.02, 0.04, 0.065): ss += [-b.L / 2 + e, b.L / 2 - e]
         for sb in b.bands: ss += [sb - 0.035, sb - 0.012, sb + 0.012, sb + 0.035]
         ss = np.unique(np.round(ss, 4))
         S_, T_ = np.meshgrid(ss, TH, indexing='ij')
@@ -474,19 +509,47 @@ def build_tawara():
             T = np.array([-math.sin(ph), math.cos(ph), 0.0])              # along the bale
             axis = np.array([b.rc * math.cos(ph), b.rc * math.sin(ph), b.zc])
             Nn = c0 - axis; Nn /= np.linalg.norm(Nn, axis=1, keepdims=True)
-            Cc = c0 + Nn * 0.012
+            Cc = c0 + Nn * 0.006
             plen = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(Cc, axis=0), axis=1))])
             bb = len(verts)
             for k in range(NP):
                 for q in range(NS):
                     psi = q / NS * TAU
-                    verts.append(Cc[k] + Nn[k] * math.cos(psi) * 0.018 + T * math.sin(psi) * 0.024)
+                    verts.append(Cc[k] + Nn[k] * math.cos(psi) * 0.014 + T * math.sin(psi) * 0.02)
             for k in range(NP - 1):
                 for q in range(NS):
                     q1 = (q + 1) % NS
                     faces.append((bb + k * NS + q, bb + k * NS + q1, bb + (k + 1) * NS + q1, bb + (k + 1) * NS + q))
                     uvs.extend([(plen[k] / 0.4, q / NS), (plen[k] / 0.4, (q + 1) / NS), (plen[k + 1] / 0.4, (q + 1) / NS), (plen[k + 1] / 0.4, q / NS)])
                     mi.append(1)
+    # a few loose straws shed onto the clay beside the bales
+    rng = np.random.default_rng(55)
+    for i in range(48):
+        b = BALES[rng.integers(NB)]
+        side_ = 1 if rng.uniform() < 0.6 else -1
+        ph = b.ph + rng.uniform(-b.ha, b.ha)
+        rr0 = b.rc + side_ * rng.uniform(BGW + 0.03, BGW + 0.25)
+        L = rng.uniform(0.07, 0.2); a0 = ph + math.pi / 2 + rng.uniform(-0.7, 0.7); bend = rng.uniform(-3, 3)
+        p0 = np.array([rr0 * math.cos(ph), rr0 * math.sin(ph)])
+        pts = []
+        for k in range(5):
+            t = k / 4; a = a0 + bend * (t - 0.5) * L
+            pts.append(p0 + L * (t - 0.5) * np.array([math.cos(a), math.sin(a)]))
+        pts = np.array(pts); z = H(pts[:, 0], pts[:, 1]) + 0.0015
+        d = np.gradient(pts, axis=0); d /= np.linalg.norm(d, axis=1, keepdims=True)
+        nside = np.stack([-d[:, 1], d[:, 0]], -1)
+        bb = len(verts); w = rng.uniform(0.0025, 0.004)
+        for k in range(5):
+            for q in range(3):
+                psi = q / 3 * TAU
+                verts.append(np.array([*(pts[k] + nside[k] * math.cos(psi) * w), z[k] + math.sin(psi) * w * 0.6 + w * 0.3]))
+        cu = rng.uniform(); cv = rng.uniform(0.3, 0.7)
+        for k in range(4):
+            for q in range(3):
+                q1 = (q + 1) % 3
+                faces.append((bb + k * 3 + q, bb + k * 3 + q1, bb + (k + 1) * 3 + q1, bb + (k + 1) * 3 + q))
+                uvs.extend([(cu + k * 0.06, cv), (cu + k * 0.06, cv + 0.004), (cu + k * 0.06 + 0.06, cv + 0.004), (cu + k * 0.06 + 0.06, cv)])
+                mi.append(0)
     o = make_obj('Tawara', np.array(verts), faces, np.array(uvs), (STRAW, ROPE), mi)
     print('tawara:', tris(o), 'tris')
     return o
@@ -549,30 +612,30 @@ def build_sand():
     dens += 0.015
     onl = (np.abs(np.abs(x) - SHIKIRI_X) < SHIKIRI_W) & (np.abs(y) < SHIKIRI_L / 2 + 0.03)
     dens[onl] = 0
-    keep = rng.uniform(size=M) < dens / dens.max() * 0.06
+    keep = rng.uniform(size=M) < dens * (1300 / dens.sum())
     x, y, bdk = x[keep], y[keep], bd[keep]
     z = H(x, y, bdk)
     verts, faces, uvs, sm = [], [], [], []
     for i in range(len(x)):
-        big = rng.uniform() < 0.12
+        big = rng.uniform() < 0.25
         kind = 1 if big else 0
-        s = rng.uniform(0.028, 0.05) if big else rng.lognormal(math.log(0.012), 0.35)
+        s = rng.uniform(0.012, 0.024) if big else rng.lognormal(math.log(0.009), 0.3)
         v, f = blob(kind, rng)
         a = rng.uniform(0, TAU); ca, sa = math.cos(a), math.sin(a)
         v = v * np.array([s * rng.uniform(0.8, 1.3), s, s * rng.uniform(0.35, 0.6)])
         v = v @ np.array([[ca, sa, 0], [-sa, ca, 0], [0, 0, 1]])
-        v += np.array([x[i], y[i], z[i] + s * 0.12])
+        v += np.array([x[i], y[i], z[i] + s * 0.05])
         base = len(verts); verts.extend(v)
         cu, cv = rng.uniform(size=2)
         for t in f:
-            faces.append(tuple(base + k for k in t)); uvs.extend([(cu, cv)] * 3); sm.append(big)
+            faces.append(tuple(base + k for k in t)); uvs.extend([(cu, cv)] * 3); sm.append(True)
     o = make_obj('Sand', np.array(verts), faces, np.array(uvs), (LOOSE,), smooth=sm)
     print('sand:', len(x), 'grains,', tris(o), 'tris')
     return o
 
 
 # ================================================================ build everything
-col, nrm = tex_top(); TOP = mat('ClayTop', image('clay_top', col), image('clay_top_n', nrm, True), rough=0.9, nrm_strength=1.0, spec=0.3)
+col, nrm = tex_top(); TOP = mat('ClayTop', image('clay_top', col), image('clay_grain_n', tex_grain(), True), rough=0.9, nrm_strength=2.5, spec=0.3, nrm_uv='Detail')
 col, nrm = tex_side(); SIDE = mat('ClaySide', image('clay_side', col), image('clay_side_n', nrm, True), rough=0.75, spec=0.35)
 col, nrm = tex_straw(); STRAW = mat('Straw', image('straw', col), image('straw_n', nrm, True), rough=0.8, spec=0.4)
 col, nrm = tex_rope(); ROPE = mat('Rope', image('rope', col), image('rope_n', nrm, True), rough=0.85, spec=0.35)
@@ -598,7 +661,7 @@ if not NOPREV:
     world.node_tree.nodes['Background'].inputs['Strength'].default_value = 0.0
     spot = bpy.data.objects.new('Spot', bpy.data.lights.new('Spot', 'SPOT')); scn.collection.objects.link(spot)
     spot.location = (0, 0, 15); spot.data.energy = 9000; spot.data.color = (1.0, 0.8, 0.58)
-    spot.data.spot_size = math.radians(56); spot.data.spot_blend = 0.55; spot.data.shadow_soft_size = 0.8
+    spot.data.spot_size = math.radians(64); spot.data.spot_blend = 0.5; spot.data.shadow_soft_size = 0.8
     cam = bpy.data.objects.new('Cam', bpy.data.cameras.new('Cam')); scn.collection.objects.link(cam); scn.camera = cam
     scn.render.engine = 'CYCLES'; scn.cycles.samples = 48; scn.cycles.device = 'CPU'; scn.cycles.use_denoising = True
     scn.cycles.max_bounces = 4
@@ -619,3 +682,4 @@ if not NOPREV:
     shoot('spot', (0, -dist * math.cos(pitch), dist * math.sin(pitch)), (0, 0, 0.2), vfov=34)
     shoot('close', (1.1, -3.0, 0.42), (0.55, -4.9, 0.02), lens=40)
     shoot('top', (0, 0, 30), (0, 0, 0), 900, 900, ortho=2 * RB + 0.4)
+    shoot('edge', (2.0, -10.5, 5.2), (1.2, -5.2, -0.2), lens=50)     # extra: the front edge and sides
