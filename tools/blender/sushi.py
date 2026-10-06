@@ -199,7 +199,7 @@ def resample(pts, n):
 
 # ================================================================ rice: real grains fused over a core, then crisp grains on top
 _G = superell(1, 1, 1, 1, 1, 8, 5)
-_GC = superell(1, 1, 1, 1, 1, 6, 4)          # 36 triangles: the crisp grains that sit on the surface
+_GC = superell(1, 1, 1, 1, 1, 8, 4)          # 48 triangles: the crisp grains that sit on the surface
 def _scatter(tri, n, keep, rng, mind=0.0):
     w = np.array([t[4] for t in tri]); w /= w.sum()
     out, tries = [], 0
@@ -231,7 +231,7 @@ def _grains(samples, rng, G, gsize, sink, tilt=0.28):
         V += [ctr + Rm @ Vector(gv * sz) for gv in GV]
         F += [tuple(base + i for i in f) for f in GF]
     return V, F
-def rice(name, core, n, keep, target, m, voxel=0.0005, seed=1, gsize=1.0, sink=(0.0002, 0.0007), crisp=0, ckeep=None):
+def rice(name, core, n, keep, target, m, voxel=0.0005, seed=1, gsize=1.0, sink=(0.0002, 0.0007), crisp=0, ckeep=None, csink=(-0.0006, -0.0002), cgsize=None):
     """core + n grains fused (voxel remesh, decimated to `target`) for a lumpy body, then `crisp` separate low-poly grains
     scattered over that body where ckeep(p, n) allows, so the rice reads as grains, not as a lumpy blob"""
     rng = np.random.default_rng(seed)
@@ -243,7 +243,8 @@ def rice(name, core, n, keep, target, m, voxel=0.0005, seed=1, gsize=1.0, sink=(
     decimate(o, target)
     o.data.materials.clear(); o.data.materials.append(m); smooth_all(o)
     if crisp:
-        V, F = _grains(_scatter(_tris_of(o), crisp, ckeep or keep, rng, mind=0.0026), rng, _GC, gsize * 1.02, (-0.0006, -0.0002), 0.35)
+        cg_ = cgsize or gsize * 1.02
+        V, F = _grains(_scatter(_tris_of(o), crisp, ckeep or keep, rng, mind=0.0026 * cg_), rng, _GC, cg_, csink, 0.35)
         cg = mk(name + '_c', V, F, m)
         o = join([o, cg], name)
     return o
@@ -483,7 +484,7 @@ def tex_soydish(w=256, h=256):
 
 def tex_gari(w=128, h=128):
     u, v = grid(h, w); r = np.hypot(u - 0.5, v - 0.5) * 2
-    c = mix(hx('fbeadf'), hx('f5bdb9'), sstep(0.3, 1.0, r))
+    c = mix(hx('fde3d8'), hx('f7aeb0'), sstep(0.25, 1.0, r))
     fib = fbm(h, w, 4, 40, 2, R)
     c = mix(c, hx('fff6ee'), sstep(0.55, 0.8, fib) * 0.35)
     c = mix(c, hx('f2a3a6'), sstep(0.88, 1.0, r) * 0.6)
@@ -501,7 +502,7 @@ def tex_wood_stick(w=256, h=32):
 
 # ================================================================ materials
 IMG_NORI = tex_nori()
-RICE = mat('Rice', 'efe9dc', 0.42, sss=0.12, sss_rad=(1.0, 0.85, 0.6), sss_scale=0.0008, sheen=0.1)
+RICE = mat('Rice', 'ebe4d4', 0.42, sss=0.12, sss_rad=(1.0, 0.85, 0.6), sss_scale=0.0008, sheen=0.1)
 NORI = mat('Nori', '1b2619', 0.62, IMG_NORI, spec=0.35)
 IKURA = mat('Ikura', 'ff6a12', 0.04, sss=1.0, sss_rad=(1, 0.3, 0.08), sss_scale=0.004, coat=1.0, ior=1.38)
 WASABI = mat('Wasabi', 'a9c34e', 0.6, sss=0.2, sss_rad=(0.5, 1.0, 0.3), sss_scale=0.0015)
@@ -537,7 +538,7 @@ for i, (nm, col) in enumerate((('red', 'cf3a3e'), ('yellow', 'f1b52c'), ('blue',
 
 
 # ================================================================ nigiri
-def nigiri_rice(seed, ax=0.0228, ay=0.0106, az=0.0097, n=150, target=1050, cover=0.78, crisp=46):
+def nigiri_rice(seed, ax=0.0228, ay=0.0106, az=0.0097, n=150, target=1000, cover=0.78, crisp=40):
     V, F = superell(ax, ay, az, 0.75, 0.55, 32, 16)
     V[:, 2] += 0.0088; V[:, 2] = np.maximum(V[:, 2], 0.0006)
     core = mk('rice', V, F)
@@ -589,7 +590,7 @@ def uv_box(o, sx, sy, sz):
             uv.data[li].uv = uvv
 def make_tamago(pos):
     r = nigiri_rice(23)
-    V, F = superell(0.0292, 0.0126, 0.0066, 0.28, 0.24, 48, 18)
+    V, F = superell(0.0292, 0.0126, 0.0066, 0.28, 0.24, 40, 14)
     V[:, 2] += 0.0066
     tz = V[:, 2].copy()
     V[:, 2] += RICE_TOP - 0.0006 - 3.2 * V[:, 0] ** 2 + 0.0006 * np.sin(V[:, 0] * 90)          # bows a little over the rice
@@ -599,7 +600,7 @@ def make_tamago(pos):
     for i, v in enumerate(co): pass
     # nori belt: a strip across the middle, shrink-wrapped over the tamago and down the rice to the plate
     bv = bvh_of([r, tm])
-    NU, NA = 5, 44
+    NU, NA = 4, 34
     rows = []
     for j in range(NU):
         x = -0.0052 + 0.0104 * j / (NU - 1)
@@ -654,8 +655,8 @@ def make_ebi(pos):
     zt = max(v.co.z for v in body.data.vertices if v.co.x > EBI_XT - 0.002)
     parts = [r, body]
     for yaw, ln, wd in ((-38, 0.0115, 0.0046), (-13, 0.0135, 0.005), (13, 0.0135, 0.005), (38, 0.0115, 0.0046)):
-        ol = outline_slice(ln / 2, wd / 2, p=2.3, shear=0.0, taper=-0.25, n=24)
-        lobe = slab('tail', ol, 0.0012, lambda x, y: 0.0012 * (x / (ln / 2)) ** 2, EBI_TAIL, nr=4,
+        ol = outline_slice(ln / 2, wd / 2, p=2.3, shear=0.0, taper=-0.25, n=18)
+        lobe = slab('tail', ol, 0.0012, lambda x, y: 0.0012 * (x / (ln / 2)) ** 2, EBI_TAIL, nr=3,
                     uvf=lambda x, y, ln=ln: (0.5 + x / ln, 0.5 + y / ln))
         xf(lobe, T(EBI_XT + 0.001, 0, zt - 0.0012) @ rot('Z', yaw) @ rot('Y', -30) @ T(ln / 2 - 0.0012, 0, 0))
         parts.append(lobe)
@@ -667,7 +668,8 @@ make_ebi((0.27, 0.16, 0))
 def make_maki(name, pos, filling, seed):
     h = 0.0232
     core = lathe('core', [(0.0058, 0.0006), (0.0118, 0.0006), (0.0118, h - 0.0012), (0.0058, h - 0.0012), (0.0058, 0.0006)], 32, None, vfun=lambda *a: 0)
-    rc = rice('rice', core, 45, lambda p, n: n.z > 0.5, 800, RICE, seed=seed, sink=(0.0001, 0.0004), crisp=34,
+    rc = rice('rice', core, 60, lambda p, n: n.z > 0.5, 800, RICE, seed=seed, gsize=0.85, sink=(0.0001, 0.0004), crisp=44, cgsize=0.8,
+               csink=(-0.00075, -0.0004),
                ckeep=lambda p, n: n.z > 0.6)
     nori = nori_wrap('nori', 0.0129, 0.0129, h + 0.0004, NORI, seg=60, seed=seed)
     return finalize(name, [rc, nori] + filling(h), pos)
@@ -699,7 +701,7 @@ def make_gunkan(pos):
     V, F = superell(a - 0.0032, b - 0.0032, 0.0085, 0.6, 0.45, 28, 12)
     V[:, 2] += 0.0085; V[:, 2] = np.maximum(V[:, 2], 0.0006)
     rc = rice('rice', mk('core', V, F), 30, lambda p, n: n.z > 0.5, 380, RICE, seed=41)
-    nori = nori_wrap('nori', a + 0.0004, b + 0.0004, 0.0245, NORI, seg=60, seed=42, flare=0.0008)
+    nori = nori_wrap('nori', a + 0.0004, b + 0.0004, 0.0245, NORI, seg=56, seed=42, flare=0.0008, rows=3)
     rng = np.random.default_rng(43); rb = 0.0026
     beads = []
     ztop = lambda x, y: 0.0335 - 0.009 * ((x / a) ** 2 + (y / b) ** 2)
@@ -779,12 +781,12 @@ make_wasabi((0.20, 0.30, 0))
 
 
 # ================================================================ gari: pickled ginger petals in a fan
-GARI = mat('Gari', 'f4b5ae', 0.28, tex_gari(), sss=0.6, sss_rad=(1.0, 0.7, 0.7), sss_scale=0.003, trans=0.1, coat=0.3)
+GARI = mat('Gari', 'f4b5ae', 0.3, tex_gari(), sss=0.35, sss_rad=(1.0, 0.6, 0.6), sss_scale=0.002, coat=0.25)
 def make_gari(pos):
     rng = np.random.default_rng(51)
     parts = []
     for i in range(6):
-        a, b = rng.uniform(0.018, 0.021), rng.uniform(0.012, 0.0145)
+        a, b = rng.uniform(0.021, 0.025), rng.uniform(0.014, 0.017)
         pts = []
         for k in range(160):
             th = TAU * k / 160; rr = 1 + 0.06 * math.sin(3 * th + i) + 0.04 * math.sin(5 * th + 2 * i)
@@ -796,7 +798,7 @@ def make_gari(pos):
             return 0.005 * r2 + 0.0016 * np.sin(4 * th + ph) * r2 ** 1.5 + 0.0008 * np.sin(7 * th + 2 * ph) * r2 ** 2 - 0.0016 * (x / a)
         p = slab('gari', ol, 0.0008, drape, GARI, nr=4, edge=3.0, uvf=lambda x, y, a=a, b=b: (0.5 + 0.5 * x / a, 0.5 + 0.5 * y / b))
         yaw = -70 + 140 * i / 5 + rng.uniform(-5, 5)
-        xf(p, rot('Z', yaw) @ T(0.014, 0, 0.0012 + 0.0011 * i) @ rot('Y', -12 - 6 * rng.random()))
+        xf(p, rot('Z', yaw) @ T(0.017, 0, 0.0012 + 0.0011 * i) @ rot('Y', -10 - 6 * rng.random()))
         parts.append(p)
     return finalize('gari', parts, pos)
 make_gari((0.30, 0.30, 0))
