@@ -21,14 +21,14 @@
     if (draw && draw.kind) { // tiled ground (4 m tiles, 1024 px) plus a transparent layer for paint, grates, numbers
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), S.CampArt.groundMat(draw.kind, w, d));
       m.position.set(x, y || 0, z); g.add(m);
-      // one big non-repeating layer over the whole floor: broad grime, darker edges where nobody walks, wet sheen down
-      // the middle. It hides the 4 m tiling (a repeating tile is what makes a floor look cheap)
+      // One quiet non-repeating colour pass hides tiling without turning the
+      // street into realistic/grimy asphalt.  Keep the road calm for combat.
       const R = Math.max(w, d) / Math.min(w, d), cw = w >= d ? 1024 : Math.round(1024 / R), ch = w >= d ? Math.round(1024 / R) : 1024;
       const macro = W.canvasTex(Math.max(64, cw), Math.max(64, ch), (c, cW, cH) => {
         const sp = (px, py, r, col) => { const gr = c.createRadialGradient(px, py, 0, px, py, r); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(px - r, py - r, r * 2, r * 2); };
-        for (let i = 0; i < 26; i++) sp(Math.random() * cW, Math.random() * cH, (0.08 + Math.random() * 0.22) * Math.max(cW, cH), 'rgba(8,6,12,' + (0.1 + Math.random() * 0.14) + ')');
-        for (let i = 0; i < 10; i++) sp(Math.random() * cW, Math.random() * cH, (0.06 + Math.random() * 0.14) * Math.max(cW, cH), 'rgba(210,225,240,' + (0.04 + Math.random() * 0.05) + ')');
-        const e = c.createLinearGradient(0, 0, cW, 0); e.addColorStop(0, 'rgba(6,4,10,0.38)'); e.addColorStop(0.16, 'rgba(6,4,10,0)'); e.addColorStop(0.84, 'rgba(6,4,10,0)'); e.addColorStop(1, 'rgba(6,4,10,0.38)'); c.fillStyle = e; c.fillRect(0, 0, cW, cH);
+        for (let i = 0; i < 7; i++) sp(Math.random() * cW, Math.random() * cH, (0.16 + Math.random() * 0.28) * Math.max(cW, cH), 'rgba(76,91,108,' + (0.025 + Math.random() * 0.025) + ')');
+        for (let i = 0; i < 5; i++) sp(Math.random() * cW, Math.random() * cH, (0.12 + Math.random() * 0.2) * Math.max(cW, cH), 'rgba(255,232,202,' + (0.018 + Math.random() * 0.02) + ')');
+        const e = c.createLinearGradient(0, 0, cW, 0); e.addColorStop(0, 'rgba(49,55,68,0.08)'); e.addColorStop(0.14, 'rgba(49,55,68,0)'); e.addColorStop(0.86, 'rgba(49,55,68,0)'); e.addColorStop(1, 'rgba(49,55,68,0.08)'); c.fillStyle = e; c.fillRect(0, 0, cW, cH);
       });
       const mo = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: macro, transparent: true, depthWrite: false }));
       mo.position.set(x, (y || 0) + 0.002, z); mo.renderOrder = 0; g.add(mo);
@@ -67,8 +67,8 @@
     const tbox = (m, w, h, d, x, y, z, ol) => { const o = W.mesh(W.GEO.box, m, ol === undefined ? 0.02 : ol); o.scale.set(w, h, d); o.position.set(x, y, z); g.add(o); return o; };
     const wall = (x0, x1, z0, z1) => { const w = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) }; walls.push(w); return w; };
     // grounding: a soft dark patch under anything standing on the floor, and pools of light where lamps hang
-    const shadowTex = W.canvasTex(128, 128, (c) => { const gr = c.createRadialGradient(64, 64, 10, 64, 64, 62); gr.addColorStop(0, 'rgba(0,0,0,0.75)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, 128, 128); });
-    const shadowAt = (parent, x, z, w, d, op) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, opacity: op || 0.7 })); m.position.set(x, 0.014, z); m.renderOrder = 1; parent.add(m); return m; };
+    const shadowTex = W.canvasTex(128, 128, (c) => { const gr = c.createRadialGradient(64, 64, 10, 64, 64, 62); gr.addColorStop(0, 'rgba(35,48,65,0.38)'); gr.addColorStop(0.58, 'rgba(35,48,65,0.2)'); gr.addColorStop(1, 'rgba(35,48,65,0)'); c.fillStyle = gr; c.fillRect(0, 0, 128, 128); });
+    const shadowAt = (parent, x, z, w, d, op) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, opacity: Math.min(0.42, (op || 0.7) * 0.55) })); m.position.set(x, 0.014, z); m.renderOrder = 1; parent.add(m); return m; };
     const lightPool = (x, z, w, d, col, op) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: glowTex(), color: col, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: op || 0.35 })); m.position.set(x, 0.016, z); m.renderOrder = 1; g.add(m); return m; };
     const breakables = []; // stalls, tables and drink machines a charge (or a thrown body) smashes through
     const breakable = (b) => { b.w.brk = b; breakables.push(b); return b; };
@@ -124,7 +124,7 @@
     }));
     // building fronts along both sides (the street's walls)
     wall(-11, -7.2, -12, -48); wall(7.2, 11, -12, -48);
-    for (const sd of [-1, 1]) { box(g, 1.2, 3.4, 36, 0x3e3038, 0x1c1418, sd * 8.45, 1.7, -30, 0.03); /* set back: the shopfronts recess 0.6 m into it */ S.CampArt.facade(g, sd * 7.19, -12, -48, 3.4, sd, 'shop'); }
+    for (const sd of [-1, 1]) { box(g, 1.2, 3.4, 36, sd < 0 ? 0xb87868 : 0x718c9a, sd < 0 ? 0x7f514b : 0x4e6672, sd * 8.45, 1.7, -30, 0); /* set back: the shopfronts recess 0.6 m into it */ S.CampArt.facade(g, sd * 7.19, -12, -48, 3.4, sd, 'shop'); }
     // market stalls: counter, awning, display of fish on ice; restaurant fronts with noren curtains
     const awningCols = [[0xe2322b, 0xf6eddc], [0x2f6fd0, 0xf6eddc], [0xf2c14e, 0x3a2c34], [0x2e9e6a, 0xf6eddc]];
     const stall = (sd, z0, z1, k) => {
@@ -132,7 +132,7 @@
       segments('stall', x, z0, z1, sd, k, false, 0.9, 1.3);
       const [c1, c2] = awningCols[k % awningCols.length];
       const aw = A.awning(g, x + sd * 0.95, z0, z1, sd, c1, c2, { depth: 2.2, y: 2.95, drop: 0.6 });
-      for (const zz of [z0, z1]) cyl(g, 0.04, 0.04, aw.fy, 0x6a6e78, 0x22242c, aw.fx, aw.fy / 2, zz, 6, 0.01);
+      for (const zz of [z0, z1]) cyl(g, 0.065, 0.065, aw.fy, 0x7d858b, 0x566069, aw.fx, aw.fy / 2, zz, 8, 0);
     };
     const restaurant = (sd, z0, z1, name, sub, col) => {
       const zc = (z0 + z1) / 2, len = Math.abs(z1 - z0), x = sd * 7.0;
