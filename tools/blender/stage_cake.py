@@ -1,8 +1,8 @@
 # BIRTHDAY CAKE stage, fully modelled: a giant buttercream layer cake (the fighting surface) with a glossy pink drip,
-# piped star rosettes and a shell border, rainbow sprinkles, strawberries and cherries, lit twisted candles, and a
-# wedge cut out of the rim showing the sponge / cream / jam layers; on a white porcelain cake stand on a party table
-# (pink gingham cloth with draped folds, party plates with forks and the cut slice, a party hat, a gift box, confetti,
-# balloons). Built entirely by script (Blender 4.2, headless).
+# piped star rosettes and a shell border, rainbow sprinkles, strawberries and cherries and lit twisted candles, all the
+# way round an uncut cake (CUT = True restores a wedge cut from the rim plus its slice on a plate); on a white porcelain
+# cake stand on a party table (pink gingham cloth with draped folds, party plates with forks, a party hat, a gift box,
+# confetti, balloons). Built entirely by script (Blender 4.2, headless).
 #   python tools/blender/stage_cake.py [out_dir] [shot=game|low ...] [fast] [noexport] [norender]
 # Writes <out_dir>/cake.glb (stage only: Z up, metres, origin at the cake top centre, textures <= 1024 px) and
 # <out_dir>/ex_game.png / ex_low.png (with the game's masked sumos + gyoji imported from scratchpad/stage).
@@ -377,9 +377,7 @@ def build_cake():
     # --- top: polar grid, outer rows bend to follow the cut
     nseg = 160
     th = list(np.linspace(-math.pi, math.pi, nseg, endpoint=False))
-    for extra in ((PHN,) if not CUT else ()) + (() if not CUT else (PHN,)) and () or (PHN,) if CUT else ():
-        pass
-    for extra in ((PHN, ang(wall_pt(U1, s_hit(U1, RIN))), ang(wall_pt(U2, s_hit(U2, RIN)))):
+    for extra in ((PHN, ang(wall_pt(U1, s_hit(U1, RIN))), ang(wall_pt(U2, s_hit(U2, RIN)))) if CUT else ()):
         th = [t for t in th if abs(wrapd(t - extra)) > 0.008] + [extra]
     th = np.array(sorted(th)); ns = len(th)
     rin = np.r_[np.linspace(0.35, 4.3, 11), 4.45, 4.55, 4.6, 4.65, 4.7]
@@ -402,15 +400,15 @@ def build_cake():
     prof = [(RIN + RE * math.sin(a), -RE + RE * math.cos(a)) for a in ra] + [(RT, z) for z in np.linspace(-RE, -H, 13)[1:]]
     V = []; UV = []; ncol = 150
     for (r, z) in prof:
-        a1 = ang(wall_pt(U1, s_hit(U1, r))); a2 = ang(wall_pt(U2, s_hit(U2, r)))
-        a2u = a2 + TAU if a2 < a1 else a2
+        a1, a2u = open_range(r)
         for a in np.linspace(a1, a2u, ncol + 1):
             V.append((r * math.cos(a), r * math.sin(a), z)); UV.append(((a - a1) / TAU * 6, (z + H) / (H + 0.4)))
-    mk('cake_side', V, grid_faces(len(prof), ncol + 1), UV, M_SIDE,
-       fix=lambda c: (c[0], c[1], max(c[2] + RE, 0) * 3))
+    o = mk('cake_side', V, grid_faces(len(prof), ncol + 1), UV, M_SIDE,
+           fix=lambda c: (c[0], c[1], max(c[2] + RE, 0) * 3))
+    if not CUT: weld(o)
     # --- the two cut walls
     zs = np.r_[[-RE + RE * math.cos(a) for a in ra], np.linspace(-RE, -H, 24)[1:]]
-    for wi, u in enumerate((U1, U2)):
+    for wi, u in enumerate((U1, U2) if CUT else ()):
         V = []; UV = []; nc = 10
         for z in zs:
             so = s_hit(u, float(rprof(z)))
@@ -447,9 +445,9 @@ def build_drip():
             a = (s - s_top) / RE; return RIN + RE * math.sin(a), -RE + RE * math.cos(a), math.sin(a), math.cos(a)
         return RT, -RE - (s - s_top - s_round), 1.0, 0.0
     ncol = 200; band_len = 0.13
-    a1 = ang(wall_pt(U1, s_hit(U1, RT))); a2 = ang(wall_pt(U2, s_hit(U2, RT))); a2u = a2 + TAU if a2 < a1 else a2
-    cols = np.linspace(a1 + 0.004, a2u - 0.004, ncol + 1)
-    wav = 0.05 * gn((1, ncol + 1), (1, 3), 61)[0]
+    a1, a2u = open_range(RT); e_ = 0.004 if CUT else 0.0
+    cols = np.linspace(a1 + e_, a2u - e_, ncol + 1)
+    wav = 0.05 * gn((1, ncol + 1), (1, 3), 61)[0]; wav[-1] = wav[0]
     V = []; rows = 9
     for i in range(rows):
         for j, a in enumerate(cols):
@@ -459,7 +457,8 @@ def build_drip():
             # top edge tucked under the rosettes (thin), full thickness on the shoulder, tapering at the lower edge
             tk = 0.034 * ss(0, 0.1, s) * (1 - ss(smax - 0.07, smax, s) * 0.92)
             V.append(((r + nr_ * tk) * math.cos(a), (r + nr_ * tk) * math.sin(a), z + nz_ * tk))
-    mk('drip_band', V, grid_faces(rows, ncol + 1), None, M_DRIP, fix=lambda c: (c[0], c[1], max(c[2] + 0.1, 0) * 4))
+    o = mk('drip_band', V, grid_faces(rows, ncol + 1), None, M_DRIP, fix=lambda c: (c[0], c[1], max(c[2] + 0.1, 0) * 4))
+    if not CUT: weld(o)
     # individual drips: half capsules lying on the side, bulging into a bead at the end
     mg = Merge(); rg = np.random.default_rng(62)
     a = a1 + 0.05
@@ -519,8 +518,8 @@ def build_piping():
     for k, a in enumerate(ROS):
         rosette((RROS * math.cos(a), RROS * math.sin(a), 0.01), rg.uniform(0, TAU), M_PINK if k % 2 else M_WHITE, mg, 1.25)
     # base shell border (white), open at the cut
-    a1 = ang(wall_pt(U1, s_hit(U1, RT))); a2 = ang(wall_pt(U2, s_hit(U2, RT))); a2u = a2 + TAU if a2 < a1 else a2
-    a1 += 0.03; a2u -= 0.03
+    a1, a2u = open_range(RT)
+    if CUT: a1 += 0.03; a2u -= 0.03
     nsh = int((a2u - a1) * RT / 0.45); per = 5
     t = np.linspace(0, nsh, nsh * per + 1); f = t % 1.0
     bump = np.sin(math.pi * np.clip(f / 0.4, 0, 1) / 2) * (1 - ss(0.4, 1.0, f)) ** 0.8
@@ -1064,7 +1063,7 @@ build_candles()
 build_stand()
 build_cloth()
 PLATES = build_props()
-build_slice(M_TOP, M_SIDE, M_CUT, PLATES[0])
+if CUT: build_slice(M_TOP, M_SIDE, M_CUT, PLATES[0])
 build_hat_gift_confetti_balloons()
 build_room()
 

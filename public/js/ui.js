@@ -309,7 +309,7 @@
           '<div class="tc"><div class="tk">' + k('W A S D', '← ↑ ↓ →') + '</div><div class="tl">MOVE</div></div>' +
           '<div class="tc"><div class="tk">' + k('J', '1') + '</div><div class="tl">PUSH</div></div>' +
           '<div class="tc"><div class="tk">' + k('K', '2') + '</div><div class="tl">GRAB</div></div>' +
-          '<div class="tc"><div class="tk">' + k('L', '3') + '</div><div class="tl">DASH / BRACE</div></div>' +
+          '<div class="tc"><div class="tk">' + k('L', '3') + '</div><div class="tl">DASH / BRACE · HOLD + DIR: CHARGE</div></div>' +
           '</div><div class="tut-sub">Push them out of the ring, or make them touch the clay.' +
           (n === 'tutorial' ? '<br><span>New here? Choose PLAY → LEARN TO PLAY.</span>' : '') +
           (n === 'controls' ? '<br><span>Locked together: K up = stick pushes / drags · hold K a moment + aim, let go = side throw, away spin, toward trip, no aim lift<br>Before the start: J clap · K stomp · W salt · A arms · S face slap · D belt slap · hold L crouch<br>Gamepad: A push · B grab · X dash · Y skill &nbsp;·&nbsp; Space: gacha skill &nbsp;·&nbsp; Esc pause</span>' : '') +
