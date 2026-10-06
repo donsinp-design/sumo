@@ -316,7 +316,7 @@ def tex_chip_top(n, body, spot, accent, ink, value, seed, hero=False):
         lab = lab * (1 - mask[..., None]) + np.asarray(c) * mask[..., None]
     paint((1 - sstep(INLAY - 0.22 - aa, INLAY - 0.22 + aa, r)) * sstep(INLAY - 0.34 - aa, INLAY - 0.34 + aa, r), BODY)
     paint(1 - sstep(0.012, 0.012 + aa, np.abs(r - (INLAY - 0.46))), srgb('b8913c'))
-    paint(1 - sstep(0.012, 0.012 + aa, np.abs(r - 1.95)) * 1.0 * (np.abs(Y) > 0.95), srgb('b8913c'))
+    paint((1 - sstep(0.012, 0.012 + aa, np.abs(r - 1.95))) * (np.abs(Y) > 0.95), srgb('b8913c'))
     kum = raster(arc_text('KUMITE', FONT_SB, 0.62, 2.28, math.pi / 2, True, 0.12), n, n, -S, S, -S, S)
     paint(kum, INK)
     low = raster(arc_text('HIGH  STAKES', FONT_S, 0.34, 2.42, -math.pi / 2, False, 0.15), n, n, -S, S, -S, S)
@@ -401,7 +401,7 @@ def tex_card(rank, suit, red, W=736, H=1024):
         paint(glyph(rank, FONT_SB, 120, x, y, rot), INK)
         paint(glyph(suit, FONT_N, 92, x, y + dy * 115, rot), INK)
     if rank == 'A':
-        big = 520 if suit == '♠' else 380
+        big = 700 if suit == '♠' else 480
         paint(glyph(suit, FONT_N, big, W / 2, H / 2 + (10 if suit == '♠' else 0)), INK)
         if suit == '♠':   # the ornamental ace of spades: a fine frame ring and a scroll under the pip
             yy, xx = np.mgrid[0:H, 0:W]; rr = np.hypot(xx - W / 2, (yy - H / 2) * 1.0)
@@ -445,7 +445,7 @@ def tex_card(rank, suit, red, W=736, H=1024):
             # suit pip in the corner of the frame
             paint(glyph(suit, FONT_N, 80, x0 + 50 if not flip else x1 - 50, Hc + 380 if not flip else Hc - 380, math.pi if flip else 0), INK)
         half(False); half(True)
-        paint(1 - sstep(1.0, 2.5, np.abs(yy - Hc)) * frame, srgb('2a3d8f'))
+        paint((1 - sstep(1.0, 2.5, np.abs(yy - Hc))) * inner, srgb('2a3d8f'))
     # card edge: rounded-corner border shadow line (very faint)
     return np.clip(col, 0, 1)
 
@@ -566,7 +566,7 @@ wood = [(-6.0, 0.0), (-6.0, 0.12), (-5.8, 0.25), (-1.4, 0.25), (-1.2, 0.2), (-1.
 pad_ = [(-1.2, 0.05)]
 for k in range(17):
     a = math.pi * k / 16          # rounded bolster: from the inner foot over the top to the outside
-    pad_.append((-1.2 + 6.0 * (1 - math.cos(a)) / 2 + 0.6 * math.sin(a) * (k < 8), 0.05 + 5.4 * math.sin(a) ** 0.8))
+    pad_.append((-1.2 + 6.0 * (1 - math.cos(a)) / 2 + 0.6 * math.sin(a) * (k < 8), 0.05 + 3.4 * math.sin(a) ** 0.8))
 pad_ += [(4.8, -1.5)]
 F = frames(rail_pts)
 def ring_verts(prof):
@@ -589,9 +589,9 @@ box_uv(rail, 5.0)
 bm = bmesh.new()
 for (p, t, nn, b) in [F[i] for i in range(len(F))]:
     pass
-seam_pts = [p - b * (-1.2 + 0.4) + nn * 4.2 for (p, t, nn, b) in F]
+seam_pts = [p - b * (-1.2 + 0.4) + nn * 2.7 for (p, t, nn, b) in F]
 sweep(bm, seam_pts, 0.12, 6, 0, closed=True)
-seam2 = [p - b * 1.8 + nn * 5.35 for (p, t, nn, b) in F]
+seam2 = [p - b * 1.8 + nn * 3.38 for (p, t, nn, b) in F]
 sweep(bm, seam2, 0.1, 6, 0, closed=True)
 piping = bm_obj('RailPiping', bm, [M_PIPING], smooth=40)
 
@@ -616,8 +616,8 @@ def card(name, key, cx, cy, rotz, z=FELT, tilt=0.0):
     return o
 
 
-card('CardAceSpades', 'A♠', -20.5, 1.5, math.radians(14))
-card('CardKingHearts', 'K♥', -16.8, -1.4, math.radians(-9), z=FELT + 0.02, tilt=math.radians(-0.4))
+card('CardAceSpades', 'A♠', -21.5, 8.0, math.radians(194))
+card('CardKingHearts', 'K♥', -17.2, 3.0, math.radians(171), z=FELT + 0.02, tilt=math.radians(0.4))
 card('CardAceHearts', 'A♥', 7.0, 19.5, math.radians(62))
 
 # ================================================================ chip stacks, a stray chip, the dealer button
@@ -637,10 +637,6 @@ stack('red', 21.0, 17.5, 3)
 stack('blue', -12.5, 15.5, 6, lean=0.02)
 stack('black', -19.0, 22.0, 4)
 o = obj('StrayChip', stack_meshes['green'], (), loc=(-5.8, 15.5, FELT + TH + 0.0), rot=(0, 0, 0.7))
-# leaning against the blue stack: a chip resting at an angle on another one
-obj('StrayChip2', stack_meshes['purple'], (), loc=(-12.0, 9.3, FELT + TH + 0.55 * 0 + 1.25), rot=(math.radians(14), 0, 0.3))
-obj('StrayChip2base', stack_meshes['blue'], (), loc=(-12.6, 8.6, FELT + TH), rot=(0, 0, 1.1))
-
 # dealer button front-right
 bm = bmesh.new()
 prof = [(0, 0)]
@@ -739,9 +735,9 @@ def light(name, kind, loc, look, energy, color, size=None, spot=None, blend=0.5,
 
 
 KEY = float(OPT.get('key', 260000))
-light('LampKey', 'SPOT', (LX, LY, LZ + 3.0), (0, 2, FELT), KEY, (1.0, 0.82, 0.6), spot=62, blend=0.85, soft=7.0)
-light('Rim', 'AREA', (6, 70, 22), (0, 0, 2), float(OPT.get('rim', 60000)), (1.0, 0.7, 0.45), size=30, glossy=True)
-light('Fill', 'AREA', (-30, -60, 30), (0, 0, 0), float(OPT.get('fill', 9000)), (0.55, 0.65, 1.0), size=40, glossy=False)
+light('LampKey', 'SPOT', (LX, LY, LZ + 3.0), (0, 2, FELT), KEY, (1.0, 0.8, 0.56), spot=float(OPT.get('cone', 44)), blend=0.95, soft=7.0)
+light('Rim', 'AREA', (6, 70, 22), (0, 0, 2), float(OPT.get('rim', 25000)), (1.0, 0.7, 0.45), size=30, glossy=True)
+light('Fill', 'AREA', (-30, -60, 30), (0, 0, 0), float(OPT.get('fill', 1200)), (0.55, 0.65, 1.0), size=40, glossy=False)
 
 # out-of-focus casino lights behind the table (slot banks, chandeliers)
 rngb = np.random.default_rng(21)
@@ -861,7 +857,7 @@ gl = cnt.nodes.new('CompositorNodeGlare'); gl.glare_type = 'FOG_GLOW'; gl.qualit
 cnt.links.new(rl.outputs['Image'], gl.inputs['Image']); cnt.links.new(gl.outputs['Image'], comp.inputs['Image'])
 
 cam.data.dof.use_dof = True
-for shot in ('game', 'low', 'top'):
+for shot in ('game', 'low', 'top', 'cards'):
     if shot not in SHOTS: continue
     if shot == 'game':
         el = math.radians(50); dist = 21
@@ -872,6 +868,10 @@ for shot in ('game', 'low', 'top'):
         cam.location = (9.5, -8.5, 4.2); cam.data.angle_y = math.radians(30)
         cam.rotation_euler = (Vector((0, 0.8, 0.4)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
         cam.data.dof.focus_distance = (Vector((0, 0.5, 1.5)) - cam.location).length; cam.data.dof.aperture_fstop = float(OPT.get('flow', 0.22))
+    elif shot == 'cards':
+        cam.data.dof.use_dof = False
+        cam.location = (-19, 4, 45); cam.data.angle_y = math.radians(45)
+        cam.rotation_euler = (Vector((-19, 4.5, 0)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
     else:
         cam.data.dof.use_dof = False
         cam.location = (0, -5, 120); cam.data.angle_y = math.radians(40)

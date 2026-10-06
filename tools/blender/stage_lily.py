@@ -428,10 +428,10 @@ M_BUDTIP = mat('BudTip', lin('f0a0be'), 0.4, sss=0.2, sss_r=(1, .6, .6))
 M_REED = mat('Reed', lin('6f8a32'), 0.55, sss=0.1, sss_r=(0.5, 1.0, 0.2))
 M_REEDY = mat('ReedDry', lin('a8924a'), 0.6)
 M_CATTAIL = mat('Cattail', lin('4a2c16'), 0.9)
-M_DFLY = mat('DragonBody', lin('1f4f5a'), 0.3, metal=0.35, coat=0.6, coat_r=0.05)
+M_DFLY = mat('DragonBody', lin('1d5e6e'), 0.4, metal=0.0, coat=0.25, coat_r=0.15)
 M_DEYE = mat('DragonEye', lin('1a3a6a'), 0.12, coat=1.0, coat_r=0.02)
 M_DLEG = mat('DragonLeg', lin('141414'), 0.4)
-M_WING = mat('Wing', rough=0.05, tcol=IM_WING, trans=1.0, ior=1.3, spec=0.5)
+M_WING = mat('Wing', rough=0.18, tcol=IM_WING, trans=0.85, ior=1.3, spec=0.5)
 M_FROG = mat('Frog', rough=0.32, tcol=IM_FROG, coat=0.6, coat_r=0.08, sss=0.15, sss_r=(0.5, 1.0, 0.3), sss_s=0.04)
 M_FEYE = mat('FrogEye', lin('b0782a'), 0.1, coat=1.0, coat_r=0.01)
 M_PUPIL = mat('FrogPupil', lin('050505'), 0.05, coat=1.0, coat_r=0.01)
@@ -904,7 +904,7 @@ def dragonfly(loc, yaw, s=1.0):
     parts = []
     prof = [(0, 0), (0.035, 0.02)]
     for k in range(10):
-        z = 0.05 + k * 0.06; r = 0.035 - 0.0018 * k
+        z = 0.05 + k * 0.06; r = 0.024 - 0.0011 * k
         prof += [(r * 1.08, z), (r * 0.92, z + 0.05)]
     prof += [(0.02, 0.66), (0, 0.68)]
     ab = lathe('DF_abdomen', [(r * s, z * s) for r, z in prof], [M_DFLY, M_DLEG], segs=10)
@@ -1089,7 +1089,7 @@ for mname in ('Petal', 'BudTip'):
     out = nt['Material Output']
     lk.new(bs.outputs[0], mx.inputs[1]); lk.new(tr.outputs[0], mx.inputs[2]); lk.new(mx.outputs[0], out.inputs['Surface'])
 # iridescence on the dragonfly
-BSDF['DragonBody'].inputs['Thin Film Thickness'].default_value = 380; BSDF['DragonBody'].inputs['Thin Film IOR'].default_value = 1.6
+BSDF['DragonBody'].inputs['Thin Film Thickness'].default_value = 250; BSDF['DragonBody'].inputs['Thin Film IOR'].default_value = 1.6
 BSDF['Wing'].inputs['Thin Film Thickness'].default_value = 520; BSDF['Wing'].inputs['Thin Film IOR'].default_value = 1.45
 BSDF['DragonEye'].inputs['Thin Film Thickness'].default_value = 300
 # frog: wet sheen bumps
