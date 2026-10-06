@@ -108,6 +108,10 @@
         const arch = o.arch || S.ARCH[1];
         a.view = new S.WrestlerView(this.scene, arch, this.fx, o.lo || (kind === 'player' ? S.DEF_EQ : S.profile.randomLoadout()));
         a.view.viewer = 0; a.view.match = null;
+        if (a.view.mats) for (const m of a.view.mats) {
+          if (m.uniforms && m.uniforms.uRimAmt) m.uniforms.uRimAmt.value = 0; // no rim glow in the market: it read as a halo
+          if (m.fragmentShader) { m.fragmentShader = m.fragmentShader.replace('sh *= mix(vec3(1.0), vec3(0.8, 0.76, 1.1), uAnime);', 'sh *= mix(vec3(1.0), vec3(0.9, 0.86, 0.9), uAnime);'); m.needsUpdate = true; } // a warm skin shadow, not a violet one (that read as a pink sash)
+        }
         a.w = { x, z, y: 0, f: a.f, fx: 0, fz: 1, vx: 0, vz: 0, st: 'free', t: 0, dur: 1, fxs: {}, a: arch, idx: kind === 'player' ? 0 : 1, szCur: K.size || 1,
           squash: 0, bal: 1, tx: 0, tz: 0, power: 0, pre: null, preT: 0, hand: 0, windPow: 0, charges: 0, uprightT: 0, throatT: 0, lifted: false, down: false,
           fallX: 0, fallZ: 1, clinch: null, slideT: 0, spd: 0, crouchT: 0, lean: 0, gulpI: -1, contact: false, fwdIn: 0, ddx: 0, ddz: 0, boomT: 0 };
@@ -137,7 +141,7 @@
         '<div class="ch-zone"></div><div class="ch-say"><b></b><span></span></div><div class="ch-prompt"></div>' +
         '<div class="ch-boss"><div class="ch-score">BOSS</div><span class="ch-bar"><i></i></span><b class="ch-name"></b></div><div class="ch-bars"></div>' +
         '<div class="ch-card"><div class="ch-cap"></div><b></b><span></span><em>' + (S.touch && S.touch.on ? 'GRAB or SKILL' : 'K or SPACE') + ' to keep it</em></div>' +
-        '<div class="ch-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART AREA</button><button data-c="quit">QUIT TO TITLE</button><p>J slap ×3 · K grab / throw · L parry · L+dir dodge, hold to CHARGE · SPACE ability</p></div>' +
+        '<div class="ch-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART AREA</button><button data-c="quit">QUIT TO TITLE</button><p>J slap ×3 · K grab / throw · L parry (tap it when the ! turns gold) · L+dir dodge, hold to CHARGE · SPACE skill</p></div>' +
         '<div class="ch-shop"></div><div class="ch-mask"></div>' +
         '<div class="ch-over"><h2 data-jp=""></h2><p></p><button data-c="retry">TRY AGAIN <kbd>J</kbd></button><button data-c="quit">QUIT TO TITLE <kbd>Esc</kbd></button></div>';
       document.body.appendChild(h);
@@ -203,6 +207,11 @@
     // ============================================================== simulation
     step(dt) {
       if (!this.over) this.runT = (this.runT || 0) + dt; // the speedrun clock (shown on the result, not on screen)
+      // SECOND WIND: in the red (under 30%), stay out of trouble for 4s and you catch your breath, back up to 40%
+      { const P0 = this.P; if (!P0.dead && !this.over && P0.hp < P0.maxHp * 0.4 && (P0.redT || P0.hp < P0.maxHp * 0.3)) {
+          if (P0.hp < P0.maxHp * 0.3) P0.redT = true;
+          if (this.t - (P0.lastHit || -99) > 4) { P0.hp = Math.min(P0.maxHp * 0.4, P0.hp + P0.maxHp * 0.08 * dt); if (P0.hp >= P0.maxHp * 0.4 - 1e-6) P0.redT = false; }
+        } else if (P0.hp >= P0.maxHp * 0.4) P0.redT = false; }
       this.chainT = (this.chainT || 0) + dt; if (this.chainT > 6 && this.mult > 1) { this.mult--; this.chain = (this.mult - 1) * 4; this.chainT = 3; this.mulBump = 1; }
       this.t += dt;
       const P = this.P;
@@ -313,7 +322,7 @@
           wantMove(4.3 * giant);
           if (c.push.pressed) this.strike(P);
           else if (c.grab.pressed) { if (vm) this.getSkill(vm); else { this.aim(P, 1.8); this.set(P, 'grab', 0.22); this.spend(P, 0.04); } }
-          else if (c.dash.pressed) { if (mag > 0.3) { this.set(P, 'lprep', 0.14); P.ldir = dirA; } else { this.set(P, 'parry', 0.26); this.g.audio.whoosh(0.08); } }
+          else if (c.dash.pressed) { if (mag > 0.3) { this.set(P, 'lprep', 0.14); P.ldir = dirA; } else { this.set(P, 'parry', 0.42); this.g.audio.whoosh(0.08); } }
           break;
         }
         case 'strike': {
@@ -554,7 +563,7 @@
       if (T.sleep) T.sleep = false;
       if (T === this.P) {
         if (T.iframe > 0 || T.st === 'dodge' || T.iron > 0) { if (T.iron > 0) this.popAt(T, 'IRON BODY'); return; }
-        if (T.st === 'parry' && T.t < (this.sk.mask.id === 'tengu' ? 0.07 : 0.22) && A && A !== T) { this.parried(A, T); return; }
+        if (T.st === 'parry' && T.t < (this.sk.mask.id === 'tengu' ? 0.12 : 0.38) && A && A !== T) { this.parried(A, T); return; }
         if (T.st === 'block') { dmg *= 0.35; kx *= 0.3; kz *= 0.3; heavy = false; this.g.audio.thump(2); }
         if (T.giant > 0) { heavy = false; kx *= 0.3; kz *= 0.3; }
       }
@@ -1157,7 +1166,9 @@
         if (on && !a.bang) { a.bang = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.bangTex, depthTest: false, transparent: true })); a.bang.renderOrder = 9; this.scene.add(a.bang); }
         if (a.bang) {
           a.bang.visible = on;
-          if (on) { const h = (a.w ? 2.5 * (a.size || 1) : 2.3) + Math.sin(T * 14) * 0.06; a.bang.position.set(a.x, h, a.z); a.bang.scale.setScalar(a.kind === 'boss' ? 1.1 : 0.7); a.bang.material.color.set(a.atk === 'grab' ? 0xffb050 : 0xffffff); }
+          if (on) { const h = (a.w ? 2.5 * (a.size || 1) : 2.3) + Math.sin(T * 14) * 0.06; a.bang.position.set(a.x, h, a.z); const now = a.dur - a.t < 0.32; // the last moment before it lands: the "!" turns gold and swells = PARRY NOW
+            a.bang.scale.setScalar((a.kind === 'boss' ? 1.1 : 0.7) * (now ? 1.3 : 1)); a.bang.material.color.set(now ? 0xffd23a : a.atk === 'grab' ? 0xffb050 : 0xffffff);
+            if (!this.parryTip && !this.over && !this.maskOpen) { this.parryTip = true; this.prompt(S.touch && S.touch.on ? '! = an attack is coming. When it turns gold, tap DEFEND (no direction) to PARRY' : '! = an attack is coming. When it turns gold, tap L (no direction) to PARRY'); setTimeout(() => this.prompt(''), 6000); } }
           if (a.gone) { this.scene.remove(a.bang); a.bang = null; }
         }
       }

@@ -1165,7 +1165,7 @@
       float shade = smoothstep(0.34, 0.1, l);
       c *= 1.0 - step(r, shade * 0.95) * (uCine > 0.5 ? 0.0 : 0.22); // the comic dots belong to versus
       // glow, ink, vignette, grain
-      c += texture2D(tBloom, vUv).rgb * 0.35;
+      c += texture2D(tBloom, vUv).rgb * (uCine > 0.5 ? 0.12 : 0.35); // the campaign keeps glow for lights, not skin
       c = mix(c, vec3(0.1, 0.045, 0.085), edge * 0.92);
       vec2 vg = vUv - 0.5; c *= 1.0 - dot(vg, vg) * (uCine > 0.5 ? 1.05 : 0.6);
       float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 91.7, vec2(12.9898, 78.233))) * 43758.5453);
