@@ -239,7 +239,18 @@ def in_cut(th, r):
     return p.dot(n1) < 0 and p.dot(n2) < 0 and p.dot([math.cos(PHN), math.sin(PHN)]) > 0
 TH1 = ang(wall_pt(U1, s_hit(U1, RT))); TH2 = ang(wall_pt(U2, s_hit(U2, RT)))   # cut opening at the side
 def wrapd(a): return (a + math.pi) % TAU - math.pi
-def near_cut(th, margin): return wrapd(th - PHN) < wrapd(TH1 - PHN) + margin and wrapd(th - PHN) > wrapd(TH2 - PHN) - margin
+def near_cut(th, margin): return CUT and wrapd(th - PHN) < wrapd(TH1 - PHN) + margin and wrapd(th - PHN) > wrapd(TH2 - PHN) - margin
+# The wedge cut is switched off (feedback: too small to read); the cake is a full uncut cylinder. CUT = True brings
+# back the notch (cut walls with the sponge layers) and the slice standing on the front-left plate.
+CUT = False
+if not CUT:
+    def rmax(th): return RIN
+    def in_cut(th, r): return False
+def open_range(r):
+    """angular range [a1, a2u] of the cake surface at radius r: the full circle when uncut."""
+    if not CUT: return PHN, PHN + TAU
+    a1 = ang(wall_pt(U1, s_hit(U1, r))); a2 = ang(wall_pt(U2, s_hit(U2, r)))
+    return a1, (a2 + TAU if a2 < a1 else a2)
 
 NROS = 24; RROS = 5.0
 ROS = [wrapd(math.radians(97) + k / NROS * TAU) for k in range(NROS)]
@@ -359,14 +370,16 @@ def build_cake():
     sc, sr, sn = build_side_maps()
     M_SIDE = pmat('m_side', img=image('side_col', sc), ormimg=image('side_orm', orm(sr), True), nimg=image('side_nrm', sn, True),
                   sss=0.35, sss_r=(1.0, 0.75, 0.6), sss_s=0.05)
-    cc, cr, cn = build_crumb_maps()
-    M_CUT = pmat('m_cut', img=image('cut_col', cc), ormimg=image('cut_orm', orm(cr), True), nimg=image('cut_nrm', cn, True),
+    cc, cr, cn = build_crumb_maps() if CUT else (np.ones((4, 4, 3)), np.ones((4, 4)), np.ones((4, 4, 3)))
+    M_CUT = None if not CUT else pmat('m_cut', img=image('cut_col', cc), ormimg=image('cut_orm', orm(cr), True), nimg=image('cut_nrm', cn, True),
                  sss=0.08, sss_r=(1.0, 0.6, 0.3), sss_s=0.015, nstr=1.5)
     log('cake maps')
     # --- top: polar grid, outer rows bend to follow the cut
     nseg = 160
     th = list(np.linspace(-math.pi, math.pi, nseg, endpoint=False))
-    for extra in (PHN, ang(wall_pt(U1, s_hit(U1, RIN))), ang(wall_pt(U2, s_hit(U2, RIN)))):
+    for extra in ((PHN,) if not CUT else ()) + (() if not CUT else (PHN,)) and () or (PHN,) if CUT else ():
+        pass
+    for extra in ((PHN, ang(wall_pt(U1, s_hit(U1, RIN))), ang(wall_pt(U2, s_hit(U2, RIN)))):
         th = [t for t in th if abs(wrapd(t - extra)) > 0.008] + [extra]
     th = np.array(sorted(th)); ns = len(th)
     rin = np.r_[np.linspace(0.35, 4.3, 11), 4.45, 4.55, 4.6, 4.65, 4.7]
