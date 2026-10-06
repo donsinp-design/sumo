@@ -866,8 +866,8 @@ def build_heli(loc, heading, s=1.3):
         rel = (z - zb) / max(zt - zb, 1e-3)
         m_ = 0
         # windscreen / chin bubble: everything forward of the door post above the belly line
-        if x > 1.02 and rel > 0.30 and abs(y) > 0.025 and not (x > 2.3): m_ = 3
-        if x > 1.02 and 0.27 < rel <= 0.33: m_ = 0
+        if x > 1.0 and rel > 0.5 and abs(y) > 0.025 and x < 2.25 and z < zt - 0.03 * (x < 1.3): m_ = 3   # windscreen
+        if x > 1.55 and 0.2 < rel < 0.44 and abs(y) > 0.1 and x < 2.3: m_ = 3                              # chin windows
         # cabin door windows
         if -1.45 < x < 0.92 and abs(y) > 0.3 and zc + 0.02 < z < zt - 0.10:
             if not (-0.30 < x < -0.20) and not (0.84 < x < 0.92): m_ = 3
@@ -1000,7 +1000,7 @@ for gx in range(-12, 13):
         if d > 380: continue
         if rng.random() < 0.12: continue       # parks / plazas
         sx = rng.uniform(13, 22); sy = rng.uniform(13, 22)
-        hmax = 40 + 70 * sstep(60, 200, d) + 90 * sstep(180, 320, d) * (rng.random() < 0.35)
+        hmax = 40 + 60 * sstep(60, 200, d) + 70 * sstep(180, 320, d) * (rng.random() < 0.3)
         h = rng.uniform(18, hmax)
         target = bm if rng.random() < 0.55 else bmc
         top = GROUND + h
@@ -1010,7 +1010,7 @@ for gx in range(-12, 13):
             add_box(target, (cx, cy, GROUND + h + h2 / 2), (sx * 0.65, sy * 0.65, h2), 0)
         if rng.random() < 0.5:   # roof plant box
             add_box(target, (cx + rng.uniform(-3, 3), cy + rng.uniform(-3, 3), top + 1.5), (sx * 0.3, sy * 0.3, 3), 1)
-        if top > -40: REDS.append((cx, cy, top + 3.2))
+        if top > -12: REDS.append((cx, cy, top + 3.2))
 city_g = bm_obj('CityGlass', bm, [M_CITY_G, M_STEELD], smooth=0)
 city_c = bm_obj('CityConcrete', bmc, [M_CITY_C, M_STEELD], smooth=0)
 for o, sd in ((city_g, 1), (city_c, 2)):
@@ -1023,7 +1023,7 @@ for o, sd in ((city_g, 1), (city_c, 2)):
             else: u, v = ((co.x if abs(n.y) > 0.5 else co.y) / 24.0 + off[0], (co.z - GROUND) / 57.6 + off[1])
             uvc.data[li].uv = (u, v)
 bm = bmesh.new()
-for (cx, cy, z) in REDS: add_sphere(bm, (cx, cy, z), 0.9, 6, 4, 0)
+for (cx, cy, z) in REDS: add_sphere(bm, (cx, cy, z), 0.6, 6, 4, 0)
 reds = bm_obj('CityBeacons', bm, [M_LENS_R], smooth=0)
 bm = bmesh.new(); add_box(bm, (0, 0, GROUND), (1200, 1200, 0.2), 0)
 streets = bm_obj('Streets', bm, [M_STREET], smooth=0); planar_uv(streets.data, 600)

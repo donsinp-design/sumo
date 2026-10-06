@@ -1037,6 +1037,7 @@ def water_render(splash_c=None):
     ad = nt.new('ShaderNodeAddShader'); lk.new(va.outputs[0], ad.inputs[0]); lk.new(vs.outputs[0], ad.inputs[1])
     lk.new(ad.outputs[0], nt['Material Output'].inputs['Volume'])
     # close the water into a slab so the volume has an inside
+    if 'nowater' in OPT: WATER.hide_render = True
     so = WATER.modifiers.new('slab', 'SOLIDIFY'); so.thickness = 6.0; so.offset = -1.0; so.use_even_offset = False
     WATER.visible_shadow = False
 
@@ -1098,31 +1099,30 @@ sdir = Vector((SUN_DIR.x * math.cos(SUN_EL), SUN_DIR.y * math.cos(SUN_EL), math.
 sun.rotation_euler = (-sdir).to_track_quat('-Z', 'Y').to_euler()
 sun.data.energy = float(OPT.get('sun', 6.5)); sun.data.color = (1.0, 0.78, 0.52); sun.data.angle = math.radians(2.5)
 
-# dappled light: an unseen canopy of leaves between the sun and the pond's left side
+# dappled light: an unseen patch of leafy canopy between the sun and the pond's left side (the left of the pad
+# catches broken light; the fighting area stays in full sun)
 bpy.ops.mesh.primitive_plane_add(size=1); gobo = bpy.context.object; gobo.name = 'Canopy'
-gobo.scale = (70, 40, 1)
-gc = Vector((-4, 4, 0)) + sdir * 30
-gobo.location = gc; gobo.rotation_euler = sdir.to_track_quat('Z', 'Y').to_euler()
+GOBO_C = Vector(eval(OPT.get('gobo', '(-8.0, 3.0, 0.0)'))); GOBO_S = float(OPT.get('gobos', 16))
+gobo.scale = (GOBO_S, GOBO_S, 1); gobo.location = GOBO_C + sdir * 26
+gobo.rotation_euler = sdir.to_track_quat('Z', 'Y').to_euler()
 gm = bpy.data.materials.new('Canopy'); gm.use_nodes = True; gnt = gm.node_tree; gn, gl_ = gnt.nodes, gnt.links
 gn.remove(gn['Principled BSDF'])
 tco = gn.new('ShaderNodeTexCoord')
-vo = gn.new('ShaderNodeTexNoise'); vo.inputs['Scale'].default_value = 22; vo.inputs['Detail'].default_value = 8; vo.inputs['Roughness'].default_value = 0.7
+vo = gn.new('ShaderNodeTexNoise'); vo.inputs['Scale'].default_value = 9; vo.inputs['Detail'].default_value = 10
+vo.inputs['Roughness'].default_value = 0.72
 gl_.new(tco.outputs['Object'], vo.inputs['Vector'])
-gr = gn.new('ShaderNodeTexGradient'); gl_.new(tco.outputs['Object'], gr.inputs['Vector'])
-ramp = gn.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].position = 0.5; ramp.color_ramp.elements[1].position = 0.56
-# canopy density: dense along the far-left edge, thinning to nothing across the fighting area
-mxv = gn.new('ShaderNodeMath'); mxv.operation = 'ADD'
-sepo = gn.new('ShaderNodeSeparateXYZ'); gl_.new(tco.outputs['Object'], sepo.inputs[0])
-lin_ = gn.new('ShaderNodeMapRange'); lin_.inputs['From Min'].default_value = -0.5; lin_.inputs['From Max'].default_value = 0.1
-lin_.inputs['To Min'].default_value = 0.18; lin_.inputs['To Max'].default_value = -0.25
-gl_.new(sepo.outputs['X'], lin_.inputs['Value'])
-gl_.new(vo.outputs['Fac'], mxv.inputs[0]); gl_.new(lin_.outputs['Result'], mxv.inputs[1])
-gl_.new(mxv.outputs[0], ramp.inputs['Fac'])
+ln_ = gn.new('ShaderNodeVectorMath'); ln_.operation = 'LENGTH'; gl_.new(tco.outputs['Object'], ln_.inputs[0])
+sc_ = gn.new('ShaderNodeMath'); sc_.operation = 'MULTIPLY_ADD'; sc_.inputs[1].default_value = 1.3; sc_.inputs[2].default_value = -0.3
+gl_.new(ln_.outputs['Value'], sc_.inputs[0])
+ad_ = gn.new('ShaderNodeMath'); ad_.operation = 'ADD'; gl_.new(vo.outputs['Fac'], ad_.inputs[0]); gl_.new(sc_.outputs[0], ad_.inputs[1])
+ramp = gn.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].position = 0.5; ramp.color_ramp.elements[1].position = 0.53
+gl_.new(ad_.outputs[0], ramp.inputs['Fac'])
 tr_ = gn.new('ShaderNodeBsdfTransparent'); df = gn.new('ShaderNodeBsdfDiffuse'); df.inputs['Color'].default_value = (0, 0, 0, 1)
 ms = gn.new('ShaderNodeMixShader'); gl_.new(ramp.outputs['Color'], ms.inputs['Fac'])
 gl_.new(df.outputs[0], ms.inputs[1]); gl_.new(tr_.outputs[0], ms.inputs[2]); gl_.new(ms.outputs[0], gn['Material Output'].inputs['Surface'])
 gobo.data.materials.append(gm)
 gobo.visible_camera = gobo.visible_glossy = gobo.visible_diffuse = gobo.visible_transmission = False
+if 'nogobo' in OPT: gobo.hide_render = True
 
 # warm bounce from the low sun off the water onto the undersides
 if float(OPT.get('bounce', 0)) > 0:

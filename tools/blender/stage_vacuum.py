@@ -371,11 +371,11 @@ def top_maps():
     brush = np.interp(R + 0.004 * np.sin(A * 3 + 1.0), rgrid, prof)
     panel = 1 - ss(4.44, 4.46, R)
     H += brush * 0.00035 * panel
-    col = np.zeros(R.shape + (3,), F32) + hx('4a4e55')
+    col = np.zeros(R.shape + (3,), F32) + hx('a3a8b0')
     tone = 0.92 + 0.08 * gn(R.shape, 60, 5)
     col *= (tone * (1 - 0.06 * ss(0, 4.4, R)))[..., None]
     col = col * (1 + 0.05 * brush[..., None] * panel[..., None])
-    rough = np.full(R.shape, 0.26, F32) + 0.03 * brush; metal = np.ones(R.shape, F32)
+    rough = np.full(R.shape, 0.3, F32) + 0.03 * brush; metal = np.full(R.shape, 0.6, F32)
     emis = np.zeros(R.shape + (3,), F32)
     CY = hx('3fe0ff')
     # fighting-circle light ring: a seam, a frosted diffuser strip, a seam
@@ -481,9 +481,9 @@ sweep('shell', [(0.06, -0.6), (0.0, -0.64), (0.0, -2.28), (0.05, -2.42), (0.2, -
 polar_cap('underside', lambda t: off(t, 0.5), 256, -2.58, mUnder, rings=(0.0, 0.5, 1.0))
 # front bumper: half the perimeter, proud of the shell, with end gaps (the seam)
 BA = math.radians(96)
-bump = [(0.12, -0.63), (-0.025, -0.63), (-0.065, -0.67), (-0.075, -0.8), (-0.075, -2.12), (-0.06, -2.27), (-0.02, -2.34), (0.12, -2.34)]
+bump = [(0.12, -0.63), (-0.02, -0.63), (-0.07, -0.68), (-0.1, -0.85), (-0.115, -1.2), (-0.11, -1.6), (-0.085, -1.95), (-0.03, -2.15), (0.08, -2.3), (0.2, -2.34)]
 sweep('bumper', bump, PHI_F - BA, PHI_F + BA, 420, mBumper, closed_prof=True, cap=True)
-sweep('ir_window', [(-0.078, -1.02), (-0.088, -1.06), (-0.088, -1.46), (-0.078, -1.5)], PHI_F - math.radians(30), PHI_F + math.radians(30), 160, mIR, cap=False)
+sweep('ir_window', [(-0.112, -1.1), (-0.122, -1.13), (-0.122, -1.37), (-0.112, -1.4)], PHI_F - math.radians(20), PHI_F + math.radians(20), 120, mIR, cap=False)
 # drive wheels in their wells, the caster at the front
 for sd in (-1, 1):
     c = np.array(off(PHI_F + sd * math.pi / 2, 1.5), F32)
@@ -763,7 +763,7 @@ def sock():
     m, nt, bs = principled('mSock', lin('c3c0bb'), 0.0, 0.9, **{'Sheen Weight': 0.7, 'Sheen Roughness': 0.45})
     hook_maps(nt, bs, sc, so, sn)
     ob.data.materials.append(m)
-    ob.data.transform(Matrix.Translation((7.2, -9.6, FZ)) @ Matrix.Rotation(math.radians(-28), 4, 'Z'))
+    ob.data.transform(Matrix.Translation((8.4, -5.2, FZ)) @ Matrix.Rotation(math.radians(-28), 4, 'Z'))
     return ob
 sock()
 
@@ -787,7 +787,7 @@ def crumbs(cx, cy, n, spread, smax):
         a = rng.uniform(0, TAU); Rm = np.array([[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]], F32)
         Vv = Vv @ Rm.T; Vv[:, 2] -= Vv[:, 2].min(); Vv += p + np.array([0, 0, FZ - 0.01], F32)
         (cb2 if rng.random() < 0.35 else cb).add(Vv, IF, [(0, 0)] * len(Vv))
-crumbs(-6.3, -7.6, 14, 1.1, 0.2); crumbs(4.2, -8.2, 6, 1.0, 0.16); crumbs(6.6, 8.6, 6, 1.4, 0.14); crumbs(-1.5, 9.8, 5, 2.0, 0.12)
+crumbs(-6.6, -6.4, 14, 1.0, 0.28); crumbs(4.6, -7.0, 7, 1.0, 0.22); crumbs(6.6, 8.6, 6, 1.4, 0.14); crumbs(-1.5, 9.8, 5, 2.0, 0.12)
 cb.build('crumbs', mCrumb); cb2.build('crumbs_crust', mCrust)
 
 mDust, nt, bs = principled('mDust', lin('8e8a84'), 0.0, 1.0, **{'Sheen Weight': 1.0, 'Sheen Roughness': 0.3, 'Subsurface Weight': 0.3, 'Subsurface Radius': (0.1, 0.1, 0.1)})
@@ -824,12 +824,10 @@ bpy.ops.import_scene.gltf(filepath=PH + '/plant/potted_plant_04_1k.gltf')
 new = [o for o in bpy.data.objects if o not in before]
 for o in new:
     for c in list(o.users_collection): c.objects.unlink(o)
-    if 'ground' in o.name.lower():
-        bpy.data.objects.remove(o); continue
     STAGE.objects.link(o)
 roots = [o for o in STAGE.all_objects if o in new and (o.parent is None)]
 for r in roots:
-    r.scale = (31,) * 3; r.location = (14.5, 12.0, FZ); r.rotation_euler = (0, 0, math.radians(30))
+    r.scale = (31,) * 3; r.location = (12.6, 9.8, FZ); r.rotation_euler = (0, 0, math.radians(30))
 for im in bpy.data.images:
     if 'potted_plant' in im.name and im not in IMGS: IMGS.append(im)
 
@@ -932,7 +930,7 @@ def setup_lights():
     nt.links.new(tc.outputs['Generated'], mp.inputs['Vector']); nt.links.new(mp.outputs['Vector'], env.inputs['Vector'])
     nt.links.new(env.outputs['Color'], bg.inputs['Color']); bg.inputs['Strength'].default_value = 0.8
     sun = bpy.data.objects.new('Sun', bpy.data.lights.new('Sun', 'SUN')); RIG.objects.link(sun)
-    sun.data.energy = 4.2; sun.data.angle = math.radians(1.6); sun.data.color = (1.0, 0.96, 0.9)
+    sun.data.energy = 5.0; sun.data.angle = math.radians(1.6); sun.data.color = (1.0, 0.97, 0.93)
     sun.rotation_euler = SUN_DIR.to_track_quat('-Z', 'Y').to_euler()
     # window frame in the right-hand wall: only casts the sun patch + mullion shadows (invisible otherwise)
     WX = 48.0
@@ -968,7 +966,7 @@ def cam_setup(shot):
         el = math.radians(50); dist = 21
         aim((0, -dist * math.cos(el), dist * math.sin(el)), (0, 0.6, 0), 34)
     elif shot == 'low':
-        aim((10.0, -9.5, 3.4), (0, 0.6, -0.4), 31, 8.0, (0, 0, 1.2))
+        aim((10.6, -10.2, 2.9), (0, 0.5, -1.0), 32, 8.0, (0, 0, 1.0))
     elif shot == 'brush':
         aim((2.5, -11.5, -0.6), (-0.6, -4.6, -2.3), 32, 8.0)
 
