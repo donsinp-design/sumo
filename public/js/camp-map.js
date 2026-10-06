@@ -124,7 +124,7 @@
     }));
     // building fronts along both sides (the street's walls)
     wall(-11, -7.2, -12, -48); wall(7.2, 11, -12, -48);
-    for (const sd of [-1, 1]) { box(g, 1.2, 3.4, 36, 0x3e3038, 0x1c1418, sd * 7.8, 1.7, -30, 0.03); S.CampArt.facade(g, sd * 7.19, -12, -48, 3.4, sd, 'shop'); }
+    for (const sd of [-1, 1]) { box(g, 1.2, 3.4, 36, 0x3e3038, 0x1c1418, sd * 8.45, 1.7, -30, 0.03); /* set back: the shopfronts recess 0.6 m into it */ S.CampArt.facade(g, sd * 7.19, -12, -48, 3.4, sd, 'shop'); }
     // market stalls: counter, awning, display of fish on ice; restaurant fronts with noren curtains
     const awningCols = [[0xe2322b, 0xf6eddc], [0x2f6fd0, 0xf6eddc], [0xf2c14e, 0x3a2c34], [0x2e9e6a, 0xf6eddc]];
     const stall = (sd, z0, z1, k) => {
@@ -215,7 +215,7 @@
       c.fillStyle = '#1a1a1a'; for (let i = 0; i < 20; i += 2) { c.fillRect(i * w / 20, h * 0.94, w / 20, 8); }
     }));
     wall(-15, -10.2, -100, -112); wall(10.2, 15, -100, -112);
-    for (const sd of [-1, 1]) { box(g, 1.2, 4.4, 12, 0x4e5660, 0x22282e, sd * 10.8, 2.2, -106, 0.035); S.CampArt.facade(g, sd * 10.19, -100, -112, 4.4, sd, 'bay', 4); }
+    for (const sd of [-1, 1]) { box(g, 1.2, 4.4, 12, 0x4e5660, 0x22282e, sd * 11.45, 2.2, -106, 0.035); /* set back behind the bay doors */ S.CampArt.facade(g, sd * 10.19, -100, -112, 4.4, sd, 'bay', 4); }
     for (const [t, x, z] of [['pallet', -6.5, -102.5], ['pallet', 6.8, -104], ['cart', 5.8, -108.5], ['crate2', -7.2, -108], ['crate', -6.4, -109], ['barrier', -2.6, -103.5], ['barrier', 3.0, -107], ['foam', 0.4, -110.2]]) prop(t, x, z);
     puddle(-3.5, -106.5, 1.2, 1.5);
     sign(g, 'セリ場', 'TUNA AUCTION  ↑', 5.6, 1.3, '#1a0e14', '#f2c14e', 0, 4.3, -111.6, 0, -0.25);

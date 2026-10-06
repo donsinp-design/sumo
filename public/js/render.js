@@ -836,6 +836,7 @@
             Lg.y = 0;
             this.fx.footprint(Lg.x, Lg.z, w.f, sd, s);
             if (sp > 3 && !this.fx.noMarks) this.fx.dust(Lg.x, 0.05, Lg.z, 2, 0.15, 0.6, 0.35, -w.vx * 0.1, -w.vz * 0.1);
+            if (sp > 0.8) this.fx.sand(Lg.x, Lg.z, sp > 3 ? 7 : 3, -w.vx * 0.25, -w.vz * 0.25, sp > 3 ? 1.2 : 0.7);
           }
           continue;
         }
@@ -845,7 +846,7 @@
           const ox = Lg.x, oz = Lg.z;
           Lg.x += w.vx * dt; Lg.z += w.vz * dt;
           const mv = Math.hypot(Lg.x - ox, Lg.z - oz);
-          if (mv > 0.004) { this.fx.slide(ox, oz, Lg.x, Lg.z, s); slideAmt += mv / dt; }
+          if (mv > 0.004) { this.fx.slide(ox, oz, Lg.x, Lg.z, s); slideAmt += mv / dt; if (Math.random() < 0.5) this.fx.sand(Lg.x, Lg.z, 2, (Lg.x - ox) / dt * 0.4, (Lg.z - oz) / dt * 0.4, 0.6); } // heels ploughing the clay
           continue;
         }
         const thr = (w.st === 'ready' || w.st === 'win' || w.st === 'lose') ? 0.15 * s : 0.26 * s;
@@ -1046,6 +1047,41 @@
       }
       this.saltPts.geometry.attributes.position.needsUpdate = true;
     }
+    // sand kicked up off the clay (dohyo only, fx.sandy): grains fly, land, lie there a moment and fade
+    sand(x, z, n, dx, dz, up) {
+      if (!this.sandy) return;
+      if (!this.sPts) {
+        const N = this.sN = 400, g = new THREE.BufferGeometry();
+        this.sPos = new Float32Array(N * 3).fill(-50); this.sVel = new Float32Array(N * 3); this.sLife = new Float32Array(N).fill(9); this.sCol = new Float32Array(N * 3); this.sI = 0;
+        const tones = [[0.93, 0.84, 0.66], [0.5, 0.37, 0.24], [0.98, 0.92, 0.78], [0.42, 0.3, 0.19]];
+        for (let i = 0; i < N; i++) { const t = tones[i % 4]; this.sCol.set(t, i * 3); }
+        g.setAttribute('position', new THREE.BufferAttribute(this.sPos, 3)); g.setAttribute('color', new THREE.BufferAttribute(this.sCol, 3));
+        this.sPts = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.075, vertexColors: true, transparent: true, opacity: 1, depthWrite: true }));
+        this.sPts.frustumCulled = false; this.sPts.renderOrder = 3; this.scene.add(this.sPts);
+      }
+      up = up || 1;
+      for (let j = 0; j < n; j++) {
+        const i = this.sI; this.sI = (this.sI + 1) % this.sN;
+        const a = Math.random() * Math.PI * 2, sp = 0.4 + Math.random() * 1.2;
+        this.sPos[i * 3] = x + Math.cos(a) * 0.12; this.sPos[i * 3 + 1] = 0.03; this.sPos[i * 3 + 2] = z + Math.sin(a) * 0.12;
+        this.sVel[i * 3] = (dx || 0) * (0.6 + Math.random()) + Math.cos(a) * sp; this.sVel[i * 3 + 1] = (0.8 + Math.random() * 1.8) * up; this.sVel[i * 3 + 2] = (dz || 0) * (0.6 + Math.random()) + Math.sin(a) * sp;
+        this.sLife[i] = 0;
+      }
+    }
+    updateSand(dt) {
+      if (!this.sPts) return;
+      for (let i = 0; i < this.sN; i++) {
+        if (this.sLife[i] > 2.5) continue;
+        this.sLife[i] += dt;
+        if (this.sPos[i * 3 + 1] > 0.015) {
+          this.sVel[i * 3 + 1] -= 12 * dt;
+          for (let a = 0; a < 3; a++) this.sPos[i * 3 + a] += this.sVel[i * 3 + a] * dt;
+          if (this.sPos[i * 3 + 1] <= 0.015) { this.sPos[i * 3 + 1] = 0.015; this.sVel[i * 3] *= 0.25; this.sVel[i * 3 + 2] *= 0.25; } // landed: a short skid
+        } else { const k = Math.exp(-dt * 10); this.sVel[i * 3] *= k; this.sVel[i * 3 + 2] *= k; this.sPos[i * 3] += this.sVel[i * 3] * dt; this.sPos[i * 3 + 2] += this.sVel[i * 3 + 2] * dt; }
+        if (this.sLife[i] > 2.5) this.sPos[i * 3 + 1] = -50;   // settled into the clay
+      }
+      this.sPts.geometry.attributes.position.needsUpdate = true;
+    }
     // stepping in water: a few droplets kicked up and thin ripples spreading out (k = how hard: 1 a step, 3 a body)
     water(x, z, k) {
       if (!this.wPts) {
@@ -1121,6 +1157,7 @@
     burst(x, z, power) {
       const p = Math.min(1.6, power / 6);
       this.dust(x, 0.05, z, Math.round(8 + p * 18), 0.25 + p * 0.3, 1.0 + p * 1.4, 0.42 + p * 0.25);
+      this.sand(x, z, Math.round(10 + p * 30), 0, 0, 1 + p * 0.5);
     }
     ring(x, z, size, dur) {
       const r = this.rings.find((o) => o.t >= o.max) || this.rings[0];
@@ -1300,7 +1337,7 @@
       this.scene = new THREE.Scene();
       this.scene.background = new THREE.Color(0x150c14);
       this.cam = new THREE.PerspectiveCamera(34, 1, 0.1, 200);
-      this.fx = new FX(this.scene); this.fx.scene = this.scene;
+      this.fx = new FX(this.scene); this.fx.scene = this.scene; this.fx.sandy = true;
       this.views = [];
       this.ref = new RefView(this.scene);
       this.buildArena();
@@ -1328,6 +1365,9 @@
       if (this.banners) for (const b of this.banners) b.visible = classic && !boss;
       if (this.coneM) this.coneM.visible = classic && !boss; // against pure black the beam reads as a grey slab
       if (classic) this.scene.background.set(boss ? 0x000000 : 0x150c14); // themed stages set their own sky
+      const d3 = boss && this.ring3d && this.ring3d.length > 0;          // the modelled dohyo replaces the painted one
+      if (this.flat2d) for (const o of this.flat2d) o.visible = !d3 && (o.parent === this.spinG ? classic : true);
+      if (this.ring3d) for (const o of this.ring3d) o.visible = d3;
     }
     // adaptive resolution: if frames run slow for a moment, render fewer pixels; if there is plenty of headroom, add them back
     perf(dt) {
@@ -1411,6 +1451,7 @@
       const rc = R + 0.3, disc = new THREE.CircleGeometry(rc, 72).rotateX(-Math.PI / 2), uv = disc.attributes.uv;
       for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.5 + (uv.getX(i) - 0.5) * rc / half, 0.5 + (uv.getY(i) - 0.5) * rc / half);
       const turn = new THREE.Mesh(disc, new THREE.MeshBasicMaterial({ map: this.ringTex })); turn.position.y = 0.004; turn.userData.dohyo = true; this.spinG.add(turn);
+      this.flat2d = [turn];
       const seam = new THREE.Mesh(new THREE.RingGeometry(rc - 0.02, rc + 0.03, 96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x5a3a24 })); seam.position.y = 0.006; this.dohyoG.add(seam);
       // tawara: straw bales ring with the four gaps
       const straw = toon(0xdcc58c, { shade: 0x9a7c52, rimAmt: 0.4 });
@@ -1418,7 +1459,7 @@
       for (let k = 0; k < 4; k++) {
         const g = new THREE.Group(); g.rotation.y = k * Math.PI / 2 + gap / 2;
         const t = mesh(new THREE.TorusGeometry(R + 0.13, 0.13, 8, 48, arc), straw, 0.02);
-        t.rotation.x = -Math.PI / 2; t.position.y = 0.03; g.add(t); g.userData.dohyo = true; this.spinG.add(g);
+        t.rotation.x = -Math.PI / 2; t.position.y = 0.03; g.add(t); g.userData.dohyo = true; this.spinG.add(g); this.flat2d.push(g);
         // straw bands
         for (let j = 1; j < 6; j++) {
           const a = j / 6 * arc;
@@ -1448,6 +1489,7 @@
         side.position.y = -0.35; bg.add(side);
         const lip = new THREE.Mesh(new THREE.TorusGeometry(rT, 0.05, 6, 96), toon(0xe2c48c, { shade: 0x7a5a3a, rimAmt: 0.6 }));
         lip.rotation.x = Math.PI / 2; lip.position.y = 0.0; bg.add(lip);
+        this.flat2d.push(topM, side, lip);
         // the spotlight falls off towards the edge of the stage
         const vig = canvasTex(512, 512, (g, w) => {
           const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
@@ -1456,6 +1498,31 @@
         });
         const vm = new THREE.Mesh(new THREE.CircleGeometry(rT + 0.02, 96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: vig, transparent: true, depthWrite: false }));
         vm.position.y = 0.009; vm.renderOrder = 1; bg.add(vm);
+        // the modelled dohyo (tools/blender/dohyo.py -> assets/models/dohyo.glb): a raised clay mound with swept sand,
+        // half-buried straw bales, the start lines and loose sand. Once it has loaded it replaces the painted stage
+        // and the toon straw in the boss arena. Bales and lines ride the turntable; the clay stays put.
+        this.ring3d = [];
+        new THREE.GLTFLoader().load('assets/models/dohyo.glb', (gl) => {
+          gl.scene.updateMatrixWorld(true);
+          for (const [name, parent, th] of [['Mound', bg, 0], ['Sand', bg, 0], ['Tawara', this.spinG, 0.012], ['Shikiri', this.spinG, 0.006]]) {
+            const src = gl.scene.getObjectByName(name); if (!src) continue;
+            const grp = new THREE.Group();
+            src.traverse((o) => {
+              if (!o.isMesh) return;
+              const sm = o.material, col = sm.color ? sm.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1);
+              if (name === 'Mound' || name === 'Sand') col.multiply(new THREE.Color(0.8, 0.82, 0.86)); // calmer clay under the comic grade
+              const m = mesh(o.geometry, toon(col.getHex(), { shade: col.clone().multiply(new THREE.Color(0.62, 0.52, 0.5)).getHex(), map: sm.map || undefined, rimAmt: 0.15 }), th);
+              if (name === 'Mound') { // the clay shell came out of Blender wound inside out: draw both faces, normals facing up/out
+                m.material.side = THREE.DoubleSide;
+                const nr = o.geometry.attributes.normal; let sy = 0; for (let i = 0; i < nr.count; i++) sy += nr.getY(i);
+                if (sy < 0) { for (let i = 0; i < nr.count; i++) nr.setXYZ(i, -nr.getX(i), -nr.getY(i), -nr.getZ(i)); nr.needsUpdate = true; }
+              }
+              m.applyMatrix4(o.matrixWorld); grp.add(m);
+            });
+            parent.add(grp); this.ring3d.push(grp);
+          }
+          this.applyArena();
+        }, undefined, () => {});
       }
       // salt box + water bucket corners
       const wood = toon(0x6d4430, { shade: 0x3c2219 });
@@ -1526,6 +1593,18 @@
     setWrestlers(archs, loadouts, names) {
       for (const v of this.views) v.dispose(this.scene);
       this.views = archs.map((a, i) => new WrestlerView(this.scene, a, this.fx, loadouts && loadouts[i]));
+      // everyone fights masked, like the campaign: two different masks each match (cosmetic in versus)
+      if (S.CampSkills) {
+        const pool = ['oni', 'tengu', 'kitsune', 'hannya', 'okame'], m0 = pool[(Math.random() * pool.length) | 0];
+        const m1 = pool.filter((k) => k !== m0)[(Math.random() * (pool.length - 1)) | 0];
+        this.views.forEach((v, i) => { const mk = S.CampSkills.maskMesh(i ? m1 : m0); if (mk && v.head) { mk.scale.setScalar((v.s || 1) * 1.3); v.head.add(mk); v.maskId = i ? m1 : m0; } });
+        // the referee wears one too: a third mask nobody is fighting in
+        if (this.ref && this.ref.headG) {
+          if (this.ref.mask) this.ref.headG.remove(this.ref.mask);
+          const rest = pool.filter((k) => k !== m0 && k !== m1), rid = rest[(Math.random() * rest.length) | 0];
+          const rm = this.ref.mask = S.CampSkills.maskMesh(rid); if (rm) { rm.scale.setScalar(0.78); rm.position.set(0, -0.06, -0.01); this.ref.headG.add(rm); this.ref.maskId = rid; }
+        }
+      }
       this.fx.clearDecals();
       this.clearObjs(); this.clearThrown();
       this.buildBanners(loadouts, names || ['', '']);
@@ -2109,7 +2188,7 @@
       }
       if (this.marker && this.marker.visible) { const k = 1 + 0.12 * Math.sin(this.time * 6); this.marker.scale.set(k, 1, k); }
       this.ref.update(rdt, T, m);
-      this.fx.update(dt); this.fx.updateSalt(dt); this.fx.updateWater(dt);
+      this.fx.update(dt); this.fx.updateSalt(dt); this.fx.updateWater(dt); this.fx.updateSand(dt);
       this.updateObjs(game, dt); this.updateThrown(dt);
       if (this.banners) for (const b of this.banners) b.userData.flag.rotation.y = Math.sin(this.time * 1.3 + b.position.x) * 0.12;
       this.excite += ((game.excite || 0) - this.excite) * Math.min(1, rdt * 3);
@@ -2172,6 +2251,7 @@
     this.dohyoG.visible = classic;
     for (const c of this.spinG.children) if (c.userData.dohyo) c.visible = classic;
     this.classicStage = classic;
+    if (this.fx) this.fx.sandy = classic; // sand kicks up off the clay ring only
     if (this.floorM) this.floorM.visible = classic;
     if (this.coneM) this.coneM.visible = classic;
     if (this.motes) this.motes.visible = classic;

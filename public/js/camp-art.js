@@ -524,13 +524,55 @@
     });
   }
   // a run of facade panels along a wall face. sd: which side (the panel faces -sd * x)
+  // The flat painted panel shows first; the modelled 3D module (tools/blender/facades.py -> assets/models/facades.glb)
+  // replaces it as soon as that file has loaded.
+  const FAC = { shop: [6, 4.0, 3.4], hall: [3, 5.0, 4.6], bay: [2, 4.0, 4.4] }; // variants, module width, module height
+  function facadeModule(set, name) {
+    set.cache = set.cache || {};
+    if (set.cache[name] !== undefined) return set.cache[name];
+    const src = set.scene.getObjectByName(name); if (!src) return (set.cache[name] = null);
+    src.updateMatrixWorld(true);
+    // one mesh per material: every piece sharing a material is merged, so a module costs a handful of draw calls
+    const byMat = new Map(), inv = new THREE.Matrix4().copy(src.matrixWorld).invert();
+    src.traverse((o) => {
+      if (!o.isMesh) return;
+      const geo = o.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)).toNonIndexed();
+      if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+      if (!byMat.has(o.material)) byMat.set(o.material, []); byMat.get(o.material).push(geo);
+    });
+    const parts = [];
+    for (const [sm, geos] of byMat) {
+      const geo = new THREE.BufferGeometry();
+      for (const [k, n] of [['position', 3], ['normal', 3], ['uv', 2]]) {
+        const tot = geos.reduce((t, gg) => t + gg.attributes[k].count * n, 0), arr = new Float32Array(tot); let off = 0;
+        for (const gg of geos) { arr.set(gg.attributes[k].array, off); off += gg.attributes[k].count * n; }
+        geo.setAttribute(k, new THREE.BufferAttribute(arr, n));
+      }
+      const col = sm.color ? sm.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1);
+      parts.push({ geo, mat: S.toon(col.getHex(), { shade: col.clone().multiply(new THREE.Color(0.7, 0.66, 0.76)).getHex(), map: sm.map || undefined, rimAmt: 0 }) });
+    }
+    return (set.cache[name] = parts);
+  }
   function facade(g, x, z0, z1, h, sd, style, seg) {
     seg = seg || 4; const za = Math.min(z0, z1), len = Math.abs(z1 - z0), n = Math.max(1, Math.round(len / seg)), sl = len / n;
+    const panels = [];
     for (let i = 0; i < n; i++) {
       const v = (Math.floor(Math.abs(za * 7 + i * 13 + sd * 5)) % 7);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(sl, h), S.toon(0xffffff, { map: facadeTex(style, v), shade: 0x9088a0, rimAmt: 0 }));
-      m.position.set(x, h / 2, za + (i + 0.5) * sl); m.rotation.y = -sd * Math.PI / 2; g.add(m);
+      m.position.set(x, h / 2, za + (i + 0.5) * sl); m.rotation.y = -sd * Math.PI / 2; g.add(m); panels.push([m, v]);
     }
+    S.facadeSet = S.facadeSet || new Promise((res) => new THREE.GLTFLoader().load('assets/models/facades.glb', (gl) => res({ scene: gl.scene }), undefined, () => res(null)));
+    S.facadeSet.then((set) => {
+      if (!set || !FAC[style]) return;
+      const [nv, mw, mh] = FAC[style];
+      for (const [m, v] of panels) {
+        const parts = facadeModule(set, style + '_' + (v % nv)); if (!parts || !parts.length) continue;
+        const grp = new THREE.Group();
+        for (const p of parts) grp.add(W.mesh(p.geo, p.mat, 0)); // no ink outline: the modelled bevels carry the edges
+        grp.scale.set(sl / mw, h / mh, 1); grp.position.set(m.position.x, 0, m.position.z); grp.rotation.y = -sd * Math.PI / 2;
+        g.add(grp); grp.updateMatrixWorld(true); m.visible = false;
+      }
+    });
   }
 
   // ---------------------------------------------------------------- awning: curved striped canvas, scalloped valance, steel frame
