@@ -81,12 +81,11 @@ def limb(a, b, ra, rb, caps=True):
     if caps: ell(a, (ra, ra, ra)); ell(b, (rb, rb, rb))
 
 # torso: one big round belly, a broad chest/back, a full seat (no cleft)
-ell((0, 0.04, 0.85), (0.35, 0.24, 0.22))            # hips
-ell((0, 0.12, 0.79), (0.31, 0.19, 0.2))             # seat
+ell((0, 0.04, 0.86), (0.395, 0.26, 0.25))           # hips and seat
 ell((0, -0.07, 1.01), (0.41, 0.38, 0.36))           # the belly: big and round
-ell((0, -0.17, 0.89), (0.31, 0.25, 0.17))           # lower belly, hanging toward the belt
-ell((0, -0.01, 1.27), (0.38, 0.28, 0.24))           # chest
-ell((0, 0.06, 1.17), (0.37, 0.23, 0.30))            # back
+ell((0, -0.15, 0.9), (0.32, 0.25, 0.18))            # lower belly, hanging toward the belt
+ell((0, 0.0, 1.25), (0.39, 0.29, 0.27))             # chest and back in one
+ell((0, 0.02, 1.06), (0.425, 0.29, 0.28))           # waist: fills between belly, back and hips
 # broad soft shoulders and a short thick neck
 for s in S2:
     limb((s * 0.06, 0.05, 1.50), (s * 0.32, 0.03, 1.43), 0.12, 0.11)    # shoulder slope
@@ -109,10 +108,9 @@ for s in S2:
     limb(H0 + xh * 0.03 + yh * 0.04 + nin * 0.006, H0 + xh * 0.09 + yh * 0.075 + nin * 0.02, 0.026, 0.022)    # thumb
 # legs: massive smooth thighs, thick calves, simple rounded feet
 for s in S2:
-    limb(HIP[s] + Vector((0, 0, -0.02)), KNEE[s], 0.25, 0.165)
-    ell((s * 0.25, 0.0, 0.65), (0.225, 0.23, 0.21))                     # thigh mass
-    limb(KNEE[s], ANK[s], 0.155, 0.1)
-    ell((s * 0.285, 0.04, 0.30), (0.135, 0.13, 0.15))                  # calf
+    limb(HIP[s] + Vector((0, 0, -0.02)), KNEE[s], 0.265, 0.17)
+    limb(KNEE[s], ANK[s], 0.165, 0.105)
+    ell((s * 0.285, 0.03, 0.31), (0.14, 0.14, 0.17))                   # calf, centred on the shin
     ell((s * 0.30, -0.055, 0.05), (0.115, 0.18, 0.07))                 # foot
     ell((s * 0.30, 0.05, 0.06), (0.09, 0.08, 0.07))                    # heel
 for o in parts: o.select_set(True)
@@ -122,15 +120,15 @@ body = bpy.context.object; body.name = 'Body'
 bpy.ops.object.transform_apply(location=True, scale=True, rotation=True)
 r = body.modifiers.new('rm', 'REMESH'); r.mode = 'VOXEL'; r.voxel_size = 0.009
 bpy.ops.object.modifier_apply(modifier='rm')
-m = body.modifiers.new('sm', 'CORRECTIVE_SMOOTH'); m.factor = 0.9; m.iterations = 20; m.smooth_type = 'LENGTH_WEIGHTED'
+m = body.modifiers.new('sm', 'CORRECTIVE_SMOOTH'); m.factor = 0.9; m.iterations = 40; m.smooth_type = 'LENGTH_WEIGHTED'
 bpy.ops.object.modifier_apply(modifier='sm')
-m = body.modifiers.new('sm2', 'SMOOTH'); m.factor = 0.6; m.iterations = 12
+m = body.modifiers.new('sm2', 'SMOOTH'); m.factor = 0.6; m.iterations = 20
 bpy.ops.object.modifier_apply(modifier='sm2')
 co = np.empty(len(body.data.vertices) * 3); body.data.vertices.foreach_get('co', co); co = co.reshape(-1, 3)
 co[:, 2] = np.maximum(co[:, 2], 0.0)                                       # flat soles
 body.data.vertices.foreach_set('co', co.ravel()); body.data.update()
 
-BODY_TRIS = int(OPT.get('bodytris', 10000))
+BODY_TRIS = int(OPT.get('bodytris', 9300))
 for _ in range(4):
     n = sum(len(p.vertices) - 2 for p in body.data.polygons)
     if n <= BODY_TRIS * 1.04: break
@@ -317,7 +315,7 @@ def is_hair(dr):
 def pdir(beta, a): return (POLE * math.cos(beta) + (PU * math.cos(a) + PV * math.sin(a)) * math.sin(beta)).normalized()
 def skull(dr):
     l, nrm = hit(HC + dr * 0.45, -dr, 0.45); return l, nrm
-NA, NE = 48, 12
+NA, NE = 40, 10
 B0 = 0.07
 P, UV = [], []
 bm = []
@@ -337,7 +335,7 @@ for kk in range(NA + 1):
         tabo = 0.022 * math.exp(-((abs(phi) - math.pi) / 0.9) ** 2) * math.exp(-((el + 0.15) / 0.32) ** 2)
         edge = min(1.0, (NE - j) / 3.0)
         edge = edge * edge * (3 - 2 * edge)
-        row.append(l + nrm * (-0.002 + 0.013 * edge + tabo * edge))
+        row.append(l + nrm * (0.003 + 0.011 * edge + tabo * edge))
         uvr.append((kk / NA, 0.05 + 0.9 * j / NE))
     P.append(row); UV.append(uvr)
 cap = grid_obj('HairCap', P, UV, HAIR)
@@ -348,18 +346,18 @@ TS = TF.cross(POLE).normalized()
 # the crown hole of the cap is covered by a soft root, and the chonmage lies forward over the crown: a bent capsule
 o = sphere('TopknotRoot', (0, 0, 0), (1, 1, 1), HAIR, 20, 12)
 for v in o.data.vertices:
-    c_ = v.co.copy(); v.co = T + TF * 0.0 + POLE * 0.005 + TS * c_.x * 0.05 + TF * c_.y * 0.06 + POLE * c_.z * 0.03
+    c_ = v.co.copy(); v.co = T - TF * 0.01 - POLE * 0.004 + TS * c_.x * 0.045 + TF * c_.y * 0.055 + POLE * c_.z * 0.02
 o.data.update()
 o = sphere('Chonmage', (0, 0, 0), (1, 1, 1), HAIR, 20, 14)
 for v in o.data.vertices:
     c_ = v.co.copy(); u = c_.y
-    v.co = T + TF * (0.02 + 0.075 * u) + POLE * (0.034 - 0.018 * u * u) + TS * c_.x * 0.034 + POLE * c_.z * 0.028
+    v.co = T + TF * (0.03 + 0.085 * u) + POLE * (0.02 - 0.012 * u * u) + TS * c_.x * 0.036 + POLE * c_.z * 0.026
 o.data.update()
 
 # ---------------------------------------------------------------- face: two small dark dot eyes, nothing else
 for s in S2:
     l, n_ = hit((s * 0.052, -1, 1.69), (0, 1, 0))
-    eye = sphere('Eye', l + Vector((0, 0.002, 0)), (0.012, 0.006, 0.0145), INK, 12, 8)
+    sphere('Eye', l + Vector((0, 0.002, 0)), (0.012, 0.006, 0.0145), INK, 10, 6)
 
 # ---------------------------------------------------------------- skin: one flat colour, a soft cheek blush, baked to a small texture
 bpy.context.view_layer.objects.active = body
@@ -388,6 +386,12 @@ imn = nt.nodes.new('ShaderNodeTexImage'); imn.image = SKIN_IMG; nt.nodes.active 
 me.materials.append(SKIN)
 scn.cycles.samples = 4
 bpy.ops.object.bake(type='EMIT', margin=16, use_clear=False)
+px = np.array(SKIN_IMG.pixels[:]).reshape(-1, 4)                      # any pixel the bake missed (or bled dark): plain skin
+lum = px[:, :3] @ np.array([0.3, 0.5, 0.2]); lum0 = np.array(SKIN_RGB) @ np.array([0.3, 0.5, 0.2])
+bad = lum < 0.8 * lum0
+print('skin texture: fixed pixels', int(bad.sum()))
+px[bad, :3] = SKIN_RGB; px[:, 3] = 1
+SKIN_IMG.pixels.foreach_set(px.ravel().astype(np.float32)); SKIN_IMG.update()
 SKIN_IMG.pack()
 nt.nodes.clear()
 outn = nt.nodes.new('ShaderNodeOutputMaterial'); bs = nt.nodes.new('ShaderNodeBsdfPrincipled')
@@ -461,9 +465,23 @@ bpy.ops.object.select_all(action='DESELECT')
 bpy.context.view_layer.objects.active = body; body.select_set(True)
 bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
 try:
-    bpy.ops.object.vertex_group_smooth(group_select_mode='ALL', factor=0.5, repeat=3)
+    bpy.ops.object.vertex_group_smooth(group_select_mode='ALL', factor=0.5, repeat=8)
 except Exception as ex: print('smooth weights skipped', ex)
 bpy.ops.object.mode_set(mode='OBJECT')
+bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+# the trunk bends as one soft volume: whatever share of a vertex belongs to hips / spine / chest is redistributed by
+# height over wide, overlapping bands (bone heat leaves sharp seams there, which crease the belly and back when posed)
+TRUNK = ('hips', 'spine', 'chest')
+gi = {g.name: g.index for g in body.vertex_groups}
+for v in body.data.vertices:
+    cur = {body.vertex_groups[g.group].name: g.weight for g in v.groups}
+    tot = sum(cur.get(n, 0.0) for n in TRUNK)
+    if tot <= 1e-4: continue
+    z = v.co.z
+    wh = 1 - float(sstep(0.80, 1.10, z)); wc = float(sstep(1.02, 1.40, z)); ws = max(0.0, 1 - wh - wc)
+    for n, w_ in zip(TRUNK, (wh, ws, wc)):
+        if w_ * tot > 1e-4: body.vertex_groups[n].add([v.index], w_ * tot, 'REPLACE')
+        elif n in cur: body.vertex_groups[n].remove([v.index])
 bpy.ops.object.vertex_group_normalize_all(lock_active=False)
 # under the belt the skin is bound to the hips (cloth and skin move as one; the legs still bend below it)
 hg = body.vertex_groups['hips']
