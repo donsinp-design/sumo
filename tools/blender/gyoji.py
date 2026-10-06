@@ -43,9 +43,9 @@ def silk_image():
         fl = np.maximum(fl, 1 - ss(0.045, 0.065, np.hypot(u - cx, v - cy)))
     fl = np.maximum(fl, 1 - ss(0.02, 0.035, np.hypot(u - 0.5, v - 0.5)) * 0.0)
     dot = 1 - ss(0.018, 0.03, np.minimum(np.hypot(u, v), np.minimum(np.hypot(1 - u, v), np.minimum(np.hypot(u, 1 - v), np.hypot(1 - u, 1 - v)))))
-    gold_a = np.clip(line * 0.35 + fl * 0.7 + dot * 0.5, 0, 1) * 0.42
+    gold_a = np.clip(line * 0.3 + fl * 0.75 + dot * 0.45, 0, 1) * 0.32
     weave = 1 + 0.035 * np.sin(y * n * math.pi * 0.5) * np.sin(x * n * math.pi * 0.25) + 0.02 * np.sin(y * n * 0.09 + np.sin(x * 9) * 2)
-    base = np.array([0x48, 0x1a, 0x6e], np.float32) / 255
+    base = np.array([0x46, 0x16, 0x72], np.float32) / 255
     gold = np.array([0xd6, 0xb0, 0x5c], np.float32) / 255
     rgb = base[None, None, :] * weave[..., None] * (1 - gold_a[..., None]) + gold[None, None, :] * gold_a[..., None]
     rgba = np.concatenate([np.clip(rgb, 0, 1), np.ones((n, n, 1), np.float32)], axis=2)
@@ -53,16 +53,20 @@ def silk_image():
     img.pixels.foreach_set(rgba.ravel()); img.update(); img.pack()
     return img
 SILK_IMG = silk_image()
-def silk_mat(name):
+def silk_mat(name, tint=None):
     m = mat(name, (1, 1, 1), 0.42); nt = m.node_tree; b = nt.nodes['Principled BSDF']
     t = nt.nodes.new('ShaderNodeTexImage'); t.image = SILK_IMG
-    nt.links.new(t.outputs['Color'], b.inputs['Base Color'])
-    b.inputs['Sheen Weight'].default_value = 0.2; b.inputs['Sheen Tint'].default_value = (*srgb('b890d8'), 1)
+    if tint:   # multiply by a constant: exported as the glTF baseColorFactor
+        mx = nt.nodes.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.blend_type = 'MULTIPLY'; mx.inputs['Factor'].default_value = 1.0
+        mx.inputs[7].default_value = (*tint, 1); nt.links.new(t.outputs['Color'], mx.inputs[6]); nt.links.new(mx.outputs[2], b.inputs['Base Color'])
+    else: nt.links.new(t.outputs['Color'], b.inputs['Base Color'])
+    b.inputs['Sheen Weight'].default_value = 0.1; b.inputs['Sheen Tint'].default_value = (*srgb('b890d8'), 1)
     return m
 
 SKIN = mat('Skin', srgb('d9a07a'), 0.6)
 HAIR = mat('Hair', srgb('2a2729'), 0.5)
 ROBE = silk_mat('Silk')
+HAKAMA = silk_mat('SilkHakama', (0.78, 0.74, 0.86))
 TRIM = mat('SilkDark', srgb('2e1442'), 0.5)        # collar, waist tie
 LINING = mat('Lining', srgb('24102f'), 0.8)        # inside the cuffs
 UNDER = mat('Juban', srgb('f1ece2'), 0.6)          # white under-kimono at the neck
@@ -164,7 +168,7 @@ def body_w(c):
     if any((c - ARM[s][2]).length < 0.16 for s in (-1, 1)): return 0.4             # hands
     if c.z > 1.25 and abs(c.x) < 0.13: return 0.45                                 # neck / collar
     return 1.0
-body = fuse('Body', 0.009, 4100, body_w)
+body = fuse('Body', 0.009, 3800, body_w)
 print('body triangles', tris_of(body))
 
 # ---------------------------------------------------------------- paint the robe onto the skin
@@ -286,8 +290,8 @@ def boundary_loop(me_bm, edges):
     return [v.co.copy() for v in loop]
 
 # ---------------------------------------------------------------- collar: dark silk bands crossing on the chest, a white juban edge
-band('Collar', COLLAR_PATH[:28], 0.024, 0.006, 0.003, TRIM, closed=False, K=5)
-band('Collar', COLLAR_PATH[27:], 0.024, 0.006, 0.0075, TRIM, closed=False, K=5)
+band('Collar', COLLAR_PATH[:28:2] + [COLLAR_PATH[28]], 0.024, 0.006, 0.003, TRIM, closed=False, K=5)
+band('Collar', COLLAR_PATH[27::2], 0.024, 0.006, 0.0075, TRIM, closed=False, K=5)
 band('JubanNeck', [p for p in loop_around((0, 0.0, 1.352), (0, 0, 1), 0.3, 40) if p[0].y < -0.03 and abs(p[0].x) < 0.065], 0.007, 0.004, 0.0, UNDER, closed=False, K=4)
 
 # ---------------------------------------------------------------- wide sleeves: fused volumes hanging from the arms, cut clean at the cuff
@@ -310,7 +314,7 @@ def bore(ob, centre, axis, r, depth):
     bpy.context.view_layer.objects.active = ob; bpy.ops.object.modifier_apply(modifier='bool')
     bpy.data.objects.remove(cyl, do_unlink=True)
 def rim_cord(name, rim, plane_no, r=0.0075):
-    step = max(1, len(rim) // 44); rim = rim[::step]
+    step = max(1, round(len(rim) / 34)); rim = rim[::step]
     ctr = sum(rim, Vector()) / len(rim); N = len(rim)
     for _ in range(3): rim = [(rim[i - 1] + 2 * rim[i] + rim[(i + 1) % N]) / 4 for i in range(N)]
     pts = []
@@ -364,6 +368,7 @@ for k in range(NA):
     th = 2 * math.pi * k / NA; dr = Vector((math.sin(th), -math.cos(th), 0))
     loc, _ = hit(Vector((0, 0.015, ZT)) + dr * 0.5, -dr)
     top.append((Vector((loc.x, loc.y - 0.015, 0)).length + 0.012))
+def sst(e0, e1, x): x = max(0.0, min(1.0, (x - e0) / (e1 - e0))); return x * x * (3 - 2 * x)
 def tri(x): x = x % 1.0; return 1 - 2 * abs(x - 0.5)        # 0..1..0 triangle wave
 hv, hf = [], []
 for i in range(NZ + 1):
@@ -372,17 +377,21 @@ for i in range(NZ + 1):
     b = min(t / 0.3, 1); b = b * b * (3 - 2 * b)
     for k in range(NA):
         th = 2 * math.pi * k / NA; sn, cs = math.sin(th), math.cos(th)
-        re = 1 / math.sqrt((sn / rx) ** 2 + (cs / ry) ** 2)
+        # two legs: the section is the union of two ellipses that drift apart below a low crotch
+        cx = 0.172 * sst(0.25, 1.0, t) ** 0.85; lrx = rx - cx; dx, dy = sn, -cs; re = 0.0
+        for c_ in (-cx, cx):
+            A = dx * dx / lrx ** 2 + dy * dy / ry ** 2; B = -2 * dx * c_ / lrx ** 2; C = c_ * c_ / lrx ** 2 - 1
+            re = max(re, (-B + math.sqrt(B * B - 4 * A * C)) / (2 * A))
         r = (1 - b) * top[k] + b * re
-        r *= 1 + 0.07 * t ** 0.8 * (tri(th / (2 * math.pi) * 16 + 0.25) - 0.5)     # knife pleats
-        for c0 in (0.0, math.pi):                                                  # the split between the legs, front and back
-            dth = math.atan2(math.sin(th - c0), math.cos(th - c0))
-            r *= 1 - (0.06 * max(t - 0.2, 0) + 0.2 * max(t - 0.55, 0) ** 1.5) * math.exp(-(dth / (0.1 + 0.25 * t ** 2)) ** 2)
-        hv.append(Vector((sn * r, 0.015 - cs * r, z)))
+        r *= 1 + 0.06 * t ** 0.8 * (tri(th / (2 * math.pi) * 18 + 0.25) - 0.5)     # knife pleats
+        lift = 0.0
+        for c0 in (0.0, math.pi):                                                  # the hem rises into the crotch: two legs
+            dth = math.atan2(math.sin(th - c0), math.cos(th - c0)); lift += 0.075 * math.exp(-(dth / 0.32) ** 2) * t ** 5
+        hv.append(Vector((sn * r, 0.015 - cs * r, z + lift)))
 for i in range(NZ):
     for k in range(NA):
         k2 = (k + 1) % NA; hf.append((i * NA + k, i * NA + k2, (i + 1) * NA + k2, (i + 1) * NA + k))
-hak = mesh_obj('Hakama', hv, hf, ROBE)
+hak = mesh_obj('Hakama', hv, hf, HAKAMA)
 bm = bmesh.new(); bm.from_mesh(hak.data); bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:]); bm.to_mesh(hak.data); bm.free()
 hem = [(hv[NZ * NA + k] + Vector((0, 0, 0.004)), Vector((hv[NZ * NA + k].x, hv[NZ * NA + k].y - 0.015, 0)).normalized()) for k in range(NA)]
 band('HakamaHem', hem, 0.009, 0.007, -0.004, TRIM, K=4)
@@ -405,8 +414,8 @@ bv_ = kp.modifiers.new('bev', 'BEVEL'); bv_.width = 0.004; bv_.segments = 2; bpy
 
 # ---------------------------------------------------------------- white tabi toes peeking out under the hem
 for s in (-1, 1):
-    sphere('Tabi', (s * 0.112, -0.19, 0.03), (0.046, 0.115, 0.031), TABI, 14, 8)
-    sphere('TabiToe', (s * 0.074, -0.278, 0.026), (0.019, 0.03, 0.022), TABI, 10, 6)
+    sphere('Tabi', (s * 0.165, -0.19, 0.028), (0.046, 0.112, 0.029), TABI, 14, 8)
+    sphere('TabiToe', (s * 0.126, -0.276, 0.024), (0.018, 0.028, 0.02), TABI, 10, 6)
 
 # ---------------------------------------------------------------- kikutoji on the chest, the sleeves and the back
 for s in (-1, 1):
@@ -461,30 +470,29 @@ cap = mesh_obj('Hair', hv2, hf2, HAIR)
 sol = cap.modifiers.new('sol', 'SOLIDIFY'); sol.thickness = 0.008; sol.offset = 1; bpy.ops.object.modifier_apply(modifier='sol')
 
 # ---------------------------------------------------------------- eboshi: tall black lacquered hat, flattened at the sides, crest folded forward
-NE_A, NE_H, H_H = 28, 12, 0.21
+NE_A, NE_H, H_H = 28, 12, 0.23
 base = []
 for k in range(NE_A):
     th = 2 * math.pi * k / NE_A; dh = Vector((math.sin(th), -math.cos(th), 0))
-    zb = HZ + 0.052 + 0.016 * math.cos(th)                 # sits higher over the brow, lower at the back
+    zb = HZ + 0.066 + 0.024 * math.cos(th)                 # sits high over the brow, lower at the back
     l, n = hit(Vector((HC.x, HC.y, zb)) + dh * 0.3, -dh)
     base.append(Vector((l.x, l.y, zb)) + dh * 0.013)
 BC = sum(base, Vector()) / NE_A
-def sst(e0, e1, x): x = max(0.0, min(1.0, (x - e0) / (e1 - e0))); return x * x * (3 - 2 * x)
 ev = []
 for i in range(NE_H + 1):
     h = (i / NE_H) ** 0.85
     ctr = BC + Vector((0, 0.045 * h ** 1.6, H_H * h))                 # leaning back
-    sx = 1 - 0.5 * h ** 1.3; sy = 1 - 0.08 * h                        # pinched at the sides into a front-to-back crest
-    if h > 0.8: k_ = math.sqrt(max(0.0, 1 - ((h - 0.8) / 0.2) ** 2)); sx *= 0.4 + 0.6 * k_; sy *= k_
+    sx = 1 - 0.5 * h ** 1.4; sy = 1 - 0.28 * h ** 2                    # narrowing, flatter at the sides
+    if h > 0.7: k_ = math.sqrt(max(0.0, 1 - ((h - 0.7) / 0.3) ** 2)); sx *= k_; sy *= k_
     for k in range(NE_A):
         th = 2 * math.pi * k / NE_A; q = base[k] - BC
         dth = math.atan2(math.sin(th), math.cos(th))
         dh = Vector((math.sin(th), -math.cos(th), 0))
         crease = -0.006 * math.exp(-(dth / 0.18) ** 2) * sst(0.1, 0.4, h)                      # a soft vertical crease down the front
-        fold = 0.022 * math.exp(-(dth / 0.5) ** 2) * sst(0.55, 0.9, h)                         # the crest folded forward at the top
+        fold = 0.014 * math.exp(-(dth / 0.45) ** 2) * sst(0.6, 0.9, h)                         # the crest folded forward at the top
         crinkle = 1 + 0.01 * math.sin(h * 24 + th * 2)                                         # lacquer wrinkles (sabi)
         ev.append(ctr + Vector((q.x * sx, q.y * sy, q.z * (1 - h))) * crinkle + dh * (crease + fold))
-ev.append(BC + Vector((0, 0.045 - 0.02, H_H + 0.004)))
+ev.append(BC + Vector((0, 0.045, H_H + 0.002)))
 ef = []
 for i in range(NE_H):
     for k in range(NE_A):
@@ -495,7 +503,7 @@ bm = bmesh.new(); bm.from_mesh(hat.data); bmesh.ops.recalc_face_normals(bm, face
 band('EboshiRim', [(base[k], (base[k] - BC - Vector((0, 0, (base[k] - BC).z))).normalized()) for k in range(NE_A)], 0.006, 0.004, -0.004, LACQ, K=4)
 # chin cord: from the hat down in front of the ears, tied under the chin
 for s in (-1, 1):
-    pth = path_on_skin([(s * 0.092, 0.0, HZ + 0.05), (s * 0.09, -0.012, HZ - 0.01), (s * 0.078, -0.022, HZ - 0.075),
+    pth = path_on_skin([(s * 0.092, 0.0, HZ + 0.062), (s * 0.09, -0.012, HZ - 0.01), (s * 0.078, -0.022, HZ - 0.075),
                         (s * 0.045, -0.045, HZ - 0.125), (s * 0.008, -0.07, HZ - 0.142)], 16)
     band('ChinCord', pth, 0.0042, 0.0042, 0.002, CORD, closed=False, K=4)
 kn = path_on_skin([(0, -0.07, HZ - 0.143)], 2)[0][0]
@@ -534,11 +542,11 @@ band('GunbaiRim', rim, 0.0095, 0.0045, -0.0035, GOLD, K=5)
 for side in (1, -1):   # a gold ring with a vermilion sun on both faces
     for r0, r1, m_, dz in ((0.058, 0.072, GOLD, 0.0012), (0.0, 0.045, RED, 0.0010)):
         vs, fs = [], []
-        for k in range(32):
-            ang = 2 * math.pi * k / 32; dd = wv * math.cos(ang) + a * math.sin(ang)
+        for k in range(24):
+            ang = 2 * math.pi * k / 24; dd = wv * math.cos(ang) + a * math.sin(ang)
             for rr in (r0, r1): vs.append(cen + dd * rr + fn * side * (TH + dz))
-        for k in range(32):
-            k2 = (k + 1) % 32; fs.append((2 * k, 2 * k2, 2 * k2 + 1, 2 * k + 1) if side > 0 else (2 * k, 2 * k + 1, 2 * k2 + 1, 2 * k2))
+        for k in range(24):
+            k2 = (k + 1) % 24; fs.append((2 * k, 2 * k2, 2 * k2 + 1, 2 * k + 1) if side > 0 else (2 * k, 2 * k + 1, 2 * k2 + 1, 2 * k2))
         mesh_obj('GunbaiSun', vs, fs, m_)
 butt = G - a * 0.088
 bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=0.004, depth=0.07, location=butt + Vector((0, 0, -0.035))); add(bpy.context.object, FUSA)
