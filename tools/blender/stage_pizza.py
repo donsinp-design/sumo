@@ -16,7 +16,7 @@ from mathutils import Vector, Matrix
 
 SCR = '/tmp/claude-0/-home-user-sumo/f8028735-3c86-5a27-b070-5e521ee72586/scratchpad'
 CHAR_DIR = SCR + '/stage'
-FLAGW = {'fast', 'noexport', 'norender', 'tris'}
+FLAGW = {'fast', 'noexport', 'norender', 'tris', 'dump'}
 ARGS = [a for a in sys.argv[1:] if '=' not in a and a not in FLAGW and not a.endswith('.py')]
 OUT = ARGS[0] if ARGS else SCR + '/pizza'
 os.makedirs(OUT, exist_ok=True)
@@ -231,7 +231,7 @@ tries = 0
 while len(LEAVES) < 6 and tries < 5000:
     tries += 1
     r = math.sqrt(rng.uniform(0.3, 1)) * 4.0; a = rng.uniform(0, TAU); x, y = r * math.cos(a), r * math.sin(a)
-    L = rng.uniform(0.85, 1.1)
+    L = rng.uniform(1.0, 1.3)
     if cutdist(x, y) < 0.5 or r > 3.95: continue
     if any(math.hypot(x - px, y - py) < pr + 0.6 for px, py, pr in PEPS): continue
     if any(math.hypot(x - fx, y - fy) < 0.9 for fx, fy in FIGHTERS): continue
@@ -240,61 +240,89 @@ while len(LEAVES) < 6 and tries < 5000:
 
 
 # ================================================================ the pizza top (cheese / sauce / cuts) maps
+def worley(N, E, pts, warp=None):
+    """F1, F2 distances (metres) on an N x N grid over [-E, E]^2 (computed at N/4 and upsampled)."""
+    n = N // 4; px = 2 * E / n
+    c = (np.arange(n, dtype=np.float32) + 0.5) * px - E
+    X, Y = np.meshgrid(c, c); Q = np.stack([X.ravel(), Y.ravel()], -1)
+    if warp is not None: Q = Q + warp.reshape(-1, 2)
+    F1 = np.full(len(Q), 1e9, np.float32); F2 = np.full(len(Q), 1e9, np.float32)
+    for i in range(0, len(Q), 16384):
+        d = np.sqrt(((Q[i:i + 16384, None, :] - pts[None, :, :]) ** 2).sum(-1))
+        p = np.partition(d, 1, axis=1)
+        F1[i:i + 16384] = p[:, 0]; F2[i:i + 16384] = p[:, 1]
+    up = lambda a: sample(a.reshape(n, n), *np.meshgrid((np.arange(N) + 0.5) / N, (np.arange(N) + 0.5) / N))
+    return up(F1), up(F2)
+
 def build_top():
     N = 1024 if FAST else 2048; E = 5.45; px = 2 * E / N
     c = (np.arange(N, dtype=np.float32) + 0.5) * px - E
     X, Y = np.meshgrid(c, c); R = np.hypot(X, Y); TH = np.arctan2(Y, X)
     m = lambda s: s / px     # metres -> px
     nb = gn((N, N), m(0.6), 1); nm = gn((N, N), m(0.16), 2); ns = gn((N, N), m(0.045), 3); nf = gn((N, N), m(0.012), 4)
-    nmi = gn((N, N), m(0.004), 5); nb2 = gn((N, N), m(1.2), 6); nm2 = gn((N, N), m(0.2), 8)
-    # --- cut grooves (8 slices + the ring cut at 4.6)
+    nmi = gn((N, N), m(0.004), 5); nb2 = gn((N, N), m(1.2), 6); nm2 = gn((N, N), m(0.25), 8); nl = gn((N, N), m(0.5), 10)
+    # --- melted cheese pools: warped Worley cells (pieces of mozzarella that melted into each other)
+    pts = []
+    rp = np.random.default_rng(21)
+    while len(pts) < 230:
+        q = rp.uniform(-5.1, 5.1, 2)
+        if np.hypot(*q) < 5.05 and all(np.hypot(*(q - p)) > 0.42 for p in pts): pts.append(q)
+    pts = np.array(pts, np.float32)
+    n4 = N // 4
+    wv = np.stack([gn((n4, n4), n4 / 24, 201), gn((n4, n4), n4 / 24, 202)], -1) * 0.22
+    F1, F2 = worley(N, E, pts, wv)
+    e = blur((F2 - F1) * 0.5, m(0.02)) + 0.03 * nm + 0.012 * ns     # distance to the seam between two pools
+    # --- cut grooves (8 slices, healing shut in places) + the continuous ring cut at 4.6 (the fighting circle)
     thw = TH + 0.0035 * nm
     dcut = np.full((N, N), 99, np.float32); cutang = np.zeros((N, N), np.float32)
     for ca in CUTS:
         dd = R * np.abs(np.sin(thw - ca)); dd = np.where(np.cos(thw - ca) > 0, dd, 99)
         cutang = np.where(dd < dcut, ca, cutang); dcut = np.minimum(dcut, dd)
-    wc = 0.035 + 0.01 * ns
-    dring = np.abs(R - (RING + 0.012 * nb)); wr = 0.07 + 0.012 * ns
-    gcut = ss(wc + 0.018, wc - 0.008, dcut) * ss(0.25, 0.5, R)
-    gring = ss(wr + 0.02, wr - 0.01, dring)
+    wc = (0.02 + 0.008 * ns + 0.006 * nl)
+    dring = np.abs(R - (RING + 0.01 * nb)); wr = 0.062 + 0.01 * ns
+    gcut = ss(wc + 0.02, wc - 0.004, dcut) * ss(0.25, 0.5, R) * (wc > 0.004)
+    gring = ss(wr + 0.022, wr - 0.008, dring)
     G = np.maximum(gcut, gring)
-    # pulled-cheese rims beside the grooves
-    rim = np.maximum(np.exp(-((dcut - wc - 0.035) / 0.03) ** 2) * ss(0.25, 0.5, R), np.exp(-((dring - wr - 0.04) / 0.035) ** 2))
-    # --- cheese strings bridging the grooves
+    rim = np.maximum(np.exp(-((dcut - wc - 0.035) / 0.03) ** 2) * ss(0.25, 0.5, R) * ss(0.0, 0.01, wc), np.exp(-((dring - wr - 0.035) / 0.03) ** 2))
+    # --- cheese strings bridging the grooves: thick where they leave the cheese, thin and sagging in the middle
     S = np.zeros((N, N), np.float32); SH = np.zeros((N, N), np.float32)
     segs = []
     for ca in CUTS:
-        for _ in range(16):
-            r = rng.uniform(0.6, 4.4); w = rng.uniform(0.006, 0.016); off = rng.uniform(-0.03, 0.03)
-            t = np.array([math.cos(ca), math.sin(ca)]); nrm = np.array([-t[1], t[0]])
-            p = t * r; sk = rng.uniform(-0.04, 0.04)
-            segs.append((p - nrm * 0.075 + t * off, p + nrm * 0.075 + t * (off + sk), w))
-    for _ in range(70):
+        for _ in range(7):
+            r = rng.uniform(0.8, 4.3); w = rng.uniform(0.008, 0.02); off = rng.uniform(-0.03, 0.03)
+            t = np.array([math.cos(ca), math.sin(ca)]); nrm = np.array([-t[1], t[0]]); sk = rng.uniform(-0.05, 0.05)
+            segs.append((t * r - nrm * 0.07 + t * off, t * r + nrm * 0.07 + t * (off + sk), w))
+    for _ in range(34):
         a = rng.uniform(0, TAU); t = np.array([math.cos(a), math.sin(a)]); nrm = np.array([-t[1], t[0]])
-        w = rng.uniform(0.006, 0.018); sk = rng.uniform(-0.05, 0.05)
-        segs.append((t * (RING - 0.12), t * (RING + 0.12) + nrm * sk, w))
+        w = rng.uniform(0.008, 0.022); sk = rng.uniform(-0.06, 0.06)
+        segs.append((t * (RING - 0.11), t * (RING + 0.11) + nrm * sk, w))
     for p0, p1, w in segs:
-        cx, cy = (p0 + p1) / 2; half = np.linalg.norm(p1 - p0) / 2 + w * 2
+        cx, cy = (p0 + p1) / 2; half = np.linalg.norm(p1 - p0) / 2 + w * 3
         st = stamp_iter((N, N), (cx + E) / px, (cy + E) / px, m(half))
         if not st: continue
         sy, sx, dx, dy = st
         P = np.stack([dx * px + cx, dy * px + cy], -1); d = p1 - p0
         tt = np.clip(((P - p0) @ d) / (d @ d), 0, 1)
         dist = np.linalg.norm(P - (p0 + tt[..., None] * d), axis=-1)
-        wt = w * (1 + 0.5 * (1 - np.sin(math.pi * tt)))          # thicker where it leaves the cheese
-        msk = ss(wt, wt * 0.35, dist)
+        wt = w * (0.45 + 2.2 * (1 - np.sin(math.pi * tt)) ** 2)
+        msk = ss(wt, wt * 0.3, dist) * 0.92
         S[sy, sx] = np.maximum(S[sy, sx], msk)
-        SH[sy, sx] = np.maximum(SH[sy, sx], msk * (0.004 - 0.010 * np.sin(math.pi * tt)))
+        SH[sy, sx] = np.maximum(SH[sy, sx], msk * (0.002 - 0.012 * np.sin(math.pi * tt)))
+    S = S * ss(0.1, 0.6, G)
     Ge = G * (1 - S)
-    # --- cheese coverage, thickness, sauce peeks
+    # --- cheese coverage: pools separated by sauce channels where the seam gap is open, plus a few holes
     redge = 5.0 + 0.09 * nm + 0.05 * ns + 0.02 * nf
     C0 = ss(redge + 0.02, redge - 0.03, R)
-    P = 0.55 * nm + 0.5 * ns + 0.3 * nb + 0.15 * nf
-    c = ss(-1.45, -1.05, P) * C0 * (1 - G)
-    T = np.clip(0.55 + 0.3 * nb + 0.28 * nm + 0.1 * ns, 0.05, 1) * c
-    # --- stringy folds: anisotropic noise layers blended by a flow-direction field, pulled perpendicular to the cuts
-    phi = math.pi * nb2 * 0.7
-    near_cut = np.exp(-(dcut / 0.35) ** 2) * ss(0.25, 0.6, R); near_ring = np.exp(-(dring / 0.35) ** 2)
+    gap = 0.05 * (nm2 * 0.8 + 0.25 * ns - 1.05)
+    pool = ss(gap, gap + 0.05, e)
+    hole = ss(-1.5, -1.2, 0.75 * nm2 + 0.4 * nm + 0.15 * ns + 0.08 * nf)
+    c = hole * C0 * (1 - G)
+    cs = ss(0.1, 0.85, blur(c, m(0.04)))                 # rounded, thick melted edges
+    dome = ss(0.0, 0.32, e) * cs                         # pools are pillowy: highest in the middle
+    valley = (1 - ss(0.0, 0.16, e)) * c * (0.5 + 0.5 * ss(-1, 1, nl))   # merged seams: shallow oily valleys
+    T = np.clip(0.55 + 0.25 * nb + 0.3 * dome + 0.1 * nm, 0.05, 1)
+    # --- stringy folds: anisotropic noise layers following a flow field, pulled perpendicular to the cuts
+    near_cut = np.exp(-(dcut / 0.3) ** 2) * ss(0.25, 0.6, R); near_ring = np.exp(-(dring / 0.3) ** 2)
     phi = np.where(near_cut > near_ring, cutang + math.pi / 2, TH)
     wdir = np.maximum(near_cut, near_ring)
     vx = (1 - wdir) * np.cos(2 * math.pi * nb2 * 0.7) + wdir * np.cos(2 * phi)
@@ -303,90 +331,93 @@ def build_top():
     F = np.zeros((N, N), np.float32); wsum = np.zeros((N, N), np.float32)
     for k in range(6):
         a = k * math.pi / 6
-        lay = gn((N, N), (m(0.22), m(0.018)), 20 + k, ang=a)
+        lay = gn((N, N), (m(0.25), m(0.02)), 20 + k, ang=a)
         w = np.maximum(np.cos(2 * (phi - a)), 0) ** 3
         F += w * lay; wsum += w
     F /= wsum + 1e-6
     ridge = (1 - np.clip(np.abs(F) / 1.6, 0, 1)) ** 4
-    # --- blisters (browned domes) and leopard spots
-    BLh = np.zeros((N, N), np.float32); BLb = np.zeros((N, N), np.float32)
-    clus = blur(nb + 0.6 * nm, m(0.1))
-    pts = []
-    while len(pts) < 520:
+    # --- blisters: clean browned domes on the pool tops, clustered (leopard)
+    BLh = np.zeros((N, N), np.float32); BLb = np.zeros((N, N), np.float32); BLd = np.zeros((N, N), np.float32)
+    clus = blur(nb + 0.7 * nm, m(0.1))
+    bl = []
+    while len(bl) < 900:
         r = math.sqrt(rng.uniform(0, 1)) * 5.0; a = rng.uniform(0, TAU); x, y = r * math.cos(a), r * math.sin(a)
         i, j = int((y + E) / px), int((x + E) / px)
-        pr = (0.25 + 0.75 * (clus[i, j] > 0.1)) * (0.4 + 0.6 * ss(3.2, 4.9, r)) * (c[i, j] > 0.5)
-        if any(math.hypot(x - qx, y - qy) < qr * 0.9 for qx, qy, qr in PEPS): pr *= 0.15
-        if rng.uniform() < pr: pts.append((x, y))
-    for x, y in pts:
-        big = rng.uniform() < 0.35
-        rad = rng.uniform(0.09, 0.3) if big else rng.uniform(0.025, 0.08)
-        st = stamp_iter((N, N), (x + E) / px, (y + E) / px, m(rad * 1.4))
+        pr = (0.2 + 0.8 * (clus[i, j] > 0.0)) * (0.45 + 0.55 * ss(3.0, 4.9, r)) * float(c[i, j] > 0.6) * (0.3 + 0.7 * ss(0.04, 0.2, e[i, j]))
+        if any(math.hypot(x - qx, y - qy) < qr * 1.05 for qx, qy, qr in PEPS): pr = 0
+        if rng.uniform() < pr: bl.append((x, y))
+    for x, y in bl:
+        big = rng.uniform() < 0.28
+        rad = rng.uniform(0.08, 0.24) if big else rng.uniform(0.025, 0.07)
+        st = stamp_iter((N, N), (x + E) / px, (y + E) / px, m(rad * 1.5))
         if not st: continue
         sy, sx, dx, dy = st
-        d = np.hypot(dx, dy) * px / (rad * (1 + 0.28 * ns[sy, sx] + 0.12 * nf[sy, sx]))
-        dome = np.clip(1 - d * d, 0, 1) ** 1.4
-        h = (0.005 + 0.009 * rng.uniform()) * (rad / 0.3) ** 0.5
-        BLh[sy, sx] = np.maximum(BLh[sy, sx], h * dome)
-        b = rng.uniform(0.35, 1.0) * (1.0 if big else 0.8)
-        BLb[sy, sx] = np.maximum(BLb[sy, sx], b * ss(0.0, 0.85, dome) ** 0.7)
-    BLb = np.clip(BLb + 0.25 * ss(0.4, 1.4, nf) * BLb, 0, 1.1) * c
-    # --- pepperoni grease halos, oil drizzle
-    OIL = np.zeros((N, N), np.float32); UNDER = np.zeros((N, N), np.float32)
+        d = np.hypot(dx, dy) * px / (rad * (1 + 0.18 * ns[sy, sx] + 0.06 * nf[sy, sx]))
+        dm = np.clip(1 - d * d, 0, 1)
+        h = (0.004 + 0.007 * rng.uniform()) * (rad / 0.24) ** 0.4
+        BLh[sy, sx] = np.maximum(BLh[sy, sx], h * dm ** 1.2)
+        b = rng.uniform(0.45, 1.0) * (1.0 if big else rng.uniform(0.6, 1.0))
+        BLb[sy, sx] = np.maximum(BLb[sy, sx], b * ss(0.0, 0.7, dm))
+        if rng.uniform() < (0.12 if big else 0.06):
+            BLd[sy, sx] = np.maximum(BLd[sy, sx], ss(0.35, 0.8, dm) * rng.uniform(0.5, 1.0))
+    BLb *= c; BLd *= c
+    # --- grease: a thin ring round each pepperoni that runs off along the valleys; an olive-oil drizzle
+    OIL = np.zeros((N, N), np.float32); UNDER = np.zeros((N, N), np.float32); NEAR = np.zeros((N, N), np.float32)
     for x, y, pr in PEPS:
-        d = np.hypot(X - x, Y - y); a = np.arctan2(Y - y, X - x)
-        reach = pr * (1.22 + 0.18 * np.sin(3 * a + x) + 0.1 * np.sin(7 * a + y)) + 0.05 * nm
-        OIL = np.maximum(OIL, ss(reach, pr * 0.95, d) * (0.65 + 0.35 * ss(-1, 1, ns)))
+        d = np.hypot(X - x, Y - y)
+        OIL = np.maximum(OIL, ss(pr * 1.16 + 0.03 * ns, pr * 1.0, d))
+        NEAR = np.maximum(NEAR, ss(pr * 2.2, pr * 1.05, d))
         UNDER = np.maximum(UNDER, ss(pr * 1.02, pr * 0.9, d))
-    for k in range(3):     # drizzle: a few wandering arcs
+    OIL = np.maximum(OIL, valley * (0.35 + 0.65 * NEAR) * ss(-0.6, 0.6, nm))
+    for k in range(3):
         a0 = rng.uniform(0, TAU); r0 = rng.uniform(1.0, 3.5)
         tt = np.linspace(0, 1, 160); aa = a0 + tt * rng.uniform(1.2, 2.4); rr = r0 + 0.8 * np.sin(tt * 5 + k) * tt
         P2 = np.stack([rr * np.cos(aa), rr * np.sin(aa)], -1)
-        for (x, y), w in zip(P2, 0.03 + 0.03 * np.sin(tt * 17) ** 2):
+        for (x, y), w in zip(P2, 0.025 + 0.025 * np.sin(tt * 17) ** 2):
             st = stamp_iter((N, N), (x + E) / px, (y + E) / px, m(w * 1.5))
             if not st: continue
             sy, sx, dx, dy = st
-            OIL[sy, sx] = np.maximum(OIL[sy, sx], 0.8 * ss(w, w * 0.4, np.hypot(dx, dy) * px))
-    drops = ss(2.1, 2.6, gn((N, N), m(0.02), 9)) * ss(-0.5, 0.5, nb)
+            OIL[sy, sx] = np.maximum(OIL[sy, sx], 0.7 * ss(w, w * 0.4, np.hypot(dx, dy) * px))
+    drops = ss(2.2, 2.6, gn((N, N), m(0.018), 9)) * ss(-0.3, 0.6, nb)
     OIL = np.clip(np.maximum(OIL, drops * 0.9), 0, 1) * ss(5.25, 5.0, R)
     # --- colours (sRGB)
-    sauce = mix(hx('9c2210'), hx('6e130a'), ss(-0.6, 1.6, nm2 * 0.6 + ns * 0.6))
-    sauce = mix(sauce, hx('c03a16'), 0.35 * ss(1.0, 2.2, nf))                     # pulp highlights
-    sauce = mix(sauce, hx('4a0e08'), 0.55 * ss(-0.2, 1.0, blur(c, m(0.03))) * (1 - c))  # reduced at cheese edges
-    sauce = mix(sauce, hx('3e0d06'), ss(5.12, 5.32, R) * (0.55 + 0.3 * nm))      # caramelised against the crust
-    ch = mix(hx('e9b968'), hx('f6e5b8'), ss(0.08, 0.75, T))
-    ch = ch * (1 + 0.05 * ridge[..., None] - 0.035 * ss(-1, 1, ns)[..., None])
-    gold = hx('dba04c'); brown = hx('a2602a'); dark = hx('4e2812')
-    br = np.clip(0.2 * nb + 0.55 * ss(3.9, 5.0, R) + 0.2 * nm, 0, 1) * 0.55 + 0.25 * rim * c
-    ch = mix(ch, gold, br * 0.7)
-    ch = mix(ch, gold, ss(0.02, 0.3, BLb)); ch = mix(ch, brown, ss(0.3, 0.75, BLb)); ch = mix(ch, dark, ss(0.82, 1.05, BLb))
-    ch = mix(ch, hx('e88a2a'), OIL * 0.55)
+    sauce = mix(hx('b4321a'), hx('8a1e0e'), ss(-0.8, 1.6, nm2 * 0.6 + ns * 0.6))
+    pulp = ss(1.3, 2.2, nf)
+    sauce = mix(sauce, hx('d2522a'), 0.35 * pulp)
+    sauce = mix(sauce, hx('6a1409'), 0.5 * ss(0.05, 0.6, blur(c, m(0.03))) * (1 - c))         # reduced at cheese edges
+    sauce = mix(sauce, hx('4a0f07'), ss(5.1, 5.32, R) * (0.5 + 0.3 * nm))                      # caramelised at the crust
+    sauce = mix(sauce, hx('5a1208'), 0.45 * ss(0.3, 0.9, G) * (1 - S))                          # shadowed groove floor
+    ch = mix(hx('e2a244'), hx('f2d17e'), ss(0.1, 0.8, T) * cs)
+    ch = mix(ch, hx('f7e0a0'), 0.4 * dome * ss(-0.5, 1.0, nm))
+    ch = ch * (1 + 0.04 * ridge[..., None] - 0.03 * ss(-1, 1, ns)[..., None])
+    ch = mix(ch, hx('e2a64a'), valley * 0.35)
+    br = np.clip(0.15 + 0.3 * nb + 0.55 * ss(3.9, 5.0, R) + 0.2 * nm, 0, 1) * 0.5 + 0.35 * rim * c
+    ch = mix(ch, hx('dba24e'), br * 0.6)
+    ch = mix(ch, hx('e6a444'), ss(0.0, 0.35, BLb)); ch = mix(ch, hx('c86e26'), ss(0.25, 0.8, BLb)); ch = mix(ch, hx('8e4214'), ss(0.7, 1.0, BLb) * 0.8)
+    ch = mix(ch, hx('5e2a0e'), BLd * 0.7)
+    ch = mix(ch, hx('e88a28'), OIL * 0.45)
     ch = mix(ch, hx('c8642a'), UNDER * 0.5)
-    strcol = hx('f2dca0')
-    cov = np.clip(c + S * C0, 0, 1)
     col = mix(sauce, ch, c)
-    col = mix(col, strcol * (0.85 + 0.15 * S[..., None]), S * ss(0.0, 0.5, G) * C0)
-    col = mix(col, hx('d8b070'), ss(5.25, 5.4, R))          # under the crust lip
-    # herbs: oregano + a few chili flakes
+    col = mix(col, hx('f4e2b0'), S)
+    col = mix(col, hx('d8b070'), ss(5.25, 5.4, R))
     herb = ss(3.1, 3.6, gn((N, N), m(0.006), 11)) * ss(-0.5, 0.8, nb2)
     col = mix(col, hx('3a4418'), herb * 0.85)
-    chili = ss(3.4, 3.9, gn((N, N), m(0.01), 12))
+    chili = ss(3.5, 3.9, gn((N, N), m(0.01), 12))
     col = mix(col, hx('b8320e'), chili * 0.9)
-    col = col * (1 - 0.18 * ss(-0.5, 1.0, G * (1 - S))[..., None])           # groove AO
-    # --- height (metres, |z| <= ~0.025)
-    Hm = -0.02 + 0.0015 * ns + 0.0006 * nf
-    Hm = Hm + c * (0.0185 + 0.004 * (T - 0.5) + 0.0035 * ridge + 0.004 * rim) + BLh * c
-    Hm = Hm - 0.006 * Ge + SH * S
-    Hm = Hm - 0.006 * UNDER
-    Hm = np.where(R > 5.35, -0.02, Hm)
+    # --- height (metres, within the 3 cm budget)
+    Hm = -0.02 + 0.0012 * ns + 0.0008 * pulp * (1 - c)
+    Hm = Hm + c * (0.013 * cs + 0.007 * dome - 0.003 * valley + 0.0025 * ridge * cs + 0.003 * rim) + BLh * c
+    Hm = Hm - 0.004 * Ge + SH * S
+    Hm = Hm * (1 - UNDER) - 0.028 * UNDER
+    Hm = np.clip(np.where(R > 5.35, -0.02, Hm), -0.029, 0.027)
     # --- roughness, sss
-    rough = mix(np.full((N, N), 0.2, np.float32), 0.36 - 0.06 * ridge, c)
-    rough = mix(rough, 0.55, ss(0.3, 0.8, BLb)); rough = mix(rough, 0.68, ss(0.85, 1.05, BLb))
-    rough = mix(rough, 0.07, OIL * 0.9)
-    rough = rough + 0.05 * nf
+    rough = mix(np.full((N, N), 0.16, np.float32), 0.34 - 0.06 * ridge - 0.08 * dome, c)
+    rough = mix(rough, 0.5, ss(0.3, 0.8, BLb)); rough = mix(rough, 0.66, BLd)
+    rough = mix(rough, 0.06, OIL * 0.9)
+    rough = rough + 0.04 * nf
     sssm = np.clip(0.25 + 0.75 * c, 0, 1) * (1 - 0.6 * ss(0.3, 0.9, BLb))
-    micro = 0.0005 * nmi + 0.00035 * nf + 0.0003 * herb + 0.0004 * chili
-    nrm = h2n(Hm + micro * (1 - OIL * 0.8), px, px, 2.6)
+    micro = 0.0004 * nmi + 0.0003 * nf + 0.0003 * herb + 0.0004 * chili + 0.0005 * pulp * (1 - c)
+    nrm = h2n(Hm + micro * (1 - OIL * 0.8), px, px, 3.5)
     TOP = dict(N=N, E=E, H=Hm)
     log('top maps built')
     return (image('top_col', col), image('top_orm', orm(np.clip(rough, 0.03, 1), None, sssm), True),
@@ -395,8 +426,8 @@ def build_top():
 
 def build_pizza_top():
     col, ormi, nrm, TOP = build_top()
-    M = pmat('m_pizza_top', img=col, ormimg=ormi, nimg=nrm, nstr=1.0, sss=0.55, sss_mask=True,
-             sss_r=(1.0, 0.55, 0.25), sss_s=0.03, spec=0.55, coat=0.0)
+    M = pmat('m_pizza_top', img=col, ormimg=ormi, nimg=nrm, nstr=1.0, sss=0.3, sss_mask=True,
+             sss_r=(1.0, 0.75, 0.35), sss_s=0.012, spec=0.55, coat=0.0)
     E = TOP['E']; Hs = blur(TOP['H'], 4)
     K, S = 44, 176
     rr = RFLAT + 0.06
@@ -454,18 +485,20 @@ def build_crust_tex():
     m = lambda s: (s / dv, s / du)
     n1 = gn((Hp, W), m(0.12), 41); n2 = gn((Hp, W), m(0.035), 42); n3 = gn((Hp, W), m(0.01), 43); n4 = gn((Hp, W), m(0.003), 44)
     # browning
-    B = np.clip(0.18 + 0.62 * top ** 1.3 + 0.16 * n1 + 0.07 * n2, 0, 1)
-    under = ss(0.5, 0.58, Tt)
-    col = mix(hx('efd29c'), hx('dca456'), ss(0.1, 0.45, B))
-    col = mix(col, hx('b8742e'), ss(0.45, 0.8, B)); col = mix(col, hx('874618'), ss(0.82, 1.0, B) * 0.7)
+    B = np.clip(0.22 + 0.6 * top ** 1.4 + 0.16 * n1 + 0.07 * n2, 0, 1)
+    under = ss(-0.13, -0.19, Z)
+    TTOP = TT[int(np.argmax(PROF[:, 1]))]
+    outer = ss(TTOP, TTOP + 0.08, Tt) * ss(0.3, 0.1, Z)
+    col = mix(hx('ecca8e'), hx('dca150'), ss(0.1, 0.45, B))
+    col = mix(col, hx('c07a32'), ss(0.45, 0.85, B)); col = mix(col, hx('8a4818'), ss(0.85, 1.0, B) * 0.6)
     # leopard spots + charred bubble tops
     SP = np.zeros((Hp, W), np.float32); HA = np.zeros((Hp, W), np.float32); BH = np.zeros((Hp, W), np.float32)
     rs = np.random.default_rng(55)
     spots = []
     for _ in range(2600 if not FAST else 1300):
         tt = rs.uniform(0.04, 0.52); pz = zprof_t(tt) / 0.48
-        if rs.uniform() > 0.15 + 0.85 * max(pz, 0) ** 1.5: continue
-        spots.append((rs.uniform(0, 1), tt, rs.uniform(0.006, 0.02) if rs.uniform() < 0.85 else rs.uniform(0.02, 0.05), rs.uniform(0.6, 1.0)))
+        if rs.uniform() > 0.05 + 0.95 * max(pz, 0) ** 2: continue
+        spots.append((rs.uniform(0, 1), tt, rs.uniform(0.01, 0.028) if rs.uniform() < 0.72 else rs.uniform(0.03, 0.075), rs.uniform(0.5, 1.0)))
     for th, sb, rbub, hb, ch in bubbles:
         spots.append((th / math.pi, sb / S_OF_T[-1], rbub * (0.45 if ch else 0.2), 1.0 if ch else 0.5))
         BHc = (th / math.pi, sb / S_OF_T[-1], rbub)
@@ -481,18 +514,18 @@ def build_crust_tex():
             if not st: continue
             sy, sx, dx, dy = st
             d = np.hypot(dx * du, dy * dv) / (sr * (1 + 0.35 * n3[sy, sx] + 0.2 * n4[sy, sx]))
-            SP[sy, sx] = np.maximum(SP[sy, sx], si * ss(1.0, 0.55, d))
-            HA[sy, sx] = np.maximum(HA[sy, sx], si * ss(2.4, 0.9, d))
-    col = mix(col, hx('7a3a14'), HA * 0.55)
-    col = mix(col, hx('2a160c'), ss(0.2, 0.7, SP)); col = mix(col, hx('140c08'), ss(0.75, 1.0, SP) * 0.85)
+            SP[sy, sx] = np.maximum(SP[sy, sx], si * ss(1.0, 0.35, d))
+            HA[sy, sx] = np.maximum(HA[sy, sx], si * ss(2.6, 0.8, d))
+    col = mix(col, hx('8a4a1c'), HA * 0.55)
+    col = mix(col, hx('3a1c0c'), ss(0.1, 0.6, SP)); col = mix(col, hx('160d08'), ss(0.6, 1.0, SP) * 0.9)
     # flour / semolina dust on the outer, lower side
-    fl = ss(0.42, 0.55, Tt) * (0.5 + 0.5 * ss(-0.5, 1.0, n1))
+    fl = np.maximum(outer, under) * (0.5 + 0.5 * ss(-0.5, 1.0, n1))
     col = mix(col, hx('f1e6cf'), 0.35 * fl)
     sem = ss(2.6, 3.2, gn((Hp, W), m(0.004), 45)) * (0.3 + fl)
     col = mix(col, hx('f6eee0'), np.clip(sem, 0, 1) * 0.8)
     # underside: oven-floor spotting
-    col = mix(col, hx('6a3a1a'), under * ss(-0.3, 1.2, n2) * 0.7)
-    col = mix(col, hx('1e120a'), under * ss(1.4, 2.0, n3))
+    col = mix(col, hx('9a6a3a'), under * 0.5)
+    col = mix(col, hx('2a180c'), under * ss(1.6, 2.2, n2))
     # sauce stain / cheese drips on the inner foot
     inner = ss(0.075, 0.03, Tt + 0.02 * n2)
     col = mix(col, hx('8c2210'), inner * 0.9)
@@ -578,30 +611,31 @@ def build_pepperoni(TOP):
     c = (np.arange(N) + 0.5) * px - e; X, Y = np.meshgrid(c, c); R = np.hypot(X, Y); A = np.arctan2(Y, X)
     m = lambda s: s / px
     n1 = gn((N, N), m(0.12), 81); n2 = gn((N, N), m(0.035), 82); n3 = gn((N, N), m(0.01), 83)
-    col = mix(hx('8e2414'), hx('6a1810'), ss(-1, 1.5, n1 * 0.7 + n2 * 0.5))
+    col = mix(hx('a82c16'), hx('7c1c0e'), ss(-1.2, 1.5, n1 * 0.5 + n2 * 0.4 + 0.4 * n3))
     FAT = np.zeros((N, N), np.float32)
     rp = np.random.default_rng(5)
-    for _ in range(260):
+    for _ in range(900):
         x, y = rp.uniform(-1, 1, 2)
         if x * x + y * y > 0.92: continue
-        rad = rp.uniform(0.012, 0.045)
+        rad = rp.uniform(0.006, 0.022)
         st = stamp_iter((N, N), (x + e) / px, (y + e) / px, m(rad * 1.6))
         sy, sx, dx, dy = st
         d = np.hypot(dx, dy) * px / (rad * (1 + 0.3 * n3[sy, sx]))
         FAT[sy, sx] = np.maximum(FAT[sy, sx], ss(1.0, 0.6, d))
-    col = mix(col, hx('d6806a'), FAT * 0.75)
+    col = mix(col, hx('c8644a'), FAT * 0.6)
     pep = ss(2.8, 3.3, gn((N, N), m(0.008), 84))
     col = mix(col, hx('2a0805'), pep)
-    rimw = 0.8 + 0.05 * n2
+    rimw = 0.74 + 0.06 * n2
     crisp = ss(rimw - 0.06, 0.97, R)
-    col = mix(col, hx('4a1008'), crisp * 0.85); col = mix(col, hx('1e0503'), ss(0.95, 1.0, R + 0.02 * n2))
+    col = mix(col, hx('3e0c06'), crisp * 0.9); col = mix(col, hx('1e0503'), ss(0.95, 1.0, R + 0.02 * n2))
     pool = ss(0.62 + 0.05 * n2, 0.42, R)
-    col = mix(col, hx('d24e16'), pool * 0.45)
+    col = mix(col, hx('c4401a'), pool * 0.3)
     col = mix(col, hx('5a1a0a'), ss(0.6, 1.4, n3) * crisp * 0.5)       # blistered charred bits on the rim
     rough = np.clip(0.42 + 0.05 * n2 - 0.35 * pool + 0.2 * crisp - 0.1 * FAT, 0.04, 1)
     wr = np.sin(A * 34 + 3 * n1) * ss(0.7, 0.98, R)                       # rim wrinkles
-    hgt = 0.0015 * n3 + 0.0012 * n2 + 0.002 * FAT + 0.003 * wr - 0.002 * pool * ss(-1, 1, n2)
-    nrm = h2n(hgt, px * 0.62, px * 0.62, 2.0)
+    cup = 0.13 * ss(0.25, 0.92, R + 0.03 * n2) ** 1.6 * ss(1.06, 0.93, R)            # the curled cup, faked in the normals
+    hgt = cup + 0.0015 * n3 + 0.0012 * n2 + 0.002 * FAT + 0.004 * wr - 0.002 * pool * ss(-1, 1, n2)
+    nrm = h2n(hgt, px * 0.62, px * 0.62, 1.6)
     M = pmat('m_pepperoni', img=image('pep_col', col), ormimg=image('pep_orm', orm(rough), True), nimg=image('pep_nrm', nrm, True),
              sss=0.25, sss_r=(1.0, 0.3, 0.15), sss_s=0.02, coat=0.35, coat_r=0.08)
     NR, NS = 9, 44
@@ -610,19 +644,19 @@ def build_pepperoni(TOP):
         rot = rr_.uniform(0, TAU)
         rad_n = 1 + 0.035 * np.sin(np.arange(NS) / NS * TAU * 3 + rr_.uniform(0, 6)) + 0.02 * np.sin(np.arange(NS) / NS * TAU * 7 + rr_.uniform(0, 6))
         rim_h = 1 + 0.22 * np.sin(np.arange(NS) / NS * TAU * 2 + rr_.uniform(0, 6)) + 0.1 * np.sin(np.arange(NS) / NS * TAU * 5)
-        V = [(0, 0, -0.008)]; UV = [(0.5, 0.5)]
+        V = [(0, 0, -0.026)]; UV = [(0.5, 0.5)]
         for i in range(1, NR + 1):
             q = i / NR
             for j in range(NS):
                 a = j / NS * TAU; rq = q * rad_n[j]
-                z = -0.008 + 0.031 * rim_h[j] * q ** 2.4
+                z = -0.026 + 0.045 * rim_h[j] * q ** 2.2
                 V.append((rq * pr * math.cos(a), rq * pr * math.sin(a), z)); UV.append((0.5 + rq * math.cos(a) / (2 * e), 0.5 + rq * math.sin(a) / (2 * e)))
         for j in range(NS):         # rolled edge going down into the cheese
             a = j / NS * TAU; rq = 1.035 * rad_n[j]
-            V.append((rq * pr * math.cos(a), rq * pr * math.sin(a), -0.004 + 0.012 * rim_h[j])); UV.append((0.5 + 1.03 * math.cos(a) / (2 * e), 0.5 + 1.03 * math.sin(a) / (2 * e)))
+            V.append((rq * pr * math.cos(a), rq * pr * math.sin(a), -0.002 + 0.016 * rim_h[j])); UV.append((0.5 + 1.03 * math.cos(a) / (2 * e), 0.5 + 1.03 * math.sin(a) / (2 * e)))
         for j in range(NS):
             a = j / NS * TAU; rq = 1.04 * rad_n[j]
-            V.append((rq * pr * math.cos(a), rq * pr * math.sin(a), -0.012)); UV.append((0.5 + 1.05 * math.cos(a) / (2 * e), 0.5 + 1.05 * math.sin(a) / (2 * e)))
+            V.append((rq * pr * math.cos(a), rq * pr * math.sin(a), -0.02)); UV.append((0.5 + 1.05 * math.cos(a) / (2 * e), 0.5 + 1.05 * math.sin(a) / (2 * e)))
         F = [(0, 1 + j, 1 + (j + 1) % NS) for j in range(NS)]
         for i in range(NR + 1):
             for j in range(NS):
@@ -659,14 +693,14 @@ def build_basil():
             v0 = 0.08 + k * 0.095
             vline = v0 + 0.55 * du_ ** 1.1
             sv = np.maximum(sv, ss(0.008, 0.0, np.abs(Vv - vline)) * ss(0.0, 0.02, du_) * ss(half * 0.95, half * 0.6, du_))
-        col = mix(hx('2e6420'), hx('1f4a14'), ss(-1, 1.5, n1 * 0.6 + n2 * 0.4))
-        col = mix(col, hx('5e9a3a'), np.maximum(mid, sv * 0.7))
+        col = mix(hx('2a4c16'), hx('17300c'), ss(-1, 1.5, n1 * 0.6 + n2 * 0.4))
+        col = mix(col, hx('3e6424'), np.maximum(mid, sv * 0.45))
         col = mix(col, hx('16300c'), ss(0.8, 1.8, n1 + 0.5 * n2) * 0.7)            # oven-wilted patches
         edge = ss(half - 0.05, half, du_)
         col = mix(col, hx('3e4012'), edge * 0.55 * ss(-0.5, 1.0, n2))                # crisp edges
         rough = np.clip(0.3 + 0.05 * n2 + 0.2 * edge - 0.12 * ss(0.5, 1.5, n1), 0.12, 1)
-        pucker = np.sin(Vv * 60 + 2 * n2) * np.sin(du_ * 50 + n2) * 0.5
-        hgt = 0.0012 * pucker - 0.0015 * np.maximum(mid, sv) + 0.0003 * n3
+        pucker = (np.sin(Vv * 37 + 2 * n2) * np.sin(du_ * 31 + n2) * 0.5) * 0.6 + 0.4 * n2 / 3
+        hgt = 0.0012 * pucker - 0.0008 * np.maximum(mid, sv) + 0.0003 * n3
         out_col.append(col); out_a.append(inside); out_r.append(rough); out_n.append(h2n(hgt, 1.0 / W2, 1.0 / N, 1.5))
     col = np.concatenate(out_col, 1); a = np.concatenate(out_a, 1)
     ci = image('basil_col', np.concatenate([col, a[..., None]], -1))
@@ -725,24 +759,24 @@ def build_tray():
     M = pmat('m_tray', img=image('tray_col', col), ormimg=image('tray_orm', orm(rough, metal), True), nimg=image('tray_nrm', nrm, True), metal=1)
     prof = [(0, -0.218), (6.5, -0.218), (6.72, -0.205), (6.84, -0.15), (6.9, -0.08), (6.95, -0.06), (6.99, -0.075),
             (6.98, -0.12), (6.86, -0.24), (6.6, -0.262), (0, -0.262)]
-    prof = chaikin(prof, 2)[::-1]
-    lathe(prof, 160, 'tray', M, uvfn=lambda x, y, a, s: ((x + e) / (2 * e), (y + e) / (2 * e)))
+    prof = chaikin(prof, 1)[::-1]
+    lathe(prof, 96, 'tray', M, uvfn=lambda x, y, a, s: ((x + e) / (2 * e), (y + e) / (2 * e)))
     # chrome wire stand: ring under the tray + 3 legs splaying to feet on the cloth
     CH = pmat('m_chrome', '#d8d8d8'[1:], rough=0.12, metal=1)
     V = []; F = []
     def add(vv, ff):
         o = len(V); V.extend(list(vv)); F.extend([tuple(i + o for i in f) for f in ff])
-    ringp = [(4.3 * math.cos(a), 4.3 * math.sin(a), -0.33) for a in np.linspace(0, TAU, 97)]
-    add(*tube(ringp, 0.075, 10, cap=False))
-    ringp2 = [(2.4 * math.cos(a), 2.4 * math.sin(a), -0.33) for a in np.linspace(0, TAU, 65)]
-    add(*tube(ringp2, 0.06, 10, cap=False))
+    ringp = [(4.3 * math.cos(a), 4.3 * math.sin(a), -0.33) for a in np.linspace(0, TAU, 65)]
+    add(*tube(ringp, 0.075, 8, cap=False))
+    ringp2 = [(2.4 * math.cos(a), 2.4 * math.sin(a), -0.33) for a in np.linspace(0, TAU, 41)]
+    add(*tube(ringp2, 0.06, 8, cap=False))
     for k in range(3):
         a = math.radians(90 + 120 * k)
         d = np.array([math.cos(a), math.sin(a), 0])
         ctrl = [d * 2.4 + [0, 0, -0.33], d * 4.3 + [0, 0, -0.33], d * 5.0 + [0, 0, -0.6], d * 5.35 + [0, 0, -1.8],
                 d * 5.7 + [0, 0, TZ + 0.5], d * 6.3 + [0, 0, TZ + 0.09], d * 6.9 + [0, 0, TZ + 0.09]]
-        pts = chaikin(np.array(ctrl), 4)
-        add(*tube(pts, 0.085, 10))
+        pts = chaikin(np.array(ctrl), 3)
+        add(*tube(pts, 0.085, 8))
         foot = [d * 6.25 + [0, 0, TZ + 0.07], d * 7.1 + [0, 0, TZ + 0.07]]
         add(*tube(np.linspace(foot[0], foot[1], 6), 0.14, 10))
     mk('stand', V, F, None, CH)
@@ -775,8 +809,8 @@ def build_cloth():
     M = pmat('m_cloth', img=image('cloth_col', col), ormimg=image('cloth_orm', orm(rough), True), nimg=image('cloth_nrm', nrm, True),
              sheen=0.6, sheen_r=0.4, sss=0.08, sss_r=(1, 0.4, 0.3), sss_s=0.02)
     def axis(H):
-        inner = np.linspace(-H + 1.6, H - 1.6, int((2 * H - 3.2) / 1.0) + 1)
-        edge = np.linspace(H - 1.6, H + DROP, int((1.6 + DROP) / 0.2) + 1)[1:]
+        inner = np.linspace(-H + 1.6, H - 1.6, int((2 * H - 3.2) / 1.4) + 1)
+        edge = np.linspace(H - 1.6, H + DROP, int((1.6 + DROP) / 0.24) + 1)[1:]
         return np.r_[-edge[::-1], inner, edge]
     xs, ys = axis(HX), axis(HY)
     A, B = np.meshgrid(xs, ys)
@@ -813,6 +847,7 @@ def build_cloth():
 
 
 # ================================================================ props
+GLASSY = []
 def glass_mat(name, tintc=(0.96, 1.0, 0.98), rough=0.02):
     m = pmat(name, rough=rough, trans=1.0, ior=1.5, spec=0.5)
     m.node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value = (*tintc, 1)
@@ -850,16 +885,17 @@ def grain_tex(name, palette, seed, size=512, flakes=False):
 
 def build_props():
     # ---- chianti fiasco candle (back left)
-    bx, by = -7.6, 9.6
+    bx, by = -7.6, 9.6; BS = 0.8
+    before = set(bpy.data.objects)
     GL = glass_mat('m_bottle', (0.18, 0.42, 0.22), 0.04)
     prof = [(0, 0.02), (1.25, 0.02), (1.75, 0.18), (2.0, 0.7), (2.04, 1.3), (1.92, 2.1), (1.55, 2.85), (1.0, 3.45), (0.62, 3.95),
             (0.5, 4.5), (0.47, 5.9), (0.53, 6.05), (0.5, 6.25), (0.42, 6.3)]
-    o = lathe(chaikin(prof, 2), 48, 'bottle', GL, z0=TZ, xy=(bx, by))
+    o = lathe(chaikin(prof, 1), 36, 'bottle', GL, z0=TZ, xy=(bx, by))
     so = o.modifiers.new('s', 'SOLIDIFY'); so.thickness = 0.06; so.offset = -1
     sc, sn = straw_tex()
     STR = pmat('m_straw', img=sc, nimg=sn, nstr=1.2, rough=0.75, sheen=0.4, sss=0.1, sss_s=0.01)
     sprof = [(0, -0.0), (1.3, 0.0), (1.82, 0.16), (2.08, 0.7), (2.12, 1.3), (2.0, 2.1), (1.72, 2.65)]
-    o = lathe(chaikin(sprof, 2), 64, 'straw', STR, z0=TZ, xy=(bx, by))
+    o = lathe(chaikin(sprof, 1), 48, 'straw', STR, z0=TZ, xy=(bx, by))
     me = o.data; rs = np.random.default_rng(44)
     zs = np.array([v.co.z for v in me.vertices]); ztop = zs.max()
     for v in me.vertices:
@@ -886,23 +922,25 @@ def build_props():
     FL = pmat('m_flame', 'ffb040', emit='ffa030', emit_s=60.0)
     fprof = [(0, TZ + 7.52), (0.1, TZ + 7.6), (0.14, TZ + 7.75), (0.1, TZ + 7.95), (0.04, TZ + 8.15), (0, TZ + 8.25)]
     lathe(fprof, 16, 'flame', FL, xy=(bx, by), coll=BG)
-    CANDLE_POS = (bx, by, TZ + 7.85)
+    Mb = Matrix.Translation((bx, by, TZ)) @ Matrix.Scale(BS, 4) @ Matrix.Translation((-bx, -by, -TZ))
+    for o in set(bpy.data.objects) - before: o.data.transform(Mb)
+    CANDLE_POS = tuple(Mb @ Vector((bx, by, TZ + 7.85)))
     # ---- wine glass (back right)
     gx, gy = 8.8, 8.6
     GLS = glass_mat('m_glass')
     gp = [(0, 0.0), (1.15, 0.0), (1.2, 0.04), (0.6, 0.12), (0.16, 0.35), (0.11, 0.8), (0.11, 2.2), (0.3, 2.45), (0.9, 2.75),
           (1.22, 3.4), (1.28, 4.2), (1.15, 5.2), (1.02, 5.95)]
-    o = lathe(chaikin(gp, 2), 48, 'wine_glass', GLS, z0=TZ, xy=(gx, gy))
+    o = lathe(chaikin(gp, 1), 36, 'wine_glass', GLS, z0=TZ, xy=(gx, gy))
     so = o.modifiers.new('s', 'SOLIDIFY'); so.thickness = 0.04; so.offset = -1
     WINE = pmat('m_wine', rough=0.0, trans=1.0, ior=1.34)
     WINE.node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value = (0.42, 0.012, 0.03, 1)
     wp = [(0, 2.53), (0.3, 2.53), (0.85, 2.8), (1.16, 3.4), (1.21, 3.75), (1.2, 3.78), (0, 3.78)]
-    lathe(chaikin(wp, 2), 48, 'wine', WINE, z0=TZ, xy=(gx, gy))
+    lathe(chaikin(wp, 1), 36, 'wine', WINE, z0=TZ, xy=(gx, gy))
     # ---- shakers (left side): glass jar + chrome perforated cap, parmesan / chili flakes
     def shaker(x, y, name, fill_col, fill_n, fill_h):
         GJ = glass_mat('m_jar_' + name)
         jp = [(0, 0.0), (0.88, 0.0), (0.92, 0.05), (0.92, 2.85), (0.84, 2.95), (0.84, 3.2)]
-        o = lathe(chaikin(jp, 2), 40, 'jar_' + name, GJ, z0=TZ, xy=(x, y))
+        o = lathe(chaikin(jp, 1), 32, 'jar_' + name, GJ, z0=TZ, xy=(x, y))
         so = o.modifiers.new('s', 'SOLIDIFY'); so.thickness = 0.07; so.offset = -1
         FM = pmat('m_fill_' + name, img=fill_col, nimg=fill_n, nstr=1.5, rough=0.8, sss=0.15 if name == 'parm' else 0.05, sss_s=0.01)
         fp = [(0, 0.28), (0.8, 0.28), (0.8, fill_h), (0.5, fill_h + 0.12), (0, fill_h + 0.2)]
@@ -917,7 +955,7 @@ def build_props():
         CAP = pmat('m_cap_' + name, img=image('cap_col_' + name, ccol), ormimg=image('cap_orm_' + name, orm(0.14 + 0.8 * holes, 1 - holes), True),
                    nimg=image('cap_nrm_' + name, h2n(-holes * 0.01, 1 / N, 1 / N, 1.0), True), metal=1)
         cp = [(0, 4.05), (0.4, 4.02), (0.75, 3.85), (0.93, 3.55), (0.96, 3.2), (0.93, 3.12), (0.86, 3.12)]
-        lathe(chaikin(cp, 2)[::-1], 48, 'cap_' + name, CAP, z0=TZ, xy=(x, y), uvfn=lambda xx, yy, a, s: (0.5 + (xx) / 2.1, 0.5 + (yy) / 2.1))
+        lathe(chaikin(cp, 1)[::-1], 32, 'cap_' + name, CAP, z0=TZ, xy=(x, y), uvfn=lambda xx, yy, a, s: (0.5 + (xx) / 2.1, 0.5 + (yy) / 2.1))
     pc, pn = grain_tex('parm', ['eadbb0', 'f6ecc8', 'd2bc84', 'fbf3dc'], 131)
     shaker(-10.6, 1.4, 'parm', pc, pn, 2.1)
     cc, cn = grain_tex('chili', ['7a160a', 'a8260e', 'e0a83a', '5a1006', 'c03a12'], 132, flakes=True)
@@ -1004,14 +1042,15 @@ def build_room():
     LB = pmat('m_bulb', 'ffc070', emit='ffb060', emit_s=40.0)
     rb_ = np.random.default_rng(170)
     for k in range(60):
-        x = -90 + k * 3.0 + rb_.uniform(-0.8, 0.8); z = 26 + 7 * math.cos(k * 0.35) + rb_.uniform(-0.5, 0.5)
+        x = -90 + k * 3.0 + rb_.uniform(-0.8, 0.8); z = -6 + 4 * math.cos(k * 0.35) + rb_.uniform(-0.5, 0.5)
         bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=6, radius=0.5, location=(x, 72, z))
         o = bpy.context.object; o.data.materials.append(LB)
         for c_ in o.users_collection: c_.objects.unlink(o)
         BG.objects.link(o)
     for x in (-40, -12, 22, 48):
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=8, radius=2.2, location=(x, 73, 12))
-        o = bpy.context.object; o.data.materials.append(pmat('m_sconce', 'ffb060', emit='ff9a40', emit_s=18.0))
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=8, radius=1.6, location=(x, 73, -12))
+        o = bpy.context.object; o.data.materials.append(pmat('m_sconce', 'ffb060', emit='ff9a40', emit_s=12.0))
+        pl = bpy.data.objects.new('wl', bpy.data.lights.new('wl', 'POINT')); BG.objects.link(pl); pl.location = (x, 70.5, -11); pl.data.energy = 30000; pl.data.color = (1, 0.6, 0.3)
         for c_ in o.users_collection: c_.objects.unlink(o)
         BG.objects.link(o)
 
@@ -1033,6 +1072,12 @@ def tri_count(objs):
         me = o.evaluated_get(dg).to_mesh(); me.calc_loop_triangles(); n += len(me.loop_triangles); o.evaluated_get(dg).to_mesh_clear()
     return n
 STAGE_TRIS = tri_count(STAGE.objects)
+if 'dump' in sys.argv:
+    os.makedirs(os.path.join(OUT, 'tex'), exist_ok=True)
+    for im in IMGS:
+        im.filepath_raw = os.path.join(OUT, 'tex', im.name + '.png'); im.file_format = 'PNG'; im.save()
+for o in STAGE.objects:
+    if o.name.startswith(('bottle', 'wine', 'jar_')): o.visible_shadow = False
 if 'tris' in sys.argv:
     import collections; agg = collections.Counter()
     for o in STAGE.objects: agg[o.name.split('_')[0]] += tri_count([o])
@@ -1138,9 +1183,13 @@ def setup_light():
         l = bpy.data.objects.new(name, bpy.data.lights.new(name, 'AREA')); scn.collection.objects.link(l)
         l.data.energy = energy; l.data.size = size; l.data.shape = shape; l.data.color = color; l.location = loc
         l.rotation_euler = (Vector(target) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler(); return l
-    area('Key', (-5, -7, 26), (0.5, 0.5, 0), 15000, 9, (1.0, 0.8, 0.58))
-    area('Fill', (16, -18, 9), (0, 0, 0), 3000, 16, (1.0, 0.86, 0.72))
-    area('Rim', (3, 24, 9), (0, 0, 0.5), 6000, 10, (1.0, 0.88, 0.75))
+    k = bpy.data.objects.new('Key', bpy.data.lights.new('Key', 'SPOT')); scn.collection.objects.link(k)
+    k.data.energy = 40000; k.data.color = (1.0, 0.8, 0.58); k.data.spot_size = math.radians(75); k.data.spot_blend = 0.75
+    k.data.shadow_soft_size = 3.0; k.location = (-6, 9, 24)
+    k.rotation_euler = (Vector((0.5, -0.8, 0)) - k.location).to_track_quat('-Z', 'Y').to_euler()
+    area('Top', (0, -4, 22), (0, 0, 0), 3000, 12, (1.0, 0.84, 0.66))
+    area('Fill', (16, -18, 9), (0, 0, 0), 2500, 16, (1.0, 0.86, 0.72))
+    area('Rim', (6, 24, 9), (0, 0, 0.5), 5000, 10, (1.0, 0.88, 0.75))
     c = bpy.data.objects.new('Candle', bpy.data.lights.new('Candle', 'POINT')); scn.collection.objects.link(c)
     c.data.energy = 3000; c.data.color = (1.0, 0.55, 0.22); c.data.shadow_soft_size = 0.25; c.location = CANDLE
 
@@ -1149,7 +1198,13 @@ def render(shot):
     if not cam:
         cam = bpy.data.objects.new('Cam', bpy.data.cameras.new('Cam')); scn.collection.objects.link(cam); scn.camera = cam
     cam.data.sensor_fit = 'VERTICAL'; cam.data.dof.use_dof = False
-    if shot == 'game':
+    if shot == 'close':
+        cam.location = (3.2, -3.6, 2.2); cam.data.angle_y = math.radians(28)
+        cam.rotation_euler = (Vector((0.6, 1.2, 0)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
+    elif shot == 'crust':
+        cam.location = (2.5, -8.2, 1.4); cam.data.angle_y = math.radians(26)
+        cam.rotation_euler = (Vector((1.2, -4.8, 0.1)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
+    elif shot == 'game':
         el = math.radians(50); dist = 21
         cam.location = (0, -dist * math.cos(el), dist * math.sin(el)); cam.data.angle_y = math.radians(34)
         cam.rotation_euler = (Vector((0, 0.6, 0)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
@@ -1163,7 +1218,7 @@ def render(shot):
     scn.cycles.caustics_reflective = False; scn.cycles.caustics_refractive = False
     scn.cycles.max_bounces = 8; scn.cycles.transmission_bounces = 8; scn.cycles.glossy_bounces = 4
     scn.render.resolution_x, scn.render.resolution_y = (640, 360) if FAST else (1280, 720)
-    scn.view_settings.view_transform = 'AgX'; scn.view_settings.look = 'AgX - Medium High Contrast'
+    scn.view_settings.view_transform = 'AgX'; scn.view_settings.look = 'AgX - Punchy'
     scn.render.filepath = os.path.join(OUT, 'ex_%s.png' % shot)
     log('rendering', shot); bpy.ops.render.render(write_still=True); log('wrote', scn.render.filepath)
 

@@ -122,11 +122,12 @@ def rrect(x0, x1, y0, y1, rc, cseg=6):
             a = math.radians(a0 + 90 * k / cseg); pts.append((cx + rc * math.cos(a), cy + rc * math.sin(a)))
     return pts
 def rbox(name, x0, x1, y0, y1, z0, z1, mat, rc=0.15, bev=0.04, bseg=3, cseg=6, loc=None, rot=None, uv=6.0, stage=True,
-         taper=0.0, holes=()):
+         taper=0.0, holes=(), outline=None):
     """Rounded-corner slab with a crisp bevel round its top and bottom rims. taper shrinks the top outline inwards.
     holes: [(kind, x, y, r or (w,h), depth)] cut by boolean from the top or front face (kind 'cylz'/'cyly'/'boxy')."""
     bm = bmesh.new()
     pb = rrect(x0, x1, y0, y1, rc, cseg); pt = rrect(x0 + taper, x1 - taper, y0 + taper, y1 - taper, max(0, rc - taper), cseg)
+    if outline: pb = pt = outline
     B = [bm.verts.new((x, y, z0)) for x, y in pb]; T = [bm.verts.new((x, y, z1)) for x, y in pt]
     bm.faces.new(T); bm.faces.new(B[::-1])
     for i in range(len(B)):
@@ -232,7 +233,7 @@ def tex_vinyl():
     X, Y = np.meshgrid(xs, xs); r = np.hypot(X, Y)
     rr = np.linspace(0, S, 6000)
     music = np.zeros_like(rr)
-    for f, w in ((3, 0.5), (9, 0.3), (27, 0.25), (80, 0.18), (240, 0.12), (700, 0.08)):
+    for f, w in ((3, 0.15), (9, 0.15), (27, 0.2), (80, 0.25), (240, 0.25), (700, 0.2)):
         music += w * np.sin(rr * f + RNG.uniform(0, TAU)) * RNG.uniform(0.6, 1.0)
     music += np.convolve(RNG.standard_normal(rr.size), np.ones(9) / 9, 'same') * 0.35
     music = (music - music.min()) / (music.max() - music.min())
@@ -247,9 +248,9 @@ def tex_vinyl():
     ripple = 0.5 + 0.5 * np.sin(r * TAU / 0.052)
     col = 0.030 + 0.016 * m * gr * (1 - gaps) + 0.004 * ripple * gr
     col = col * (1 - line) + 0.86 * line
-    rough = (0.34 + 0.08 * m) * gr * (1 - gaps) + 0.12 * (gaps * gr + (1 - gr))
+    rough = (0.32 + 0.05 * m) * gr * (1 - gaps) + 0.12 * (gaps * gr + (1 - gr))
     rough = rough * (1 - line) + 0.42 * line
-    h = (ripple * 0.05 + m * 0.5) * gr * (1 - gaps) - 0.25 * gaps * gr + 0.3 * line
+    h = (ripple * 0.05 + m * 0.12) * gr * (1 - gaps) - 0.2 * gaps * gr + 0.3 * line
     return np.clip(col, 0, 1), rough, normal_from_h(h, 1.0)
 
 
@@ -346,9 +347,10 @@ def build_deck(prefix, ox=0.0, ring_line=True):
     P(lathe(prefix + 'Record', [(0.14, 0.0), (5.16, 0.0), (5.23, 0.014), (5.285, 0.01), (RD, -0.02), (5.29, -0.085), (5.24, -0.1),
                                (0.14, -0.1), (0.14, 0.0)], [VINYL], 384, uvS=RD + 0.05, smooth=50))
     P(lathe(prefix + 'Label', [(0, 0.004), (1.745, 0.004), (1.75, 0.0)], [LABEL], 160, uvS=1.75))
-    P(text_mesh(prefix + 'LabelKumite', 'KUMITE', 0.62, LABEL_INK, (0, 0.62, 0.004), font=FONT, bold=0.012))
-    P(text_mesh(prefix + 'LabelKanji', '組手', 0.36, LABEL_INK, (0, -0.62, 0.004), font=FONT, bold=0.006))
-    P(text_mesh(prefix + 'LabelRpm', '33 1/3 RPM', 0.17, LABEL_INK, (0, -1.08, 0.004), font=FONT))
+    # KUMITE on the near half of the label: the fighters stand on the centre line and hide the far half from the game camera
+    P(text_mesh(prefix + 'LabelKumite', 'KUMITE', 0.5, LABEL_INK, (0, -1.05, 0.004), font=FONT, bold=0.01))
+    P(text_mesh(prefix + 'LabelKanji', '組手', 0.4, LABEL_INK, (0, 0.75, 0.004), font=FONT, bold=0.006))
+    P(text_mesh(prefix + 'LabelRpm', '33 1/3 RPM', 0.15, LABEL_INK, (0, 1.25, 0.004), font=FONT))
     P(text_mesh(prefix + 'LabelSide', 'SIDE A', 0.15, LABEL_INK, (-1.05, 0.0, 0.004), font=FONT))
     P(text_mesh(prefix + 'LabelBpm', '128 BPM', 0.15, LABEL_INK, (1.08, 0.0, 0.004), font=FONT))
     P(lathe(prefix + 'Spindle', [(0, 0.24), (0.06, 0.235), (0.1, 0.205), (0.115, 0.16), (0.115, -0.1)], [CHROME], 48))
@@ -386,7 +388,13 @@ def build_deck(prefix, ox=0.0, ring_line=True):
     # headshell: a slim shell with a finger lift, the collar, a cartridge with a red stripe, the stylus
     hrot = (0, 0, math.atan2(h.y, h.x))
     HC = Nd - h * 0.55
-    P(rbox(prefix + 'Headshell', -0.8, 0.8, -0.34, 0.34, ZA - 0.2, ZA - 0.12, ALU, rc=0.14, bev=0.025, bseg=2, loc=(HC.x, HC.y, 0), rot=hrot))
+    hs = []   # headshell outline: a narrow neck flaring to a broad, round-nosed shell
+    for k in range(25):
+        x = -0.85 + 1.5 * k / 24; w = 0.17 + 0.19 * (1 - (1 - min(1, max(0, (x + 0.75) / 0.6))) ** 2); hs.append((x, -w))
+    for k in range(1, 12):
+        a = -math.pi / 2 + math.pi * k / 12; hs.append((0.65 + 0.16 * math.cos(a), 0.36 * math.sin(a)))
+    hs += [(x, -y) for x, y in reversed(hs[:25])]
+    P(rbox(prefix + 'Headshell', 0, 0, 0, 0, ZA - 0.19, ZA - 0.13, ALU, bev=0.022, bseg=2, outline=hs, loc=(HC.x, HC.y, 0), rot=hrot))
     P(lathe(prefix + 'Collar', [(0, 0.34), (0.15, 0.34), (0.19, 0.3), (0.19, 0.03), (0.15, 0.0), (0, 0.0)], [DARKMET], 48,
             loc=(J.x - h.x * 0.17, J.y - h.y * 0.17, ZA - 0.06), rot=h.to_track_quat('Z', 'Y').to_euler(),
             mod=lambda a, r, z: 1.0 + (0.04 if math.cos(a * 24) > 0 else 0.0) * (1 if 0.04 < z < 0.3 else 0)))
@@ -534,17 +542,20 @@ def cone(name, x, y, z, rad):
 
 
 speakers = []
-for sx in (-17.5, 19.5):
-    sy = 13.0; fy = sy - 2.6
-    speakers.append(rbox('SubCab', sx - 3.2, sx + 3.2, sy - 2.6, sy + 2.6, -14.0, -7.4, BLACK, rc=0.15, bev=0.08,
-                         holes=[('cyly', sx, -10.7, 2.3, 0.5)]))
-    speakers.append(cone('SubCone', sx, fy + 0.45, -10.7, 2.25))
-    speakers.append(rbox('TopCab', sx - 2.6, sx + 2.6, sy - 2.3, sy + 2.3, -7.35, 1.2, BLACK, rc=0.15, bev=0.08,
-                         holes=[('cyly', sx, -5.3, 1.75, 0.5), ('cyly', sx, -1.6, 1.75, 0.5)]))
-    for zc in (-5.3, -1.6): speakers.append(cone('TopCone', sx, sy - 2.3 + 0.42, zc, 1.72))
-    speakers.append(lathe('Horn', [(0.3, 0.0), (0.45, 0.22), (1.1, 0.42), (1.25, 0.42), (1.25, 0.36)], [GLOSSBLACK], 4,
-                          loc=(sx, sy - 2.3 - 0.4, 0.4), rot=(-math.pi / 2, math.pi / 4, 0)))
-    speakers.append(rbox('PowerLed', sx + 2.0, sx + 2.15, sy - 2.33, sy - 2.3, -7.0, -6.85, mat('LedBlue', lin('3a8aff'), 0.3, emit=lin('3a8aff'), estr=20), rc=0, bev=0, uv=0))
+LED_BLUE = mat('LedBlue', lin('3a8aff'), 0.3, emit=lin('3a8aff'), estr=20)
+for sx in (-15.5, 15.0):   # on the dance floor behind the booth, their tops below the deck so the low view stays clean
+    sy = 14.5; front = sy - 2.4
+    speakers.append(rbox('SubCab', sx - 3.0, sx + 3.0, sy - 2.4, sy + 2.4, -14.0, -9.2, BLACK, rc=0.15, bev=0.08,
+                         holes=[('cyly', sx, -11.6, 2.0, 0.5)]))
+    speakers.append(cone('SubCone', sx, front + 0.45, -11.6, 1.95))
+    speakers.append(rbox('TopCab', sx - 2.6, sx + 2.6, sy - 2.2, sy + 2.2, -9.15, -2.9, BLACK, rc=0.15, bev=0.08,
+                         holes=[('cyly', sx, -7.4, 1.7, 0.5), ('boxy', sx, -4.4, (2.6, 1.9), 0.5)]))
+    speakers.append(cone('TopCone', sx, sy - 2.2 + 0.42, -7.4, 1.65))
+    hn = lathe('Horn', [(0.32, 0.0), (0.5, 0.25), (1.55, 0.44), (1.85, 0.46), (1.85, 0.4)], [GLOSSBLACK], 4,
+               loc=(sx, sy - 2.2 + 0.48, -4.4), rot=(math.pi / 2, 0, 0), smooth=0)
+    hn.data.transform(Matrix.Rotation(math.pi / 4, 4, 'Z')); hn.scale = (1.0, 0.72, 1.0)   # square mouth, squashed
+    speakers.append(hn)
+    speakers.append(rbox('PowerLed', sx + 2.0, sx + 2.15, sy - 2.23, sy - 2.2, -8.8, -8.65, LED_BLUE, rc=0, bev=0, uv=0))
 
 cables = []
 cables.append(curve_mesh('CableAudio', [Vector((8.6, 6.25, PL_TOP - 1.2)), Vector((8.9, 7.4, TABLE + 0.08)), Vector((10.3, 7.9, TABLE + 0.08)),
@@ -623,26 +634,27 @@ def panel(name, loc, look, size, strength, color):
 
 for k, y in enumerate((9.0, 13.5, 18.0)):     # long strip lights over the booth: the plinth's brushed highlights
     panel('Strip%d' % k, (0, y, 19.0), (0, y - 14, 0), (46, 1.1), 7.0, (0.9, 0.95, 1.0))
-panel('Ceiling', (0, 14, 21.0), (0, 10, 0), (70, 30), 0.35, (0.75, 0.8, 1.0))
+panel('Ceiling', (0, 14, 21.0), (0, 10, 0), (70, 30), 0.14, (0.75, 0.8, 1.0))
 panel('BackWall', (-6, 30, 6), (-6, 0, 2), (70, 16), 0.3, (0.7, 0.75, 1.0))
 panel('BackMagenta', (-22, 26, 8), (-6, 0, 0), (3, 14), 6.0, (1.0, 0.2, 0.65))
 panel('BackCyan', (14, 28, 8), (0, 0, 0), (3, 14), 6.0, (0.2, 0.7, 1.0))
 light('MixerGlow', 'AREA', (12.65, 0.0, MT + 1.4), (12.65, 0, 0), 120, (0.8, 0.4, 1.0), size=(4, 10), glossy=False)
-for sx, c in ((-17.5, (1.0, 0.2, 0.6)), (19.5, (0.2, 0.6, 1.0))):
+for sx, c in ((-15.5, (1.0, 0.2, 0.6)), (15.0, (0.2, 0.6, 1.0))):
     light('SpkRim', 'SPOT', (sx, 4, 9), (sx, 10.5, -4), 9000, c, spot=40, blend=0.6, soft=0.5)
 
 # haze and lasers
 bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 8, 2)); hz = bpy.context.object; hz.name = 'Haze'; hz.scale = (90, 60, 34)
 hm = bpy.data.materials.new('Haze'); hm.use_nodes = True; nt = hm.node_tree; nt.nodes.remove(nt.nodes['Principled BSDF'])
-pv = nt.nodes.new('ShaderNodeVolumePrincipled'); pv.inputs['Density'].default_value = float(OPT.get('haze', 0.0035))
+pv = nt.nodes.new('ShaderNodeVolumePrincipled'); pv.inputs['Density'].default_value = float(OPT.get('haze', 0.008))
 pv.inputs['Anisotropy'].default_value = 0.45
 nt.links.new(pv.outputs['Volume'], nt.nodes['Material Output'].inputs['Volume']); hz.data.materials.append(hm)
-LASER = {c: mat('Laser' + c, (0, 0, 0), 1.0, emit=lin(h), estr=40) for c, h in (('C', '3ad8ff'), ('M', 'ff3ad8'), ('G', '6aff6a'))}
-for k in range(6):
-    src = Vector((-14 + k * 5.6, 26, 7)); tgt = Vector((-24 + k * 9.5, -6, 22 + (k % 3) * 3))
+LASER = {c: mat('Laser' + c, (0, 0, 0), 1.0, emit=lin(h), estr=14) for c, h in (('C', '3ad8ff'), ('M', 'ff3ad8'), ('G', '6aff6a'))}
+for k in range(10):  # two laser fans low over the dance floor behind the booth (the band the game camera sees)
+    sd = -1 if k < 5 else 1; j = k % 5
+    src = Vector((sd * 22, 30, -6.0)); tgt = Vector((-sd * 6 + sd * j * 3.0, 4 + j * 1.5, -13.5))
     dirv = (tgt - src); ln = dirv.length
-    bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.035, depth=ln, location=(src + tgt) / 2)
-    o = bpy.context.object; o.rotation_euler = dirv.to_track_quat('Z', 'Y').to_euler(); o.data.materials.append(LASER['CMG'[k % 3]])
+    bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.022, depth=ln, location=(src + tgt) / 2)
+    o = bpy.context.object; o.rotation_euler = dirv.to_track_quat('Z', 'Y').to_euler(); o.data.materials.append(LASER['MC'[k // 5]] if j != 2 else LASER['G'])
     o.visible_shadow = False
 
 
