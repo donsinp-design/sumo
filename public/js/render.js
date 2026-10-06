@@ -1597,7 +1597,13 @@
       if (S.CampSkills) {
         const pool = ['oni', 'tengu', 'kitsune', 'hannya', 'okame'], m0 = pool[(Math.random() * pool.length) | 0];
         const m1 = pool.filter((k) => k !== m0)[(Math.random() * (pool.length - 1)) | 0];
-        this.views.forEach((v, i) => { const mk = S.CampSkills.maskMesh(i ? m1 : m0); if (mk && v.head) { mk.scale.setScalar(v.s || 1); v.head.add(mk); v.maskId = i ? m1 : m0; } });
+        this.views.forEach((v, i) => { const mk = S.CampSkills.maskMesh(i ? m1 : m0); if (mk && v.head) { mk.scale.setScalar((v.s || 1) * 1.3); v.head.add(mk); v.maskId = i ? m1 : m0; } });
+        // the referee wears one too: a third mask nobody is fighting in
+        if (this.ref && this.ref.headG) {
+          if (this.ref.mask) this.ref.headG.remove(this.ref.mask);
+          const rest = pool.filter((k) => k !== m0 && k !== m1), rid = rest[(Math.random() * rest.length) | 0];
+          const rm = this.ref.mask = S.CampSkills.maskMesh(rid); if (rm) { rm.scale.setScalar(0.78); rm.position.set(0, -0.06, -0.01); this.ref.headG.add(rm); this.ref.maskId = rid; }
+        }
       }
       this.fx.clearDecals();
       this.clearObjs(); this.clearThrown();

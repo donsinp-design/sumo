@@ -458,7 +458,8 @@
   function maskMesh(id) {
     if (id === 'none') return null;
     const W = S.R3, g = new THREE.Group(), T = (c, sh, o) => S.toon(c, Object.assign({ shade: sh }, o || {}));
-    const plate = (col, sh) => { const m = W.mesh(new THREE.SphereGeometry(1, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2), T(col, sh), 0.012); m.rotation.x = Math.PI / 2; m.scale.set(0.2, 0.09, 0.24); m.position.set(0, 0.05, 0.16); g.add(m); return m; };
+    let strapCol = null;
+    const plate = (col, sh) => { strapCol = strapCol || [col, sh]; const m = W.mesh(new THREE.SphereGeometry(1, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2), T(col, sh), 0.012); m.rotation.x = Math.PI / 2; m.scale.set(0.2, 0.09, 0.24); m.position.set(0, 0.05, 0.16); g.add(m); return m; };
     const eyes = (col) => { for (const sd of [-1, 1]) { const e = W.mesh(W.GEO.sphere, T(col, col), 0); e.scale.set(0.035, 0.02, 0.01); e.position.set(sd * 0.075, 0.09, 0.245); g.add(e); } };
     const horn = (col, sh, sd, len) => { const h = W.mesh(new THREE.ConeGeometry(0.035, len, 8), T(col, sh), 0.008); h.position.set(sd * 0.11, 0.26, 0.12); h.rotation.z = -sd * 0.45; g.add(h); };
     if (id === 'oni') { plate(0xc8231d, 0x6e1018); eyes(0xffd23a); horn(0xf2e6c8, 0x9a8a68, -1, 0.16); horn(0xf2e6c8, 0x9a8a68, 1, 0.16); const fang = W.mesh(new THREE.ConeGeometry(0.02, 0.06, 6), T(0xffffff, 0xb8b0a0), 0); fang.position.set(0.04, -0.03, 0.25); fang.rotation.x = Math.PI; g.add(fang); }
@@ -467,6 +468,8 @@
     else if (id === 'hannya') { plate(0xeae2c8, 0xa89a78); eyes(0xffd23a); horn(0xd8c890, 0x8a7a48, -1, 0.2); horn(0xd8c890, 0x8a7a48, 1, 0.2); const m = W.mesh(W.GEO.box, T(0x7a1414, 0x3a0808), 0); m.scale.set(0.12, 0.025, 0.01); m.position.set(0, -0.02, 0.25); g.add(m); }
     else if (id === 'okame') { const p = plate(0xfbf6ee, 0xc8bca8); p.scale.set(0.22, 0.1, 0.25); for (const sd of [-1, 1]) { const ch = W.mesh(W.GEO.sphere, T(0xf08a8a, 0xc06060), 0); ch.scale.set(0.035, 0.03, 0.01); ch.position.set(sd * 0.11, 0.0, 0.235); g.add(ch); const e = W.mesh(W.GEO.box, T(0x141414, 0x141414), 0); e.scale.set(0.04, 0.008, 0.01); e.position.set(sd * 0.07, 0.09, 0.25); g.add(e); } }
     else if (id === 'fish') { const cap = W.mesh(new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), T(0x2f6fd0, 0x163a78), 0.012); cap.scale.set(0.26, 0.15, 0.26); cap.position.set(0, 0.17, 0.0); g.add(cap); const brim = W.mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.02, 16, 1, false, -Math.PI / 2, Math.PI), T(0x2f6fd0, 0x163a78), 0.008); brim.position.set(0, 0.18, 0.18); g.add(brim); const band = W.mesh(new THREE.TorusGeometry(0.255, 0.018, 6, 24), T(0xf6f2ea, 0xb8b0a0), 0); band.rotation.x = Math.PI / 2; band.position.y = 0.18; g.add(band); }
+    // a cord round the back of the head in the mask's colour: the camera mostly sees backs and tops
+    if (strapCol) { const st = W.mesh(new THREE.TorusGeometry(0.24, 0.028, 6, 28), T(strapCol[0], strapCol[1]), 0.008); st.rotation.x = Math.PI / 2 - 0.25; st.position.set(0, 0.1, -0.01); g.add(st); }
     return g;
   }
   CampSkills.POOL = POOL; CampSkills.BY = BY; CampSkills.MASKS = MASKS; CampSkills.maskMesh = maskMesh;
