@@ -39,7 +39,7 @@ F32 = np.float32
 FONT = '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'
 TEXN = 1024 if FAST else 2048
 
-PHI_F = math.radians(-62)                      # the robot's heading (front), seen from above
+PHI_F = math.radians(-100)                      # the robot's heading (front), seen from above
 FWD = np.array([math.cos(PHI_F), math.sin(PHI_F)], F32)
 RIGHT = np.array([math.sin(PHI_F), -math.cos(PHI_F)], F32)
 TA = PHI_F + math.pi                           # rear: the lidar lobe
@@ -377,13 +377,13 @@ def top_maps():
     col = col * (1 + 0.05 * brush[..., None] * panel[..., None])
     rough = np.full(R.shape, 0.3, F32) + 0.03 * brush; metal = np.full(R.shape, 0.6, F32)
     emis = np.zeros(R.shape + (3,), F32)
-    CY = hx('3fe0ff')
+    CY = hx('00b4ff')
     # fighting-circle light ring: a seam, a frosted diffuser strip, a seam
     seam_i = band(R, 4.45, 4.51, w); strip = band(R, 4.51, 4.69, w); seam_o = band(R, 4.69, 4.74, w); outer = ss(4.74 - w, 4.74 + w, R)
     H += -0.012 * (seam_i + seam_o) - 0.004 * strip
     col = lerp(col, hx('0a0b0c'), seam_i + seam_o); rough = rough * (1 - seam_i - seam_o) + 0.6 * (seam_i + seam_o); metal *= 1 - seam_i - seam_o
     glow = 0.82 + 0.18 * np.cos(np.arctan2(LX, LY) * 1.0)          # a little brighter toward the front
-    col = lerp(col, hx('d6f6ff'), strip); rough = rough * (1 - strip) + 0.35 * strip; metal *= 1 - strip
+    col = lerp(col, hx('8fdcff'), strip); rough = rough * (1 - strip) + 0.35 * strip; metal *= 1 - strip
     emis += (strip * glow * (1 - 0.25 * (np.abs(R - 4.6) / 0.09) ** 2))[..., None] * CY
     # outer band: piano black, with a faint satin edge
     col = lerp(col, hx('060708'), outer); rough = rough * (1 - outer) + 0.06 * outer; metal *= 1 - outer
@@ -391,7 +391,7 @@ def top_maps():
     btn = 1 - ss(0.50 - w, 0.50 + w, R); ring = band(R, 0.555, 0.665, w); bez = band(R, 0.68, 0.82, w); gap = band(R, 0.50, 0.555, w) + band(R, 0.665, 0.68, w) + band(R, 0.82, 0.84, w)
     H += 0.012 * btn * (1 - (R / 0.5) ** 2) + 0.004 * bez - 0.008 * gap
     col = lerp(col, hx('0b0c0e'), btn + gap); rough = rough * (1 - btn - gap) + 0.12 * btn + 0.5 * gap; metal *= 1 - btn - gap
-    col = lerp(col, hx('d8f4ff'), ring); rough = rough * (1 - ring) + 0.3 * ring; metal *= 1 - ring
+    col = lerp(col, hx('8fdcff'), ring); rough = rough * (1 - ring) + 0.3 * ring; metal *= 1 - ring
     emis += (ring * 1.15)[..., None] * CY
     col = lerp(col, hx('c9ccd1'), bez); rough = rough * (1 - bez) + 0.2 * bez       # polished, metal
     # power icon (white print) on the button: ring with a gap toward the front + a bar
@@ -435,7 +435,7 @@ def top_maps():
 
 TOP_COL, TOP_ORM, TOP_NRM, TOP_EMIS = top_maps()
 mTop, nt, bs = principled('mTopCover', lin('4a4e55'), 1.0, 0.3)
-hook_maps(nt, bs, TOP_COL, TOP_ORM, TOP_NRM, metal=True, emis=TOP_EMIS, estr=9.0)
+hook_maps(nt, bs, TOP_COL, TOP_ORM, TOP_NRM, metal=True, emis=TOP_EMIS, estr=3.2)
 aniso(nt, bs, 0.65)
 bs.inputs['Coat Weight'].default_value = 0.0
 
@@ -495,7 +495,7 @@ cf = FWD * 3.8; cst.rotation_euler = (math.pi / 2, 0, PHI_F + math.pi / 2); cst.
 # ---- lidar turret on the rear lobe (beyond r 4.75)
 log('turret')
 mSmoke, nt, bs = principled('mSmokeGlass', lin('07090b'), 0.0, 0.03, **{'Coat Weight': 1.0, 'Coat Roughness': 0.0})
-mCap, nt, bs = principled('mCapAlu', lin('b9bcc1'), 1.0, 0.22); aniso(nt, bs, 0.7)
+mCap, nt, bs = principled('mCapAlu', lin('5a5d63'), 1.0, 0.26); aniso(nt, bs, 0.7)
 cx, cy = float(TC[0]), float(TC[1])
 revolve('lidar_collar', [(0, 0.03), (0.9, 0.03), (0.97, 0.015), (0.99, 0.0), (0.99, -0.01)], 96, mat=mTrim, centre=(cx, cy, 0))
 revolve('lidar_body', [(0, 0.76), (0.6, 0.76), (0.74, 0.745), (0.82, 0.7), (0.86, 0.62), (0.86, 0.56), (0.83, 0.545), (0.83, 0.2), (0.86, 0.185), (0.86, 0.03), (0.86, 0.0)], 96, mat=mPiano, centre=(cx, cy, 0))
@@ -709,7 +709,7 @@ def sock():
         sl = s * Ltot
         wdt = 1.12 + 0.04 * math.sin(s * 9)
         if sl > Ltot - 0.9: k = (Ltot - sl) / 0.9; wdt *= math.sqrt(max(0, 1 - (1 - k) ** 2)) * 0.98 + 0.02
-        hgt = 0.2 + 0.05 * math.sin(s * 5 + 1)
+        hgt = 0.13 + 0.03 * math.sin(s * 5 + 1)
         if sl < 0.15: hgt *= 0.4 + 4 * sl
         if sl > Ltot - 0.9: hgt *= max(0.05, (Ltot - sl) / 0.9) ** 0.5
         for j in range(NA):
@@ -757,7 +757,7 @@ def sock():
     sidev = np.cos(vv * TAU)
     heel = band(sm, 2.25, 2.25 + 0.95 * math.radians(105) + 0.45, 0.06) * ss(0.15, 0.35, sidev)
     toe = ss(Ltot - 0.95, Ltot - 0.85, sm)
-    col = lerp(col, hx('55585e') * heather[..., None], np.clip(heel + toe, 0, 1))
+    col = lerp(col, hx('55585e') * heather[..., None], np.clip(toe, 0, 1))
     col *= (0.8 + 0.2 * (h / 0.03))[..., None]
     sc, so, sn = img('sock_col', np.clip(col, 0, 1)), img('sock_orm', orm(np.full(uu.shape, 0.9, F32)), True), img('sock_nrm', normal_from_height(h, Ltot / NU, 1.0), True)
     m, nt, bs = principled('mSock', lin('c3c0bb'), 0.0, 0.9, **{'Sheen Weight': 0.7, 'Sheen Roughness': 0.45})
@@ -850,7 +850,7 @@ def load(f):
     new = [o for o in bpy.data.objects if o not in before]
     roots = [o for o in new if o.parent is None or o.parent not in new]
     return new, roots
-GP = (0.55, 4.7)
+GP = (-0.85, 4.66)
 def add_characters():
     stance = None; RIGS = []
     def sumo(f, pos, face, scale=1.65):

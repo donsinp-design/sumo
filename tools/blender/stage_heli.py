@@ -442,11 +442,11 @@ def tex_windows(seed, kind='glass'):
 
 def tex_streets():
     """Street grid far below: dark blocks, sodium-lit roads, car lights. Covers 1200 m, roads every 30 m."""
-    n = 1024; S = 600.0; xs = (np.arange(n) + 0.5) / n * 2 * S - S
+    n = 1024; S = 800.0; xs = (np.arange(n) + 0.5) / n * 2 * S - S
     X, Y = np.meshgrid(xs, xs)
-    dx = np.abs(((X + 15) % 30) - 15); dy = np.abs(((Y + 15) % 30) - 15)
+    dx = np.abs((X % 30) - 15); dy = np.abs((Y % 30) - 15)
     road = np.maximum(1 - sstep(4, 5.5, dx), 1 - sstep(4, 5.5, dy))
-    avenue = np.maximum(1 - sstep(6, 8, np.abs(((X + 60) % 120) - 60)), 1 - sstep(6, 8, np.abs(((Y + 60) % 120) - 60)))
+    avenue = np.maximum(1 - sstep(6, 8, np.abs(((X + 45) % 120) - 60)), 1 - sstep(6, 8, np.abs(((Y + 45) % 120) - 60)))
     rng = np.random.default_rng(3)
     cars = (rng.random((n, n)) < 0.012).astype(np.float32) * np.maximum(road, avenue)
     cars = blur(cars, 0.8) * 6
@@ -516,7 +516,7 @@ tb, te = tex_windows(17, 'glass')
 M_TOWER = mat('TowerFacade', tcol=image('tower_col', tb), temit=image('tower_em', te), estr=2.0, rough=0.2, spec=0.7)
 M_LOUVRE = mat('CrownLouvre', lin('2e3236'), 0.45, 0.6, tnrm=image('louvre_n2', tex_louvre(256, 20), True))
 # helicopter
-M_HPAINT = mat('HeliWhite', lin('e6e8ea'), 0.28, 0.0, coat=0.8, coat_r=0.06)
+M_HPAINT = mat('HeliWhite', lin('d6d9dc'), 0.3, 0.0, coat=0.8, coat_r=0.06)
 M_HNAVY = mat('HeliNavy', lin('101c3c'), 0.3, 0.0, coat=0.8, coat_r=0.06)
 M_HRED = mat('HeliRed', lin('b0141a'), 0.3, 0.0, coat=0.8, coat_r=0.06)
 M_HGLASS = mat('HeliGlass', lin('0b0f13'), 0.03, 0.0, spec=1.0)
@@ -657,6 +657,19 @@ for k in range(4):
         p = a + (b - a) * i / n
         add_tube(bm, p + Vector((0, 0, ROOF + PH_ + 0.04)), p + Vector((0, 0, ROOF + PH_ + 1.0)), 0.02, 6, 0)
 rail = bm_obj('GuardRail', bm, [M_GALV], smooth=40)
+# warm LED wall-washer strip under the parapet coping (inner face) and path bollards
+M_LED = mat('LedStrip', lin('ffd2a0'), 0.3, emit=lin('ffc890'), estr=6.0)
+bm = bmesh.new()
+for k in range(4):
+    a = Vector((*loop[k], 0)); b = Vector((*loop[(k + 1) % 4], 0)); d = (b - a).normalized(); nrm_in = Vector((-d.y, d.x, 0))
+    c = (a + b) / 2 + nrm_in * (PT / 2 + 0.015) + Vector((0, 0, ROOF + PH_ - 0.06))
+    L = (b - a).length - 2 * PT
+    add_box(bm, c, (abs(d.x) * L + abs(d.y) * 0.03 + 0.001, abs(d.y) * L + abs(d.x) * 0.03 + 0.001, 0.03), 0)
+for (bx_, by_) in ((-7.5, -6.5), (-4.0, -8.0), (4.0, -8.0), (7.5, -6.5), (-8.4, 1.0), (8.6, 1.0)):
+    add_cyl(bm, (bx_, by_, ROOF + 0.4), 0.09, 0.8, 16, 1)
+    add_cyl(bm, (bx_, by_, ROOF + 0.72), 0.095, 0.1, 16, 0)
+    add_cyl(bm, (bx_, by_, ROOF + 0.82), 0.11, 0.04, 16, 1)
+led = bm_obj('RoofLights', bm, [M_LED, M_STEELD], smooth=30)
 # tower body: crown louvre band then curtain wall down to the street
 bm = bmesh.new(); add_box(bm, ((X0 + X1) / 2, (Y0 + Y1) / 2, ROOF - 3.5), (X1 - X0 + 0.3, Y1 - Y0 + 0.3, 6.0), 0)
 crown = bm_obj('TowerCrown', bm, [M_LOUVRE], smooth=0); box_uv(crown, 3.0)
@@ -672,7 +685,7 @@ for p in me.polygons:
         uvt.data[li].uv = (u / 24.0, co.z / 57.6)
 
 # ---------------------------------------------------------------- stair hut (front-left), with door, lamp, exit sign
-HX, HY = -13.2, -6.6; HW, HD, HH = 4.2, 3.6, 3.0
+HX, HY = -12.4, -3.8; HW, HD, HH = 4.2, 3.6, 3.0
 bm = bmesh.new()
 add_box(bm, (HX, HY, ROOF + HH / 2), (HW, HD, HH), 0)
 add_box(bm, (HX, HY, ROOF + HH + 0.12), (HW + 0.3, HD + 0.3, 0.24), 0)
@@ -718,7 +731,7 @@ def condenser(cx, cy, rot):
 for (cx, cy, rot) in ((8.6, 11.2, 0.0), (11.6, 7.0, math.pi / 2), (11.6, 3.6, math.pi / 2)):
     condenser(cx, cy, rot)
 bm = bmesh.new()   # refrigerant pipes on sleepers from the condensers to the hut
-pipe_path = [(11.6, 1.7, ROOF + 0.25), (11.6, -4.0, ROOF + 0.25), (6.0, -9.6, ROOF + 0.25), (-10.8, -9.6, ROOF + 0.25), (-10.8, -6.2, ROOF + 0.25)]
+pipe_path = [(11.6, 1.7, ROOF + 0.25), (11.6, -4.0, ROOF + 0.25), (6.0, -9.6, ROOF + 0.25), (HX + 1.2, -9.6, ROOF + 0.25), (HX + 1.2, HY - HD / 2 - 0.25, ROOF + 0.25)]
 for dz in (0.0, 0.0):
     pass
 for off in (-0.09, 0.09):
@@ -736,7 +749,7 @@ for i in range(len(pipe_path) - 1):
 pipes = bm_obj('Pipes', bm, [M_RUBBER, M_STEELD], smooth=40)
 # mushroom vents / soil stacks
 bm = bmesh.new()
-for (vx, vy, s_) in ((-6.0, 12.2, 1.0), (-2.5, 12.6, 0.8), (3.5, 12.4, 1.1), (-15.2, 2.0, 0.9), (-15.0, -1.4, 0.7), (12.4, -7.5, 1.0)):
+for (vx, vy, s_) in ((-6.0, 12.2, 1.0), (-2.5, 12.6, 0.8), (3.5, 12.4, 1.1), (-15.6, 1.8, 0.9), (-15.4, -8.4, 0.7), (12.4, -7.5, 1.0)):
     add_cyl(bm, (vx, vy, ROOF + 0.45 * s_), 0.16 * s_, 0.9 * s_, 20, 0)
     add_cyl(bm, (vx, vy, ROOF + 0.93 * s_), 0.34 * s_, 0.06 * s_, 24, 0)
     add_cyl(bm, (vx, vy, ROOF + 1.0 * s_), 0.30 * s_, 0.10 * s_, 24, 0, r1=0.05)
@@ -744,15 +757,15 @@ for (vx, vy, s_) in ((-6.0, 12.2, 1.0), (-2.5, 12.6, 0.8), (3.5, 12.4, 1.1), (-1
 vents = bm_obj('Vents', bm, [M_GALV, M_RUBBER], smooth=40)
 
 # ---------------------------------------------------------------- windsock (back-right corner)
-WX, WY = 12.2, 13.0
+WX, WY = -3.4, 6.9
 bm = bmesh.new()
 add_cyl(bm, (WX, WY, ROOF + 0.15), 0.25, 0.3, 16, 1)
-add_tube(bm, (WX, WY, ROOF + 0.2), (WX, WY, 3.2), 0.065, 12, 0, r1=0.045)
-for z in (0.6, -1.4):     # aviation-orange bands on the mast
+add_tube(bm, (WX, WY, ROOF + 0.2), (WX, WY, 2.2), 0.065, 12, 0, r1=0.045)
+for z in (0.2, -1.6):     # aviation-orange bands on the mast
     add_cyl(bm, (WX, WY, z), 0.062, 0.5, 12, 2)
-SOCK_A = math.radians(205)    # blowing towards back-left
+SOCK_A = math.radians(160)    # blowing towards back-left
 sd_ = Vector((math.cos(SOCK_A), math.sin(SOCK_A), 0))
-top = Vector((WX, WY, 3.0))
+top = Vector((WX, WY, 2.0))
 # swivel frame: hoop + arm
 hoop_c = top + sd_ * 0.35
 pts = [hoop_c + (Vector((0, 0, 1)) * math.cos(TAU * t / 24) + sd_.cross(Vector((0, 0, 1))) * math.sin(TAU * t / 24)) * 0.42 for t in range(24)]
@@ -869,12 +882,12 @@ def build_heli(loc, heading, s=1.3):
         if x > 1.0 and rel > 0.5 and abs(y) > 0.025 and x < 2.25 and z < zt - 0.03 * (x < 1.3): m_ = 3   # windscreen
         if x > 1.55 and 0.2 < rel < 0.44 and abs(y) > 0.1 and x < 2.3: m_ = 3                              # chin windows
         # cabin door windows
-        if -1.45 < x < 0.92 and abs(y) > 0.3 and zc + 0.02 < z < zt - 0.10:
-            if not (-0.30 < x < -0.20) and not (0.84 < x < 0.92): m_ = 3
+        if -1.25 < x < 0.88 and abs(y) > 0.3 and zc + 0.12 < z < zt - 0.13:
+            if not (-0.30 < x < -0.20): m_ = 3
         # navy belly stripe and red pinstripe
-        if m_ == 0 and abs(y) > 0.2 and zc - 0.40 < z < zc - 0.18 and x < 1.9: m_ = 1
-        if m_ == 0 and abs(y) > 0.2 and zc - 0.15 < z < zc - 0.11 and x < 2.0: m_ = 2
-        if m_ == 0 and rel < 0.12: m_ = 1
+        if m_ == 0 and rel < 0.36 - 0.05 * (x - 0.0) / 2.5: m_ = 1        # two-tone: navy lower body
+        if m_ == 0 and abs(y) > 0.2 and 0.37 - 0.05 * x / 2.5 < rel < 0.41 - 0.05 * x / 2.5: m_ = 2   # red pinstripe
+        if m_ == 0 and abs(y) > 0.3 and -1.3 < x < 0.95 and (abs(x + 0.25) < 0.012 or abs(x - 0.92) < 0.012 or abs(x + 1.28) < 0.012) and rel > 0.3: m_ = 1   # door seams
         f.material_index = m_
     put('HeliCabin', bm, [M_HPAINT, M_HNAVY, M_HRED, M_HGLASS], smooth=50)
     # ---------------- engine cowling + exhaust + intakes
@@ -975,7 +988,7 @@ def text_mesh(name, body, size, mat_, extrude=0.003):
     return obj(name, me, [mat_])
 
 
-HELI_POS = (-10.2, 8.2, ROOF); HELI_HEAD = math.radians(-28)
+HELI_POS = (-11.6, 8.6, ROOF); HELI_HEAD = math.radians(-28)
 heli = build_heli(HELI_POS, HELI_HEAD, 1.25)
 # its parking box on the roof: a painted steel deck plate with a yellow box and an aiming T
 bm = bmesh.new()
@@ -1011,6 +1024,12 @@ for gx in range(-12, 13):
         if rng.random() < 0.5:   # roof plant box
             add_box(target, (cx + rng.uniform(-3, 3), cy + rng.uniform(-3, 3), top + 1.5), (sx * 0.3, sy * 0.3, 3), 1)
         if top > -12: REDS.append((cx, cy, top + 3.2))
+for k in range(110):     # far skyline ring (strongly hazed)
+    a = rng.uniform(0, TAU); d = rng.uniform(420, 700); cx, cy = math.cos(a) * d, math.sin(a) * d
+    if cy < -150: continue
+    h = rng.uniform(60, 200) * (1.5 if rng.random() < 0.15 else 1.0)
+    add_box(bm if rng.random() < 0.6 else bmc, (cx, cy, GROUND + h / 2), (rng.uniform(20, 45), rng.uniform(20, 45), h), 0,
+            rot=Matrix.Rotation(rng.uniform(0, 1.5), 3, 'Z').to_euler())
 city_g = bm_obj('CityGlass', bm, [M_CITY_G, M_STEELD], smooth=0)
 city_c = bm_obj('CityConcrete', bmc, [M_CITY_C, M_STEELD], smooth=0)
 for o, sd in ((city_g, 1), (city_c, 2)):
@@ -1020,13 +1039,13 @@ for o, sd in ((city_g, 1), (city_c, 2)):
         for li in p.loop_indices:
             co = me.vertices[me.loops[li].vertex_index].co
             if abs(n.z) > 0.5: u, v = 0.01, 0.01
-            else: u, v = ((co.x if abs(n.y) > 0.5 else co.y) / 24.0 + off[0], (co.z - GROUND) / 57.6 + off[1])
+            else: u, v = (((co.x + co.y) if abs(abs(n.x) - abs(n.y)) < 0.9 else (co.x if abs(n.y) > 0.5 else co.y)) / 24.0 + off[0], (co.z - GROUND) / 57.6 + off[1])
             uvc.data[li].uv = (u, v)
 bm = bmesh.new()
 for (cx, cy, z) in REDS: add_sphere(bm, (cx, cy, z), 0.6, 6, 4, 0)
 reds = bm_obj('CityBeacons', bm, [M_LENS_R], smooth=0)
-bm = bmesh.new(); add_box(bm, (0, 0, GROUND), (1200, 1200, 0.2), 0)
-streets = bm_obj('Streets', bm, [M_STREET], smooth=0); planar_uv(streets.data, 600)
+bm = bmesh.new(); add_box(bm, (0, 0, GROUND), (1600, 1600, 0.2), 0)
+streets = bm_obj('Streets', bm, [M_STREET], smooth=0); planar_uv(streets.data, 800)
 
 for o in STAGE:
     if o.type == 'MESH' and not o.data.uv_layers: box_uv(o, 2.0)
@@ -1060,7 +1079,7 @@ def view_haze(mname, col, dist, amount=1.0):
     nt.links.new(mix.outputs[0], out.inputs['Surface'])
 
 
-HAZE = (0.055, 0.045, 0.075)
+HAZE = (0.10, 0.065, 0.085)
 for mn in ('CityGlass', 'CityConc', 'Streets'): view_haze(mn, HAZE, float(OPT.get('hazed', 420)), 0.92)
 view_haze('TowerFacade', HAZE, 260, 0.9)
 BSDF['LensGreen'].inputs['Emission Strength'].default_value = 30
@@ -1085,13 +1104,17 @@ world = bpy.data.worlds.new('W'); world.use_nodes = True; scn.world = world; nt 
 bg = nt.nodes['Background']
 env = nt.nodes.new('ShaderNodeTexEnvironment'); env.image = bpy.data.images.load(os.path.join(PH, 'rooftop_night.hdr'))
 tco = nt.nodes.new('ShaderNodeTexCoord'); mpw = nt.nodes.new('ShaderNodeMapping')
-mpw.inputs['Rotation'].default_value = (0, 0, math.radians(float(OPT.get('hrot', 60))))
+mpw.inputs['Rotation'].default_value = (0, 0, math.radians(float(OPT.get('hrot', -93))))
 nt.links.new(tco.outputs['Generated'], mpw.inputs['Vector']); nt.links.new(mpw.outputs['Vector'], env.inputs['Vector'])
 sep = nt.nodes.new('ShaderNodeSeparateXYZ'); nt.links.new(tco.outputs['Generated'], sep.inputs['Vector'])
 mr = nt.nodes.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = -0.02; mr.inputs['From Max'].default_value = 0.06
 nt.links.new(sep.outputs['Z'], mr.inputs['Value'])
 mixw = nt.nodes.new('ShaderNodeMix'); mixw.data_type = 'RGBA'; mixw.inputs['B'].default_value = (0, 0, 0, 1)
-mixw.inputs['A'].default_value = (*[c * 0.9 for c in HAZE], 1)
+grad = nt.nodes.new('ShaderNodeMix'); grad.data_type = 'RGBA'
+grad.inputs['A'].default_value = (0.012, 0.012, 0.022, 1); grad.inputs['B'].default_value = (*HAZE, 1)
+mr2 = nt.nodes.new('ShaderNodeMapRange'); mr2.inputs['From Min'].default_value = -0.4; mr2.inputs['From Max'].default_value = 0.0
+nt.links.new(sep.outputs['Z'], mr2.inputs['Value']); nt.links.new(mr2.outputs['Result'], grad.inputs['Factor'])
+nt.links.new(grad.outputs['Result'], mixw.inputs['A'])
 nt.links.new(mr.outputs['Result'], mixw.inputs['Factor']); nt.links.new(env.outputs['Color'], mixw.inputs['B'])
 nt.links.new(mixw.outputs['Result'], bg.inputs['Color']); bg.inputs['Strength'].default_value = float(OPT.get('sky', 0.8))
 
@@ -1111,9 +1134,8 @@ FE = float(OPT.get('flood', 2600))
 for k, (hc, d) in enumerate(FLOOD_HEADS):
     light('Flood%d' % k, 'SPOT', hc + d * 0.12, hc + d * 10, FE, (1.0, 0.9, 0.78), spot=60, blend=0.7, soft=0.25)
 light('HutLamp', 'POINT', (DX + 0.35, HY - 0.45, ROOF + 2.3), (0, 0, 0), 60, (1.0, 0.75, 0.45), soft=0.1)
-light('SockLamp', 'SPOT', (WX - 0.6, WY - 0.6, ROOF + 0.6), (WX - 1.5, WY - 1.0, 3.0), 400, (1.0, 0.9, 0.75), spot=40, soft=0.1)
+light('SockLamp', 'SPOT', (WX + 0.5, WY - 0.6, ROOF + 0.6), (WX - 1.2, WY + 0.3, 1.8), 300, (1.0, 0.9, 0.75), spot=40, soft=0.1)
 light('HeliLamp', 'SPOT', (-3.0, 3.5, 4.0), (HELI_POS[0], HELI_POS[1], ROOF + 1.5), 2500, (0.95, 0.9, 0.85), spot=45, blend=0.8, soft=0.4)
-light('CityBounce', 'AREA', (0, 0, -40), (0, 0, 0), float(OPT.get('bounce', 5000)), (1.0, 0.6, 0.35), size=(60, 60))
 
 
 # ================================================================ characters (as stage_render.py)

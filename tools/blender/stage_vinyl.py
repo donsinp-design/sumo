@@ -407,10 +407,7 @@ def build_deck(prefix, ox=0.0, ring_line=True):
     P(rbox(prefix + 'CartStripe', -0.43, 0.43, -0.12, 0.12, ZA - 0.32, ZA - 0.24, RED_ACC, rc=0.02, bev=0.01, bseg=1,
            loc=(CC.x, CC.y, 0), rot=hrot))
     P(curve_mesh(prefix + 'Cantilever', [Vector((Nd.x - h.x * 0.12, Nd.y - h.y * 0.12, 0.16)), Vector((Nd.x, Nd.y, 0.03))], 0.012, GOLD, res=2, handles='VECTOR'))
-    # arm rest with its clip (the plinth stays clean round the pitch slider: no cue lever, anti-skate or target light)
-    P(lathe(prefix + 'ArmRest', [(0, 0.55), (0.2, 0.55), (0.2, 0.25), (0.13, 0.22), (0.13, PL_TOP), (0, PL_TOP)], [ALU, RUBBER], 32,
-            loc=(8.25, -0.9, 0), mi=[1, 1, 1, 0, 0]))
-    P(rbox(prefix + 'ArmRestCup', -0.25, 0.25, -0.12, 0.12, 0.55, 0.68, RUBBER, rc=0.05, bev=0.02, loc=(8.25, -0.9, 0), rot=(0, 0, 0.4)))
+    # no arm rest, cue lever, anti-skate or target light: the arm rests on the record and the plinth stays clean round the slider
 
     # ---------------- controls on the plinth
     P(rbox(prefix + 'StartStop', -6.35, -4.95, -5.75, -4.8, PL_TOP - 0.02, PL_TOP + 0.14, BLACK, rc=0.12, bev=0.035))

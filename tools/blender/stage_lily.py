@@ -50,8 +50,8 @@ RD = R + 0.7            # pad radius
 WZ = -0.16              # water surface
 FLAT = R + 0.25         # the pad is flat out to here, then its rim curls up
 NOTCH_A = math.radians(118)   # the notch points back-left
-NOTCH_RN = R + 0.12     # notch apex (outside the fighting circle)
-NOTCH_TH = math.radians(38)   # half-angle of the V
+NOTCH_RN = R + 0.1      # notch apex (outside the fighting circle)
+NOTCH_TH = math.radians(46)   # half-angle of the V
 SPL_A = math.radians(-140); SPL_R = RD + 1.75   # the splash shot: where the thrown sumo hits the water (front-left)
 SPL_C = Vector((SPL_R * math.cos(SPL_A), SPL_R * math.sin(SPL_A), WZ))
 
@@ -129,6 +129,7 @@ def lathe(name, prof, mats, segs=24, loc=(0, 0, 0), rot=None, stage=True, smooth
             else: vs = (A[i], A[j], B[j], B[i]); us = (i / segs, (j if j else segs) / segs, (j if j else segs) / segs, i / segs); ks = (k, k, k + 1, k + 1)
             f = bm.faces.new(vs)
             for lp, u, kk in zip(f.loops, us, ks): lp[uvl].uv = (u, L[kk] / L[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
     if smooth: me.shade_smooth(); me.set_sharp_from_angle(angle=math.radians(smooth))
     return obj(name, me, mats, stage=stage, loc=loc, rot=rot)
@@ -230,19 +231,19 @@ def pad_veins(n, Rpx, cx, cy, nprim, seed, w0=3.0, w1=1.0):
     """Radiating, forking veins: returns intensity 0..1 (n x n)."""
     rng = np.random.default_rng(seed)
     V = np.zeros((n, n), np.float32)
-    def stamp(px, py, w):
+    def stamp(px, py, w, st=1.0):
         k = int(math.ceil(2.6 * w)) + 1
         x0, x1 = max(0, int(px) - k), min(n, int(px) + k + 1); y0, y1 = max(0, int(py) - k), min(n, int(py) + k + 1)
         if x0 >= x1 or y0 >= y1: return
         xs = np.arange(x0, x1) + 0.5 - px; ys = np.arange(y0, y1) + 0.5 - py
-        g = np.exp(-(ys[:, None] ** 2 + xs[None, :] ** 2) / (w * w))
+        g = st * np.exp(-(ys[:, None] ** 2 + xs[None, :] ** 2) / (w * w))
         np.maximum(V[y0:y1, x0:x1], g, out=V[y0:y1, x0:x1])
     forks = (0.3, 0.58, 0.82)
     for i in range(nprim):
         a0 = TAU * (i + rng.uniform(-0.25, 0.25)) / nprim
         branches = [(a0, 0.0, 1)]            # base angle, fork offset accumulator sign tree
         spread = TAU / nprim
-        ph = rng.uniform(0, TAU); wob = rng.uniform(0.02, 0.05)
+        ph = rng.uniform(0, TAU); wob = rng.uniform(0.02, 0.05); vs = rng.uniform(0.55, 1.0)
         fr = [f * Rpx * rng.uniform(0.9, 1.1) for f in forks]
         paths = [[]]
         # walk outwards; at each fork radius every branch splits in two that drift apart smoothly
@@ -260,7 +261,7 @@ def pad_veins(n, Rpx, cx, cy, nprim, seed, w0=3.0, w1=1.0):
             w = w0 + (w1 - w0) * (rho / Rpx) ** 0.7
             w = w / (1 + 0.25 * len(codes[0]))
             for c in codes:
-                a = ang(rho, c); stamp(cx + rho * math.cos(a), cy + rho * math.sin(a), max(0.7, w))
+                a = ang(rho, c); stamp(cx + rho * math.cos(a), cy + rho * math.sin(a), max(0.7, w), vs * (0.75 ** len(c)) * (0.8 + 0.2 * math.sin(rho * 0.05 + ph)))
             rho += 0.8
     return V
 
@@ -311,7 +312,7 @@ def tex_pad(n, S, padR, ring=None, seed=1, notch=None, old=0.0):
         c = c + (np.array(lin('a08a34')) - c) * (old * sc)[..., None]
     # petiole spot in the centre
     c = c + (np.array(lin('9ab85a')) - c) * (0.6 * np.exp(-(rho / (0.06 * padR)) ** 2))[..., None]
-    rough = 0.24 + 0.08 * mott2 + 0.06 * vi + 0.25 * fr + 0.3 * marg
+    rough = 0.3 + 0.12 * mott2 + 0.08 * vi + 0.25 * fr + 0.3 * marg + 0.1 * sstep(0.6, 0.8, fbm(n, 8, 3, seed + 17))
     if ring is not None:   # the fighting circle: a pale waxy bloom band with a marginal vein in it
         dr = rho - ring
         band = np.exp(-(dr / 0.035) ** 2); halo = np.exp(-(dr / 0.16) ** 2) * (0.85 + 0.3 * (mott2 - 0.5))
@@ -332,7 +333,7 @@ def tex_under(n, S, padR, seed=2):
     nz = fbm(n, 8, 4, seed); nz2 = fbm(n, 40, 2, seed + 1)
     ribs = 0.5 + 0.5 * np.cos(phi * 120 + 3.0 * (nz - 0.5))
     ribs = ribs ** 6
-    base = np.array(lin('5a1a2a')); hi = np.array(lin('9a4a50')); lip = np.array(lin('6a5a2a'))
+    base = np.array(lin('7a2236')); hi = np.array(lin('b25a64')); lip = np.array(lin('7a6a2e'))
     c = base * (0.8 + 0.4 * nz2[..., None]) + (hi - base) * (0.55 * ribs)[..., None]
     c = c + (lip - c) * sstep(padR - 0.005, padR + 0.03, rho)[..., None]
     rough = 0.35 + 0.15 * nz2 - 0.1 * ribs
@@ -404,9 +405,10 @@ IM_WATER_N = image('water_nrm', tex_water(), data=True)
 
 
 # ================================================================ materials
-M_PAD = mat('PadTop', rough=0.3, tcol=IM_PAD[0], trough=IM_PAD[1], tnrm=IM_PAD[2], nstr=0.6, coat=0.35, coat_r=0.12,
+M_PAD = mat('PadTop', rough=0.36, tcol=IM_PAD[0], trough=IM_PAD[1], tnrm=IM_PAD[2], nstr=0.6, coat=0.35, coat_r=0.12,
             sss=0.08, sss_r=(0.3, 1.0, 0.2), sss_s=0.04)
-M_UNDER = mat('PadUnder', rough=0.4, tcol=IM_UNDER[0], trough=IM_UNDER[1], tnrm=IM_UNDER[2], nstr=0.8, coat=0.2, coat_r=0.2)
+M_UNDER = mat('PadUnder', rough=0.4, tcol=IM_UNDER[0], trough=IM_UNDER[1], tnrm=IM_UNDER[2], nstr=0.8, coat=0.2, coat_r=0.2,
+               sss=0.2, sss_r=(1.0, 0.3, 0.3), sss_s=0.05)
 M_SPAD = mat('PadSmall', rough=0.3, tcol=IM_SPAD[0], trough=IM_SPAD[1], tnrm=IM_SPAD[2], nstr=0.6, coat=0.35, coat_r=0.12)
 M_OPAD = mat('PadOld', rough=0.35, tcol=IM_OPAD[0], trough=IM_OPAD[1], tnrm=IM_OPAD[2], nstr=0.6, coat=0.25, coat_r=0.15)
 M_DROP = mat('Droplet', (1, 1, 1), 0.0, trans=1.0, ior=1.33, spec=0.5)
@@ -905,7 +907,11 @@ def dragonfly(loc, yaw, s=1.0):
         z = 0.05 + k * 0.06; r = 0.035 - 0.0018 * k
         prof += [(r * 1.08, z), (r * 0.92, z + 0.05)]
     prof += [(0.02, 0.66), (0, 0.68)]
-    ab = lathe('DF_abdomen', [(r * s, z * s) for r, z in prof], [M_DFLY], segs=10); ab.rotation_euler = (-math.pi / 2 - 0.06, 0, 0)
+    ab = lathe('DF_abdomen', [(r * s, z * s) for r, z in prof], [M_DFLY, M_DLEG], segs=10)
+    for p in ab.data.polygons:   # dark rings between the segments
+        zz = p.center.z / s
+        if zz > 0.05 and ((zz - 0.05) % 0.06) > 0.045: p.material_index = 1
+    ab.rotation_euler = (-math.pi / 2 - 0.06, 0, 0)
     th = ellipsoid('DF_thorax', (0.07 * s, 0.11 * s, 0.075 * s), M_DFLY, 14, 8, loc=(0, -0.03 * s, 0.01 * s))
     hd = ellipsoid('DF_head', (0.05 * s, 0.04 * s, 0.045 * s), M_DFLY, 12, 8, loc=(0, -0.155 * s, 0.015 * s))
     e1 = ellipsoid('DF_eyeL', (0.05 * s, 0.05 * s, 0.05 * s), M_DEYE, 14, 8, loc=(0.035 * s, -0.17 * s, 0.035 * s))
@@ -1032,21 +1038,39 @@ def water_render(splash_c=None):
     bump = nt.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 1.0; bump.inputs['Distance'].default_value = 1.0
     lk.new(h, bump.inputs['Height']); lk.new(bump.outputs['Normal'], bs.inputs['Normal'])
     bs.inputs['Base Color'].default_value = (1, 1, 1, 1); bs.inputs['Roughness'].default_value = 0.02
-    va = nt.new('ShaderNodeVolumeAbsorption'); va.inputs['Color'].default_value = (*lin('a9c88e'), 1); va.inputs['Density'].default_value = float(OPT.get('absorb', 0.2))
-    vs = nt.new('ShaderNodeVolumeScatter'); vs.inputs['Color'].default_value = (*lin('9ab88a'), 1); vs.inputs['Density'].default_value = float(OPT.get('scatter', 0.012))
-    ad = nt.new('ShaderNodeAddShader'); lk.new(va.outputs[0], ad.inputs[0]); lk.new(vs.outputs[0], ad.inputs[1])
-    lk.new(ad.outputs[0], nt['Material Output'].inputs['Volume'])
-    # close the water into a slab so the volume has an inside
+    bs.inputs['Base Color'].default_value = (*lin('d6eadb'), 1)       # a faint green cast on what is seen through it
     if 'nowater' in OPT: WATER.hide_render = True
-    so = WATER.modifiers.new('slab', 'SOLIDIFY'); so.thickness = 6.0; so.offset = -1.0; so.use_even_offset = False
+    if 'nobump' in OPT: lk.remove(bump.outputs['Normal'].links[0])
+    # no volume: shadow rays would never leave it (the water is invisible to them so the sun reaches the bed).
+    # Depth absorption is faked on the underwater materials instead (depth_tint below).
     WATER.visible_shadow = False
 
 
 water_render(SPL_C if SPLASH else None)
+
+
+def depth_tint(mname, k=None, col=None):
+    """Fade an underwater material towards murky pond green with depth below the surface."""
+    k = float(OPT.get('absorb', 0.75)) if k is None else k
+    nt, lk = nodes(MATS[mname]); bs = BSDF[mname]
+    src = bs.inputs['Base Color'].links[0].from_socket if bs.inputs['Base Color'].links else None
+    geo = nt.new('ShaderNodeNewGeometry'); sep = nt.new('ShaderNodeSeparateXYZ'); lk.new(geo.outputs['Position'], sep.inputs[0])
+    d = nt.new('ShaderNodeMath'); d.operation = 'SUBTRACT'; d.inputs[0].default_value = WZ; lk.new(sep.outputs['Z'], d.inputs[1])
+    d2 = nt.new('ShaderNodeMath'); d2.operation = 'MAXIMUM'; d2.inputs[1].default_value = 0.0; lk.new(d.outputs[0], d2.inputs[0])
+    e = nt.new('ShaderNodeMath'); e.operation = 'MULTIPLY'; e.inputs[1].default_value = -k; lk.new(d2.outputs[0], e.inputs[0])
+    ex = nt.new('ShaderNodeMath'); ex.operation = 'EXPONENT'; lk.new(e.outputs[0], ex.inputs[0])
+    f = nt.new('ShaderNodeMath'); f.operation = 'SUBTRACT'; f.inputs[0].default_value = 1.0; lk.new(ex.outputs[0], f.inputs[1])
+    mx = nt.new('ShaderNodeMix'); mx.data_type = 'RGBA'; lk.new(f.outputs[0], mx.inputs['Factor'])
+    if src: lk.new(src, mx.inputs['A'])
+    else: mx.inputs['A'].default_value = bs.inputs['Base Color'].default_value
+    mx.inputs['B'].default_value = (*lin(col or '22351c'), 1)
+    lk.new(mx.outputs['Result'], bs.inputs['Base Color'])
+
+
 # the pad: waxy sheen micro-bumps, a little translucency under the sun
 for mname in ('PadTop', 'PadSmall', 'PadOld'):
     nt, lk = nodes(MATS[mname]); bs = BSDF[mname]
-    bs.inputs['Coat Weight'].default_value = 0.45; bs.inputs['Coat Roughness'].default_value = 0.1
+    bs.inputs['Coat Weight'].default_value = 0.3 if mname == 'PadTop' else 0.2; bs.inputs['Coat Roughness'].default_value = 0.16
     nm = [n for n in nt if n.type == 'NORMAL_MAP'][0]
     nz = nt.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 60; nz.inputs['Detail'].default_value = 3
     bp = nt.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.08; bp.inputs['Distance'].default_value = 0.01
@@ -1076,6 +1100,8 @@ img = [n for n in nt if n.type == 'TEX_IMAGE' and n.image.name.startswith('brown
 mix = nt.new('ShaderNodeMix'); mix.data_type = 'RGBA'; mix.blend_type = 'MULTIPLY'; mix.inputs['Factor'].default_value = 0.55
 mix.inputs['B'].default_value = (*lin('8aa860'), 1)
 lk.new(img.outputs['Color'], mix.inputs['A']); lk.new(mix.outputs['Result'], bs.inputs['Base Color'])
+for mname in ('PondBed', 'Stone', 'Weed', 'StemRed'):
+    depth_tint(mname)
 
 # ---------------------------------------------------------------- sky & sun
 world = bpy.data.worlds.new('W'); world.use_nodes = True; scn.world = world
@@ -1097,7 +1123,7 @@ wl.new(clamp.outputs['Result'], bg.inputs['Color'])
 sun = bpy.data.objects.new('Sun', bpy.data.lights.new('Sun', 'SUN')); scn.collection.objects.link(sun)
 sdir = Vector((SUN_DIR.x * math.cos(SUN_EL), SUN_DIR.y * math.cos(SUN_EL), math.sin(SUN_EL)))
 sun.rotation_euler = (-sdir).to_track_quat('-Z', 'Y').to_euler()
-sun.data.energy = float(OPT.get('sun', 6.5)); sun.data.color = (1.0, 0.78, 0.52); sun.data.angle = math.radians(2.5)
+sun.data.energy = float(OPT.get('sun', 6.5)); sun.data.color = (1.0, 0.78, 0.52); sun.data.angle = math.radians(float(OPT.get('sunang', 4.0)))
 
 # dappled light: an unseen patch of leafy canopy between the sun and the pond's left side (the left of the pad
 # catches broken light; the fighting area stays in full sun)
@@ -1127,7 +1153,7 @@ if 'nogobo' in OPT: gobo.hide_render = True
 # warm bounce from the low sun off the water onto the undersides
 if float(OPT.get('bounce', 0)) > 0:
     fill = bpy.data.objects.new('Bounce', bpy.data.lights.new('Bounce', 'AREA')); scn.collection.objects.link(fill)
-    fill.data.energy = float(OPT['bounce']); fill.data.color = (1.0, 0.85, 0.65); fill.data.size = 30; fill.data.shape = 'DISK'
+    fill.data.energy = float(OPT.get('bounce', 150)); fill.data.color = (1.0, 0.85, 0.65); fill.data.size = 30; fill.data.shape = 'DISK'
     fill.location = (0, 0, -0.5); fill.rotation_euler = (math.pi, 0, 0); fill.visible_glossy = False   # facing up off the water
 
 
