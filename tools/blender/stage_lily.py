@@ -320,7 +320,7 @@ def tex_pad(n, S, padR, ring=None, seed=1, notch=None, old=0.0):
         rough = rough + 0.12 * halo
         V = np.maximum(V, band * 0.9)
     # height: veins sunk into the blade, blistered between them, fine cell domes
-    h = -1.4 * V - 0.3 * reti + 0.35 * (1 - F1) * 0.4 + 0.8 * mott2 * 0.3
+    h = -1.4 * V - 0.1 * reti + 0.05 * (1 - F1) + 0.8 * mott2 * 0.3
     nrm = normal_from_h(h, 1.6 * (n / 1024))
     c = np.where((rho > padR + 0.01)[..., None], np.array(lin('7a2c22')), c)
     return c, np.clip(rough, 0.05, 1), nrm
@@ -332,13 +332,13 @@ def tex_under(n, S, padR, seed=2):
     Y, X = np.meshgrid(p, p, indexing='ij'); rho = np.hypot(X, Y); phi = np.arctan2(Y, X)
     nz = fbm(n, 8, 4, seed); nz2 = fbm(n, 40, 2, seed + 1)
     ribs = 0.5 + 0.5 * np.cos(phi * 120 + 3.0 * (nz - 0.5))
-    ribs = ribs ** 6
-    base = np.array(lin('7a2236')); hi = np.array(lin('b25a64')); lip = np.array(lin('7a6a2e'))
-    c = base * (0.8 + 0.4 * nz2[..., None]) + (hi - base) * (0.55 * ribs)[..., None]
+    ribs = ribs ** 4
+    base = np.array(lin('702238')); hi = np.array(lin('9a4a5a')); lip = np.array(lin('6a5a2a'))
+    c = base * (0.75 + 0.5 * nz[..., None]) * (0.85 + 0.3 * nz2[..., None]) + (hi - base) * (0.3 * ribs)[..., None]
     c = c + (lip - c) * sstep(padR - 0.005, padR + 0.03, rho)[..., None]
     rough = 0.35 + 0.15 * nz2 - 0.1 * ribs
-    h = ribs * 1.0 + 0.3 * nz2
-    return c, rough, normal_from_h(h, 2.0)
+    h = ribs * 0.6 + 0.3 * nz2
+    return c, rough, normal_from_h(h, 1.2)
 
 
 print('painting textures...')
@@ -370,7 +370,7 @@ def tex_frog(n=512):
     m = n // 2
     nz = fbm(m, 6, 4, 41, m=n); sp = vnoise(m, 22, 42, m=n); sp2 = vnoise(m, 40, 43, m=n)
     v = (np.arange(m) + 0.5) / m
-    top = np.array(lin('5a8a2a')); top2 = np.array(lin('3f6f22')); belly = np.array(lin('e6dca0'))
+    top = np.array(lin('6f9e34')); top2 = np.array(lin('4f7f26')); belly = np.array(lin('e6dca0'))
     c = top + (top2 - top) * nz[..., None]
     spots = np.maximum(sstep(0.7, 0.76, sp), sstep(0.78, 0.83, sp2))
     c = c + (np.array(lin('2a3a14')) - c) * (0.85 * spots)[..., None]
@@ -383,10 +383,10 @@ def tex_wing(n=512, m=128):
     u = (np.arange(n) + 0.5) / n; v = (np.arange(m) + 0.5) / m
     V_, U_ = np.meshgrid(v, u, indexing='ij')
     long = (0.5 + 0.5 * np.cos(V_ * TAU * 9 + 0.6 * np.sin(U_ * 7))) ** 30
-    F1, F2 = voronoi(n, 40, 51); F1 = F1[:m]; F2 = F2[:m]
-    cross = np.exp(-((F2 - F1) / 0.05) ** 2)
-    vein = np.clip(long + 0.7 * cross + np.exp(-((V_ - 0.92) / 0.03) ** 2), 0, 1)
-    c = np.array(lin('e8eef0')) + (np.array(lin('3a2a1a')) - np.array(lin('e8eef0'))) * vein[..., None]
+    F1, F2 = voronoi(n, 28, 51); F1 = F1[:m]; F2 = F2[:m]
+    cross = np.exp(-((F2 - F1) / 0.035) ** 2)
+    vein = np.clip(0.8 * long + 0.35 * cross + np.exp(-((V_ - 0.92) / 0.03) ** 2), 0, 1)
+    c = np.array(lin('f6fafa')) + (np.array(lin('3a2a1a')) - np.array(lin('f6fafa'))) * vein[..., None]
     c = c + (np.array(lin('d8a040')) - c) * (sstep(0.18, 0.0, U_) * 0.6)[..., None]                 # amber base
     stig = np.exp(-(((U_ - 0.86) / 0.04) ** 2 + ((V_ - 0.85) / 0.08) ** 2))
     c = c + (np.array(lin('2a1a0e')) - c) * np.clip(stig * 1.5, 0, 1)[..., None]                   # pterostigma
@@ -405,7 +405,7 @@ IM_WATER_N = image('water_nrm', tex_water(), data=True)
 
 
 # ================================================================ materials
-M_PAD = mat('PadTop', rough=0.36, tcol=IM_PAD[0], trough=IM_PAD[1], tnrm=IM_PAD[2], nstr=0.6, coat=0.35, coat_r=0.12,
+M_PAD = mat('PadTop', rough=0.36, tcol=IM_PAD[0], trough=IM_PAD[1], tnrm=IM_PAD[2], nstr=0.45, coat=0.35, coat_r=0.12,
             sss=0.08, sss_r=(0.3, 1.0, 0.2), sss_s=0.04)
 M_UNDER = mat('PadUnder', rough=0.4, tcol=IM_UNDER[0], trough=IM_UNDER[1], tnrm=IM_UNDER[2], nstr=0.8, coat=0.2, coat_r=0.2,
                sss=0.2, sss_r=(1.0, 0.3, 0.3), sss_s=0.05)
@@ -431,7 +431,7 @@ M_CATTAIL = mat('Cattail', lin('4a2c16'), 0.9)
 M_DFLY = mat('DragonBody', lin('1f4f5a'), 0.3, metal=0.35, coat=0.6, coat_r=0.05)
 M_DEYE = mat('DragonEye', lin('1a3a6a'), 0.12, coat=1.0, coat_r=0.02)
 M_DLEG = mat('DragonLeg', lin('141414'), 0.4)
-M_WING = mat('Wing', rough=0.08, tcol=IM_WING, trans=0.92, ior=1.4, spec=0.6)
+M_WING = mat('Wing', rough=0.05, tcol=IM_WING, trans=1.0, ior=1.3, spec=0.5)
 M_FROG = mat('Frog', rough=0.32, tcol=IM_FROG, coat=0.6, coat_r=0.08, sss=0.15, sss_r=(0.5, 1.0, 0.3), sss_s=0.04)
 M_FEYE = mat('FrogEye', lin('b0782a'), 0.1, coat=1.0, coat_r=0.01)
 M_PUPIL = mat('FrogPupil', lin('050505'), 0.05, coat=1.0, coat_r=0.01)
@@ -505,7 +505,7 @@ def build_pad(name, padR, mats, segs, top_rings, rim_rings, ztop, under, notch_a
 
 
 # ---------------------------------------------------------------- the big pad
-RIM_UP = 0.26
+RIM_UP = 0.2
 WAVES = [(0.07, 5, 0.7), (0.04, 8, 2.1), (0.025, 13, 4.0), (0.012, 21, 1.3)]
 def ztop_main(r, a):
     t = max(0.0, (r - FLAT) / (RD - FLAT))
@@ -522,8 +522,8 @@ def ztop_main(r, a):
 
 
 print('building the pad...')
-UNDER_MAIN = [(RD + 0.025, None, -0.02), (RD + 0.035, None, -0.06), (RD + 0.015, None, -0.11), (RD - 0.03, -0.02, 0),
-              (RD - 0.08, -0.14, 0), (RD - 0.14, -0.24, 0), (RD - 0.3, -0.32, 0), (RD - 0.65, -0.35, 0), (2.5, -0.36, 0),
+UNDER_MAIN = [(RD + 0.025, None, -0.02), (RD + 0.03, None, -0.055), (RD + 0.005, None, -0.09), (RD - 0.07, -0.03, 0),
+              (RD - 0.16, -0.13, 0), (RD - 0.26, -0.22, 0), (RD - 0.42, -0.3, 0), (RD - 0.75, -0.35, 0), (2.5, -0.36, 0),
               (0.0, -0.36, 0)]
 PAD = build_pad('LilyPad', RD, [M_PAD, M_UNDER], 256, 18, 9, ztop_main, UNDER_MAIN, NOTCH_A, NOTCH_RN, NOTCH_TH, TS,
                 flat_frac=FLAT / RD)
@@ -595,7 +595,7 @@ def drops_on(target_xy_z, n, rmin, rmax, seed, name, zfun, xform=None, avoid=Non
     for (x, y, s) in out:
         z = zfun(x, y)
         sx = s * rr.uniform(0.85, 1.25)
-        M = Matrix.Translation((x, y, z - 0.004)) @ Matrix.Rotation(rr.uniform(0, TAU), 4, 'Z') @ Matrix.Diagonal((sx, s, s * rr.uniform(0.45, 0.7), 1))
+        M = Matrix.Translation((x, y, z + 0.003)) @ Matrix.Rotation(rr.uniform(0, TAU), 4, 'Z') @ Matrix.Diagonal((sx, s, s * rr.uniform(0.45, 0.7), 1))
         if xform: M = xform @ M
         tmp = tm.copy(); bmesh.ops.transform(tmp, matrix=M, verts=tmp.verts)
         me2 = bpy.data.meshes.new('t'); tmp.to_mesh(me2); tmp.free(); bm.from_mesh(me2); bpy.data.meshes.remove(me2)
@@ -914,8 +914,8 @@ def dragonfly(loc, yaw, s=1.0):
     ab.rotation_euler = (-math.pi / 2 - 0.06, 0, 0)
     th = ellipsoid('DF_thorax', (0.07 * s, 0.11 * s, 0.075 * s), M_DFLY, 14, 8, loc=(0, -0.03 * s, 0.01 * s))
     hd = ellipsoid('DF_head', (0.05 * s, 0.04 * s, 0.045 * s), M_DFLY, 12, 8, loc=(0, -0.155 * s, 0.015 * s))
-    e1 = ellipsoid('DF_eyeL', (0.05 * s, 0.05 * s, 0.05 * s), M_DEYE, 14, 8, loc=(0.035 * s, -0.17 * s, 0.035 * s))
-    e2 = ellipsoid('DF_eyeR', (0.05 * s, 0.05 * s, 0.05 * s), M_DEYE, 14, 8, loc=(-0.035 * s, -0.17 * s, 0.035 * s))
+    e1 = ellipsoid('DF_eyeL', (0.034 * s, 0.036 * s, 0.034 * s), M_DEYE, 14, 8, loc=(0.03 * s, -0.17 * s, 0.03 * s))
+    e2 = ellipsoid('DF_eyeR', (0.034 * s, 0.036 * s, 0.034 * s), M_DEYE, 14, 8, loc=(-0.03 * s, -0.17 * s, 0.03 * s))
     parts += [ab, th, hd, e1, e2]
     # wings: thin veined membranes
     for sd in (-1, 1):
@@ -948,26 +948,28 @@ DFLY, DFLY_PARTS = dragonfly((6.6, -2.4, 1.7), math.radians(-35), s=1.8)
 
 # ================================================================ frog
 def frog(loc, yaw, s=1.0):
-    mb = bpy.data.metaballs.new('FrogMB'); mb.resolution = 0.035 * s; mb.render_resolution = 0.035 * s; mb.threshold = 0.6
-    def el(co, rad, sz=(1, 1, 1), rot=None):
-        e = mb.elements.new(); e.type = 'ELLIPSOID'; e.co = Vector(co) * s; e.radius = rad * s
-        e.size_x, e.size_y, e.size_z = sz
+    """A sitting frog (facing -Y) from blended metaball ellipsoids given by their half-extents in metres."""
+    mb = bpy.data.metaballs.new('FrogMB'); mb.resolution = 0.018 * s; mb.render_resolution = 0.018 * s; mb.threshold = 0.6
+    def el(co, half, rot=None):
+        e = mb.elements.new(); e.type = 'ELLIPSOID'; e.co = Vector(co) * s
+        m_ = max(half); e.radius = m_ * s / 0.574 * 0.92
+        e.size_x, e.size_y, e.size_z = [h / m_ for h in half]
         if rot: e.rotation = Euler(rot).to_quaternion()
-    el((0, 0.05, 0.22), 0.3, (0.95, 1.25, 0.62), (-0.25, 0, 0))     # body
-    el((0, -0.26, 0.3), 0.24, (1.0, 0.85, 0.55), (0.1, 0, 0))       # head
-    el((0, -0.42, 0.27), 0.12, (1.0, 0.7, 0.5))                     # snout
+    el((0, 0.08, 0.2), (0.22, 0.3, 0.15), (-0.25, 0, 0))      # body, sloping down to the rump
+    el((0, -0.19, 0.26), (0.19, 0.16, 0.11), (0.1, 0, 0))     # head
+    el((0, -0.32, 0.23), (0.12, 0.09, 0.065))                  # snout
     for sd in (-1, 1):
-        el((sd * 0.13, -0.27, 0.42), 0.09, (1, 1, 1))               # eye bumps
-        el((sd * 0.27, 0.22, 0.14), 0.16, (0.7, 1.4, 0.55), (0, 0, sd * 0.5))     # thigh
-        el((sd * 0.34, 0.0, 0.08), 0.1, (0.6, 1.5, 0.45), (0, 0, -sd * 0.35))     # shin folded forward
-        el((sd * 0.42, -0.12, 0.03), 0.09, (1.2, 1.5, 0.25), (0, 0, sd * 0.3))    # hind foot
-        el((sd * 0.2, -0.33, 0.12), 0.065, (0.7, 0.7, 1.5), (0.3, sd * 0.3, 0))   # front arm
-        el((sd * 0.24, -0.42, 0.025), 0.07, (1.2, 1.2, 0.3))                      # front hand
+        el((sd * 0.11, -0.22, 0.34), (0.06, 0.06, 0.06))           # eye bumps
+        el((sd * 0.2, 0.2, 0.12), (0.08, 0.2, 0.08), (0, 0, sd * 0.4))     # thigh
+        el((sd * 0.26, 0.0, 0.07), (0.06, 0.19, 0.05), (0, 0, -sd * 0.3))  # shin folded forward
+        el((sd * 0.31, -0.13, 0.02), (0.1, 0.14, 0.02), (0, 0, sd * 0.3))  # webbed hind foot
+        el((sd * 0.15, -0.28, 0.1), (0.045, 0.045, 0.1), (0.25, -sd * 0.2, 0))   # front arm
+        el((sd * 0.17, -0.36, 0.02), (0.07, 0.07, 0.02))           # hand
     tmp = bpy.data.objects.new('FrogMBo', mb); scn.collection.objects.link(tmp)
     dg = bpy.context.evaluated_depsgraph_get()
     me = bpy.data.meshes.new_from_object(tmp.evaluated_get(dg), depsgraph=dg); bpy.data.objects.remove(tmp)
     o = obj('Frog', me, [M_FROG])
-    dec = o.modifiers.new('d', 'DECIMATE'); dec.ratio = 0.35
+    dec = o.modifiers.new('d', 'DECIMATE'); dec.ratio = float(OPT.get('frogdec', 0.3))
     dg = bpy.context.evaluated_depsgraph_get(); me2 = bpy.data.meshes.new_from_object(o.evaluated_get(dg), depsgraph=dg)
     o.modifiers.clear(); o.data = me2; me2.shade_smooth()
     # UV: spherical about the body centre (top = green and spotted, belly = cream)
@@ -977,15 +979,17 @@ def frog(loc, yaw, s=1.0):
         uv.data[l.index].uv = (math.atan2(p.y, p.x) / TAU + 0.5, math.atan2(p.z, math.hypot(p.x, p.y)) / math.pi + 0.5)
     eyes = []
     for sd in (-1, 1):
-        e = ellipsoid('FrogEye', (0.085 * s, 0.085 * s, 0.08 * s), M_FEYE, 16, 10, loc=(sd * 0.15 * s, -0.29 * s, 0.45 * s)); eyes.append(e)
-        p = ellipsoid('FrogPupil', (0.02 * s, 0.05 * s, 0.03 * s), M_PUPIL, 10, 6, loc=(sd * 0.19 * s, -0.33 * s, 0.47 * s), rot=(0, 0, sd * 0.6)); eyes.append(p)
+        ec = Vector((sd * 0.118, -0.235, 0.375)) * s; dv = Vector((sd * 0.65, -0.65, 0.35)).normalized()
+        e = ellipsoid('FrogEye', (0.058 * s, 0.058 * s, 0.055 * s), M_FEYE, 16, 10, loc=ec); eyes.append(e)
+        p = ellipsoid('FrogPupil', (0.03 * s, 0.006 * s, 0.017 * s), M_PUPIL, 10, 6, loc=ec + dv * 0.054 * s,
+                      rot=dv.to_track_quat('-Y', 'Z').to_euler()); eyes.append(p)
     root = bpy.data.objects.new('FrogRoot', None); scn.collection.objects.link(root); STAGE.append(root)
     for x in [o] + eyes: x.parent = root
     root.location = loc; root.rotation_euler = (0, 0, yaw)
     return root
 
 
-FROG = frog((-8.9, 3.9, WZ + 0.02), math.radians(-115), s=1.9)
+FROG = frog((-8.9, 3.9, WZ + 0.02), math.radians(62), s=1.9)
 
 
 # ================================================================ export the stage
@@ -1038,7 +1042,7 @@ def water_render(splash_c=None):
     bump = nt.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 1.0; bump.inputs['Distance'].default_value = 1.0
     lk.new(h, bump.inputs['Height']); lk.new(bump.outputs['Normal'], bs.inputs['Normal'])
     bs.inputs['Base Color'].default_value = (1, 1, 1, 1); bs.inputs['Roughness'].default_value = 0.02
-    bs.inputs['Base Color'].default_value = (*lin('d6eadb'), 1)       # a faint green cast on what is seen through it
+    bs.inputs['Base Color'].default_value = (*lin('cde8d2'), 1)       # a faint green cast on what is seen through it
     if 'nowater' in OPT: WATER.hide_render = True
     if 'nobump' in OPT: lk.remove(bump.outputs['Normal'].links[0])
     # no volume: shadow rays would never leave it (the water is invisible to them so the sun reaches the bed).
@@ -1051,7 +1055,7 @@ water_render(SPL_C if SPLASH else None)
 
 def depth_tint(mname, k=None, col=None):
     """Fade an underwater material towards murky pond green with depth below the surface."""
-    k = float(OPT.get('absorb', 0.75)) if k is None else k
+    k = float(OPT.get('absorb', 0.9)) if k is None else k
     nt, lk = nodes(MATS[mname]); bs = BSDF[mname]
     src = bs.inputs['Base Color'].links[0].from_socket if bs.inputs['Base Color'].links else None
     geo = nt.new('ShaderNodeNewGeometry'); sep = nt.new('ShaderNodeSeparateXYZ'); lk.new(geo.outputs['Position'], sep.inputs[0])
@@ -1429,6 +1433,9 @@ rl = cnt.nodes['Render Layers']; comp = cnt.nodes['Composite']
 gl = cnt.nodes.new('CompositorNodeGlare'); gl.glare_type = 'FOG_GLOW'; gl.quality = 'HIGH'; gl.threshold = 1.5; gl.mix = -0.85; gl.size = 8
 cnt.links.new(rl.outputs['Image'], gl.inputs['Image']); cnt.links.new(gl.outputs['Image'], comp.inputs['Image'])
 
+VIEWS = {'flower': ((8.6, 2.0, 2.0), (11.4, 5.5, 0.2), 30), 'frog': ((-6.6, 1.2, 1.6), (-8.9, 3.9, 0.35), 30),
+         'dfly': ((5.2, -4.6, 2.3), (6.6, -2.4, 1.7), 30), 'notch': ((0.2, 1.0, 2.2), (-2.6, 4.7, 0.0), 40),
+         'rim': ((4.5, -7.5, 0.6), (3.0, -4.0, 0.0), 35), 'reeds': ((-8, 2, 3.0), (-15.5, 11.0, 2.0), 45)}
 for shot in SHOTS:
     if shot == 'game':   # the game camera, 'wide' framing of stage_render.py
         el = math.radians(50); dist = 21
@@ -1437,6 +1444,10 @@ for shot in SHOTS:
     elif shot == 'low':  # the low three-quarter view from the front-right
         cam.location = (9.5, -8.5, 4.2); cam.data.angle_y = math.radians(30)
         cam.rotation_euler = (Vector((0, 0.8, 0.4)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
+    elif shot in VIEWS:   # close-ups for look-dev
+        c_, t_, fv = VIEWS[shot]
+        cam.location = c_; cam.data.angle_y = math.radians(fv)
+        cam.rotation_euler = (Vector(t_) - cam.location).to_track_quat('-Z', 'Y').to_euler()
     elif shot == 'cam':
         cam.location = Vector(eval(OPT['cam'])); cam.data.angle_y = math.radians(float(OPT.get('fov', 30)))
         cam.rotation_euler = (Vector(eval(OPT['tgt'])) - cam.location).to_track_quat('-Z', 'Y').to_euler()
