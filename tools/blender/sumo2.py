@@ -135,6 +135,9 @@ ell((0, 0.06, 1.25), (0.355, 0.22, 0.24))           # upper back
 for s in S2:
     ell((s * 0.165, 0.19, 1.30), (0.15, 0.11, 0.16))       # shoulder-blade masses
 ell((0, 0.07, 1.04), (0.355, 0.21, 0.20))           # lower back
+ell((0, 0.075, 1.14), (0.36, 0.215, 0.17))          # mid back: one broad slab from the shoulder blades to the belt
+for s in S2:
+    limb((s * 0.065, 0.2, 1.0), (s * 0.06, 0.22, 1.3), 0.075, 0.06)   # erector columns either side of the spine
 ell((0, 0.05, 0.945), (0.425, 0.285, 0.105))       # the roll of fat above the belt (love handles round the back)
 for s in S2:
     ell((s * 0.27, 0.10, 0.955), (0.15, 0.17, 0.10))       # ...fuller over the hips
@@ -177,8 +180,9 @@ for s in S2:
     limb(H0 + xh * 0.025 + yh * 0.04 + nin * 0.006, H0 + xh * 0.085 + yh * 0.07 + nin * 0.022, 0.018, 0.0135)  # thumb
 # legs: massive thighs, knees, shapely calves, flat broad feet with toes
 for s in S2:
-    limb(HIP[s] + Vector((0, 0, -0.02)), KNEE[s], 0.225, 0.155)
-    ell((s * 0.235, -0.04, 0.66), (0.2, 0.2, 0.2))                       # inner / front thigh mass
+    limb(HIP[s] + Vector((0, 0, -0.02)), KNEE[s], 0.245, 0.16)
+    ell((s * 0.24, -0.03, 0.66), (0.215, 0.215, 0.2))                    # inner / front thigh mass
+    ell((s * 0.27, 0.06, 0.62), (0.2, 0.18, 0.17))                       # hamstring mass under the buttock
     ell(KNEE[s] + Vector((0, -0.04, 0.0)), (0.14, 0.13, 0.12))          # knee
     limb(KNEE[s], ANK[s], 0.145, 0.092)
     ell((s * 0.29, 0.065, 0.31), (0.125, 0.115, 0.135))                # calf
@@ -209,7 +213,9 @@ def sculpt(me):
     x, y, z = co.T; nx, ny, nz = nr.T
     d = np.zeros(n)
     back = sstep(0.15, 0.5, ny)
-    d -= 0.016 * gau(x, 0.032) * back * sstep(0.9, 1.0, z) * (1 - sstep(1.36, 1.46, z))           # spine groove
+    d -= 0.02 * gau(x, 0.03) * back * sstep(0.9, 1.0, z) * (1 - sstep(1.36, 1.46, z))             # spine groove
+    for z0, a in ((1.06, 0.012), (1.15, 0.008)):                                                   # flank folds above the roll
+        d -= a * gau(z - z0 - 0.15 * (np.abs(x) - 0.3), 0.009) * sstep(0.18, 0.3, np.abs(x)) * sstep(-0.05, 0.1, y) * sstep(0.2, 0.5, np.hypot(nx, ny))
     d -= 0.006 * gau(x, 0.06) * back * sstep(0.9, 1.0, z) * (1 - sstep(1.3, 1.44, z))             # ...with soft walls
     for z0, a in ((1.465, 0.011), (1.505, 0.009), (1.54, 0.005)):                                  # folds at the back of the neck
         d -= a * gau(z - (z0 + 0.9 * x ** 2), 0.0075) * np.exp(-(x / 0.12) ** 4) * sstep(0.1, 0.5, ny)
@@ -233,7 +239,7 @@ def sculpt(me):
     torso = (np.abs(x) < 0.56) & (z > 0.58) & (z < 1.02)
     band = sstep(BELT_H + 0.02, BELT_H - 0.01, np.abs(z - zc))
     hz = np.hypot(nx, ny)
-    d -= torso * band * 0.032 * sstep(0.3, 0.7, hz)
+    d -= torso * band * 0.022 * sstep(0.3, 0.7, hz)
     co += nr * d[:, None]
     co[:, 2] = np.maximum(co[:, 2], 0.0)                                                            # flat soles
     me.vertices.foreach_set('co', co.ravel()); me.update()
@@ -322,64 +328,91 @@ def skin_r(th, z, r0=0.64):
     d = Vector((math.sin(th), -math.cos(th), 0)); o = Vector((0, CY, z))
     loc, _ = hit(o + d * r0, -d, r0)
     return (loc - o).length if loc else 0.3
-def envelope(zfun, h, NT, ths):
-    """outer radius of the skin over each wrap's height, with concavities bridged (cloth spans the spine groove / cleft)"""
-    R = np.array([max(skin_r(th, zfun(th) + dz) for dz in np.linspace(-h, h, 5)) for th in ths])
+NT = 72
+THS = [math.pi * 2 * i / NT for i in range(NT)]
+WRAPS = []                                     # (zfun, h, outer radius per theta) of the cloth laid so far
+def lerp_th(arr, th):
+    return float(np.interp(th % (2 * math.pi), THS + [2 * math.pi], list(arr) + [arr[0]]))
+def cloth_base(th, z):
+    """radius the next layer of cloth has to clear at (theta, z): the skin, or any wrap already there"""
+    r = skin_r(th, z)
+    for zf, h, Ro in WRAPS:
+        if abs(z - zf(th)) <= h + 0.006: r = max(r, lerp_th(Ro, th))
+    return r
+def bridge(R):                                 # cloth spans concavities (spine groove, cleft): max filter, then smooth
     for _ in range(2): R = np.maximum(R, np.maximum(np.roll(R, 1), np.roll(R, -1)))
     for _ in range(4): R = (np.roll(R, 1) + 2 * R + np.roll(R, -1)) / 4
     return R
-NT = 72
-THS = [math.pi * 2 * i / NT for i in range(NT)]
-WRAPS = []
 def wrap(name, zfun, h, off, t, K=10):
-    R = envelope(zfun, h, NT, THS)
+    prof = []
+    for k in range(K + 1):
+        g = math.pi + 2 * math.pi * k / K                             # seam on the inner face
+        cx, cy = math.cos(g), math.sin(g); prof.append((h * sgp(cy, 0.28), t * (sgp(cx, 0.28) + 1) / 2))
+    dzs = sorted(set(round(dz, 6) for dz, _ in prof))
+    B = {dz: bridge(np.array([cloth_base(th, zfun(th) + dz) for th in THS])) for dz in dzs}
     P, UV = [], []
     for i in range(NT + 1):
         ii = i % NT; th = THS[ii] if i < NT else 2 * math.pi
         zc = zfun(th); row, uvr = [], []
-        for k in range(K + 1):
-            g = math.pi + 2 * math.pi * k / K                         # seam on the inner face
-            cx, cy = math.cos(g), math.sin(g)
-            dz = h * sgp(cy, 0.4); dr = t * (sgp(cx, 0.4) + 1) / 2
-            rr = R[ii] + off + dr
+        for dz, dr in prof:
+            rr = B[round(dz, 6)][ii] + off + dr
             row.append(Vector((rr * math.sin(th), CY - rr * math.cos(th), zc + dz)))
             uvr.append((i / NT * 4.0, 0.5 + 0.5 * dz / h))
         P.append(row); UV.append(uvr)
-    o = grid_obj(name, P, UV, MAW); WRAPS.append((zfun, h, off + t, R)); return o
-# th = 0 at the front (-Y), pi at the back. Three wraps, offset outward and tilted differently so they cross at the back.
-w1 = wrap('Wrap1', lambda th: float(belt_zc(th)) - 0.03, 0.055, 0.004, 0.02)
-w2 = wrap('Wrap2', lambda th: float(belt_zc(th)) + 0.008 + 0.022 * math.sin(th) * (1 - math.cos(th)) / 2, 0.05, 0.02, 0.019)
-w3 = wrap('Wrap3', lambda th: float(belt_zc(th)) + 0.045 - 0.024 * math.sin(th) * (1 - math.cos(th)) / 2, 0.04, 0.035, 0.018)
-OUTER = 0.035 + 0.018
-R_BACK = envelope(lambda th: float(belt_zc(th)), BELT_H, NT, THS)
+    o = grid_obj(name, P, UV, MAW)
+    WRAPS.append((zfun, h, np.max(np.array([B[d] for d in dzs]), axis=0) + off + t)); return o
+# th = 0 at the front (-Y), pi at the back. Three wraps laid one over the other, each tilted differently so the
+# edges step and cross (the camera mostly sees the back and the top lips of the wraps).
+# Inner wraps ride higher, outer ones lower: from above and behind the top lips read as stepped terraces.
+w1 = wrap('Wrap1', lambda th: float(belt_zc(th)) + 0.012, 0.07, 0.003, 0.018)
+w2 = wrap('Wrap2', lambda th: float(belt_zc(th)) - 0.008 + 0.016 * math.sin(th) * (1 - math.cos(th)) / 2, 0.065, 0.001, 0.019)
+w3 = wrap('Wrap3', lambda th: float(belt_zc(th)) - 0.035 - 0.018 * math.sin(th) * (1 - math.cos(th)) / 2, 0.06, 0.001, 0.019)
+ZB = float(belt_zc(math.pi))                   # belt centre height at the back
 
-def pad(name, thc, half_w, zc, h, off, t, tilt=0.0, bulge=0.25, NI=18, K=10, zbend=0.0):
-    """a folded slab of belt cloth lying on the belt's outer surface (a rounded rectangle, pillowed)"""
+def pad(name, thc, half_w, zc, h, off, t, tilt=0.0, bulge=0.25, NI=16, K=10, zbend=0.0, taper=0.0):
+    """a folded slab of belt cloth lying flat over whatever is under it (a rounded rectangle, pillowed)"""
     P, UV = [], []
     for i in range(NI + 1):
         a = -1 + 2 * i / NI
-        sz = (1 - abs(a) ** 5) ** 0.2                                   # rounded-rect outline
+        sz = (1 - abs(a) ** 6) ** 0.16                                  # rounded-rect outline
         th = thc + a * half_w / 0.42
-        rr0 = float(np.interp(th % (2 * math.pi), THS + [2 * math.pi], list(R_BACK) + [R_BACK[0]])) + off
+        rr0 = max(cloth_base(th, zc + tilt * a + dz) for dz in np.linspace(-h, h, 7)) + off
         row, uvr = [], []
         for k in range(K + 1):
             g = math.pi + 2 * math.pi * k / K; cx, cy = math.cos(g), math.sin(g)
-            dz = h * sz ** 0.5 * sgp(cy, 0.35)
+            dz = h * sz ** 0.5 * sgp(cy, 0.26)
             tt = t * sz * (1 + bulge * (1 - a * a) * (1 - abs(cy)))
-            dr = tt * (sgp(cx, 0.35) + 1) / 2
+            dr = tt * (sgp(cx, 0.26) + 1) / 2
             rr = rr0 + dr
-            row.append(Vector((rr * math.sin(th), CY - rr * math.cos(th), zc + dz + tilt * a + zbend * a * a)))
-            uvr.append((0.25 + 0.5 * (a + 1) / 2 * half_w * 4, 0.5 + 0.5 * dz / h))
+            thk = thc + a * half_w * (1 - taper * (0.5 - 0.5 * dz / h)) / 0.42
+            row.append(Vector((rr * math.sin(thk), CY - rr * math.cos(thk), zc + dz + tilt * a + zbend * a * a)))
+            uvr.append((0.25 + (a + 1) * half_w * 2, 0.5 + 0.5 * dz / h))
         P.append(row); UV.append(uvr)
-    return grid_obj(name, P, UV, MAW)
-ZB = float(belt_zc(math.pi))                   # belt centre height at the back
-KNOT = [
-    pad('KnotBase', math.pi, 0.15, ZB + 0.005, 0.075, OUTER - 0.004, 0.022, bulge=0.4),
-    pad('KnotFold', math.pi, 0.07, ZB - 0.005, 0.115, OUTER + 0.014, 0.03, bulge=0.5),        # the vertical fold, taller than the belt
-    pad('KnotCross', math.pi, 0.115, ZB + 0.012, 0.038, OUTER + 0.038, 0.024, tilt=0.012, bulge=0.6),  # a crossing fold over it
-    pad('KnotTop', math.pi, 0.055, ZB + 0.12, 0.03, OUTER + 0.026, 0.026, bulge=0.6, zbend=-0.015),   # the tucked end rolled over the top
-    pad('KnotTail', math.pi + 0.02, 0.05, ZB - 0.14, 0.045, OUTER - 0.012, 0.02, bulge=0.5),          # tail of the fold below the belt
-]
+    o = grid_obj(name, P, UV, MAW)
+    Ro = np.array([cloth_base(th, zc) for th in THS]) * 0                      # register it as cloth for the next layer
+    for ii, th in enumerate(THS):
+        dth = (th - thc + math.pi) % (2 * math.pi) - math.pi
+        if abs(dth) < half_w / 0.42: Ro[ii] = max(cloth_base(th, zc + dz) for dz in (-h, 0, h)) + off + t * (1 + bulge * 0.5)
+    WRAPS.append((lambda th, zc=zc: zc, h, Ro))
+    return o
+def path_strip(name, pts, side, hw, t, m_=None, K=8):
+    P, UV = [], []; L = 0.0
+    for i, p in enumerate(pts):
+        tng = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized(); nn = side.cross(tng).normalized()
+        if i: L += (pts[i] - pts[i - 1]).length
+        row, uvr = [], []
+        for k in range(K + 1):
+            g = math.pi + 2 * math.pi * k / K; cx, cy = math.cos(g), math.sin(g)
+            row.append(p + nn * t * 0.5 * sgp(cx, 0.4) + side * hw * sgp(cy, 0.4)); uvr.append((L * 3, 0.5 + 0.45 * sgp(cy, 0.4)))
+        P.append(row); UV.append(uvr)
+    return grid_obj(name, P, UV, m_ or MAW, cap_i=True)
+# the back knot: three pleats stacked like roof tiles (each lip catches the light from above), a narrow vertical
+# fold of the strip running up over them, and the tucked end standing up proud of the top edge
+KNOT = [pad('KnotPleat', math.pi, 0.125 - 0.012 * k, ZB - 0.07 + 0.06 * k, 0.042, 0.002, 0.02, tilt=0.008 * (k - 1), bulge=0.35)
+        for k in range(3)]
+KNOT.append(pad('KnotFold', math.pi, 0.048, ZB - 0.035, 0.135, 0.003, 0.024, bulge=0.3, taper=-0.25))
+yb = CY + lerp_th(WRAPS[-1][2], math.pi)       # outer face of the knot at the back centre
+KNOT.append(pad('KnotEnd', math.pi, 0.05, ZB + 0.118, 0.034, -0.042, 0.022, bulge=0.5, zbend=-0.016))
 
 # the tate-mitsu: one strip up the front over the groin, under the crotch, up between the buttocks into the knot
 def mid_skin(phi, c=Vector((0, 0.03, 0.80))):
@@ -419,20 +452,20 @@ strip = grid_obj('TateMitsu', P, UV, MAW)
 push_out(strip, 0.01)
 # sagari: stiff cords tucked under the front of the belt
 SAG = []
-NS = 19
+NS = 17
 for j in range(NS):
     a = -0.98 + 1.96 * j / (NS - 1)
     th = a
     z0 = float(belt_zc(th)) - 0.05
-    rr = WRAPS[0][3][int(round(th / (2 * math.pi) * NT)) % NT] + 0.03
+    rr = lerp_th(WRAPS[0][2], th) + 0.004
     top = Vector((rr * math.sin(th), CY - rr * math.cos(th), z0))
-    L = 0.25 - 0.035 * abs(a) ** 2 + 0.012 * math.sin(j * 2.3)
+    L = 0.215 - 0.04 * abs(a) ** 2 + 0.012 * math.sin(j * 2.3)
     out = Vector((math.sin(th), -math.cos(th), 0))
     P, UV = [], []
     for i in range(6):
         f = i / 5
-        c = top + Vector((0, 0, -L * f)) + out * (0.03 * f + 0.02 * f * f)
-        rad = 0.0095 - 0.003 * f
+        c = top + Vector((0, 0, -L * f)) + out * (0.012 * f)
+        rad = 0.0105 - 0.003 * f
         row, uvr = [], []
         for k in range(7):
             g = 2 * math.pi * k / 6
@@ -486,28 +519,31 @@ for v in o.data.vertices:      # an ellipsoid along the crown frame
 o.data.update()
 o = sphere('TopknotTail', (0, 0, 0), (1, 1, 1), HAIR, 16, 10)
 for v in o.data.vertices:      # the gathered hair behind the tie, flattened onto the crown
-    c_ = v.co.copy(); v.co = T - TF * 0.03 + TS * c_.x * 0.036 + TF * c_.y * 0.045 + POLE * (c_.z * 0.022 - 0.004)
+    c_ = v.co.copy(); v.co = T - TF * 0.022 + TS * c_.x * 0.03 + TF * c_.y * 0.034 + POLE * (c_.z * 0.02 - 0.004)
 o.data.update()
 for k, dz in enumerate((-0.006, 0.01)):          # the white motoyui cord, two turns round the root
     bpy.ops.mesh.primitive_torus_add(major_radius=0.03, minor_radius=0.0058, major_segments=20, minor_segments=6,
                                      location=tuple(T + TF * dz + POLE * 0.01), rotation=TF.to_track_quat('Z', 'Y').to_euler())
     tor = bpy.context.object; tor.scale = (1.2, 0.95, 1.0)
     prim_obj('Motoyui', WHITE)
-# the ginkgo-leaf fan, spread forward over the crown
-FP = T + TF * 0.025
+# the ginkgo-leaf fan: the topknot folded forward and spread over the crown, its rim curling up
+FP = T + TF * 0.018 + Vector((0, 0, 0.012))
+FF = Vector((TF.x, TF.y, 0)).normalized()
 NFA, NFR = 25, 9
 P, UV = [], []
 for i in range(NFA):
-    ph = -0.95 + 1.9 * i / (NFA - 1)
-    Rm = 0.15 * (1 - 0.2 * math.exp(-(ph / 0.12) ** 2)) * (0.8 + 0.2 * math.cos(ph))      # notched ginkgo rim
+    ph = -1.0 + 2.0 * i / (NFA - 1)
+    Rm = 0.115 * (1 - 0.2 * math.exp(-(ph / 0.12) ** 2)) * (0.82 + 0.18 * math.cos(ph))     # notched ginkgo rim
     row, uvr = [], []
     for j in range(NFR + 1):
-        f = j / NFR; rho = 0.012 + (Rm - 0.012) * f
-        q = FP + (TF * math.cos(ph) + TS * math.sin(ph)) * rho * (0.4 + 0.6 * f) + TS * math.sin(ph) * 0.0
+        f = j / NFR; rho = 0.01 + (Rm - 0.01) * f
+        q = FP + (FF * math.cos(ph) + TS * math.sin(ph) * 1.2) * rho
         dr = (q - HC).normalized(); l, nrm = skull(dr)
-        lift = 0.05 * (1 - f) ** 1.5 + 0.022 + 0.02 * f ** 2.5 + 0.003 * math.cos(ph * 24) * f    # arched, the rim curling up
-        row.append(l + dr * lift)
-        uvr.append(((ph + 0.95) / 1.9, 0.08 + 0.85 * f))
+        rest = (l - HC).length + 0.026                                    # never closer to the skull than this
+        q = q + Vector((0, 0, 0.012 * f + 0.026 * f ** 2.5 + 0.0018 * math.cos(ph * 20) * f ** 0.5))
+        if (q - HC).length < rest: q = HC + (q - HC).normalized() * rest
+        row.append(q)
+        uvr.append(((ph + 1.0) / 2.0, 0.08 + 0.85 * f))
     P.append(row); UV.append(uvr)
 fan = grid_obj('Ginkgo', P, UV, HAIR)
 sol = fan.modifiers.new('sol', 'SOLIDIFY'); sol.thickness = 0.02; sol.offset = -1; sol.use_rim = True
@@ -747,7 +783,7 @@ def set_weights(o, fn):
     for v in o.data.vertices:
         for g, x in fn(v.co).items(): o.vertex_groups[g].add([v.index], x, 'REPLACE')
 head_only = lambda p: {'head': 1.0}
-knot_anchor = skin_weights(Vector((0, R_BACK[NT // 2] + CY, ZB)))
+knot_anchor = skin_weights(Vector((0, yb - 0.06, ZB)))
 for o in list(scn.objects):
     if o.type != 'MESH' or o == body: continue
     nm = o.name.split('.')[0]
@@ -823,7 +859,7 @@ def apply_pose(rg, spec, hips_off=Vector()):
 def lean(deg):
     a = math.radians(deg); return ((0, -math.sin(a), math.cos(a)), (0, -math.cos(a), -math.sin(a)))
 def stance_spec():
-    sp = {'hips': lean(8), 'spine': lean(16), 'chest': lean(20), 'neck': lean(30), 'head': lean(4)}
+    sp = {'hips': lean(4), 'spine': lean(9), 'chest': lean(13), 'neck': lean(24), 'head': lean(2)}
     for s in S2:
         sd = '.L' if s > 0 else '.R'
         lt = (rig_data.bones['thigh' + sd].length, rig_data.bones['shin' + sd].length)
@@ -833,8 +869,8 @@ def stance_spec():
         sp['foot' + sd] = ((s * 0.42, -0.86, -0.28), (0, 0, 1))
         sp['shoulder' + sd] = ((s * 0.93, -0.3, 0.05), None)
         sp['upper_arm' + sd] = ((s * 0.5, -0.72, -0.48), None)
-        sp['forearm' + sd] = ((s * 0.12, -0.95, 0.2), None)
-        sp['hand' + sd] = ((s * 0.08, -0.5, 0.86), (-s, 0, 0))
+        sp['forearm' + sd] = ((s * 0.16, -0.98, -0.02), None)
+        sp['hand' + sd] = ((s * 0.06, -0.78, 0.6), (-s, 0, 0))
     return sp
 STANCE_OFF = Vector((0, 0.03, -0.2))
 
@@ -854,7 +890,7 @@ cam = bpy.data.objects.new('Cam', bpy.data.cameras.new('Cam')); scn.collection.o
 scn.cycles.samples = SAMPLES; scn.cycles.use_denoising = True
 scn.render.resolution_x = scn.render.resolution_y = RES
 scn.view_settings.view_transform = 'Standard'
-DEBUG = {'head', 'belt', 'face', 'stance_top', 'rest_back', 'stance_side'}
+DEBUG = {'head', 'belt', 'face', 'stance_top', 'rest_back', 'stance_side', 'headtop'}
 def shoot(name, pos, look, lens=50, w=None, h=None):
     if (SHOTS and name not in SHOTS) or (not SHOTS and name in DEBUG): return
     scn.render.resolution_x = w or RES; scn.render.resolution_y = h or RES
@@ -868,8 +904,9 @@ shoot('rest_back', (-1.0, 5.0, 1.8), (0, 0, 0.95), 50)
 shoot('head', (-0.5, 0.75, 2.35), (0, 0.0, 1.75), 50)
 shoot('face', (0.35, -0.95, 1.75), (0, 0, 1.66), 50)
 shoot('belt', (-0.6, 1.55, 1.25), (0, 0.15, 0.82), 50)
+shoot('headtop', (0.0, 0.5, 2.9), (0, 0.02, 1.8), 70)
 apply_pose(rig, stance_spec(), STANCE_OFF)
-shoot('stance_back', (-2.3, 3.0, 2.7), (0, -0.1, 0.8), 50)
+shoot('stance_back', (-1.5, 3.3, 2.8), (0, -0.1, 0.8), 50)
 shoot('stance_front', (1.5, -3.4, 1.6), (0, -0.2, 0.8), 50)
 shoot('stance_top', (0.0, 2.2, 4.0), (0, -0.1, 0.8), 50)
 # the game camera: two of them squaring up, 1.6 m apart, the hero with its back to the camera
