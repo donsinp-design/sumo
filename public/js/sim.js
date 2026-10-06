@@ -54,7 +54,7 @@
     get fx() { return Math.cos(this.f); }
     get fz() { return Math.sin(this.f); }
     get spd() { return Math.hypot(this.vx, this.vz); }
-    set(st, dur) { this.st = st; this.t = 0; this.dur = dur || 0; this.hitDone = false; }
+    set(st, dur) { this.st = st; this.t = 0; this.dur = dur || 0; this.hitDone = false; if (st !== 'charge') this.holdCharge = false; }
   }
   S.Wrestler = Wrestler;
 
@@ -285,6 +285,10 @@
           else if (w.t >= 0.17 && pr('dash') && w.dashCD <= 0 && mag > 0.35) { w.throat = false; this.startDash(w, ix / mag, iz / mag); }
           break;
         case 'charge':
+          if (w.holdCharge) { // a held charge: keeps going while L is held and there is breath, steers a little
+            if (I.dash.held && w.stam > 0.02 && !w.chargeHit && w.t < 1.6) { w.dur = Math.max(w.dur, w.t + 0.08); w.stam = Math.max(0, w.stam - dt * 0.32); }
+            if (!I.dash.held) w.dur = Math.min(w.dur, w.t + 0.05);
+          }
           if (pr('push') && !w.chargeHit && !w.hariteUsed) w.hariteQ = true; // J again mid-charge: slap the face as you hit
           if (pr('dash') && w.t > 0.08 && !w.chargeHit) { // pull up short: counter to an expected sidestep
             w.set('brace'); w.braceT = 0.3; w.vx *= 0.35; w.vz *= 0.35;
@@ -307,6 +311,12 @@
           if (w.t >= 0.17) { w.set('recover', 0.3); this.emit('whiff', { w, grab: true }); }
           break;
         case 'dash':
+          // keep holding L with a direction: the dash turns into a charge that runs as long as you hold it (like the campaign)
+          if (I.dash.held && I.dash.t > 0.16 && mag > 0.35 && w.stam > 0.1) {
+            w.f = Math.atan2(iz / mag, ix / mag); w.chargeHit = false; w.dodged = false; w.holdCharge = true;
+            w.cspd = w.a.maxSpeed * 1.35; w.set('charge', 0.45); w.stam = Math.max(0, w.stam - 0.1);
+            this.emit('charge', { w }); break;
+          }
           if (w.t >= w.dur) {
             // dashing straight at them commits you; sidesteps and retreats recover quickly
             const dx0 = w.opp.x - w.x, dz0 = w.opp.z - w.z, dl0 = Math.hypot(dx0, dz0) || 1, fwd = (w.ddx * dx0 + w.ddz * dz0) / dl0;
