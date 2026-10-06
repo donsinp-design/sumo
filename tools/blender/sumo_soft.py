@@ -640,7 +640,7 @@ def arm(sp, s, sh, ua, fa, hd, hz):
 def stance_spec(dz=0.0):
     # shiko-dachi-like ready stance: feet wide and turned out, knees over the toes, hips low, back nearly upright,
     # arms relaxed forward and out, open hands palm-down at belly height, head up looking ahead
-    sp = {'hips': lean(3), 'spine': lean(8), 'chest': lean(10), 'neck': lean(6), 'head': lean(-4)}
+    sp = {'hips': lean(5), 'spine': lean(7), 'chest': lean(9), 'neck': lean(4), 'head': lean(-4)}
     for s in S2:
         out = math.radians(38)
         leg(sp, s, (s * 0.56, 0.02, 0.11 + dz), (s * math.sin(out), -math.cos(out), 0.05),
@@ -652,24 +652,24 @@ STANCE_OFF = Vector((0, 0.03, -0.22))
 def push_spec(dz=0.0):
     # oshi: driving forward. Torso ~35 degrees forward, left foot planted ahead with the knee bent over it, right leg
     # long and nearly straight behind on the ball of the foot, both arms out at chest height, palms forward, head up
-    sp = {'hips': lean(22), 'spine': lean(33), 'chest': lean(38), 'neck': lean(10), 'head': lean(-6)}
+    sp = {'hips': lean(36), 'spine': lean(42), 'chest': lean(45), 'neck': lean(20), 'head': lean(-4)}
     leg(sp, 1, (0.30, -0.36, 0.11 + dz), (0.25, -0.95, 0.1), (0.18, -0.93, -0.32))
-    leg(sp, -1, (-0.27, 0.50, 0.17 + dz), (-0.15, -0.6, -0.8), (-0.05, -0.5, -0.86), (0, -1, 0.3))
+    leg(sp, -1, (-0.27, 0.55, 0.17 + dz), (-0.15, -0.6, -0.8), (-0.05, -0.5, -0.86), (0, -1, 0.3))
     for s in S2:
-        arm(sp, s, (s * 0.88, -0.45, 0.12), (s * 0.30, -0.92, -0.05), (s * 0.03, -0.97, 0.22),
+        arm(sp, s, (s * 0.9, -0.42, -0.04), (s * 0.30, -0.90, -0.30), (s * 0.02, -0.98, 0.10),
             (-s * 0.04, -0.35, 0.94), (-s, 0, 0))
     return sp
-PUSH_OFF = Vector((0, -0.12, -0.14))
+PUSH_OFF = Vector((0, -0.16, -0.15))
 def charge_spec(dz=0.0):
     # tachiai / run: ~45 degrees forward and falling into the step. Left thigh driven up and forward, right leg long
     # behind pushing off the toes; arms bent and pumping low (right forward, left back), head slightly down
-    sp = {'hips': lean(32), 'spine': lean(45), 'chest': lean(50), 'neck': lean(30), 'head': lean(12)}
-    leg(sp, 1, (0.29, -0.40, 0.30 + dz), (0.2, -0.85, 0.45), (0.12, -0.75, -0.65))
+    sp = {'hips': lean(50), 'spine': lean(55), 'chest': lean(58), 'neck': lean(36), 'head': lean(18)}
+    leg(sp, 1, (0.29, -0.52, 0.32 + dz), (0.15, -0.7, 0.7), (0.12, -0.75, -0.65))
     leg(sp, -1, (-0.25, 0.55, 0.20 + dz), (-0.1, -0.6, -0.8), (-0.03, -0.35, -0.94), (0, -1, 0.3))
-    arm(sp, -1, (-0.85, -0.5, 0.0), (-0.22, -0.80, -0.56), (0.12, -0.92, 0.36), (0.1, -0.98, 0.15), (0, 0, 1))
-    arm(sp, 1, (0.92, -0.25, -0.1), (0.38, 0.40, -0.83), (0.10, -0.70, -0.70), (0.05, -0.85, -0.52), (0, 0, 1))
+    arm(sp, -1, (-0.88, -0.45, -0.1), (-0.2, -0.45, -0.87), (0.15, -0.80, 0.58), (0.12, -0.84, 0.53), (-1, 0, 0.3))
+    arm(sp, 1, (0.92, -0.2, -0.1), (0.35, 0.75, -0.55), (0.10, -0.35, -0.93), (0.05, -0.5, -0.86), (0, 0, 1))
     return sp
-CHARGE_OFF = Vector((0, -0.16, -0.08))
+CHARGE_OFF = Vector((0, -0.2, -0.1))
 
 def floor_z():
     bpy.context.view_layer.update()
@@ -743,7 +743,7 @@ if RENDER:
     # the three clips side by side, seen 3/4 from front-right and above
     for o in (hero2, rig2): bpy.data.objects.remove(o)
     rig.location = (0, 0, 0); rig.rotation_euler = (0, 0, 0)
-    el, az, dist = math.radians(30), math.radians(48), 10.5
+    el, az, dist = math.radians(28), math.radians(55), 10.5
     right = Vector((math.cos(az), math.sin(az), 0)); tgt = Vector((0, 0, 0.72))
     cam.location = tgt + Vector((dist * math.cos(el) * math.sin(az), -dist * math.cos(el) * math.cos(az), dist * math.sin(el)))
     cam.rotation_euler = (tgt - cam.location).to_track_quat('-Z', 'Y').to_euler(); cam.data.lens = 50
@@ -753,7 +753,7 @@ if RENDER:
             rg = rig.copy(); scn.collection.objects.link(rg)
             hr = hero.copy(); hr.data = hero.data.copy(); scn.collection.objects.link(hr); hr.parent = rg; hr.modifiers['Armature'].object = rg
         rg.animation_data_create(); rg.animation_data.action = ACTS[nm]
-        rg.location = right * (2.05 * (i - 1))
+        rg.location = right * (2.05 * (i - 1)); rg.rotation_euler = (0, 0, math.radians(20 if i == 0 else -15))   # stance more frontal, the drives more in profile
     scn.frame_set(1)
     scn.render.resolution_x, scn.render.resolution_y = 1200, 500
     scn.render.filepath = os.path.join(OUT, 'prev_poses.png'); bpy.ops.render.render(write_still=True)
