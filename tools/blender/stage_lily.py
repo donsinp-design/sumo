@@ -1314,8 +1314,8 @@ def build_splash(c):
         r = r0 + 0.9
         p = Vector((c.x + r * math.cos(a), c.y + r * math.sin(a), WZ - 0.1 + h + 0.12))
         d = Vector((math.cos(a) * 0.5, math.sin(a) * 0.5, 1)).normalized()
-        bead(p, rr.uniform(0.06, 0.11), 1.6, d)
-    for k in range(260):
+        bead(p, rr.uniform(0.04, 0.07), 1.8, d)
+    for k in range(420):
         a = rr.uniform(0, TAU)
         da = abs(math.atan2(math.sin(a - toward_pad), math.cos(a - toward_pad)))
         hm = hmax(a)
@@ -1324,7 +1324,7 @@ def build_splash(c):
         z = WZ + hm * (0.5 + 0.9 * rr.random()) * math.sin(math.pi * min(1, 0.25 + tt * 0.8)) + 0.1
         p = Vector((c.x + r * math.cos(a), c.y + r * math.sin(a), z))
         d = Vector((math.cos(a), math.sin(a), 1.4 - 2.2 * tt)).normalized()
-        rad = 0.02 + 0.07 * rr.random() ** 2.5
+        rad = 0.012 + 0.05 * rr.random() ** 3
         bead(p, rad, 1.0 + 2.5 * rr.random(), d)
     # a few drops raining onto the pad's edge
     for k in range(40):
@@ -1391,7 +1391,7 @@ if not NOCHARS:
         sumo('sumo2_stance.glb', W, (SPL_C.x, SPL_C.y))
         rig, roots = sumo('sumo2_red.glb', (SPL_C.x, SPL_C.y), (0, 0), keep_action=False)
         yaw = roots[0].rotation_euler.z
-        tilt = float(OPT.get('tilt', -1.25))
+        tilt = float(OPT.get('tilt', -0.85))
         for r in roots: r.rotation_euler = (tilt, 0.15, yaw)
         # arms flung up and out, legs kicking
         for sd, s in (('L', 1), ('R', -1)):
@@ -1403,7 +1403,7 @@ if not NOCHARS:
         set_bone(rig, 'head', (-0.35, 0, 0))
         scn.frame_set(1); bpy.context.view_layer.update()
         hip = rig.matrix_world @ rig.pose.bones['hips'].head
-        want = Vector((SPL_C.x, SPL_C.y, float(OPT.get('hipz', 0.15))))
+        want = Vector((SPL_C.x, SPL_C.y, float(OPT.get('hipz', 0.45))))
         for r in roots: r.location += want - hip
         bpy.context.view_layer.update()
         GX, GY = 0.4, 5.0
@@ -1452,8 +1452,8 @@ for shot in SHOTS:
         cam.location = Vector(eval(OPT['cam'])); cam.data.angle_y = math.radians(float(OPT.get('fov', 30)))
         cam.rotation_euler = (Vector(eval(OPT['tgt'])) - cam.location).to_track_quat('-Z', 'Y').to_euler()
     elif shot == 'splash':
-        cam.location = Vector(eval(OPT.get('scam', '(1.2, -14.5, 2.6)'))); cam.data.angle_y = math.radians(float(OPT.get('sfov', 36)))
-        cam.rotation_euler = (Vector(eval(OPT.get('stgt', '(-3.2, -2.6, 0.9)'))) - cam.location).to_track_quat('-Z', 'Y').to_euler()
+        cam.location = Vector(eval(OPT.get('scam', '(2.0, -15.5, 2.9)'))); cam.data.angle_y = math.radians(float(OPT.get('sfov', 34)))
+        cam.rotation_euler = (Vector(eval(OPT.get('stgt', '(-3.9, -3.3, 1.05)'))) - cam.location).to_track_quat('-Z', 'Y').to_euler()
     scn.render.filepath = os.path.join(OUT, OPT.get('prefix', 'ex_') + shot + '.png')
     bpy.ops.render.render(write_still=True)
     print('wrote', scn.render.filepath)

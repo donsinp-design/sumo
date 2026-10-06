@@ -383,7 +383,7 @@ def top_maps():
     H += -0.012 * (seam_i + seam_o) - 0.004 * strip
     col = lerp(col, hx('0a0b0c'), seam_i + seam_o); rough = rough * (1 - seam_i - seam_o) + 0.6 * (seam_i + seam_o); metal *= 1 - seam_i - seam_o
     glow = 0.82 + 0.18 * np.cos(np.arctan2(LX, LY) * 1.0)          # a little brighter toward the front
-    col = lerp(col, hx('8fdcff'), strip); rough = rough * (1 - strip) + 0.35 * strip; metal *= 1 - strip
+    col = lerp(col, hx('5cc6f2'), strip); rough = rough * (1 - strip) + 0.35 * strip; metal *= 1 - strip
     emis += (strip * glow * (1 - 0.25 * (np.abs(R - 4.6) / 0.09) ** 2))[..., None] * CY
     # outer band: piano black, with a faint satin edge
     col = lerp(col, hx('060708'), outer); rough = rough * (1 - outer) + 0.06 * outer; metal *= 1 - outer

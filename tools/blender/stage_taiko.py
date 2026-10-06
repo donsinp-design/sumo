@@ -340,13 +340,13 @@ def tomoe_mask(X, Y, cx, cy, RE, rot, w, n=3):
     """Mitsudomoe coverage (anti-aliased over w metres): three commas, each a head disc whose tail sweeps round
     against the outer circle and tapers to a point just short of the next comma."""
     x, y = X - cx, Y - cy; rho = np.hypot(x, y); phi = np.arctan2(y, x)
-    d, hr, DL = 0.5 * RE, 0.3 * RE, 2.45
+    d, hr, DL = 0.5 * RE, 0.29 * RE, 2.3
     m = np.zeros(X.shape, F32)
     for c in range(n):
         a = rot + c / n * TAU
         head = 1 - ss(hr - w, hr + w, np.hypot(x - d * math.cos(a), y - d * math.sin(a)))
         dl = np.mod(a - phi, TAU)                        # the tail runs clockwise behind the head
-        inner = (d - hr) + (RE - (d - hr)) * np.clip(dl / DL, 0, 1) ** 1.35
+        inner = (d - hr) + (RE - (d - hr)) * np.clip(dl / DL, 0, 1) ** 0.7
         outer = np.minimum(RE, d + hr + (RE - d - hr) * np.sqrt(np.clip(dl / 0.7, 0, 1)))
         tail = ss(inner - w, inner + w, rho) * (1 - ss(outer - w, outer + w, rho)) * (1 - ss(DL - 0.01, DL, dl))
         m = np.maximum(m, np.maximum(head, tail))
@@ -499,7 +499,7 @@ hook_maps(nt, bs, load_img(RW + 'rosewood_veneer1_diff_2k.jpg'), None, load_img(
 rtn = tex_node(nt, load_img(RW + 'rosewood_veneer1_rough_2k.jpg', True), nt.nodes['Mapping'].outputs['Vector'])
 mr = nt.nodes.new('ShaderNodeMapRange'); mr.inputs['To Min'].default_value = 0.18; mr.inputs['To Max'].default_value = 0.4
 nt.links.new(rtn.outputs['Color'], mr.inputs['Value']); nt.links.new(mr.outputs['Result'], bs.inputs['Roughness'])
-mIron, nt, bs = principled('mByouIron', lin('3a3430'), 0.9, 0.3); micro_bump(nt, bs, 40, 0.3, 0.01)
+mIron, nt, bs = principled('mByouIron', lin('5e554c'), 0.65, 0.34); micro_bump(nt, bs, 40, 0.3, 0.01)
 mBrass, nt, bs = principled('mKanBrass', lin('a88445'), 1.0, 0.3); micro_bump(nt, bs, 25, 0.2, 0.01)
 DW = PH + '/dark_wooden_planks/'
 def plank_mat(name, rmin, rmax, tint=None):
@@ -569,7 +569,7 @@ def drum(tag, k, at, crest=True, kan_angles=(math.radians(-42), math.radians(138
     SV, SF = torus_template(0.17, 0.055, 20, 8)
     KV, KF = torus_template(0.92, 0.12, 48, 10)
     for th in kan_angles:
-        p, t, d, n = frame_at(th, -LB * 0.42, 0.0)
+        p, t, d, n = frame_at(th, -LB * 0.37, 0.0)
         place(kb, RV, RF, p, t, d, n); place(kb, BV, BF, p, t, d, n)
         place(kb, SV, SF, p + n * 0.36, n, d, t)
         place(kb, KV, KF, p + n * 0.42 + d * 0.86, t, d, n)
@@ -618,11 +618,11 @@ def hachimaki():
     C = catmull([(x, y, 0) for x, y in ctrl], 14)
     T = np.gradient(C, axis=0); T /= np.linalg.norm(T, axis=1, keepdims=True); S = np.stack([-T[:, 1], T[:, 0], np.zeros(len(T))], 1)
     L = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(C, axis=0), axis=1))]); Ls = L[-1]
-    W = 0.75; V, Uv = [], []
+    W = 0.9; V, Uv = [], []
     for i in range(len(C)):
-        z = FZ + 0.012 + 0.035 * (0.5 + 0.5 * math.sin(L[i] * 1.7)) + 0.02 * math.sin(L[i] * 4.3)
+        z = FZ + 0.015 + 0.07 * (0.5 + 0.5 * math.sin(L[i] * 1.3)) + 0.03 * (0.5 + 0.5 * math.sin(L[i] * 3.7))
         for sgn in (-1, 1):
-            tilt = 0.04 * math.sin(L[i] * 2.1) * sgn
+            tilt = 0.07 * math.sin(L[i] * 1.9) * sgn
             p = C[i] + S[i] * (W / 2) * sgn; V.append((p[0], p[1], z + tilt)); Uv.append((L[i] / Ls, (sgn + 1) / 2))
     F = [[2 * i, 2 * i + 1, 2 * i + 3, 2 * i + 2] for i in range(len(C) - 1)]
     UL = []
@@ -852,7 +852,6 @@ def setup_lights():
         return o
     L('Key', 'SPOT', (2.0, -5.0, 27.0), (0, 0.4, -2.0), 2.6e4, (1.0, 0.8, 0.58), spot_size=math.radians(46), spot_blend=0.85, shadow_soft_size=1.8)
     L('Rim', 'AREA', (-6.0, 24.0, 9.0), (0, 0, -3.0), 4.5e3, (0.62, 0.72, 1.0), size=12.0, shape='DISK')
-    L('Kick', 'AREA', (26.0, -20.0, 4.0), (0, 0, -4.0), 1.6e3, (1.0, 0.72, 0.48), size=22.0, shape='DISK')
     for c in LANTERNS:
         L('LanternLight', 'POINT', tuple(c), None, 700, (1.0, 0.55, 0.26), shadow_soft_size=0.9)
 
@@ -871,7 +870,7 @@ def cam_setup(shot):
         el = math.radians(50); dist = 21
         aim((0, -dist * math.cos(el), dist * math.sin(el)), (0, 0.6, 0), 34)
     elif shot == 'low':
-        aim((10.6, -10.2, 2.9), (0, 0.5, -2.0), 32, 8.0, (0, 0, 1.0))
+        aim((12.6, -12.1, 3.1), (0, 0.5, -2.1), 32, 8.0, (0, 0, 1.0))
     elif shot == 'drum':
         aim((24, -30, -2), (0, 0, -5.5), 40, 11.0)
 
