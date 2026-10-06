@@ -49,9 +49,9 @@ R = ring_r()            # fighting circle
 RD = R + 0.7            # pad radius
 WZ = -0.16              # water surface
 FLAT = R + 0.25         # the pad is flat out to here, then its rim curls up
-NOTCH_A = math.radians(118)   # the notch points back-left
+NOTCH_A = math.radians(132)   # the notch points back-left
 NOTCH_RN = R + 0.1      # notch apex (outside the fighting circle)
-NOTCH_TH = math.radians(46)   # half-angle of the V
+NOTCH_TH = math.radians(55)   # half-angle of the V
 SPL_A = math.radians(-140); SPL_R = RD + 1.75   # the splash shot: where the thrown sumo hits the water (front-left)
 SPL_C = Vector((SPL_R * math.cos(SPL_A), SPL_R * math.sin(SPL_A), WZ))
 
@@ -312,7 +312,7 @@ def tex_pad(n, S, padR, ring=None, seed=1, notch=None, old=0.0):
         c = c + (np.array(lin('a08a34')) - c) * (old * sc)[..., None]
     # petiole spot in the centre
     c = c + (np.array(lin('9ab85a')) - c) * (0.6 * np.exp(-(rho / (0.06 * padR)) ** 2))[..., None]
-    rough = 0.3 + 0.12 * mott2 + 0.08 * vi + 0.25 * fr + 0.3 * marg + 0.1 * sstep(0.6, 0.8, fbm(n, 8, 3, seed + 17))
+    rough = 0.38 + 0.12 * mott2 + 0.08 * vi + 0.25 * fr + 0.3 * marg + 0.1 * sstep(0.6, 0.8, fbm(n, 8, 3, seed + 17))
     if ring is not None:   # the fighting circle: a pale waxy bloom band with a marginal vein in it
         dr = rho - ring
         band = np.exp(-(dr / 0.035) ** 2); halo = np.exp(-(dr / 0.16) ** 2) * (0.85 + 0.3 * (mott2 - 0.5))
@@ -517,7 +517,7 @@ def ztop_main(r, a):
     if r > NOTCH_RN - 0.2 and ca > 0.7:
         g = notch_gap(max(r, NOTCH_RN), NOTCH_RN, NOTCH_TH); da = abs(math.atan2(math.sin(a - NOTCH_A), ca))
         d = max(0.0, (da - g)) * r
-        z += 0.06 * math.exp(-d / 0.35) * fsstep(NOTCH_RN - 0.05, NOTCH_RN + 0.4, r)
+        z += 0.1 * math.exp(-d / 0.35) * fsstep(NOTCH_RN - 0.05, NOTCH_RN + 0.4, r)
     return z
 
 
@@ -629,7 +629,7 @@ def rim_xy(rr):
         a = rr.uniform(0, TAU)
         if abs(math.atan2(math.sin(a - NOTCH_A), math.cos(a - NOTCH_A))) < NOTCH_TH + 0.25: continue
         r = rr.uniform(FLAT + 0.05, RD - 0.12); return r * math.cos(a), r * math.sin(a)
-DROPS2 = drops_on(rim_xy, 22, 0.08, 0.2, 9, 'DropsRim', main_z)
+DROPS2 = drops_on(rim_xy, 22, 0.06, 0.14, 9, 'DropsRim', main_z)
 for k, o in enumerate(PADS[:12:2]):   # some on the neighbouring pads
     sp = PAD_SPECS[k * 2]; r = sp[2]
     def xy(rr, r=r):
@@ -919,7 +919,7 @@ def dragonfly(loc, yaw, s=1.0):
     parts += [ab, th, hd, e1, e2]
     # wings: thin veined membranes
     for sd in (-1, 1):
-        for fw, (y0, ln, wd, sw) in enumerate(((-0.06, 0.42, 0.075, -0.12), (0.0, 0.4, 0.09, 0.1))):
+        for fw, (y0, ln, wd, sw) in enumerate(((-0.06, 0.42, 0.1, -0.12), (0.03, 0.4, 0.12, 0.1))):
             bm = bmesh.new(); uvl = bm.loops.layers.uv.new('UVMap'); top_, bot = [], []
             nseg = 10
             for i in range(nseg + 1):
@@ -943,7 +943,7 @@ def dragonfly(loc, yaw, s=1.0):
     return root, parts
 
 
-DFLY, DFLY_PARTS = dragonfly((6.6, -2.4, 1.7), math.radians(-35), s=1.8)
+DFLY, DFLY_PARTS = dragonfly((-6.2, 6.4, 1.9), math.radians(-120), s=1.8)
 
 
 # ================================================================ frog
@@ -1074,8 +1074,8 @@ def depth_tint(mname, k=None, col=None):
 # the pad: waxy sheen micro-bumps, a little translucency under the sun
 for mname in ('PadTop', 'PadSmall', 'PadOld'):
     nt, lk = nodes(MATS[mname]); bs = BSDF[mname]
-    bs.inputs['Coat Weight'].default_value = 0.3 if mname == 'PadTop' else 0.12; bs.inputs['Coat Roughness'].default_value = 0.16 if mname == 'PadTop' else 0.25
-    if mname != 'PadTop': bs.inputs['Specular IOR Level'].default_value = 0.35
+    bs.inputs['Coat Weight'].default_value = 0.15 if mname == 'PadTop' else 0.06; bs.inputs['Coat Roughness'].default_value = 0.2 if mname == 'PadTop' else 0.3
+    bs.inputs['Specular IOR Level'].default_value = 0.32 if mname == 'PadTop' else 0.22
     nm = [n for n in nt if n.type == 'NORMAL_MAP'][0]
     nz = nt.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 60; nz.inputs['Detail'].default_value = 3
     bp = nt.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.08; bp.inputs['Distance'].default_value = 0.01
@@ -1436,7 +1436,7 @@ gl = cnt.nodes.new('CompositorNodeGlare'); gl.glare_type = 'FOG_GLOW'; gl.qualit
 cnt.links.new(rl.outputs['Image'], gl.inputs['Image']); cnt.links.new(gl.outputs['Image'], comp.inputs['Image'])
 
 VIEWS = {'flower': ((8.6, 2.0, 2.0), (11.4, 5.5, 0.2), 30), 'frog': ((-6.6, 1.2, 1.6), (-8.9, 3.9, 0.35), 30),
-         'dfly': ((5.2, -4.6, 2.3), (6.6, -2.4, 1.7), 30), 'notch': ((0.2, 1.0, 2.2), (-2.6, 4.7, 0.0), 40),
+         'dfly': ((-4.2, 3.6, 2.4), (-6.2, 6.4, 1.9), 30), 'notch': ((0.2, 1.0, 2.2), (-2.6, 4.7, 0.0), 40),
          'rim': ((4.5, -7.5, 0.6), (3.0, -4.0, 0.0), 35), 'reeds': ((-8, 2, 3.0), (-15.5, 11.0, 2.0), 45)}
 for shot in SHOTS:
     if shot == 'game':   # the game camera, 'wide' framing of stage_render.py
