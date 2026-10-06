@@ -7,7 +7,7 @@
   const LIGHT_W = new THREE.Vector3(-0.5, 0.85, 0.42).normalize();
   const RIM_W = new THREE.Vector3(0.6, 0.35, -0.75).normalize();
   const LIGHT_ANIME = new THREE.Vector3(-0.85, 0.5, 0.35).normalize(); // anime fighters light from the side: a clear lit half and shadow half
-  const SH = { uLight: { value: new THREE.Vector3() }, uRimDir: { value: new THREE.Vector3() }, uAnime: { value: 0 }, uOL: { value: 1 } }; // uAnime: the anime look (KUMITEGAME / ART STYLE)
+  const SH = { uLight: { value: new THREE.Vector3() }, uRimDir: { value: new THREE.Vector3() }, uAnime: { value: 0 }, uOL: { value: 1 }, uSoft: { value: 0 } }; // uSoft: the campaign's painterly light (a soft terminator) // uAnime: the anime look (KUMITEGAME / ART STYLE)
 
   // ------------------------------------------------------------------ shaders
   const TOON_VS = `
@@ -27,7 +27,7 @@
     }`;
   const TOON_FS = `
     uniform vec3 uColor; uniform vec3 uShade; uniform vec3 uRim; uniform vec3 uLight; uniform vec3 uRimDir;
-    uniform float uRimAmt; uniform float uSpec; uniform float uFlash; uniform vec3 uFlashCol;
+    uniform float uRimAmt; uniform float uSpec; uniform float uFlash; uniform vec3 uFlashCol; uniform float uSoft;
     uniform sampler2D uMap; uniform float uHasMap; uniform float uAlpha; uniform float uAnime;
     varying vec3 vN; varying vec3 vV; varying vec3 vIC; varying vec2 vUv;
     void main(){
@@ -37,8 +37,8 @@
       // anime: brighter lit side, cool violet shadow, a razor-sharp terminator
       sh *= mix(vec3(1.0), vec3(0.8, 0.76, 1.1), uAnime);
       float d = dot(n, uLight);
-      float lit = smoothstep(0.0, mix(0.04, 0.012, uAnime), d);
-      float deep = smoothstep(-0.5, -0.46, d);
+      float lit = smoothstep(-0.06 * uSoft, mix(mix(0.04, 0.012, uAnime), 0.42, uSoft), d);
+      float deep = smoothstep(-0.5 - 0.35 * uSoft, -0.46, d);
       vec3 col = mix(sh * mix(0.78, 0.66, uAnime), sh, deep);
       col = mix(col, base, lit);
       float fres = 1.0 - max(dot(n, v), 0.0);
@@ -73,7 +73,7 @@
         uRimAmt: { value: o.rimAmt !== undefined ? o.rimAmt : 0.55 }, uSpec: { value: o.spec || 0 },
         uFlash: { value: 0 }, uFlashCol: { value: new THREE.Color(0xffffff) },
         uMap: { value: o.map || null }, uHasMap: { value: o.map ? 1 : 0 }, uAlpha: { value: 1 },
-        uLight: SH.uLight, uRimDir: SH.uRimDir, uAnime: SH.uAnime,
+        uLight: SH.uLight, uRimDir: SH.uRimDir, uAnime: SH.uAnime, uSoft: SH.uSoft,
       },
       vertexShader: TOON_VS, fragmentShader: TOON_FS,
     });
@@ -1121,7 +1121,7 @@
       c += (texture2D(tColor, vUv + uDir * 3.231).rgb + texture2D(tColor, vUv - uDir * 3.231).rgb) * 0.070;
       gl_FragColor = vec4(c, 1.0); }`;
   const COMP_FS = `uniform sampler2D tColor; uniform sampler2D tDepth; uniform sampler2D tBloom;
-    uniform vec2 uRes; uniform float uNear; uniform float uFar; uniform float uTime; uniform float uPx; uniform float uCine; uniform vec3 uHaze;
+    uniform vec2 uRes; uniform float uNear; uniform float uFar; uniform float uTime; uniform float uPx; uniform float uCine; uniform vec3 uHaze; uniform sampler2D tShadow; uniform mat4 uInvVP; uniform mat4 uLightVP; uniform float uShadow; uniform vec3 uShadowTint; uniform vec2 uShadowPx;
     varying vec2 vUv;
     float D(vec2 uv){ float z = texture2D(tDepth, uv).r; return uNear * uFar / (uFar - z * (uFar - uNear)); }
     vec3 C(vec2 uv){ return texture2D(tColor, uv).rgb; }
@@ -1138,6 +1138,18 @@
       float edgeC = smoothstep(0.45, 0.8, length(cl - cr) + length(cu - cd)) * step(d0, uFar * 0.8);
       float edge = max(edgeD, edgeC * 0.45);
       // CINEMATIC (campaign): contact shadows from the depth buffer, distance haze, a warmer/cooler grade
+      if (uCine > 0.5 && uShadow > 0.0 && d0 < uFar * 0.8) {
+        // SUN SHADOWS: this pixel back to the world, into the sun's view, compared with what the sun can see
+        float zr = texture2D(tDepth, vUv).r;
+        vec4 wp = uInvVP * vec4(vUv * 2.0 - 1.0, zr * 2.0 - 1.0, 1.0); wp /= wp.w;
+        vec4 lp = uLightVP * vec4(wp.xyz, 1.0); vec3 l = lp.xyz / lp.w * 0.5 + 0.5;
+        if (l.x > 0.0 && l.x < 1.0 && l.y > 0.0 && l.y < 1.0 && l.z < 1.0) {
+          float sh = 0.0;
+          for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) sh += step(texture2D(tShadow, l.xy + vec2(float(x), float(y)) * uShadowPx * 1.3).r, l.z - 0.0018);
+          sh /= 25.0;
+          c = mix(c, c * uShadowTint, sh * uShadow);
+        }
+      }
       if (uCine > 0.5) {
         float ao = 0.0, rad = 0.55 / (d0 * 0.70);
         for (int i = 0; i < 12; i++) {
@@ -1185,7 +1197,7 @@
       const mk = (fs, u) => new THREE.ShaderMaterial({ uniforms: u, vertexShader: POST_VS, fragmentShader: fs, depthTest: false, depthWrite: false });
       this.bright = mk(BRIGHT_FS, { tColor: { value: null } });
       this.blur = mk(BLUR_FS, { tColor: { value: null }, uDir: { value: new THREE.Vector2() } });
-      this.comp = mk(COMP_FS, { tColor: { value: null }, tDepth: { value: null }, tBloom: { value: null }, uRes: { value: new THREE.Vector2() }, uNear: { value: 0.1 }, uFar: { value: 200 }, uTime: { value: 0 }, uCine: { value: 0 }, uHaze: { value: new THREE.Color(0x1c1830) }, uPx: { value: 1 } });
+      this.comp = mk(COMP_FS, { tColor: { value: null }, tDepth: { value: null }, tBloom: { value: null }, uRes: { value: new THREE.Vector2() }, uNear: { value: 0.1 }, uFar: { value: 200 }, uTime: { value: 0 }, uCine: { value: 0 }, uHaze: { value: new THREE.Color(0x1c1830) }, tShadow: { value: null }, uInvVP: { value: new THREE.Matrix4() }, uLightVP: { value: new THREE.Matrix4() }, uShadow: { value: 0 }, uShadowTint: { value: new THREE.Color(0x5a6a9a) }, uShadowPx: { value: new THREE.Vector2(1 / 2048, 1 / 2048) }, uPx: { value: 1 } });
     }
     setSize(w, h, pr) {
       const W = Math.max(4, Math.round(w * pr)), H = Math.max(4, Math.round(h * pr));
@@ -1194,8 +1206,17 @@
       this.comp.uniforms.uPx.value = Math.max(1, H / 900); // line width grows with the screen, about 1px at 900p
     }
     pass(mat, target) { this.quad.material = mat; this.r.setRenderTarget(target); this.r.render(this.qs, this.qc); }
+    // sun shadows (campaign): a depth map from the light's point of view; only objects on layer 2 cast
+    sunShadow(scene, lightCam) {
+      if (!this.shRT) { this.shRT = new THREE.WebGLRenderTarget(2048, 2048); this.shRT.depthTexture = new THREE.DepthTexture(2048, 2048); this.shRT.depthTexture.type = THREE.UnsignedIntType; this.shMat = new THREE.MeshBasicMaterial({ colorWrite: false }); }
+      const r = this.r, ov = scene.overrideMaterial, bg = scene.background; scene.overrideMaterial = this.shMat; scene.background = null;
+      lightCam.layers.set(2); r.setRenderTarget(this.shRT); r.clear(); r.render(scene, lightCam);
+      scene.overrideMaterial = ov; scene.background = bg;
+      const u = this.comp.uniforms; u.tShadow.value = this.shRT.depthTexture; u.uLightVP.value.multiplyMatrices(lightCam.projectionMatrix, lightCam.matrixWorldInverse);
+    }
     render(scene, cam, t) {
       const r = this.r;
+      if (this.comp.uniforms.uShadow.value > 0) this.comp.uniforms.uInvVP.value.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).invert();
       r.setRenderTarget(this.rt); r.render(scene, cam);
       this.bright.uniforms.tColor.value = this.rt.texture; this.pass(this.bright, this.bA);
       for (let i = 0; i < 2; i++) {
@@ -2108,8 +2129,8 @@
   S.R3.GEO = GEO;
   // shared with the campaign (campaign.js): the wrestler model, effects, and the toon light for any camera
   S.WrestlerView = WrestlerView; S.FX = FX;
-  S.R3.setLight = (cam, anime) => {
-    SH.uLight.value.copy(anime ? LIGHT_ANIME : LIGHT_W).transformDirection(cam.matrixWorldInverse);
+  S.R3.setLight = (cam, anime, dirW) => {
+    SH.uLight.value.copy(dirW || (anime ? LIGHT_ANIME : LIGHT_W)).transformDirection(cam.matrixWorldInverse);
     SH.uRimDir.value.copy(RIM_W).transformDirection(cam.matrixWorldInverse);
   };
   // STAGES: swap the classic dohyo for a themed stage (built in stages.js). The fight area is the same everywhere.

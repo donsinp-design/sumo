@@ -1106,9 +1106,32 @@
       this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh * 0.5, dist * 0.64 + (Math.random() - 0.5) * sh * 0.5, this.camT.z + dist * 0.77);
       this.cam.lookAt(this.camT.x, 0.6, this.camT.z);
       this.cam.updateMatrixWorld();
-      S.R3.setLight(this.cam, R.anime);
-      if (R.anime && R.post) { const u = R.post.comp.uniforms; u.uCine.value = 1; R.post.render(this.scene, this.cam, T); u.uCine.value = 0; } else R.r.render(this.scene, this.cam);
+      if (R.anime && R.post) {
+        // DAWN: a low warm sun casting real shadows (painterly, soft-terminator shading, fine outlines); versus keeps its own look
+        const u = R.post.comp.uniforms, SH = S.R3.SH, ol0 = SH.uOL.value;
+        this.markCasters(dt);
+        const sun = this.sunDir || (this.sunDir = new THREE.Vector3(0.5, 0.82, -0.36).normalize());
+        if (!this.sunCam) { this.sunCam = new THREE.OrthographicCamera(-24, 24, 24, -24, 1, 120); }
+        const lc = this.sunCam; lc.position.set(this.camT.x + sun.x * 50, sun.y * 50, this.camT.z - 4 + sun.z * 50); lc.lookAt(this.camT.x, 0, this.camT.z - 4); lc.updateMatrixWorld(); lc.updateProjectionMatrix();
+        S.R3.setLight(this.cam, R.anime, sun);
+        SH.uSoft.value = 1; SH.uOL.value = ol0 * 0.62; u.uCine.value = 1; u.uShadow.value = 0.62;
+        R.post.sunShadow(this.scene, lc); R.post.render(this.scene, this.cam, T);
+        SH.uSoft.value = 0; SH.uOL.value = ol0; u.uCine.value = 0; u.uShadow.value = 0;
+      } else R.r.render(this.scene, this.cam);
       this.drawHud();
+    }
+    // which objects cast sun shadows: solid meshes; not floors, decals, glows, sprites or the outline shells (checked as things appear)
+    markCasters(dt) {
+      this.castT = (this.castT || 0) - dt; if (this.castT > 0) return; this.castT = 0.5;
+      this.scene.traverse((o) => {
+        if (o.userData.cast !== undefined) return;
+        let cast = false;
+        if ((o.isMesh || o.isInstancedMesh || o.isSkinnedMesh) && o.material && !Array.isArray(o.material)) {
+          const m = o.material, g = o.geometry;
+          cast = !m.transparent && m.side !== THREE.BackSide && m.blending !== THREE.AdditiveBlending && m.colorWrite !== false && !(g && g.type === 'PlaneGeometry') && !(m.uniforms && m.uniforms.uThick);
+        }
+        o.userData.cast = cast; if (cast) o.layers.enable(2);
+      });
     }
     drawActor(a, dt, T) {
       if (a.gone) return;
