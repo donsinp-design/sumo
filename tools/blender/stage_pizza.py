@@ -16,7 +16,7 @@ from mathutils import Vector, Matrix
 
 SCR = '/tmp/claude-0/-home-user-sumo/f8028735-3c86-5a27-b070-5e521ee72586/scratchpad'
 CHAR_DIR = SCR + '/stage'
-FLAGW = {'fast', 'noexport', 'norender'}
+FLAGW = {'fast', 'noexport', 'norender', 'tris'}
 ARGS = [a for a in sys.argv[1:] if '=' not in a and a not in FLAGW and not a.endswith('.py')]
 OUT = ARGS[0] if ARGS else SCR + '/pizza'
 os.makedirs(OUT, exist_ok=True)
@@ -42,7 +42,8 @@ def ss(e0, e1, x):
     t = np.clip((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t)
 def mix(a, b, t):
     t = np.asarray(t, np.float32)
-    if t.ndim and np.ndim(a) and np.shape(a)[-1] == 3 or (t.ndim and np.ndim(b) and np.shape(b)[-1] == 3): t = t[..., None]
+    iscol = (np.ndim(a) >= 1 and np.shape(a)[-1] == 3) or (np.ndim(b) >= 1 and np.shape(b)[-1] == 3)
+    if iscol and t.ndim >= 1 and t.shape[-1] != 3: t = t[..., None]
     return a + (b - a) * t
 
 def gn(shape, sig, seed, ang=None):
@@ -724,7 +725,7 @@ def build_tray():
     M = pmat('m_tray', img=image('tray_col', col), ormimg=image('tray_orm', orm(rough, metal), True), nimg=image('tray_nrm', nrm, True), metal=1)
     prof = [(0, -0.218), (6.5, -0.218), (6.72, -0.205), (6.84, -0.15), (6.9, -0.08), (6.95, -0.06), (6.99, -0.075),
             (6.98, -0.12), (6.86, -0.24), (6.6, -0.262), (0, -0.262)]
-    prof = chaikin(prof, 2)
+    prof = chaikin(prof, 2)[::-1]
     lathe(prof, 160, 'tray', M, uvfn=lambda x, y, a, s: ((x + e) / (2 * e), (y + e) / (2 * e)))
     # chrome wire stand: ring under the tray + 3 legs splaying to feet on the cloth
     CH = pmat('m_chrome', '#d8d8d8'[1:], rough=0.12, metal=1)
@@ -782,16 +783,22 @@ def build_cloth():
     qx = np.clip(A, -HX, HX); qy = np.clip(B, -HY, HY)
     ox, oy = A - qx, B - qy; d = np.hypot(ox, oy) + 1e-9; dx, dy = ox / d, oy / d
     # perimeter coordinate (continuous through corners)
-    ang = np.arctan2(dy, dx)
-    s = np.where(np.abs(ox) > np.abs(oy), qy * np.sign(ox), -qx * np.sign(oy)) + ang * 1.2
+    Rc = 1.2; a2 = np.arctan2(dy, dx) % TAU; hp = math.pi / 2
+    ex, ey = np.abs(ox) > 1e-6, np.abs(oy) > 1e-6
+    b1 = 2 * HY; b2 = b1 + Rc * hp + 2 * HX; b3 = b2 + Rc * hp + 2 * HY; b4 = b3 + Rc * hp + 2 * HX
+    s = np.select([ex & ey & (ox > 0) & (oy > 0), ex & ey & (ox < 0) & (oy > 0), ex & ey & (ox < 0) & (oy < 0), ex & ey,
+                   ex & (ox > 0), ey & (oy > 0), ex & (ox < 0), ey],
+                  [b1 + Rc * a2, b2 + Rc * (a2 - hp), b3 + Rc * (a2 - 2 * hp), b4 + Rc * (a2 - 3 * hp),
+                   qy + HY, b1 + Rc * hp + (HX - qx), b2 + Rc * hp + (HY - qy), b3 + Rc * hp + (qx + HX)], 0.0)
+    Ptot = b4 + Rc * hp
     rr = 0.3
     phi = np.minimum(d / rr, math.pi / 2)
     hang = np.maximum(d - rr * math.pi / 2, 0)
     rc = np.random.default_rng(12)
-    fold = sum(math.sin(0) + np.sin(s * (TAU / wl) + rc.uniform(0, TAU)) * amp for wl, amp in ((2.6, 1.0), (1.55, 0.55), (0.9, 0.25)))
+    fold = sum(np.sin(s * TAU * round(Ptot / wl) / Ptot + rc.uniform(0, TAU)) * amp for wl, amp in ((2.6, 1.0), (1.55, 0.55), (0.9, 0.25)))
     corner = (np.abs(ox) > 0.2) & (np.abs(oy) > 0.2)
     amp = 0.32 * ss(0.0, 3.5, hang) * (1 + 0.8 * corner)
-    out = rr * np.sin(phi) + amp * fold + 0.15 * ss(0, 4, hang)
+    out = rr * np.sin(phi) + amp * (1 + fold / 1.8) + 0.15 * ss(0, 4, hang)
     Xc = qx + dx * out; Yc = qy + dy * out
     Zc = TZ - rr * (1 - np.cos(phi)) - hang
     flat = d < 1e-6
@@ -865,7 +872,7 @@ def build_props():
     WAXR = pmat('m_wax_red', 'a4161a', rough=0.35, sss=0.5, sss_r=(1.0, 0.3, 0.2), sss_s=0.12)
     WAXG = pmat('m_wax_green', '2e6a3a', rough=0.35, sss=0.5, sss_r=(0.4, 1.0, 0.4), sss_s=0.12)
     cprof = [(0, TZ + 7.35), (0.18, TZ + 7.38), (0.33, TZ + 7.5), (0.36, TZ + 7.45), (0.37, TZ + 6.1), (0, TZ + 6.1)]
-    lathe(chaikin(cprof, 2), 32, 'candle', WAX, xy=(bx, by))
+    lathe(chaikin(cprof, 2)[::-1], 32, 'candle', WAX, xy=(bx, by))
     rd = np.random.default_rng(66)
     for k in range(16):
         a = rd.uniform(0, TAU); mat_ = [WAX, WAX, WAXR, WAXG][k % 4]
@@ -910,7 +917,7 @@ def build_props():
         CAP = pmat('m_cap_' + name, img=image('cap_col_' + name, ccol), ormimg=image('cap_orm_' + name, orm(0.14 + 0.8 * holes, 1 - holes), True),
                    nimg=image('cap_nrm_' + name, h2n(-holes * 0.01, 1 / N, 1 / N, 1.0), True), metal=1)
         cp = [(0, 4.05), (0.4, 4.02), (0.75, 3.85), (0.93, 3.55), (0.96, 3.2), (0.93, 3.12), (0.86, 3.12)]
-        lathe(chaikin(cp, 2), 48, 'cap_' + name, CAP, z0=TZ, xy=(x, y), uvfn=lambda xx, yy, a, s: (0.5 + (xx) / 2.1, 0.5 + (yy) / 2.1))
+        lathe(chaikin(cp, 2)[::-1], 48, 'cap_' + name, CAP, z0=TZ, xy=(x, y), uvfn=lambda xx, yy, a, s: (0.5 + (xx) / 2.1, 0.5 + (yy) / 2.1))
     pc, pn = grain_tex('parm', ['eadbb0', 'f6ecc8', 'd2bc84', 'fbf3dc'], 131)
     shaker(-10.6, 1.4, 'parm', pc, pn, 2.1)
     cc, cn = grain_tex('chili', ['7a160a', 'a8260e', 'e0a83a', '5a1006', 'c03a12'], 132, flakes=True)
@@ -918,7 +925,6 @@ def build_props():
     # ---- pizza cutter (right, lying on the cloth)
     STEEL = pmat('m_steel', 'c8c8c6', rough=0.22, metal=1)
     N = 512; u = (np.arange(N) + 0.5) / N; U, Vv = np.meshgrid(u, u); Rw = np.hypot(U - 0.5, Vv - 0.5) * 2; Aw = np.arctan2(Vv - 0.5, U - 0.5)
-    brushed = gn((N, N), (60, 0.6), 141, ang=0)  # replaced by radial below
     circ = np.sin(Rw * 900 + 3 * gn((N, N), 20, 142)) * 0.5 + 0.5
     smear = ss(0.2, 0.9, gn((N, N), 18, 143) + 1.5 * ss(0.5, 1.0, Rw) * (np.cos(Aw - 0.8) > 0.2))
     wcol = mix(np.tile(hx('c9c9c6'), (N, N, 1)) * (0.92 + 0.08 * circ[..., None]), hx('8a1e0c'), smear * 0.85)
@@ -927,8 +933,8 @@ def build_props():
     HAND = pmat('m_handle', '1c1a19', rough=0.55, coat=0.2, coat_r=0.3)
     parts = []
     wp_ = [(0, 0.04), (1.35, 0.03), (1.5, 0.0), (1.35, -0.03), (0, -0.04)]
-    w = lathe(wp_, 64, 'cutter_wheel', WH, uvfn=lambda xx, yy, a, s: (0.5 + xx / 3.0, 0.5 + yy / 3.0)); parts.append(w)
-    hub = lathe([(0, 0.11), (0.28, 0.1), (0.3, 0.0), (0.28, -0.1), (0, -0.11)], 24, 'cutter_hub', STEEL); parts.append(hub)
+    w = lathe(wp_[::-1], 64, 'cutter_wheel', WH, uvfn=lambda xx, yy, a, s: (0.5 + xx / 3.0, 0.5 + yy / 3.0)); parts.append(w)
+    hub = lathe([(0, 0.11), (0.28, 0.1), (0.3, 0.0), (0.28, -0.1), (0, -0.11)][::-1], 24, 'cutter_hub', STEEL); parts.append(hub)
     V, F = tube([(0, 0.13, 0.0), (-0.9, 0.16, 0.0), (-1.9, 0.12, 0.0), (-2.2, 0.0, 0.0)], 0.07, 8); parts.append(mk('cutter_fork', V, F, None, STEEL))
     V, F = tube([(0, -0.13, 0.0), (-0.9, -0.16, 0.0), (-1.9, -0.12, 0.0), (-2.2, 0.0, 0.0)], 0.07, 8); parts.append(mk('cutter_fork2', V, F, None, STEEL))
     hp = np.array([(-2.2, 0, 0), (-2.6, 0, 0), (-3.4, 0, 0), (-4.6, 0, 0), (-5.6, 0, 0), (-5.9, 0, 0)])
@@ -1027,6 +1033,10 @@ def tri_count(objs):
         me = o.evaluated_get(dg).to_mesh(); me.calc_loop_triangles(); n += len(me.loop_triangles); o.evaluated_get(dg).to_mesh_clear()
     return n
 STAGE_TRIS = tri_count(STAGE.objects)
+if 'tris' in sys.argv:
+    import collections; agg = collections.Counter()
+    for o in STAGE.objects: agg[o.name.split('_')[0]] += tri_count([o])
+    log(sorted(agg.items(), key=lambda kv: -kv[1]))
 log('stage triangles:', STAGE_TRIS)
 
 # max relief inside the flat zone
@@ -1128,11 +1138,11 @@ def setup_light():
         l = bpy.data.objects.new(name, bpy.data.lights.new(name, 'AREA')); scn.collection.objects.link(l)
         l.data.energy = energy; l.data.size = size; l.data.shape = shape; l.data.color = color; l.location = loc
         l.rotation_euler = (Vector(target) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler(); return l
-    area('Key', (-5, -7, 26), (0.5, 0.5, 0), 26000, 9, (1.0, 0.8, 0.58))
-    area('Fill', (16, -18, 9), (0, 0, 0), 5000, 16, (1.0, 0.86, 0.72))
-    area('Rim', (3, 24, 9), (0, 0, 0.5), 9000, 10, (1.0, 0.88, 0.75))
+    area('Key', (-5, -7, 26), (0.5, 0.5, 0), 15000, 9, (1.0, 0.8, 0.58))
+    area('Fill', (16, -18, 9), (0, 0, 0), 3000, 16, (1.0, 0.86, 0.72))
+    area('Rim', (3, 24, 9), (0, 0, 0.5), 6000, 10, (1.0, 0.88, 0.75))
     c = bpy.data.objects.new('Candle', bpy.data.lights.new('Candle', 'POINT')); scn.collection.objects.link(c)
-    c.data.energy = 9000; c.data.color = (1.0, 0.55, 0.22); c.data.shadow_soft_size = 0.25; c.location = CANDLE
+    c.data.energy = 3000; c.data.color = (1.0, 0.55, 0.22); c.data.shadow_soft_size = 0.25; c.location = CANDLE
 
 def render(shot):
     cam = bpy.data.objects.get('Cam')

@@ -183,9 +183,9 @@ def image(name, arr, data=False):
     arr = np.asarray(arr, np.float32)
     if arr.ndim == 2: arr = np.repeat(arr[..., None], 3, 2)
     h, w = arr.shape[:2]; rgba = np.ones((h, w, 4), np.float32); rgba[..., :3] = np.clip(arr[..., :3], 0, 1)
-    im = bpy.data.images.new(name, w, h, alpha=False); im.pixels.foreach_set(rgba.ravel())
-    if data: im.colorspace_settings.name = 'Non-Color'
-    im.file_format = 'PNG'; im.pack(); return im
+    im = bpy.data.images.new(name, w, h, alpha=False)
+    if data: im.colorspace_settings.name = 'Non-Color'      # before the pixels: changing it regenerates the image
+    im.pixels.foreach_set(rgba.ravel()); im.file_format = 'PNG'; im.pack(); return im
 def normal_from_h(h, strength):
     gy, gx = np.gradient(h); n = np.dstack([-gx * strength, -gy * strength, np.ones_like(h)])
     n /= np.linalg.norm(n, axis=2, keepdims=True); return n * 0.5 + 0.5
