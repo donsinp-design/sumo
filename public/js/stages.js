@@ -515,8 +515,8 @@
         c.fillStyle = 'rgba(90,52,20,0.35)'; c.fillRect(0, w - 4, w, 4); // board joint
       }, 240, 10);
       // filled in from the Blender set: plates of sushi riding the belt, and tea, soy and ginger along the counter
-      const ridePlates = [], props = [], SPAN = 120, SC = 62;
-      [-26, -13, 13, 26].forEach((x) => { const pg = new THREE.Group(); pg.position.set(x, BY, 0); g.add(pg); ridePlates.push(pg); });
+      const ridePlates = [], props = [], SPAN = 120, SC = 44;
+      [-20.5, -10.6, 10.6, 20.5].forEach((x) => { const pg = new THREE.Group(); pg.position.set(x, BY, 0); g.add(pg); ridePlates.push(pg); });
       S.sushiSet = S.sushiSet || new Promise((res) => new THREE.GLTFLoader().load('assets/models/sushi_set.glb', (gl) => res(gl.scene), undefined, () => res(null)));
       S.sushiSet.then((set) => {
         if (!set) return;
@@ -537,7 +537,7 @@
         ridePlates.forEach((pg, k) => {
           const [pl, food] = menu[k], plate = part(pl); if (plate) pg.add(plate);
           food.forEach((f, i) => { const it = part(f); if (!it) return; const n = food.length, a = (i / n) * TAU + 0.6;
-            it.position.set(Math.cos(a) * (n > 2 ? 1.25 : 0.95), 0.9, Math.sin(a) * (n > 2 ? 1.25 : 0.95) * 1.2); it.rotation.y = n > 2 ? a : Math.PI / 2 + 0.25 * (i ? 1 : -1); pg.add(it); });
+            it.position.set(Math.cos(a) * (n > 2 ? 0.95 : 0.7), 0.42, Math.sin(a) * (n > 2 ? 0.95 : 0.7) * 1.2); it.rotation.y = n > 2 ? a : Math.PI / 2 + 0.25 * (i ? 1 : -1); pg.add(it); });
         });
         const table = ['teacup', 'soy_dish', 'gari', 'chopsticks', 'wasabi', 'teacup', 'soy_dish', 'chopsticks', 'gari', 'teacup', 'soy_dish', 'wasabi'];
         table.forEach((name, k) => {
