@@ -532,13 +532,25 @@
     if (set.cache[name] !== undefined) return set.cache[name];
     const src = set.scene.getObjectByName(name); if (!src) return (set.cache[name] = null);
     src.updateMatrixWorld(true);
-    const parts = [];
+    // one mesh per material: every piece sharing a material is merged, so a module costs a handful of draw calls
+    const byMat = new Map(), inv = new THREE.Matrix4().copy(src.matrixWorld).invert();
     src.traverse((o) => {
       if (!o.isMesh) return;
-      const sm = o.material, col = sm.color ? sm.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1);
-      const geo = o.geometry.clone().applyMatrix4(new THREE.Matrix4().copy(src.matrixWorld).invert().multiply(o.matrixWorld));
-      parts.push({ geo, mat: S.toon(col.getHex(), { shade: col.clone().multiply(new THREE.Color(0.7, 0.66, 0.76)).getHex(), map: sm.map || undefined, rimAmt: 0 }) });
+      const geo = o.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)).toNonIndexed();
+      if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+      if (!byMat.has(o.material)) byMat.set(o.material, []); byMat.get(o.material).push(geo);
     });
+    const parts = [];
+    for (const [sm, geos] of byMat) {
+      const geo = new THREE.BufferGeometry();
+      for (const [k, n] of [['position', 3], ['normal', 3], ['uv', 2]]) {
+        const tot = geos.reduce((t, gg) => t + gg.attributes[k].count * n, 0), arr = new Float32Array(tot); let off = 0;
+        for (const gg of geos) { arr.set(gg.attributes[k].array, off); off += gg.attributes[k].count * n; }
+        geo.setAttribute(k, new THREE.BufferAttribute(arr, n));
+      }
+      const col = sm.color ? sm.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1);
+      parts.push({ geo, mat: S.toon(col.getHex(), { shade: col.clone().multiply(new THREE.Color(0.7, 0.66, 0.76)).getHex(), map: sm.map || undefined, rimAmt: 0 }) });
+    }
     return (set.cache[name] = parts);
   }
   function facade(g, x, z0, z1, h, sd, style, seg) {
@@ -556,7 +568,7 @@
       for (const [m, v] of panels) {
         const parts = facadeModule(set, style + '_' + (v % nv)); if (!parts || !parts.length) continue;
         const grp = new THREE.Group();
-        for (const p of parts) grp.add(W.mesh(p.geo, p.mat, 0.012));
+        for (const p of parts) grp.add(W.mesh(p.geo, p.mat, 0)); // no ink outline: the modelled bevels carry the edges
         grp.scale.set(sl / mw, h / mh, 1); grp.position.set(m.position.x, 0, m.position.z); grp.rotation.y = -sd * Math.PI / 2;
         g.add(grp); grp.updateMatrixWorld(true); m.visible = false;
       }

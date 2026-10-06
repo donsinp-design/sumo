@@ -836,6 +836,7 @@
             Lg.y = 0;
             this.fx.footprint(Lg.x, Lg.z, w.f, sd, s);
             if (sp > 3 && !this.fx.noMarks) this.fx.dust(Lg.x, 0.05, Lg.z, 2, 0.15, 0.6, 0.35, -w.vx * 0.1, -w.vz * 0.1);
+            if (sp > 0.8) this.fx.sand(Lg.x, Lg.z, sp > 3 ? 7 : 3, -w.vx * 0.25, -w.vz * 0.25, sp > 3 ? 1.2 : 0.7);
           }
           continue;
         }
@@ -845,7 +846,7 @@
           const ox = Lg.x, oz = Lg.z;
           Lg.x += w.vx * dt; Lg.z += w.vz * dt;
           const mv = Math.hypot(Lg.x - ox, Lg.z - oz);
-          if (mv > 0.004) { this.fx.slide(ox, oz, Lg.x, Lg.z, s); slideAmt += mv / dt; }
+          if (mv > 0.004) { this.fx.slide(ox, oz, Lg.x, Lg.z, s); slideAmt += mv / dt; if (Math.random() < 0.5) this.fx.sand(Lg.x, Lg.z, 2, (Lg.x - ox) / dt * 0.4, (Lg.z - oz) / dt * 0.4, 0.6); } // heels ploughing the clay
           continue;
         }
         const thr = (w.st === 'ready' || w.st === 'win' || w.st === 'lose') ? 0.15 * s : 0.26 * s;
@@ -1046,6 +1047,41 @@
       }
       this.saltPts.geometry.attributes.position.needsUpdate = true;
     }
+    // sand kicked up off the clay (dohyo only, fx.sandy): grains fly, land, lie there a moment and fade
+    sand(x, z, n, dx, dz, up) {
+      if (!this.sandy) return;
+      if (!this.sPts) {
+        const N = this.sN = 400, g = new THREE.BufferGeometry();
+        this.sPos = new Float32Array(N * 3).fill(-50); this.sVel = new Float32Array(N * 3); this.sLife = new Float32Array(N).fill(9); this.sCol = new Float32Array(N * 3); this.sI = 0;
+        const tones = [[0.93, 0.84, 0.66], [0.5, 0.37, 0.24], [0.98, 0.92, 0.78], [0.42, 0.3, 0.19]];
+        for (let i = 0; i < N; i++) { const t = tones[i % 4]; this.sCol.set(t, i * 3); }
+        g.setAttribute('position', new THREE.BufferAttribute(this.sPos, 3)); g.setAttribute('color', new THREE.BufferAttribute(this.sCol, 3));
+        this.sPts = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.075, vertexColors: true, transparent: true, opacity: 1, depthWrite: true }));
+        this.sPts.frustumCulled = false; this.sPts.renderOrder = 3; this.scene.add(this.sPts);
+      }
+      up = up || 1;
+      for (let j = 0; j < n; j++) {
+        const i = this.sI; this.sI = (this.sI + 1) % this.sN;
+        const a = Math.random() * Math.PI * 2, sp = 0.4 + Math.random() * 1.2;
+        this.sPos[i * 3] = x + Math.cos(a) * 0.12; this.sPos[i * 3 + 1] = 0.03; this.sPos[i * 3 + 2] = z + Math.sin(a) * 0.12;
+        this.sVel[i * 3] = (dx || 0) * (0.6 + Math.random()) + Math.cos(a) * sp; this.sVel[i * 3 + 1] = (0.8 + Math.random() * 1.8) * up; this.sVel[i * 3 + 2] = (dz || 0) * (0.6 + Math.random()) + Math.sin(a) * sp;
+        this.sLife[i] = 0;
+      }
+    }
+    updateSand(dt) {
+      if (!this.sPts) return;
+      for (let i = 0; i < this.sN; i++) {
+        if (this.sLife[i] > 2.5) continue;
+        this.sLife[i] += dt;
+        if (this.sPos[i * 3 + 1] > 0.015) {
+          this.sVel[i * 3 + 1] -= 12 * dt;
+          for (let a = 0; a < 3; a++) this.sPos[i * 3 + a] += this.sVel[i * 3 + a] * dt;
+          if (this.sPos[i * 3 + 1] <= 0.015) { this.sPos[i * 3 + 1] = 0.015; this.sVel[i * 3] *= 0.25; this.sVel[i * 3 + 2] *= 0.25; } // landed: a short skid
+        } else { const k = Math.exp(-dt * 10); this.sVel[i * 3] *= k; this.sVel[i * 3 + 2] *= k; this.sPos[i * 3] += this.sVel[i * 3] * dt; this.sPos[i * 3 + 2] += this.sVel[i * 3 + 2] * dt; }
+        if (this.sLife[i] > 2.5) this.sPos[i * 3 + 1] = -50;   // settled into the clay
+      }
+      this.sPts.geometry.attributes.position.needsUpdate = true;
+    }
     // stepping in water: a few droplets kicked up and thin ripples spreading out (k = how hard: 1 a step, 3 a body)
     water(x, z, k) {
       if (!this.wPts) {
@@ -1121,6 +1157,7 @@
     burst(x, z, power) {
       const p = Math.min(1.6, power / 6);
       this.dust(x, 0.05, z, Math.round(8 + p * 18), 0.25 + p * 0.3, 1.0 + p * 1.4, 0.42 + p * 0.25);
+      this.sand(x, z, Math.round(10 + p * 30), 0, 0, 1 + p * 0.5);
     }
     ring(x, z, size, dur) {
       const r = this.rings.find((o) => o.t >= o.max) || this.rings[0];
@@ -1300,7 +1337,7 @@
       this.scene = new THREE.Scene();
       this.scene.background = new THREE.Color(0x150c14);
       this.cam = new THREE.PerspectiveCamera(34, 1, 0.1, 200);
-      this.fx = new FX(this.scene); this.fx.scene = this.scene;
+      this.fx = new FX(this.scene); this.fx.scene = this.scene; this.fx.sandy = true;
       this.views = [];
       this.ref = new RefView(this.scene);
       this.buildArena();
@@ -2109,7 +2146,7 @@
       }
       if (this.marker && this.marker.visible) { const k = 1 + 0.12 * Math.sin(this.time * 6); this.marker.scale.set(k, 1, k); }
       this.ref.update(rdt, T, m);
-      this.fx.update(dt); this.fx.updateSalt(dt); this.fx.updateWater(dt);
+      this.fx.update(dt); this.fx.updateSalt(dt); this.fx.updateWater(dt); this.fx.updateSand(dt);
       this.updateObjs(game, dt); this.updateThrown(dt);
       if (this.banners) for (const b of this.banners) b.userData.flag.rotation.y = Math.sin(this.time * 1.3 + b.position.x) * 0.12;
       this.excite += ((game.excite || 0) - this.excite) * Math.min(1, rdt * 3);
@@ -2172,6 +2209,7 @@
     this.dohyoG.visible = classic;
     for (const c of this.spinG.children) if (c.userData.dohyo) c.visible = classic;
     this.classicStage = classic;
+    if (this.fx) this.fx.sandy = classic; // sand kicks up off the clay ring only
     if (this.floorM) this.floorM.visible = classic;
     if (this.coneM) this.coneM.visible = classic;
     if (this.motes) this.motes.visible = classic;
