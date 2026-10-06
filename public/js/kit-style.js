@@ -119,6 +119,65 @@
     p.add(mesh); return mesh;
   };
 
+  // ---------------------------------------------------------------- MASTER MATERIAL (our "custom URP shader")
+  // One stylised shader for the whole environment: colour from a tiny palette texture (or vertex colours), wrapped
+  // soft diffuse with a gentle 3-step-blended ramp (never hard bands), sky/ground ambient, softened shadows that keep
+  // colour, a very restrained broad highlight. Built on MeshLambertMaterial so three.js lights + shadow maps just work.
+  K.master = (o) => {
+    o = o || {};
+    const m = new THREE.MeshLambertMaterial({ map: o.palette || null, vertexColors: !!o.vertexColors, color: o.color !== undefined ? o.color : 0xffffff });
+    m.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader
+        // soft wrap lighting: shadows lift instead of going black, the terminator is a gentle blend
+        .replace('#include <lights_lambert_pars_fragment>', `#include <lights_lambert_pars_fragment>
+          float kitWrap(float d){ float w = clamp((d + 0.35) / 1.35, 0.0, 1.0); return smoothstep(0.0, 1.0, w) * 0.85 + w * 0.15; }`)
+        .replace('#include <opaque_fragment>', `
+          // shadowed areas keep their hue: pull dark values toward a lifted, slightly cool version of the albedo
+          outgoingLight = max(outgoingLight, diffuseColor.rgb * vec3(0.46, 0.47, 0.54));
+          #include <opaque_fragment>`);
+    };
+    return m;
+  };
+
+  // ---------------------------------------------------------------- LUT GRADE: the cohesive pastel treatment, as a post pass
+  // A 16×16×16 colour cube (stored as a 256×16 strip) built from a few artistic operations: lift blacks to warm grey,
+  // gentle S-curve on luminance, saturation pulled down in the highs and kept in the mids, a slight warm/cool split.
+  K.lutStrip = (fn) => {
+    const N = 16, d = new Uint8Array(N * N * N * 4);
+    for (let b = 0; b < N; b++) for (let g = 0; g < N; g++) for (let r = 0; r < N; r++) {
+      const c = fn(r / (N - 1), g / (N - 1), b / (N - 1)), i = (g * N * N + b * N + r) * 4;
+      d[i] = Math.round(Math.min(1, Math.max(0, c[0])) * 255); d[i + 1] = Math.round(Math.min(1, Math.max(0, c[1])) * 255); d[i + 2] = Math.round(Math.min(1, Math.max(0, c[2])) * 255); d[i + 3] = 255;
+    }
+    const t = new THREE.DataTexture(d, N * N, N, THREE.RGBAFormat); t.minFilter = t.magFilter = THREE.LinearFilter; t.needsUpdate = true; return t;
+  };
+  K.pastel = (r, g, b) => {
+    const L = 0.299 * r + 0.587 * g + 0.114 * b;
+    const s = (x) => x * x * (3 - 2 * x);
+    const Ln = 0.1 + 0.86 * (0.6 * L + 0.4 * s(L));                   // lifted blacks, soft S
+    const satK = 0.92 - 0.3 * Math.max(0, L - 0.65);                  // calmer highlights
+    let o = [r, g, b].map((c) => Ln + (c - L) * satK);
+    const warm = L, cool = 1 - L;                                      // warm lights, slightly lilac shade
+    o = [o[0] + 0.03 * warm - 0.005 * cool, o[1] + 0.012 * warm, o[2] - 0.02 * warm + 0.03 * cool];
+    return o;
+  };
+  K.grade = (renderer, scene, camera, lut) => {
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { samples: 4 });
+    const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+      uniforms: { tSrc: { value: rt.texture }, tLut: { value: lut } }, depthTest: false, depthWrite: false,
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `uniform sampler2D tSrc, tLut; varying vec2 vUv;
+        vec3 lut(vec3 c){ c = clamp(c, 0.0, 1.0); float N = 16.0; float b = c.b * (N - 1.0); float b0 = floor(b), b1 = min(b0 + 1.0, N - 1.0);
+          vec2 uv0 = vec2((b0 * N + c.r * (N - 1.0) + 0.5) / (N * N), (c.g * (N - 1.0) + 0.5) / N);
+          vec2 uv1 = vec2((b1 * N + c.r * (N - 1.0) + 0.5) / (N * N), uv0.y);
+          return mix(texture2D(tLut, uv0).rgb, texture2D(tLut, uv1).rgb, b - b0); }
+        void main(){ vec3 c = texture2D(tSrc, vUv).rgb; gl_FragColor = vec4(lut(c), 1.0); }`,
+    }));
+    const qs = new THREE.Scene(); qs.add(q); const qc = new THREE.Camera();
+    return { render() { const s2 = renderer.getDrawingBufferSize(new THREE.Vector2()); if (s2.x !== rt.width || s2.y !== rt.height) rt.setSize(s2.x, s2.y);
+      renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null); renderer.render(qs, qc); } };
+  };
+
   // ---------------------------------------------------------------- daylight rig
   K.light = (scene, focus) => {
     const sun = new THREE.DirectionalLight(0xfff3e4, 0.72);
