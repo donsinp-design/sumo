@@ -1,11 +1,11 @@
-# "SUSHI TRAIN" stage, fully modelled: two sumos fight on a giant glazed kaiten-zushi plate riding a brushed-steel
-# conveyor belt, between ~40x sushi plates, with a pale hinoki counter (soy dish, wasabi, gari, chopsticks, 寿 cup)
-# beyond. Built entirely by script (Blender 4.2, run headless).
+# "SUSHI TRAIN" stage, fully modelled: two sumos fight on a giant glazed kaiten-zushi plate riding single file on a
+# black crescent-chain conveyor between polished steel guides, one ~40x sushi plate in the slot either side, pale
+# hinoki counters either side (soy dish, wasabi, gari, chopsticks, 寿 cup on the far one). Built entirely by script (Blender 4.2, run headless).
 #   python tools/blender/stage_sushi.py [out_dir] [chars_dir] [sushi_glb] [samples=32] [pct=100] [noren] [nochars]
 # Writes <out_dir>/sushi_stage.glb (the stage only: Z up in Blender, metres, origin at the plate centre, flat top of the
 # plate at Z=0, camera side -Y) and renders <out_dir>/ex_game.png from the game camera ('wide' of stage_render.py)
 # with the game's characters (sumo2_stance.glb, sumo2_red.glb, gyoji.glb from chars_dir) in masks.
-# Only what the game camera sees is built: the belt runs along X through the plate, the counter lies beyond it (+Y).
+# Only what the game camera sees is built: the belt runs along X through the plate centre.
 # The sushi pieces / table props are instances of the meshes in sushi_set.glb (tools/blender/sushi.py) at 40x.
 import bpy, bmesh, math, sys, os, re
 import numpy as np
@@ -38,9 +38,9 @@ RING_R = ring_r()
 PR = RING_R + 0.7            # giant plate radius (5.3)
 K = 40.0                     # scale of the sushi-set props
 BELT_Z = -0.6                # top of the belt slats = underside of the giant plate's foot
-BELT_W = 5.9                 # half width of the slats
+BELT_W = 3.35                # half width of the slats: a single-file lane, a little wider than a 40x plate (r 3.03)
 COUNTER_Z = -1.45            # hinoki counter top, a step below the belt
-COUNTER_Y = 6.75
+COUNTER_Y = 4.05             # the counters start right at the belt's steel skirt, on both sides
 
 
 # ================================================================ helpers
@@ -169,9 +169,26 @@ def tex_hinoki(n=1024):
     return image('hinoki', c)
 
 PORCELAIN = mat('GiantPlate', 'f8f6f1', 0.1, tex_plate(), coat=0.6)
-STEEL = mat('BrushedSteel', 'c4c8cd', 0.26, tex_steel(), metal=1.0, aniso=0.7)
-RAIL = mat('RailSteel', 'c9ccd1', 0.2, tex_steel(512), metal=1.0, aniso=0.5)
-BED = mat('BeltBed', '222325', 0.6)
+SLAT = mat('CrescentSlat', '141517', 0.38, coat=0.25)                                      # matte black, slight sheen
+RAIL = mat('RailSteel', 'cdd0d4', 0.12, tex_steel(512), metal=1.0, aniso=0.4)             # polished guides
+SKIRT = mat('SkirtSteel', 'c4c8cd', 0.28, tex_steel(), metal=1.0, aniso=0.7)               # brushed skirt below
+BED = mat('BeltBed', '0b0b0c', 0.7)
+
+def tex_glaze(name, base, n=512):
+    """a single bright glaze with faint brush strokes, in the sushi set's plate UVs (u,v = 0.5 + (x,y) / 0.16 m)"""
+    u, v = grid(n, n); x = (u - 0.5) * 0.16; y = (v - 0.5) * 0.16
+    r = np.hypot(x, y); th = np.arctan2(y, x)
+    col = hx(base); lite = mix(col, hx('ffffff'), 0.35); deep = mix(col, hx('000000'), 0.18)
+    c = mix(col, deep, sstep(0.3, 0.9, fbm(n, n, 5, 5, 3)) * 0.35)                          # glaze pooling
+    swirl = 0.5 + 0.5 * np.sin(th * 2 + r * 900 + fbm(n, n, 8, 8, 3) * 9)                     # turned / brushed glaze
+    c = mix(c, lite, sstep(0.75, 1.0, swirl) * 0.18)
+    for r0, a0, a1, w in ((0.03, -0.6, 2.2, 0.006), (0.05, 2.6, 5.2, 0.007)):                 # two sweeping strokes
+        ang = np.mod(th - a0, TAU); inarc = sstep(0.0, 0.5, ang) * (1 - sstep(a1 - a0 - 0.6, a1 - a0, ang))
+        rag = (fbm(n, n, 40, 40, 2) - 0.5) * 0.004
+        c = mix(c, lite, (1 - sstep(w * 0.4, w, np.abs(r - r0 + rag))) * inarc * 0.32)
+    c = mix(c, hx('8a7c6c'), sstep(0.975, 0.996, vnoise(n, n, 300, 300)) * 0.3)             # speckles
+    c = mix(c, deep, sstep(0.0735, 0.0756, r) * 0.6)                                          # rim edge a touch deeper
+    return image('glaze_' + name, c)
 GOLD = mat('Gold', 'e2b04a', 0.22, metal=1.0)
 HINOKI = mat('Hinoki', 'ead8b4', 0.55, tex_hinoki(), coat=0.15)
 
@@ -199,8 +216,9 @@ def lathe(name, prof, seg, m, uvfun):
 # top (flat, Z=0) -> a low lip outside the fighting area -> rolled edge -> underside -> foot ring on the belt
 PROF = [(0.6, 0.0), (2.0, 0.0), (3.4, 0.0), (4.4, 0.0), (4.85, 0.0), (4.97, 0.004), (5.06, 0.018), (5.14, 0.032),
         (5.21, 0.035), (5.26, 0.022), (5.292, -0.01), (5.302, -0.05), (5.29, -0.1), (5.25, -0.14), (5.17, -0.17),
-        (4.9, -0.21), (4.5, -0.27), (4.15, -0.33), (4.05, -0.38), (4.0, -0.5), (3.96, -0.58), (3.92, BELT_Z),
-        (3.78, BELT_Z), (3.74, -0.56), (3.7, -0.45), (3.5, -0.41), (2.0, -0.39), (0.6, -0.38)]
+        (4.8, -0.22), (4.3, -0.27), (3.8, -0.31), (3.4, -0.35), (3.2, -0.38), (3.12, -0.48), (3.08, -0.56),
+        (3.05, BELT_Z), (2.9, BELT_Z), (2.87, -0.56), (2.83, -0.46), (2.6, -0.42), (1.5, -0.4), (0.6, -0.39)]
+# (the underside clears the guide rails at r 3.4-3.8: the arena plate overhangs them)
 def plate_uv(p):
     if p[2] < -0.16:     # underside: squeeze into the plain white middle of the texture
         return (0.5 + p[0] / (2 * PR) * 0.4, 0.5 + p[1] / (2 * PR) * 0.4)
@@ -215,38 +233,44 @@ annulus('GoldLine', RING_R + 0.1, RING_R + 0.16, 0.002, 192, GOLD)
 annulus('GoldEdge', 5.215, 5.24, 0.0365, 192, GOLD)
 
 
-# ================================================================ the kaiten belt: crescent steel slats, side rails
+# ================================================================ the kaiten belt: black crescent top chain, steel guides
 X0, X1 = -17.5, 17.5
-PITCH, GAP, SAG, NY = 1.5, 0.035, 0.42, 25
+PITCH, GAP, RC, NY = 1.8, 0.05, 3.75, 31
 def slat(name, x0):
-    V, UV = [], []
+    """one crescent link: convex leading arc, concave trailing arc of the same circle shifted one pitch back, so
+    each link nests into the next"""
+    V = []
     ys = np.linspace(-BELT_W, BELT_W, NY)
-    for z in (BELT_Z - 0.09, BELT_Z):
+    for z in (BELT_Z - 0.1, BELT_Z):
         for y in ys:
-            sg = SAG * (1 - (y / BELT_W) ** 2)
-            for x in (x0 + sg, x0 + PITCH - GAP + sg):
-                V.append((x, y, z)); UV.append((x / 4.0, y / 4.0))
+            a = math.sqrt(RC * RC - y * y) - RC
+            for x in (x0 - PITCH + GAP + a, x0 + a):
+                V.append((x, y, z))
     n = NY * 2; F = []
     for i in range(NY - 1):
         a, b = 2 * i, 2 * i + 2
         F.append((n + a, n + a + 1, n + b + 1, n + b))           # top
         F.append((a, b, b + 1, a + 1))                           # bottom
-        F.append((a, n + a, n + b, b))                           # leading (concave) side
-        F.append((a + 1, b + 1, n + b + 1, n + a + 1))           # trailing side
+        F.append((a, n + a, n + b, b))                           # trailing (concave) side
+        F.append((a + 1, b + 1, n + b + 1, n + a + 1))           # leading (convex) side
     l = 2 * (NY - 1)
     F.append((0, 1, n + 1, n)); F.append((l, n + l, n + l + 1, l + 1))
-    return mk(name, V, F, STEEL, UV, smooth=False)
-slats = [slat('Slat', x) for x in np.arange(X0, X1, PITCH)]
-for o in slats: bevel(o, 0.018, 2, 30)
+    o = mk(name, V, F, SLAT, smooth=False)
+    bm = bmesh.new(); bm.from_mesh(o.data); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(o.data); bm.free()
+    return o
+slats = [slat('Slat', x) for x in np.arange(X0, X1 + 3.0, PITCH)]
+for o in slats: bevel(o, 0.03, 2, 30)
 activate(slats[0])
 for o in slats[1:]: o.select_set(True)
 bpy.ops.object.join(); belt = bpy.context.object; belt.name = belt.data.name = 'BeltSlats'
 for o in slats[1:]: STAGE.remove(o)
-box('BeltBed', X0, X1, -BELT_W - 0.1, BELT_W + 0.1, BELT_Z - 0.4, BELT_Z - 0.12, BED)
+box('BeltBed', X0, X1, -BELT_W - 0.05, BELT_W + 0.05, BELT_Z - 0.4, BELT_Z - 0.12, BED)
+for sd in (-1, 1):   # brushed steel skirt from the guide down to the counters
+    box('Skirt', X0, X1, min(sd * 3.5, sd * 3.95), max(sd * 3.5, sd * 3.95), COUNTER_Z - 0.05, BELT_Z - 0.3, SKIRT, uvs_scale=4.0)
 
 def rail(name, yc, side):
     """a stainless guard rail along X: rounded-rectangle section, inner face toward the belt"""
-    w, z0, z1, rr = 0.42, BELT_Z - 0.8, BELT_Z + 0.42, 0.12
+    w, z0, z1, rr = 0.42, BELT_Z - 0.35, BELT_Z + 0.17, 0.1
     pts = []
     for cx, cz, a0 in ((w / 2 - rr, z1 - rr, 0), (-w / 2 + rr, z1 - rr, 90)):
         for k in range(7):
@@ -260,12 +284,12 @@ def rail(name, yc, side):
     o = mk(name, V, F, RAIL, UV)
     bm = bmesh.new(); bm.from_mesh(o.data); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(o.data); bm.free()
     return o
-rail('RailFront', -BELT_W - 0.3, -1)
-rail('RailBack', BELT_W + 0.3, 1)
+rail('RailFront', -BELT_W - 0.25, -1)
+rail('RailBack', BELT_W + 0.25, 1)
 
-# ================================================================ the hinoki counter beyond the belt
-counter = box('Counter', -24, 24, COUNTER_Y, 18, COUNTER_Z - 0.6, COUNTER_Z, HINOKI, uvs_scale=8.0)
-bevel(counter, 0.05, 3, 30)
+# ================================================================ hinoki counters either side of the belt
+for nm, y0, y1 in (('CounterBack', COUNTER_Y, 18), ('CounterFront', -11, -COUNTER_Y)):
+    bevel(box(nm, -24, 24, y0, y1, COUNTER_Z - 0.6, COUNTER_Z, HINOKI, uvs_scale=8.0), 0.05, 3, 30)
 
 
 # ================================================================ sushi-set props at 40x (instances of the set's meshes)
@@ -287,18 +311,27 @@ def plate_with(col, x, y, rz, items):
     for nm, dx, dy, r in items:
         dx *= K; dy *= K
         place(nm, (x + dx * math.cos(a) - dy * math.sin(a), y + dx * math.sin(a) + dy * math.cos(a), BELT_Z + FZ), rz + r)
-# along the belt, either side of the arena (the frame cuts the outer ones)
-# (staggered so the 6 m plates never touch: the near ones closer in, the far ones further out)
-plate_with('red', -10.9, 2.85, 8, [('nigiri_salmon', 0, 0.019, -4), ('nigiri_salmon', 0.003, -0.019, 6)])
-plate_with('yellow', -8.5, -2.85, 20, [('nigiri_tamago', 0, 0.02, 0), ('nigiri_ebi', 0, -0.02, 180)])
-plate_with('blue', 10.9, 2.85, -14, [('nigiri_tuna', 0, 0.019, 3), ('nigiri_tuna', -0.002, -0.019, -5)])
-plate_with('green', 8.5, -2.85, -6, [('maki_cucumber', -0.017, 0.018, 0), ('maki_tuna', 0.017, -0.016, 40)])
-# the diner's things on the counter
+# single file along the belt: [salmon plate] gap [arena plate] gap [maki plate]; the next slots are out of frame
+GLAZES = {}
+def glazed(col, hexc):   # the set's plate mesh with a plain bright glaze instead of the white + seigaiha one
+    me = MESH['plate_red'].copy(); me.materials.clear()
+    me.materials.append(mat('Glaze_' + col, hexc, 0.12, tex_glaze(col, hexc), coat=0.6)); MESH['glazed_' + col] = me
+glazed('skyblue', '5fb4e8'); glazed('yellow', 'f2c230')
+def plate_with(col, x, y, rz, items):
+    place('glazed_' + col, (x, y, BELT_Z), rz)
+    a = math.radians(rz)
+    for nm, dx, dy, r in items:
+        dx *= K; dy *= K
+        place(nm, (x + dx * math.cos(a) - dy * math.sin(a), y + dx * math.sin(a) + dy * math.cos(a), BELT_Z + FZ), rz + r)
+SLOT = PR + 1.1 + 0.0757 * K           # arena edge + a clear 1.1 m gap + the small plate's radius
+plate_with('skyblue', -SLOT, 0.0, 84, [('nigiri_salmon', 0, 0.019, -4), ('nigiri_salmon', 0.003, -0.019, 6)])
+plate_with('yellow', SLOT, 0.0, -72, [('maki_cucumber', -0.017, 0.016, 0), ('maki_tuna', 0.017, -0.016, 40)])
+# the diner's things on the far counter, clear of the arena plate and the gyoji
 CZ = COUNTER_Z
-place('soy_dish', (-8.7, 9.0, CZ))
-place('wasabi', (-5.6, 8.6, CZ)); place('gari', (-3.2, 9.3, CZ), 25)
-place('chopsticks', (-4.6, 11.7, CZ), 3)
-place('teacup', (7.8, 8.4, CZ), -20)
+place('soy_dish', (-8.4, 7.2, CZ))
+place('wasabi', (-5.9, 6.2, CZ)); place('gari', (-3.4, 8.3, CZ), 25)
+place('chopsticks', (-4.3, 10.9, CZ), 3)
+place('teacup', (7.6, 7.4, CZ), -20)
 
 # ================================================================ export the stage
 for o in bpy.context.view_layer.objects: o.select_set(o in STAGE)

@@ -42,7 +42,7 @@ def ring_r():
 
 R = ring_r()            # fighting circle
 RD = R + 0.7            # map radius; the ice wall starts here
-LAT_EDGE = -75.0        # latitude at RD
+LAT_EDGE = -85.0        # latitude at RD (Antarctica is the white band just inside the ice wall)
 HMAX = 0.03             # land relief
 def lat_of(r): return 90.0 - r / RD * (90.0 - LAT_EDGE)
 
@@ -161,11 +161,11 @@ H = np.clip(blur(H, 0.7), 0, 1)
 HEIGHT = H * HMAX                                                            # metres, <= 3 cm
 
 # the sea: richer blues, shallow shelves a touch more turquoise; light clouds very faint
-sea_t = col * np.array([0.9, 1.15, 1.35], np.float32) * 1.35
+sea_t = col * np.array([0.92, 1.02, 1.1], np.float32) * 1.08
 col = col * land[..., None] + sea_t * ocean[..., None]
 if os.path.exists(CLOUDS):
     eqc = load_equirect(CLOUDS); cl = sample(eqc, LAT, LON)[..., 0]; del eqc
-    col = col + (np.array([0.95, 0.96, 1.0]) - col) * (np.clip(cl, 0, 1) ** 1.3 * 0.22)[..., None]
+    col = col + (np.array([0.95, 0.96, 1.0]) - col) * (np.clip(cl, 0, 1) ** 1.5 * 0.09)[..., None]
 # faint graticule (every 30 deg of longitude, every 30 deg of latitude), Gleason-map style
 px = RD * 2 / N
 g = np.zeros((N, N), np.float32)
@@ -191,7 +191,7 @@ def height_at(x, y):
 
 # ================================================================ materials
 EARTH_M = mat('EarthMap', (0.2, 0.3, 0.5), 0.4, tcol=TCOL, trough=TROUGH, tnrm=TNRM, nstr=1.0)
-LINE = mat('LatitudeLine', (0.85, 0.9, 1.0), 0.4, emit=(0.7, 0.85, 1.0), estr=0.6)
+LINE = mat('LatitudeLine', (0.5, 0.58, 0.68), 0.4, emit=(0.7, 0.85, 1.0), estr=0.03)
 # crust strata (cylindrical u = angle, v = depth)
 NS = 1024
 sv = np.linspace(0, 1, 256)[:, None]; su = np.linspace(0, 1, NS)[None, :]
@@ -231,7 +231,7 @@ me = bpy.data.meshes.new('EarthTop'); bm.to_mesh(me); bm.free(); me.shade_smooth
 obj('EarthTop', me, [EARTH_M])
 
 # the fighting circle: a faint latitude line riding on the map
-bm = bmesh.new(); uvl = bm.loops.layers.uv.new('UVMap'); S2 = 256; w = 0.022
+bm = bmesh.new(); uvl = bm.loops.layers.uv.new('UVMap'); S2 = 256; w = 0.016
 inner = []; outer = []
 for i in range(S2):
     a = TAU * i / S2; c, s = math.cos(a), math.sin(a)
@@ -250,17 +250,18 @@ def noise1(n, k, seed):
     r = np.random.default_rng(seed).standard_normal(n); F = np.fft.rfft(r); f = np.fft.rfftfreq(n)
     out = np.fft.irfft(F * np.exp(-(f * k) ** 2), n); return out / (out.std() + 1e-9)
 SW = 384
-hn = noise1(SW, 40, 1) * 0.6 + noise1(SW, 9, 2) * 0.4
-crag = noise1(SW, 4, 3)
+blk = np.repeat(np.random.default_rng(4).random(SW // 4 + 1), 4)[:SW] - 0.5      # serac blocks: stepped heights
+hn = noise1(SW, 40, 1) * 0.35 + noise1(SW, 6, 2) * 0.25 + blk * 1.1
+crag = noise1(SW, 1.2, 3)
 #            r offset, z,  jitter-scale     (inner foot -> crest -> outer foot)
-wall = [(-0.03, -0.004, 0.0), (0.0, 0.05, 0.3), (0.05, 0.20, 0.8), (0.12, 0.33, 1.0), (0.24, 0.40, 1.0),
-        (0.38, 0.38, 1.0), (0.50, 0.30, 0.8), (0.60, 0.16, 0.6), (0.66, 0.02, 0.3), (0.68, -0.06, 0.0)]
+wall = [(-0.03, -0.004, 0.0), (0.0, 0.04, 0.2), (0.02, 0.17, 0.6), (0.05, 0.27, 1.0), (0.13, 0.31, 1.0),
+        (0.24, 0.30, 1.0), (0.32, 0.24, 0.8), (0.37, 0.12, 0.6), (0.40, 0.02, 0.3), (0.42, -0.06, 0.0)]
 bm = bmesh.new(); uvl = bm.loops.layers.uv.new('UVMap'); rings = []
 for k, (dr, z, js) in enumerate(wall):
     ring = []
     for i in range(SW):
-        a = TAU * i / SW; hh = 1 + 0.28 * hn[i]
-        r = RD + dr + js * 0.035 * crag[(i + k * 7) % SW]
+        a = TAU * i / SW; hh = max(0.45, 1 + 0.3 * hn[i])
+        r = RD + dr + js * 0.03 * crag[(i + k * 7) % SW]
         ring.append(bm.verts.new((r * math.cos(a), r * math.sin(a), z * hh if z > 0 else z)))
     rings.append(ring)
 for k, (A, B) in enumerate(zip(rings[:-1], rings[1:])):
@@ -272,7 +273,7 @@ me = bpy.data.meshes.new('IceWall'); bm.to_mesh(me); bm.free()
 me.shade_smooth(); me.set_sharp_from_angle(angle=math.radians(50))
 icewall = obj('IceWall', me, [ICE])
 # outward normals check (the first face of the outer slope should face +r)
-RC = RD + 0.68
+RC = RD + 0.42
 crust = [(RC, -0.06), (RC + 0.02, -0.4), (RC - 0.02, -0.9), (RC - 0.12, -1.3), (RC - 0.5, -1.75), (RC - 1.3, -2.25),
          (RC - 2.6, -2.75), (RC - 4.2, -3.15), (0, -3.4)]
 SC = 192
@@ -306,13 +307,13 @@ for f in bm.faces:
 me = bpy.data.meshes.new('Floor'); bm.to_mesh(me); bm.free(); obj('CrustTop', me, [CRUST])
 
 # ================================================================ waterfalls spilling off the edge
-FALLS = [(math.radians(a), wdt) for a, wdt in ((178, 0.10), (192, 0.05), (-8, 0.08), (8, 0.045), (232, 0.06), (305, 0.05))]
+FALLS = [(math.radians(a), wdt) for a, wdt in ((171, 0.06), (187, 0.035), (-6, 0.05), (9, 0.03))]
 for n, (a0, hw) in enumerate(FALLS):
     bm = bmesh.new(); uvl = bm.loops.layers.uv.new('UVMap'); NU, NV = 6, 26; grid = []
     jit = np.random.default_rng(20 + n)
     for vi in range(NV + 1):
         t = vi / NV; row = []
-        r = RC + 0.04 + 0.9 * t ** 1.5; z = -0.12 - 5.5 * t ** 1.15
+        r = RC + 0.03 + 1.5 * t ** 1.4; z = -0.05 - 5.5 * t ** 1.15
         spread = hw * (1 + 0.6 * t)
         for ui in range(NU + 1):
             s = ui / NU * 2 - 1; a = a0 + s * spread + 0.01 * jit.standard_normal() * t
@@ -351,9 +352,9 @@ nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 14; 
 nt.links.new(tc.outputs['Object'], nz.inputs['Vector'])
 mx = nt.nodes.new('ShaderNodeMath'); mx.operation = 'ADD'
 nt.links.new(vn.outputs['Distance'], mx.inputs[0]); nt.links.new(nz.outputs['Fac'], mx.inputs[1])
-bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.6; bp.inputs['Distance'].default_value = 0.05
+bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.9; bp.inputs['Distance'].default_value = 0.05
 nt.links.new(mx.outputs[0], bp.inputs['Height']); nt.links.new(bp.outputs['Normal'], bs.inputs['Normal'])
-ramp = nt.nodes.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].color = (*lin('b8d4ea'), 1)
+ramp = nt.nodes.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].color = (*lin('8fb6d4'), 1)
 ramp.color_ramp.elements[1].color = (*lin('f4f9fd'), 1); ramp.color_ramp.elements[0].position = 0.35
 nt.links.new(nz.outputs['Fac'], ramp.inputs['Fac']); nt.links.new(ramp.outputs['Color'], bs.inputs['Base Color'])
 
@@ -385,9 +386,9 @@ m1 = nt.nodes.new('ShaderNodeMath'); m1.operation = 'MULTIPLY'; nt.links.new(pw.
 sr = nt.nodes.new('ShaderNodeMapRange'); sr.inputs['From Min'].default_value = 0.35; sr.inputs['From Max'].default_value = 0.65
 nt.links.new(st.outputs['Fac'], sr.inputs['Value'])
 m2 = nt.nodes.new('ShaderNodeMath'); m2.operation = 'MULTIPLY'; nt.links.new(m1.outputs[0], m2.inputs[0]); nt.links.new(sr.outputs['Result'], m2.inputs[1])
-m3 = nt.nodes.new('ShaderNodeMath'); m3.operation = 'MULTIPLY'; m3.inputs[1].default_value = 0.85
+m3 = nt.nodes.new('ShaderNodeMath'); m3.operation = 'MULTIPLY'; m3.inputs[1].default_value = 0.9
 nt.links.new(m2.outputs[0], m3.inputs[0]); nt.links.new(m3.outputs[0], bs.inputs['Alpha'])
-bs.inputs['Emission Color'].default_value = (0.6, 0.8, 1.0, 1); bs.inputs['Emission Strength'].default_value = 0.05
+bs.inputs['Emission Color'].default_value = (0.6, 0.8, 1.0, 1); bs.inputs['Emission Strength'].default_value = 0.6
 
 # space: black with stars (two layers), the faintest blue haze
 world = bpy.data.worlds.new('W'); world.use_nodes = True; scn.world = world; wt = world.node_tree
@@ -462,7 +463,7 @@ for nm, p in (('sun', SUN_P), ('moon', MOON_P)):
 bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=24, radius=0.55, location=SUN_P); sun = bpy.context.object
 sun.data.materials.append(mat('SunOrb', (0, 0, 0), 1.0, emit=(1.0, 0.78, 0.45), estr=40.0)); bpy.ops.object.shade_smooth()
 sun.visible_shadow = False
-bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=24, radius=0.42, location=MOON_P); moon = bpy.context.object
+bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=24, radius=0.55, location=MOON_P); moon = bpy.context.object
 mm = mat('Moon', (0.5, 0.5, 0.5), 0.9); bpy.ops.object.shade_smooth(); moon.data.materials.append(mm)
 nt = mm.node_tree; bs = BSDF['Moon']
 mv = nt.nodes.new('ShaderNodeTexNoise'); mv.inputs['Scale'].default_value = 3.5; mv.inputs['Detail'].default_value = 8
@@ -478,7 +479,7 @@ light('SunGlow', 'POINT', tuple(SUN_P), (0, 0, 0), 2500, (1.0, 0.8, 0.55), soft=
 light('Key', 'SUN', (10, 6, 14), (0, 0, 0), 4.2, (1.0, 0.9, 0.78), angle=4.0)
 light('MoonFill', 'AREA', (-14, -4, 10), (0, 0, 0), 1800, (0.6, 0.72, 1.0), size=(8, 8), glossy=False)
 light('Rim', 'AREA', (0, 16, 4), (0, 0, 0), 1500, (0.7, 0.8, 1.0), size=(16, 4), glossy=False)
-panel('SeaSheen', (6, 22, 17), (0, 2, 0), (30, 9), 0.35, (1.0, 0.92, 0.8))
+panel('SeaSheen', (6, 22, 17), (0, 2, 0), (34, 12), 1.1, (1.0, 0.92, 0.8))
 
 # ================================================================ characters (as stage_render.py)
 def load(f):
