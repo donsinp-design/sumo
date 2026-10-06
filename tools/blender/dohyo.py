@@ -39,8 +39,8 @@ def ring_r():  # the game's ring radius: the inside edge of the straw circle
 
 R = ring_r()
 RT = R + 1.6           # radius of the mound's flat top (the old boss-stage disc)
-DROP = 0.6             # height of the sloped sides
-RB = RT + 0.36         # radius at the foot: a trapezoid, a little wider at the bottom
+DROP = 1.6             # height of the sloped sides: a proper raised mound, not a disc
+RB = RT + 1.5          # radius at the foot: a broad trapezoid skirt you can see from the game camera
 EXT = RT + 0.12        # half-size of the square the top texture covers
 NB = 20                # bales in the ring
 BA, BRY, BZC = 0.17, 0.155, -0.03   # bale half-width, half-height, axis height (axis below ground: half-buried)
@@ -410,7 +410,7 @@ def build_mound():
     # the slope: hand-dressed waviness, pushed out along the horizontal
     sn = fnoise(64, 1024, 7, 9, 7)
     on_side = rr > top_r + 0.005
-    zz = np.clip((Z + 0.7) / 0.8, 0, 1)
+    zz = np.clip((Z + DROP + 0.1) / (DROP + 0.2), 0, 1)
     dr = 0.008 * sample(sn, A / TAU, zz) * on_side * sstep(0.0, 0.08, -Z)
     X += dr * np.cos(A); Y += dr * np.sin(A)
     verts = np.stack([X, Y, Z], -1).reshape(-1, 3)
