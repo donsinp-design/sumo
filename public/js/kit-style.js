@@ -27,7 +27,7 @@
     o = o || {};
     const key = col + '|' + (o.map ? o.map.uuid : '') + '|' + (o.side || 0) + '|' + (o.opacity || 1);
     if (!o.map && cache.has(key)) return cache.get(key);
-    const m = new THREE.MeshToonMaterial({ color: new THREE.Color(col), gradientMap: ramp, map: o.map || null, side: o.side || THREE.FrontSide });
+    const m = new THREE.MeshLambertMaterial({ color: new THREE.Color(col), map: o.map || null, side: o.side || THREE.FrontSide }); // soft smooth shading (no bands)
     if (o.opacity !== undefined && o.opacity < 1) { m.transparent = true; m.opacity = o.opacity; m.depthWrite = false; }
     if (!o.map) cache.set(key, m);
     return m;

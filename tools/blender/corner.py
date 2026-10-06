@@ -41,8 +41,8 @@ PAL = {  # name: hex, roughness
     'mack_back': '4f8fa8', 'mack_str': '2c5a72', 'mack_belly': 'e3e8ea', 'fin_grey': '9fb3bd', 'eye_w': 'f6f3ea',
     'snap_back': 'e8706a', 'snap_belly': 'f6c0b0', 'snap_fin': 'ee8f80', 'aji_back': '8fa39a', 'aji_belly': 'e6e9e4',
     'buri_back': '5d7895', 'buri_belly': 'eceeea', 'buri_line': 'e8c955', 'tuna': 'c23a45', 'tuna_fat': 'f2b5b0', 'tuna_skin': '3e4a5c',
-    'squid': 'f1d9cf', 'squid_dk': 'd59a8a', 'octo': 'd9573f', 'octo_lt': 'f2ae8f', 'prawn': 'f08a5a', 'prawn_lt': 'f7b98f',
-    'shell': 'e6aa83', 'shell_in': 'f6e8d8', 'scal_meat': 'fbf6ee', 'scal_roe': 'f0a35c', 'baran': '4caf50', 'lemon': 'f4d84a',
+    'squid': 'f6ebe4', 'squid_dk': 'cf7f70', 'octo': 'd9573f', 'octo_lt': 'f2ae8f', 'prawn': 'f08a5a', 'prawn_lt': 'f7b98f',
+    'shell': 'eea078', 'shell_in': 'f6e8d8', 'scal_meat': 'fbf6ee', 'scal_roe': 'f0a35c', 'baran': '58b85a', 'lemon': 'f4d84a',
     'leaf': '5f9e4a', 'leaf2': '4b8a3c', 'leaf3': '78b25a', 'pot': 'c46f4f', 'pot_blue': '5b80aa', 'soil': '5a4232',
     'hose': '62b35c', 'boot': 'eceae2', 'boot_sole': '3a3836', 'bucket': '4d8fd1', 'bamboo': 'd8b06c',
     'chalk': '2f4a3f', 'chalk_w': 'f2efe4', 'chalk_y': 'f4d47c', 'chalk_p': 'f2a6aa', 'lantern': 'd8493b',
@@ -283,8 +283,7 @@ def fish(L, H, W, kind, Mx):
         if c.z > 0.08 * H: f.material_index = 0
         if P[3] and kind == 'mack' and c.z > 0.16 * H and c.x < 0.82 * L and int(c.x / L * 15 + c.z / H * 5) % 2 == 0: f.material_index = 3
         if P[3] and kind == 'buri' and abs(c.z) < 0.09 * H and 0.1 * L < c.x < 0.85 * L: f.material_index = 3
-    if bm.faces[0].normal.dot(bm.faces[0].calc_center_median() - Vector((L / 2, 0, 0))) < 0:
-        bmesh.ops.reverse_faces(bm, faces=bm.faces[:])
+    bmesh.ops.reverse_faces(bm, faces=bm.faces[:])        # loft winding is inward; flip once
     lie = Mx @ Rx(90)                            # lateral +Y becomes up: the fish lies on its side, eye side up
     with at(lie):
         put(bm, [P[0], P[1], P[2], P[3] or P[0]], T(0, 0, 0))
@@ -293,8 +292,8 @@ def fish(L, H, W, kind, Mx):
         put(poly_bm([(0.74 * L, 0, -0.05 * H), (0.62 * L, 0, -0.2 * H), (0.6 * L, 0, -0.05 * H)], 0.004), P[2], T(0, 0.32 * W, 0), smooth=False)
         er = 0.085 * H
         for s in (1, -1):
-            sphere(0.87 * L, s * 0.31 * W, 0.12 * H, er, er * 0.6, er, 'eye_w', 8, 6)
-            sphere(0.875 * L, s * (0.31 * W + er * 0.45), 0.12 * H, er * 0.55, er * 0.4, er * 0.55, 'black', 6, 4)
+            sphere(0.87 * L, s * 0.31 * W, 0.12 * H, er, er * 0.6, er, 'eye_w', 8, 5)
+            sphere(0.875 * L, s * (0.31 * W + er * 0.45), 0.12 * H, er * 0.55, er * 0.4, er * 0.55, 'black', 6, 3)
         # gill line
         tube([(0.76 * L, 0.3 * W * 1.05, 0.25 * H), (0.735 * L, 0.36 * W, 0.0), (0.76 * L, 0.3 * W, -0.22 * H)], 0.004, P[0], 4)
 
@@ -305,19 +304,21 @@ def squid(L, Mx):
         prof = [(0, 0), (0.25 * R, 0.04 * L), (0.6 * R, 0.14 * L), (0.95 * R, 0.32 * L), (R, 0.5 * L), (0.85 * R, 0.6 * L), (0.0, 0.6 * L)]
         bm = lathe_bm(prof, 10, cap=False)
         for f in bm.faces:
-            c = f.calc_center_median(); f.material_index = 1 if c.y > 0.45 * R and c.z > 0.1 * L else 0
-        put(bm, ['squid', 'squid_dk'], Ry(90) @ Sc(1, 0.72, 1) @ T(0, 0, 0))
+            c = f.calc_center_median(); f.material_index = 1 if c.x < -0.45 * R and c.z > 0.08 * L else 0
+        put(bm, ['squid', 'squid_dk'], Ry(90) @ Sc(0.72, 1, 1))
         fin = [(0.0, 0, 0), (0.12 * L, 0.24 * L * 0.62, 0), (0.24 * L, 0, 0), (0.12 * L, -0.24 * L * 0.62, 0)]
         put(poly_bm(fin, 0.006), 'squid_dk', T(0.0, 0, 0.0), smooth=False)
         sphere(0.66 * L, 0, 0, 0.07 * L, 0.6 * R, 0.5 * R, 'squid', 10, 6)
-        for s in (1, -1): sphere(0.67 * L, s * 0.55 * R, 0.12 * R, 0.022 * L, 0.018 * L, 0.022 * L, 'black', 6, 4)
+        for s in (1, -1):
+            sphere(0.67 * L, s * 0.55 * R, 0.12 * R, 0.03 * L, 0.022 * L, 0.03 * L, 'eye_w', 6, 4)
+            sphere(0.675 * L, s * 0.62 * R, 0.14 * R, 0.018 * L, 0.014 * L, 0.018 * L, 'black', 6, 3)
         for k in range(8):
             a = (k - 3.5) / 3.5
             ln = 0.42 * L if k in (2, 5) else 0.3 * L
             pts = [(0.7 * L, a * 0.3 * R, 0), (0.7 * L + ln * 0.4, a * 0.55 * R, -0.01 * L), (0.7 * L + ln * 0.75, a * 0.9 * R + 0.03 * L * math.sin(k), -0.02 * L),
                    (0.7 * L + ln, a * 1.1 * R + 0.05 * L * math.cos(k * 1.7), -0.022 * L)]
             pts = spline(pts, 3)
-            tube(pts, 0, 'squid', 5, [0.022 * L * (1 - 0.8 * i / (len(pts) - 1)) for i in range(len(pts))])
+            tube(pts, 0, 'squid' if k % 2 else 'squid_dk', 5, [0.03 * L * (1 - 0.75 * i / (len(pts) - 1)) for i in range(len(pts))])
 
 def octopus(s, Mx):
     with at(Mx @ Sc(s, s, s)):
@@ -335,7 +336,7 @@ def octopus(s, Mx):
             rad = [0.034 * (1 - 0.82 * i / 13) for i in range(14)]
             tube(pts, 0, 'octo', 6, rad)
             for i in range(2, 12, 2):   # pale suckers along each arm
-                p = Vector(pts[i]); sphere(p.x, p.y, p.z - rad[i] * 0.55, rad[i] * 0.45, rad[i] * 0.45, rad[i] * 0.3, 'octo_lt', 6, 4)
+                p = Vector(pts[i]); sphere(p.x, p.y, p.z - rad[i] * 0.55, rad[i] * 0.45, rad[i] * 0.45, rad[i] * 0.3, 'octo_lt', 5, 3)
 
 def prawn(Mx):
     with at(Mx):
@@ -344,7 +345,7 @@ def prawn(Mx):
             a = math.radians(-80 + i * 30); r = 0.045
             x, z = r * math.cos(a), r * math.sin(a) + 0.045
             rr = 0.019 - i * 0.0018
-            sphere(x, 0, z * 0.6 + 0.012, rr * 1.15, rr, rr * 0.95, 'prawn' if i % 2 == 0 else 'prawn_lt', 8, 6, Ry(-math.degrees(a)))
+            sphere(x, 0, z * 0.6 + 0.012, rr * 1.15, rr, rr * 0.95, 'prawn' if i % 2 == 0 else 'prawn_lt', 7, 5, Ry(-math.degrees(a)))
         sphere(0.05, 0, 0.015, 0.03, 0.017, 0.016, 'prawn', 8, 6, Ry(10))   # head
         for s in (1, -1):
             put(poly_bm([(0, 0, 0), (0.025, s * 0.012, 0), (0.02, s * 0.026, 0)], 0.003), 'prawn_lt', T(0.005, 0, 0.065), smooth=False)
@@ -353,7 +354,7 @@ def prawn(Mx):
 
 def scallop(Mx):
     with at(Mx):
-        R = 0.07; na, nr = 14, 5; rows = []
+        R = 0.085; na, nr = 14, 5; rows = []
         for j in range(nr + 1):
             r = R * j / nr; row = []
             for i in range(na + 1):
@@ -376,7 +377,7 @@ def ice_bed(x0, x1, y0, y1, z, amp=0.022, step=0.055):
     bm = sheet_bm(rows)
     for f in bm.faces: f.material_index = 1 if RND.random() < 0.28 else 0; f.smooth = False
     put(bm, ['ice', 'ice2'], None, smooth=False)
-    for _ in range(int((x1 - x0) * (y1 - y0) * 40)):
+    for _ in range(int((x1 - x0) * (y1 - y0) * 22)):
         ico(RND.uniform(x0, x1), RND.uniform(y0, y1), z + amp * 0.8, RND.uniform(0.012, 0.022), 'ice', 1, (1, 1, 0.7), jitter=0.2)
 
 def styro_box(cx, cy, z0, lx, ly, h, wall=0.028, label=True):
@@ -410,6 +411,15 @@ def baran(x0, x1, y, z, n=8, h=0.05):
     rows = [[(p[0], p[1], z) for p in pts[2:]], [p for p in pts[2:]]]
     put(sheet_bm(rows, 0.003), 'baran', None, smooth=False)
 
+def leaf_flat(Mx, L, W):
+    """A flat decorative leaf (haran) with a raised midrib, lying on the ice."""
+    with at(Mx):
+        n = 8; rows = []
+        for i in range(n + 1):
+            t = i / n; x = (t - 0.5) * L; w = W / 2 * math.sin(math.pi * t) ** 0.8
+            rows.append([(x, -w, 0.004 * math.sin(math.pi * t)), (x, 0, 0.012 * math.sin(math.pi * t)), (x, w, 0.004 * math.sin(math.pi * t))])
+        put(sheet_bm(list(map(list, zip(*rows))), 0.003), 'baran', None, smooth=True)
+
 def price_card(x, y, z, name, price, h=0.2, tilt=-14, yaw=0, col='red'):
     with at(T(x, y, z) @ Rz(yaw)):
         cyl(0, 0, h / 2, 0.0035, h, 'wood_pale', 'Z', 5)
@@ -426,7 +436,7 @@ def fan(Mx, r=0.16, base='wall'):
             box(-0.16, -0.14, -0.06, 0.06, -0.08, 0.08, 'white', 0.01)
             tube([(-0.14, 0, 0), (-0.1, 0, -0.02), (-0.08, 0, 0)], 0.018, 'white', 8)
         lathe([(0, -0.1), (0.05, -0.095), (0.065, -0.06), (0.06, -0.02), (0.035, 0.0), (0, 0.005)], 'white', Ry(90), 12)
-        cyl(0.025, 0, 0, 0.028, 0.03, 'fan_hub', 'X', 10) if False else cyl(0.02, 0, 0, 0.028, 0.03, 'grey_lt', 'X', 10)
+        cyl(0.02, 0, 0, 0.028, 0.03, 'grey_lt', 'X', 10)
         for k in range(3):
             put(cube_bm(0.008, r * 0.42, r * 0.85, 0.004, 1), mat('fan_blade', 'a9d3ea', 0.6), T(0.02, 0, 0) @ Rx(k * 120 + 15) @ T(0, 0, r * 0.47) @ Ry(18))
         for rx_, rr in ((0.06, r), (0.07, r * 0.66), (0.075, r * 0.33), (-0.03, r)):
@@ -523,6 +533,7 @@ for py in (-2.2, 2.2):   # side rails and knee braces
     for px, sg in ((-0.05, -1), (-2.02, 1)):
         p0 = Vector((px, py, zc(px) - 0.45)); p1 = Vector((px + sg * 0.4, py, zc(px + sg * 0.4) - 0.07))
         tube([p0, p1], 0.014, 'frame', 6)
+box(-0.87, -0.83, -2.2, 2.2, zc(-0.85) - 0.1, zc(-0.85) - 0.065, 'frame', 0.01, 1)   # hanging bar
 for py in (-2.0, -1.0, 0.0, 1.0, 2.0):   # rope ties along the back
     tube([(-2.02, py, zc(-2.02) - 0.1), (-2.0, py, zc(-2.02) - 0.16)], 0.006, 'rope', 4)
 
@@ -549,7 +560,7 @@ def valance(p0, axis, length, ztop_fn, n, depth, out):
             v = r / 3; row = []
             for c in range(9):
                 u = c / 8; s = i * w + u * w; p = p0 + axis * s
-                d = depth * (0.7 + 0.3 * math.sin(math.pi * u))
+                d = depth * (0.5 + 0.5 * math.sin(math.pi * u) ** 0.6)     # rounded tongue per stripe
                 bul = 0.035 * math.sin(math.pi * u) * (0.3 + 0.7 * v) + 0.008 * math.sin(4 * math.pi * u) * v
                 row.append(p + out * bul + Vector((0, 0, ztop_fn(p) - v * d - p.z)))
             rows.append(row)
@@ -566,7 +577,7 @@ RAIL_X, RAIL_Z = 0.22, zc(0.22) - 0.13
 box(RAIL_X - 0.02, RAIL_X + 0.02, -2.0, 2.0, RAIL_Z - 0.02, RAIL_Z + 0.02, 'black', 0.008, 1)
 for py in (-1.9, 0.0, 1.9): tube([(RAIL_X, py, RAIL_Z), (RAIL_X, py, zc(RAIL_X) - 0.03)], 0.007, 'black', 5)
 for py in (-1.5, -0.5, 0.5, 1.5):
-    pos = Vector((RAIL_X + 0.02, py, RAIL_Z - 0.16)); tgt = Vector((-0.7, py * 0.8, 0.95))
+    pos = Vector((RAIL_X + 0.02, py, RAIL_Z - 0.22)); tgt = Vector((-0.7, py * 0.8, 0.95))
     tube([(RAIL_X, py, RAIL_Z), pos + Vector((0, 0, 0.05))], 0.008, 'black', 5)
     for s in (-1, 1): tube([pos + Vector((0, s * 0.055, 0.05)), pos + Vector((0, s * 0.055, -0.01))], 0.006, 'black', 4)
     tube([pos + Vector((0, -0.055, 0.05)), pos + Vector((0, 0.055, 0.05))], 0.006, 'black', 4)
@@ -598,11 +609,11 @@ for sy in (-1, 1):
     box(-1.96, -1.25, sy * 1.98, sy * 2.02, 0.98, 1.2, 'wood_dk', 0.01, 1)
 # little paper posters on the fascia
 for py, col, t1 in ((-1.0, 'yellow', '特価'), (0.0, 'paper', '朝獲れ'), (1.0, 'chalk_p', '活')):
-    box(-0.585, -0.582, py - 0.09, py + 0.09, 0.78, 0.96, col, 0, 1, Ry(-3))
-    text(t1, T(-0.58, py, 0.87) @ FPX, 0.07, 'red_dk', fitw=0.15)
+    box(-0.585, -0.582, py - 0.09, py + 0.09, 0.85, 0.99, col, 0, 1)
+    text(t1, T(-0.5815, py, 0.92) @ FPX, 0.07, 'red_dk', fitw=0.15)
 # tier A slanted tray
 TA = T(-0.3, 0, 0.80) @ Ry(6)
-box(-0.62, 0.02, -1.98, 1.98, 0.735, 0.79, 'wood_dk', 0.008, 1)
+box(-0.6, -0.02, -1.96, 1.96, 0.70, 0.725, 'wood_dk', 0.008, 1)
 with at(TA):
     box(-0.31, 0.31, -1.98, 1.98, -0.03, 0.0, 'tray', 0.006)
     for s in (1, -1):
@@ -629,9 +640,10 @@ for ty in (0.28, 0.66):
             box(-0.23, 0.23, s * 0.17 - s * 0.012, s * 0.17, 0, 0.03, 'tray_blk', 0.004, 1)
             box(s * 0.23 - s * 0.012, s * 0.23, -0.17, 0.17, 0, 0.03, 'tray_blk', 0.004, 1)
 # ice in the tier C crates
-ice_bed(-1.88, -1.32, -1.86, -1.04, 1.25, 0.015)
-ice_bed(-1.88, -1.32, 0.14, 0.96, 1.25, 0.015)
-ice_bed(-1.88, -1.32, -0.86, -0.04, 1.25, 0.015)
+ice_bed(-1.88, -1.32, -1.86, -1.04, 1.32, 0.015)
+ice_bed(-1.88, -1.32, 0.14, 0.96, 1.32, 0.015)
+ice_bed(-1.88, -1.32, -0.86, -0.04, 1.32, 0.015)
+for cy in (-1.45, -0.45, 0.55): box(-1.89, -1.31, cy - 0.43, cy + 0.43, 1.215, 1.32, 'ice2', 0)
 
 group('Stall_Fish')
 with at(TA):   # tier A: mackerel row, snapper, squid
@@ -640,9 +652,10 @@ with at(TA):   # tier A: mackerel row, snapper, squid
         fish(0.32, 0.075, 0.05, 'mack', T(-0.16, y, 0.045) @ Rz(22 + RND.uniform(-4, 4)))
     for i, y in enumerate((-0.52, -0.12, 0.28)):
         fish(0.36, 0.15, 0.06, 'snap', T(-0.17, y, 0.05) @ Rz(16 + 6 * i))
-    baran(-0.28, 0.28, 0.5, 0.02, 7)
+    for i, y in enumerate((-0.45, -0.05, 0.35)):
+        leaf_flat(T(-0.02, y, 0.03) @ Rz(16 + 6 * i + 8), 0.42, 0.14)
     for i in range(4):
-        squid(0.42, T(0.2, 0.82 + i * 0.3, 0.05) @ Rz(180 + RND.uniform(-5, 5)))
+        squid(0.4, T(0.25, 0.82 + i * 0.3, 0.045) @ Rz(180 + RND.uniform(-5, 5)))
 # tier B: tuna, octopus, prawns, scallops
 with at(T(-0.95, -1.47, 1.09)):
     sec = [(0, 0.04), (0.045, 0.03), (0.075, -0.02), (0.06, -0.05), (-0.06, -0.05), (-0.075, -0.02), (-0.045, 0.03)]
@@ -653,12 +666,10 @@ with at(T(-0.95, -1.47, 1.09)):
         rings.append([bm.verts.new((sx * sc * 1.4, -0.36 + 0.72 * t, (sz + 0.05) * sc * 1.3)) for sx, sz in sec])
     for j in range(8):
         for i in range(7):
-            f = bm.faces.new((rings[j][i], rings[j + 1][i], rings[j + 1][(i + 1) % 7], rings[j][(i + 1) % 7]))
+            f = bm.faces.new((rings[j][i], rings[j][(i + 1) % 7], rings[j + 1][(i + 1) % 7], rings[j + 1][i]))
             f.material_index = 2 if i == 0 else 0
     for rg in (rings[0], rings[-1]):
         f = bm.faces.new(rg if rg is rings[-1] else list(reversed(rg))); f.material_index = 1
-    bm.normal_update()
-    if bm.faces[0].normal.dot(bm.faces[0].calc_center_median() - Vector((0, 0, 0.06))) < 0: bmesh.ops.reverse_faces(bm, faces=bm.faces[:])
     put(bm, ['tuna', 'tuna_fat', 'tuna_skin'], T(-0.07, 0.04, 0.0) @ Rz(4))
     for k2 in range(3):   # saku blocks with fat lines
         with at(T(0.15, -0.22 + k2 * 0.2, 0.0) @ Rz(-8)):
@@ -676,18 +687,18 @@ for r_ in range(2):
         scallop(T(-1.08 + r_ * 0.24, 1.15 + c_ * 0.19, 1.085) @ Rz(RND.uniform(-30, 30) + (0 if r_ else 180)))
 # tier C crates: aji row, two buri, mackerel
 for i in range(5):
-    fish(0.26, 0.07, 0.045, 'aji', T(-1.7, -1.8 + i * 0.16, 1.28) @ Rz(12))
+    fish(0.26, 0.07, 0.045, 'aji', T(-1.7, -1.8 + i * 0.16, 1.35) @ Rz(12))
 for i in range(2):
-    fish(0.62, 0.17, 0.11, 'buri', T(-1.9, -0.72 + i * 0.4, 1.3) @ Rz(18 - i * 30))
+    fish(0.62, 0.17, 0.11, 'buri', T(-1.86, -0.72 + i * 0.4, 1.38) @ Rz(18 - i * 30))
 for i in range(5):
-    fish(0.3, 0.072, 0.05, 'mack', T(-1.75, 0.2 + i * 0.16, 1.28 + 0.01 * (i % 2)) @ Rz(-10))
+    fish(0.3, 0.072, 0.05, 'mack', T(-1.75, 0.2 + i * 0.16, 1.35 + 0.01 * (i % 2)) @ Rz(-10))
 for i in range(9):   # lemons in the green basket
     sphere(-1.68 + 0.08 * (i % 3), 1.18 + 0.09 * (i // 3), 1.27 + 0.02 * (i % 2), 0.04, 0.03, 0.03, 'lemon', 8, 6, Rz(RND.uniform(0, 180)))
 
 group('Stall_Cards')
-price_card(0.22, -1.3, 0.83, 'さば', '¥280', 0.17)
-price_card(0.22, -0.1, 0.83, '真鯛', '¥650', 0.17, col='red_dk')
-price_card(0.22, 1.25, 0.83, 'いか', '¥320', 0.17)
+price_card(-0.07, -1.3, 0.8, 'さば', '¥280', 0.17)
+price_card(-0.07, -0.1, 0.8, '真鯛', '¥650', 0.17, col='red_dk')
+price_card(-0.07, 1.3, 0.8, 'いか', '¥320', 0.17)
 for cy, n, p in zip(BOXES_B, ('まぐろ', 'たこ', '有頭えび', 'ほたて'), ('¥980', '¥760', '¥450', '¥150')):
     price_card(-0.68, cy + 0.25, 1.1, n, p, 0.16)
 price_card(-1.29, -0.45, 1.36, 'ぶり', '¥1200', 0.16, col='red_dk')
@@ -712,7 +723,7 @@ for k2 in range(3):
     tube([(SX, SY + 0.02, 1.68), (SX + 0.14 * math.cos(a), SY + 0.14 * math.sin(a), 1.45)], 0.0025, 'steel', 3)
 lathe([(0, 1.38), (0.1, 1.39), (0.15, 1.43), (0.16, 1.45), (0.15, 1.45), (0.14, 1.43), (0.095, 1.40), (0, 1.40)], 'steel', T(SX, SY, 0), 18)
 # hanging zaru basket on a coiled spring (the cash basket)
-ZX, ZY = -1.05, -1.0
+ZX, ZY = -0.85, -1.0
 pts = [(ZX + 0.025 * math.cos(t * 0.9), ZY + 0.025 * math.sin(t * 0.9), zc(ZX) - 0.05 - t * 0.012) for t in range(40)]
 tube(pts, 0.003, 'grey', 3, caps=False)
 tube([(ZX, ZY, pts[-1][2]), (ZX, ZY, 1.86)], 0.004, 'grey', 3)
@@ -730,7 +741,7 @@ with at(T(-1.62, 1.75, 1.2) @ Rz(-20)):
     box(0.115, 0.12, -0.02, 0.02, 0.07, 0.1, 'steel', 0.003, 1)
     cyl(0.121, 0, 0.083, 0.004, 0.003, 'ink', 'X', 6)
 # radio on the top step
-with at(T(-1.75, 1.55, 1.2) @ Rz(-35)):
+with at(T(-1.85, 1.52, 1.2) @ Rz(-35)):
     box(-0.05, 0.05, -0.1, 0.1, 0, 0.11, 'red', 0.015)
     cyl(0.051, -0.04, 0.055, 0.035, 0.006, 'dark', 'X', 14)
     for k2 in range(4): box(0.05, 0.055, 0.02, 0.08, 0.025 + k2 * 0.022, 0.032 + k2 * 0.022, 'white', 0, 1)
@@ -772,13 +783,12 @@ crate(-0.45, -2.62, 0.0, 0.45, 0.62, 0.2, 'crate_green', 4, 3, 1, Mx=Rz(-12))
 # hand-written A-frame menu board
 with at(T(0.95, -2.35, 0) @ Rz(-38)):
     for s in (1, -1):
-        with at(T(s * 0.13, 0, 0) @ Ry(s * 12)):
-            box(-0.02, 0.02, -0.3, 0.3, 0.0, 0.95, 'wood', 0.01) if False else None
+        with at(T(s * 0.2, 0, 0) @ Ry(-s * 11)):
             for sy2 in (-1, 1): box(-0.018, 0.018, sy2 * 0.29 - 0.02, sy2 * 0.29 + 0.02, 0.0, 0.95, 'wood', 0.008, 1)
             box(-0.018, 0.018, -0.29, 0.29, 0.92, 0.96, 'wood', 0.008, 1)
             box(-0.018, 0.018, -0.29, 0.29, 0.2, 0.24, 'wood', 0.008, 1)
             box(-0.01, 0.01, -0.27, 0.27, 0.24, 0.92, 'chalk', 0.004, 1)
-    with at(T(0.13, 0, 0) @ Ry(12) @ T(0.0105, 0, 0)):
+    with at(T(0.2, 0, 0) @ Ry(-11) @ T(0.0105, 0, 0)):
         text('本日のおすすめ', T(0, 0, 0.85) @ FPX, 0.06, 'chalk_y', fitw=0.48)
         box(0, 0.002, -0.22, 0.22, 0.795, 0.802, 'chalk_w', 0, 1)
         for i, (a_, b_) in enumerate((('まぐろ', '980'), ('真鯛', '650'), ('さば', '280'), ('ほたて', '150'))):
@@ -787,11 +797,27 @@ with at(T(0.95, -2.35, 0) @ Rz(-38)):
         put(poly_bm([(0, -0.12, 0.33), (0, 0.0, 0.29), (0, 0.08, 0.33), (0, 0.13, 0.29), (0, 0.13, 0.37), (0, 0.08, 0.33), (0, 0.0, 0.37)], 0.002), 'chalk_p', None, smooth=False)
         sphere(0.002, -0.06, 0.34, 0.002, 0.01, 0.01, 'chalk_w', 6, 4)
 
+# tall wooden notice board on the left front post, bag roll on the right one
+with at(T(0.0, -2.2, 0)):
+    box(0.03, 0.06, -0.12, 0.12, 1.0, 2.0, 'wood_pale', 0.012)
+    box(0.06, 0.065, -0.1, 0.1, 1.06, 1.94, 'paper', 0, 1)
+    text('本\n日\n入\n荷', T(0.066, 0, 1.52) @ FPX, 0.17, 'ink', 0.004)
+    cyl(0.068, 0, 1.86, 0.035, 0.004, 'red', 'X', 14)
+    for zz in (1.15, 1.85): box(-0.035, 0.035, -0.035, 0.035, zz - 0.02, zz + 0.02, 'frame_dk', 0.006, 1)
+with at(T(0.0, 2.2, 1.55)):
+    tube([(0.03, 0, 0.12), (0.12, 0, 0.12), (0.12, 0, 0.0)], 0.006, 'steel', 5)
+    cyl(0.12, 0, -0.06, 0.05, 0.18, 'white', 'Y', 14, bev=0.01)
+    cyl(0.12, 0, -0.06, 0.015, 0.2, 'red', 'Y', 8)
+    put(sheet_bm([[(0.12 + 0.05, -0.08, -0.06), (0.12 + 0.05, 0.08, -0.06)], [(0.12 + 0.055, -0.08, -0.25), (0.12 + 0.06, 0.08, -0.25)]]), 'white', None)
+# a dip net and ladle standing in the blue bucket
+tube([(0.12, 2.5, 0.05), (0.2, 2.42, 0.85)], 0.008, 'wood_pale', 5)
+tube([(0.2 + 0.07 * math.cos(a), 2.42 + 0.07 * math.sin(a), 0.92) for a in [i * 2 * math.pi / 16 for i in range(17)]], 0.006, 'steel', 4, caps=False)
+lathe([(0, 0.82), (0.05, 0.84), (0.068, 0.92), (0, 0.92)], mat('net', '6fa7c9', 0.8), T(0.2, 2.42, 0), 10, cap=False)
+
 group('Bunting')
 POLE = Vector((0.75, -3.3, 0))
 bunting(sag((POLE.x - 0.15, POLE.y, 3.55), (-2.58, 4.6, 3.4), 0.4, 26), 0)
 bunting(sag((POLE.x - 0.12, POLE.y + 0.05, 2.9), (CX_F + 0.04, -2.25, zc(CX_F) - 0.02), 0.08, 6), 2)
-bunting(sag((CX_F + 0.06, -2.2, zc(CX_F) + 0.0), (CX_F + 0.06, 2.2, zc(CX_F) + 0.0), 0.12, 22), 4)
 
 # ================================================================ vending machines + recycle bin
 def vending(yc, kind):
@@ -823,8 +849,7 @@ def vending(yc, kind):
                 box(-0.03, -0.012, yy - 0.035, yy + 0.035, z - 0.045, z - 0.012, 'white', 0.003, 1)   # price strip
                 box(-0.014, -0.004, yy - 0.018, yy + 0.018, z - 0.04, z - 0.026, EMIT['vm_btn'], 0.003, 1)
         for gy, gz in ((-0.25, 1.25), (0.02, 1.4)):
-            box(-0.005, 0.0, gy - 0.022, gy + 0.022, 0.93, 1.59, GLARE, 0, 1, Mx=None) if False else \
-                cbox(-0.004, gy, gz, 0.003, 0.05, 0.42, GLARE, 0, 1, Rx(28))
+            cbox(-0.004, gy, gz, 0.003, 0.05, 0.42, GLARE, 0, 1, Rx(28))
         # coin / bill panel
         box(0.0, 0.02, 0.215, 0.445, 0.97, 1.52, cpan, 0.012)
         box(0.02, 0.026, 0.24, 0.42, 1.4, 1.48, 'black', 0.004, 1)
@@ -838,7 +863,7 @@ def vending(yc, kind):
         # advert panel
         box(0.0, 0.012, -0.41, 0.18, 0.4, 0.88, adp, 0.01, 1)
         cyl(0.014, -0.12, 0.66, 0.15, 0.006, acc, 'X', 24)
-        bottle('g' if red else 'bl', T(0.02, -0.12, 0.54) @ Ry(90) @ Rz(0) @ Sc(1, 1, 1) if False else T(0.03, -0.12, 0.55) @ Sc(2.6, 2.6, 2.6))
+        bottle('g' if red else 'bl', T(0.03, -0.12, 0.55) @ Sc(2.6, 2.6, 2.6))
         for k2, sz in enumerate((0.42, 0.6, 0.78)):
             box(0.012, 0.016, 0.06, 0.16, sz - 0.012, sz + 0.012, acc if k2 != 1 else 'yellow', 0.004, 1)
         # pickup slot with flap
@@ -866,14 +891,24 @@ with at(T(-2.05, 3.0, 0)):
     put(poly_bm([(0, -0.04, 0.47), (0, 0.04, 0.47), (0, 0.0, 0.52)], 0.002), 'white', T(0.207, 0, 0), smooth=False)
 
 # ================================================================ the building
-WX = -2.6; Y0B, Y1B = -2.5, 5.35; GF, UF0, TOPB = 3.6, 3.7, 6.25
+WX = -2.6; Y0B, Y1B = -2.5, 5.55; GF, UF0, TOPB = 3.6, 3.7, 6.25
 group('Building')
-box(WX - 1.2, WX - 0.02, Y0B + 0.02, Y1B, 0, TOPB, 'plaster', 0)              # core block
+box(WX - 1.2, WX - 0.02, Y0B + 0.02, -2.0, 0, TOPB, 'plaster', 0)              # core block, open where the shop is
+box(WX - 1.2, WX - 0.02, 2.4, Y1B, 0, TOPB, 'plaster', 0)
+box(WX - 1.2, WX - 0.02, -2.0, 2.4, 2.6, TOPB, 'plaster', 0)
+box(WX - 1.0, WX, -2.0, 2.4, -0.02, 0.005, 'grout', 0)
 # shop opening recess (interior seen behind the stall)
 box(WX - 1.0, WX - 0.95, -2.0, 2.4, 0, 2.6, 'interior', 0)
 box(WX - 1.0, WX, -2.0, 2.4, 2.6, 2.65, 'dark', 0)
 box(WX - 0.98, WX - 0.9, -1.6, -0.5, 0.0, 1.8, 'white', 0.02)
 box(WX - 0.92, WX - 0.9, -1.55, -0.55, 0.2, 1.7, EMIT['interior_lt'], 0)
+for zz in (0.25, 0.62, 0.99, 1.36):
+    box(WX - 0.9, WX - 0.68, -1.56, -0.54, zz - 0.02, zz, 'steel', 0.004, 1)
+    for i in range(7):
+        c3 = ['drink_g', 'drink_o', 'drink_bl', 'drink_rd', 'drink_w', 'styro_lbl', 'yellow'][(i + int(zz * 10)) % 7]
+        box(WX - 0.86, WX - 0.72, -1.52 + i * 0.135, -1.42 + i * 0.135, zz, zz + 0.12 + 0.08 * ((i * 3 + int(zz * 7)) % 3) / 2, c3, 0.01, 1)
+for zz in (0.18, 1.75): box(WX - 0.7, WX - 0.62, -1.6, -0.5, zz - 0.03, zz + 0.03, 'white', 0.015)
+for yy in (-1.6, -1.05, -0.5): box(WX - 0.7, WX - 0.62, yy - 0.03, yy + 0.03, 0.15, 1.78, 'white', 0.015)
 for zz in (0.55, 0.95, 1.35): box(WX - 0.95, WX - 0.6, 0.2, 2.2, zz, zz + 0.03, 'wood', 0.008, 1)
 for i in range(8): box(WX - 0.9, WX - 0.7, 0.3 + i * 0.24, 0.5 + i * 0.24, 0.98, 1.1 + 0.05 * (i % 3), 'styro' if i % 2 else 'crate_blue', 0.01, 1)
 box(WX - 0.9, WX - 0.86, -1.95, 2.35, 2.5, 2.54, EMIT['interior_lt'], 0.0)
@@ -903,7 +938,7 @@ box(WX - 0.01, WX + 0.005, 2.68, Y1B, 0, 1.02, 'grout', 0)
 for r_ in range(7):
     for c_ in range(int((Y1B - 2.68) / 0.15)):
         y = 2.68 + c_ * 0.15
-        box(WX, WX + 0.02, y + 0.004, y + 0.146, r_ * 0.145 + 0.004, r_ * 0.145 + 0.141, 'tile_w', 0.004, 1)
+        box(WX, WX + 0.02, y + 0.004, y + 0.146, r_ * 0.145 + 0.004, r_ * 0.145 + 0.141, 'tile_w', 0)
 box(WX - 0.01, WX + 0.05, 2.68, Y1B, 1.02, 1.06, 'band', 0.01, 1)
 box(WX - 0.01, WX + 0.01, 2.68, Y1B, 1.06, GF, 'plaster', 0)
 # electricity meter box
@@ -924,12 +959,20 @@ for ly in (-1.0, 0.2, 1.4):
     tube(spline([(WX + 0.02, ly, 3.62), (WX + 0.22, ly, 3.72), (WX + 0.42, ly, 3.66)], 4), 0.01, 'frame_dk', 6)
     lathe([(0, 0.0), (0.012, 0.02), (0.075, -0.04), (0.08, -0.05), (0.07, -0.05), (0, -0.01)], 'frame_dk', T(WX + 0.44, ly, 3.64) @ Ry(25), 14)
     cyl(0, 0, 0, 0.065, 0.004, EMIT['bulb'], 'Z', 12, Mx=T(WX + 0.44, ly, 3.64) @ Ry(25) @ T(0, 0, -0.046))
+# vertical projecting sign (tate kanban) on the corner pillar, read from the street
+with at(T(WX + 0.2, Y0B + 0.18, 0)):
+    for zz in (4.0, 5.6): box(0.0, 0.42, -0.02, 0.02, zz - 0.02, zz + 0.02, 'frame_dk', 0.006, 1)
+    box(0.12, 0.6, -0.06, 0.06, 3.85, 5.75, 'red', 0.03, 2)
+    box(0.15, 0.57, -0.065, 0.065, 3.9, 5.7, 'sign', 0.012, 1)
+    for sd in (-1, 1):
+        text('魚\nが\nし', T(0.36, sd * 0.066, 4.8) @ Rz(180 if sd < 0 else 0) @ Rx(90), 0.38, 'red_dk', 0.008)
+    cyl(0.36, 0, 5.92, 0.06, 0.12, 'bulb', 'Z', 12, bev=0.01)
 # belt course and lap siding on the upper floor (wrapping the corner)
 box(WX - 0.02, WX + 0.08, Y0B - 0.08, Y1B, GF, UF0, 'band', 0.015)
 box(WX - 1.2, WX + 0.08, Y0B - 0.08, Y0B + 0.02, GF, UF0, 'band', 0.012, 1)
 z = UF0; k3 = 0
 while z < TOPB - 0.18:
-    box(WX - 0.01, WX + 0.035, Y0B - 0.03, Y1B, z, z + 0.185, 'siding' if k3 % 2 else 'siding2', 0.008, 1, Ry(-4) if False else None)
+    box(WX - 0.01, WX + 0.035, Y0B - 0.03, Y1B, z, z + 0.185, 'siding' if k3 % 2 else 'siding2', 0.008, 1)
     box(WX + 0.035, WX + 0.045, Y0B - 0.03, Y1B, z, z + 0.012, 'grout', 0, 1)
     box(WX - 1.2, WX + 0.035, Y0B - 0.04, Y0B - 0.0, z, z + 0.185, 'siding' if k3 % 2 else 'siding2', 0.008, 1)
     z += 0.18; k3 += 1
@@ -945,8 +988,8 @@ def window(y0, y1, z0, z1, curtain=False, guard=False, flowers=False):
     for gy in (y0 + 0.2, ym + 0.15):
         cbox(WX + 0.106, gy, (z0 + z1) / 2, 0.003, 0.07, (z1 - z0) * 0.7, mat('glare_w', 'c8dcea', 0.3), 0, 1, Rx(25))
     if curtain:
-        put(lattice_bm(0.1, 0.1, 1, 1) if False else sheet_bm([[(WX + 0.075 + 0.015 * math.sin(i * 1.3), y0 + 0.05 + (ym - y0 - 0.05) * i / 10, z) for i in range(11)] for z in (z0 + 0.06, z1 - 0.06)]), 'curtain', None)
-    box(WX + 0.08, WX + 0.18, y0 - 0.06, y1 + 0.06, z0 - 0.05, z0, 'sill' if False else 'alu', 0.012)
+        put(sheet_bm([[(WX + 0.075 + 0.015 * math.sin(i * 1.3), y0 + 0.05 + (ym - y0 - 0.05) * i / 10, z) for i in range(11)] for z in (z0 + 0.06, z1 - 0.06)]), 'curtain', None)
+    box(WX + 0.08, WX + 0.18, y0 - 0.06, y1 + 0.06, z0 - 0.05, z0, 'alu', 0.012)
     if guard:
         for gz in (z0 + 0.12, z0 + 0.3, z0 + 0.48): tube([(WX + 0.18, y0 + 0.02, gz), (WX + 0.18, y1 - 0.02, gz)], 0.012, 'alu', 6)
         for gy in (y0 + 0.04, y1 - 0.04): tube([(WX + 0.1, gy, z0 + 0.05), (WX + 0.18, gy, z0 + 0.05), (WX + 0.18, gy, z0 + 0.55)], 0.012, 'alu', 6)
@@ -976,7 +1019,7 @@ with at(T(WX, 4.55, 4.05)):
 # round wall fan (ventilation) above the bin
 fan(T(WX + 0.16, 3.0, 2.35) @ Rz(15), 0.18)
 # drainpipe with brackets
-DY = 5.2
+DY = 5.42
 tube(spline([(WX + 0.15, DY - 0.25, TOPB - 0.05), (WX + 0.15, DY - 0.1, TOPB - 0.25), (WX + 0.12, DY, TOPB - 0.45)], 3) +
      [Vector((WX + 0.12, DY, 0.25)), Vector((WX + 0.2, DY, 0.06)), Vector((WX + 0.3, DY, 0.04))], 0.045, 'drain', 10)
 box(WX + 0.02, WX + 0.24, DY - 0.38, DY - 0.12, TOPB - 0.12, TOPB, 'drain', 0.02)
@@ -1015,6 +1058,11 @@ with at(T(POLE.x, POLE.y, 0)):
     for k2 in range(10):
         z = 2.4 + k2 * 0.42; a = math.pi * (k2 % 2) + 0.6; r = 0.17 - 0.05 * z / 8.2
         tube([(r * math.cos(a), r * math.sin(a), z), ((r + 0.18) * math.cos(a), (r + 0.18) * math.sin(a), z)], 0.012, 'grey', 5)
+    # street lamp on a curved arm toward the street
+    tube(spline([(0.1, 0, 4.4), (0.5, 0, 4.75), (1.1, 0, 4.85)], 4), 0.03, 'grey', 8)
+    for zz in (4.35, 4.85): tube([(p.x * 1.0, p.y, zz) for p in circle(0.15, 16)], 0.012, 'grey', 4, caps=False)
+    lathe([(0, 0.0), (0.05, 0.0), (0.16, -0.06), (0.17, -0.09), (0.0, -0.09)], 'grey_lt', T(1.15, 0, 4.86), 16)
+    cyl(1.15, 0, 4.77, 0.13, 0.01, EMIT['bulb'], 'Z', 16)
     # cross arm with insulators
     box(-0.75, 0.75, -0.05, 0.05, 7.55, 7.65, 'grey', 0.015)
     for ix in (-0.6, -0.2, 0.25, 0.6):
@@ -1028,7 +1076,7 @@ with at(T(POLE.x, POLE.y, 0)):
             a = 2 * math.pi * k2 / 8 + 0.2
             cbox(0.25 * math.cos(a), 0.25 * math.sin(a), 0.33, 0.06, 0.012, 0.5, 'transf', 0.004, 1, Rz(math.degrees(a)))
         for ix in (-0.08, 0.08): lathe([(0, 0), (0.025, 0), (0.035, 0.03), (0.02, 0.05), (0.03, 0.08), (0, 0.1)], 'insul', T(ix, 0.0, 0.8), 8)
-        cyl(0.245, 0, 0.42, 0.06, 0.004, 'yellow', 'Z', 1) if False else box(0.235, 0.25, -0.06, 0.06, 0.38, 0.46, 'yellow', 0.003, 1)
+        box(0.235, 0.25, -0.06, 0.06, 0.38, 0.46, 'yellow', 0.003, 1)
     # drop cable to the building and wires to the cross arm
     tube(sag((0.42, 0.0, 5.85), (-0.6, 0.0, 7.6), 0.15, 8), 0.012, 'black', 5)
 tube(sag((POLE.x - 0.1, POLE.y, 6.6), (WX + 0.05, -1.8, TOPB - 0.2), 0.35, 14), 0.012, 'black', 5)
@@ -1072,20 +1120,25 @@ for m in GROUPS['PV_Ground'].mats: pv.materials.append(m)
 po = bpy.data.objects.new('PV_Ground', pv); scn.collection.objects.link(po)
 
 world = bpy.data.worlds.new('W'); world.use_nodes = True; scn.world = world
-bg = world.node_tree.nodes['Background']; bg.inputs['Color'].default_value = (*srgb('bcd6f0'), 1); bg.inputs['Strength'].default_value = 1.15
+bg = world.node_tree.nodes['Background']; bg.inputs['Color'].default_value = (*srgb('bcd6f0'), 1); bg.inputs['Strength'].default_value = 0.95
 sun = bpy.data.objects.new('Sun', bpy.data.lights.new('Sun', 'SUN')); scn.collection.objects.link(sun)
-sun.data.energy = 3.4; sun.data.color = srgb('fff2dc'); sun.data.angle = math.radians(9)
-sun.rotation_euler = (math.radians(44), 0, math.radians(62))
+sun.data.energy = 4.2; sun.data.color = srgb('fff2dc'); sun.data.angle = math.radians(9)
+sun.rotation_euler = (math.radians(46), 0, math.radians(38))
 for py in (-1.5, -0.5, 0.5, 1.5):   # warm glow from the stall spots
     L = bpy.data.objects.new('spot', bpy.data.lights.new('spot', 'POINT')); scn.collection.objects.link(L)
     L.location = (RAIL_X - 0.1, py, RAIL_Z - 0.3); L.data.energy = 18; L.data.color = srgb('ffd9a0'); L.data.shadow_soft_size = 0.2
 cam = bpy.data.objects.new('Cam', bpy.data.cameras.new('Cam')); scn.collection.objects.link(cam); scn.camera = cam
-tgt = Vector((-0.9, 0.9, 1.25)); az = math.radians(-36); d = 9.0
-pos = tgt + Vector((d * math.cos(az) * 0.94, d * math.sin(az) * 0.94, 0)); pos.z = 3.5
-cam.location = pos; cam.rotation_euler = (tgt - pos).to_track_quat('-Z', 'Y').to_euler(); cam.data.lens = 30
 scn.render.engine = 'CYCLES'; scn.cycles.device = 'CPU'; scn.cycles.samples = 32; scn.cycles.use_denoising = True
 scn.cycles.max_bounces = 5; scn.cycles.use_adaptive_sampling = True
 scn.render.resolution_x, scn.render.resolution_y = 1280, 720
-scn.view_settings.view_transform = 'AgX'; scn.view_settings.look = 'AgX - Medium Low Contrast'; scn.view_settings.exposure = 0.15
-scn.render.filepath = os.path.join(OUT, 'prev.png'); bpy.ops.render.render(write_still=True)
-print('wrote prev')
+scn.view_settings.view_transform = 'AgX'; scn.view_settings.look = 'AgX - Medium Low Contrast'; scn.view_settings.exposure = 0.0
+def shoot(fn, tgt, az, d, h, lens):
+    tgt = Vector(tgt); az = math.radians(az)
+    pos = tgt + Vector((d * math.cos(az), d * math.sin(az), 0)); pos.z = h
+    cam.location = pos; cam.rotation_euler = (tgt - pos).to_track_quat('-Z', 'Y').to_euler(); cam.data.lens = lens
+    scn.render.filepath = os.path.join(OUT, fn); bpy.ops.render.render(write_still=True); print('wrote', fn)
+DBG = [a[5:] for a in sys.argv if a.startswith('shot=')]
+if not DBG: shoot('prev.png', (-1.0, 0.7, 1.75), -33, 8.7, 3.5, 27)
+if 'close' in DBG: shoot('dbg_close.png', (-0.7, 0.0, 1.0), -20, 3.2, 2.2, 32)
+if 'vm' in DBG: shoot('dbg_vm.png', (-1.9, 4.3, 1.1), -15, 3.6, 1.7, 32)
+if 'bld' in DBG: shoot('dbg_bld.png', (-2.6, 1.4, 3.6), -10, 9.0, 3.0, 28)
