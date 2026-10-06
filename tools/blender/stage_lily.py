@@ -418,7 +418,7 @@ M_MUD = mat('PondBed', tcol=load_img('brown_mud_rocks_01_diff_1k.jpg'), trough=N
 M_ROCK = mat('Stone', tcol=load_img('mossy_rock_diff_1k.jpg'), tnrm=load_img('mossy_rock_nor_gl_1k.jpg', True), nstr=1.0, rough=0.7)
 M_STEM = mat('Stem', lin('4a5a22'), 0.45, sss=0.1, sss_r=(0.4, 1.0, 0.2))
 M_STEMR = mat('StemRed', lin('5a3a22'), 0.45)
-M_WEED = mat('Weed', lin('3e5a1a'), 0.6, sss=0.15, sss_r=(0.4, 1.0, 0.2))
+M_WEED = mat('Weed', lin('5a7a22'), 0.6, sss=0.15, sss_r=(0.4, 1.0, 0.2))
 M_PETAL = mat('Petal', rough=0.38, tcol=IM_PETAL, sss=0.25, sss_r=(1.0, 0.6, 0.6), sss_s=0.03, spec=0.4)
 M_SEPAL = mat('Sepal', lin('6a4a3a'), 0.4, coat=0.2)
 M_STAMEN = mat('Stamen', lin('f2b80e'), 0.45, sss=0.2, sss_r=(1.0, 0.7, 0.2))
@@ -751,7 +751,7 @@ def merge(name, objs, mats=None):
 
 # underwater weeds (pondweed strands) and the pads' long stems
 weeds = []
-for k in range(70):
+for k in range(110):
     while True:
         x, y = rr.uniform(-18, 18), rr.uniform(-10, 14)
         if math.hypot(x, y) > RD - 1.5: break
@@ -760,7 +760,7 @@ for k in range(70):
     L = rr.uniform(0.6, hi)
     for s in range(3):
         weeds.append(ribbon('weed', (x + rr.uniform(-.2, .2), y + rr.uniform(-.2, .2), zb - 0.05), (rr.uniform(-.3, .3), rr.uniform(-.3, .3), 1),
-                            L * rr.uniform(0.6, 1.0), rr.uniform(0.06, 0.12), (rr.uniform(-.4, .4), rr.uniform(-.4, .4), 0), M_WEED,
+                            L * rr.uniform(0.6, 1.0), rr.uniform(0.12, 0.24), (rr.uniform(-.4, .4), rr.uniform(-.4, .4), 0), M_WEED,
                             segs=6, twist=rr.uniform(-2, 2), sway=(rr.uniform(-.15, .15), rr.uniform(-.15, .15))))
 WEEDS = merge('Weeds', weeds)
 
@@ -1100,6 +1100,34 @@ img = [n for n in nt if n.type == 'TEX_IMAGE' and n.image.name.startswith('brown
 mix = nt.new('ShaderNodeMix'); mix.data_type = 'RGBA'; mix.blend_type = 'MULTIPLY'; mix.inputs['Factor'].default_value = 0.55
 mix.inputs['B'].default_value = (*lin('8aa860'), 1)
 lk.new(img.outputs['Color'], mix.inputs['A']); lk.new(mix.outputs['Result'], bs.inputs['Base Color'])
+# algae patches and sunlight caustics on the bed (render-only)
+nz = nt.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 0.25; nz.inputs['Detail'].default_value = 6
+rp = nt.new('ShaderNodeMapRange'); rp.inputs['From Min'].default_value = 0.45; rp.inputs['From Max'].default_value = 0.65
+lk.new(nz.outputs['Fac'], rp.inputs['Value'])
+al = nt.new('ShaderNodeMix'); al.data_type = 'RGBA'; al.blend_type = 'MIX'; lk.new(rp.outputs['Result'], al.inputs['Factor'])
+lk.new(mix.outputs['Result'], al.inputs['A']); al.inputs['B'].default_value = (*lin('3a4a1a'), 1)
+lk.new(al.outputs['Result'], bs.inputs['Base Color'])
+
+
+def caustics(mname, strength=1.6):
+    nt, lk = nodes(MATS[mname]); bs = BSDF[mname]
+    src = bs.inputs['Base Color'].links[0].from_socket
+    geo = nt.new('ShaderNodeNewGeometry')
+    wn_ = nt.new('ShaderNodeTexNoise'); wn_.inputs['Scale'].default_value = 0.6; wn_.inputs['Detail'].default_value = 2
+    lk.new(geo.outputs['Position'], wn_.inputs['Vector'])
+    dv = nt.new('ShaderNodeVectorMath'); dv.operation = 'MULTIPLY_ADD'; dv.inputs[1].default_value = (0.5, 0.5, 0.5)
+    lk.new(wn_.outputs['Color'], dv.inputs[0]); lk.new(geo.outputs['Position'], dv.inputs[2])
+    vo_ = nt.new('ShaderNodeTexVoronoi'); vo_.feature = 'DISTANCE_TO_EDGE'; vo_.inputs['Scale'].default_value = 1.3
+    lk.new(dv.outputs['Vector'], vo_.inputs['Vector'])
+    mr = nt.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = 0.0; mr.inputs['From Max'].default_value = 0.07
+    mr.inputs['To Min'].default_value = 1.0 + strength; mr.inputs['To Max'].default_value = 0.85
+    lk.new(vo_.outputs['Distance'], mr.inputs['Value'])
+    ml = nt.new('ShaderNodeMix'); ml.data_type = 'RGBA'; ml.blend_type = 'MULTIPLY'; ml.inputs['Factor'].default_value = 1.0
+    lk.new(src, ml.inputs['A']); lk.new(mr.outputs['Result'], ml.inputs['B'])
+    lk.new(ml.outputs['Result'], bs.inputs['Base Color'])
+
+
+caustics('PondBed'); caustics('Stone', 1.0)
 for mname in ('PondBed', 'Stone', 'Weed', 'StemRed'):
     depth_tint(mname)
 
@@ -1129,12 +1157,12 @@ sun.data.energy = float(OPT.get('sun', 6.5)); sun.data.color = (1.0, 0.78, 0.52)
 # catches broken light; the fighting area stays in full sun)
 bpy.ops.mesh.primitive_plane_add(size=1); gobo = bpy.context.object; gobo.name = 'Canopy'
 GOBO_C = Vector(eval(OPT.get('gobo', '(-8.0, 3.0, 0.0)'))); GOBO_S = float(OPT.get('gobos', 16))
-gobo.scale = (GOBO_S, GOBO_S, 1); gobo.location = GOBO_C + sdir * 26
+gobo.scale = (GOBO_S, GOBO_S, 1); gobo.location = GOBO_C + sdir * float(OPT.get('gobod', 8))
 gobo.rotation_euler = sdir.to_track_quat('Z', 'Y').to_euler()
 gm = bpy.data.materials.new('Canopy'); gm.use_nodes = True; gnt = gm.node_tree; gn, gl_ = gnt.nodes, gnt.links
 gn.remove(gn['Principled BSDF'])
 tco = gn.new('ShaderNodeTexCoord')
-vo = gn.new('ShaderNodeTexNoise'); vo.inputs['Scale'].default_value = 9; vo.inputs['Detail'].default_value = 10
+vo = gn.new('ShaderNodeTexNoise'); vo.inputs['Scale'].default_value = float(OPT.get('gobon', 14)); vo.inputs['Detail'].default_value = 10
 vo.inputs['Roughness'].default_value = 0.72
 gl_.new(tco.outputs['Object'], vo.inputs['Vector'])
 ln_ = gn.new('ShaderNodeVectorMath'); ln_.operation = 'LENGTH'; gl_.new(tco.outputs['Object'], ln_.inputs[0])
