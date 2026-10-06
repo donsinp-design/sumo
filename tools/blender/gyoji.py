@@ -54,7 +54,7 @@ def silk_image():
     return img
 SILK_IMG = silk_image()
 def silk_mat(name, tint=None):
-    m = mat(name, (1, 1, 1), 0.42); nt = m.node_tree; b = nt.nodes['Principled BSDF']
+    m = mat(name, (1, 1, 1), 0.52); nt = m.node_tree; b = nt.nodes['Principled BSDF']
     t = nt.nodes.new('ShaderNodeTexImage'); t.image = SILK_IMG
     if tint:   # multiply by a constant: exported as the glTF baseColorFactor
         mx = nt.nodes.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.blend_type = 'MULTIPLY'; mx.inputs['Factor'].default_value = 1.0
@@ -146,7 +146,7 @@ for s in (-1, 1):
     limb(J, E, 0.056, 0.05); ell(*E, 0.05, 0.05, 0.05); limb(E, W, 0.05, 0.038)
     limb(W - d2 * 0.02, W + d2 * 0.035, 0.033, 0.035)                         # wrist
     if s < 0:   # a fist round the gunbai handle
-        HD = Vector((-0.12, -0.62, 0.78)).normalized()                         # handle axis: up and forward
+        HD = Vector((-0.45, -0.32, 1.0)).normalized()                           # handle axis: upright, leaning forward and out
         f = (d2 - HD * d2.dot(HD)).normalized(); c = HD.cross(f)
         R = Matrix((f, HD, c)).transposed()
         H0 = W + d2 * 0.058
@@ -414,8 +414,8 @@ bv_ = kp.modifiers.new('bev', 'BEVEL'); bv_.width = 0.004; bv_.segments = 2; bpy
 
 # ---------------------------------------------------------------- white tabi toes peeking out under the hem
 for s in (-1, 1):
-    sphere('Tabi', (s * 0.165, -0.19, 0.028), (0.046, 0.112, 0.029), TABI, 14, 8)
-    sphere('TabiToe', (s * 0.126, -0.276, 0.024), (0.018, 0.028, 0.02), TABI, 10, 6)
+    sphere('Tabi', (s * 0.165, -0.19, 0.025), (0.045, 0.112, 0.026), TABI, 14, 8)
+    sphere('TabiToe', (s * 0.126, -0.276, 0.024), (0.017, 0.027, 0.018), TABI, 10, 6)
 
 # ---------------------------------------------------------------- kikutoji on the chest, the sleeves and the back
 for s in (-1, 1):
@@ -449,11 +449,11 @@ band('Mouth', mp, 0.0026, 0.0024, 0.0, INK, closed=False, K=5)
 HC = Vector((0, 0.012, HZ + 0.02))
 def hairline(a):
     y = -0.11 * math.cos(a)
-    if y < -0.06: return 0.03 + 0.02 * min((-y - 0.02) / 0.05, 1)
-    if y < 0.02:
-        t = (y + 0.06) / 0.08; return 0.045 + (-0.05 - 0.045) * (0.5 - 0.5 * math.cos(math.pi * t))
-    yb = max(0, min(1, (y - 0.02) / 0.09))
-    return -0.05 - 0.045 * (0.5 - 0.5 * math.cos(math.pi * yb))
+    if y < -0.085: return 0.05                                              # forehead (under the hat brim)
+    if y < 0.015:                                                            # temples down into short sideburns: no bare skin under the brim
+        t = (y + 0.085) / 0.1; return 0.05 + (-0.058 - 0.05) * (0.5 - 0.5 * math.cos(math.pi * t))
+    yb = max(0, min(1, (y - 0.015) / 0.09))
+    return -0.058 - 0.037 * (0.5 - 0.5 * math.cos(math.pi * yb))
 NHA, NHE = 30, 5
 hv2, hf2 = [], []
 for k in range(NHA):
@@ -512,7 +512,7 @@ for s in (-1, 1):
     sphere('ChinTail', kn + Vector((s * 0.008, -0.01, -0.035)), (0.0045, 0.0045, 0.03), CORD, 8, 5, (0, s * 0.15, 0))
 
 # ---------------------------------------------------------------- the gunbai in his right hand
-a = HD; wv = (Vector((1, 0, 0)) - a * a.x).normalized(); fn = a.cross(wv)
+a = HD; nt = Vector((0.15, -1, 0.3)); fn = (nt - a * nt.dot(a)).normalized(); wv = fn.cross(a)   # blade faces the front
 G = GRIP
 bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.0115, depth=0.17, location=G + a * 0.012)
 o = bpy.context.object; o.rotation_euler = a.to_track_quat('Z', 'Y').to_euler(); bpy.ops.object.transform_apply(rotation=True); add(o, LACQ); o.name = 'GunbaiHandle'
