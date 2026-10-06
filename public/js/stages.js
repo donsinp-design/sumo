@@ -13,7 +13,7 @@
     { id: 'taiko', name: 'TAIKO DRUM' }, { id: 'can', name: 'SODA CAN' }, { id: 'cake', name: 'BIRTHDAY CAKE' },
     { id: 'vinyl', name: 'DJ VINYL' }, { id: 'heli', name: 'HELIPAD' }, { id: 'pizza', name: 'PIZZA' },
     { id: 'watch', name: 'CLOCK' }, { id: 'earth', name: 'FLAT EARTH' },
-    { id: 'lily', name: 'LILY PAD' }, { id: 'petri', name: 'PETRI DISH' }, { id: 'sushi', name: 'SUSHI TRAIN' },
+    { id: 'lily', name: 'LILY PAD' }, { id: 'sushi', name: 'SUSHI TRAIN' },
     { id: 'random', name: 'RANDOM' },
   ];
   // RANDOM: a different stage every match, never the one you just played (the classic dohyo is in the pool too)
@@ -466,78 +466,86 @@
       };
     },
 
-    // ---------------------------------------------------------------- petri dish on a lab bench
-    petri(Rn, g, spin) {
-      const H = 0.3;
-      top(spin, (c) => {
-        const gr = c.createRadialGradient(C, C, 30, C, C, C); gr.addColorStop(0, '#f8eeb8'); gr.addColorStop(1, '#e6d58a'); c.fillStyle = gr; c.fillRect(0, 0, W, W);
-        // bacteria colonies: little round blobs, some clustered
-        const cols = [['#fff8e0', '#c8b070'], ['#f2c8d8', '#b0708a'], ['#fbe27a', '#b89a2a'], ['#d8ecc8', '#7a9a5a'], ['#f6f6f2', '#a8a090']];
-        for (let k = 0; k < 26; k++) {
-          const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * (C - 40), cx = C + Math.cos(a) * r, cy2 = C + Math.sin(a) * r, [f, l] = cols[k % cols.length];
-          const n = 1 + (Math.random() * 5 | 0);
-          for (let j = 0; j < n; j++) { const s = 6 + Math.random() * (j ? 14 : 34); c.beginPath(); c.arc(cx + (Math.random() - 0.5) * 70 * (j > 0), cy2 + (Math.random() - 0.5) * 70 * (j > 0), s, 0, TAU); c.fillStyle = f; c.fill(); c.lineWidth = 3; c.strokeStyle = l; c.stroke(); }
-        }
-        circ(c, RR, null, 'rgba(150,120,40,0.8)', 7);
-        c.fillStyle = 'rgba(30,40,120,0.75)'; c.font = 'italic bold 54px sans-serif'; c.textAlign = 'center'; c.fillText('sample 07', C, C + RR + 70);
-      });
-      side(g, null, { color: 0xe6d07a, shade: 0x9a8030, h: H }); edgeLine(g);
-      // the glass: a clear wall, a bright rim and a base you can see through
-      const GR = RD + 0.25;
-      const glass = new THREE.Mesh(new THREE.CylinderGeometry(GR, GR, H + 0.75, 96, 1, true), new THREE.MeshBasicMaterial({ color: 0xcfeaf4, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }));
-      glass.position.y = -H - 0.1 + (H + 0.75) / 2; glass.renderOrder = 5; g.add(glass);
-      const lip = new THREE.Mesh(new THREE.TorusGeometry(GR, 0.07, 8, 128), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })); lip.rotation.x = Math.PI / 2; lip.position.y = 0.55; g.add(lip);
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(GR, GR, 0.1, 96), new THREE.MeshBasicMaterial({ color: 0xbfe0ec, transparent: true, opacity: 0.5 })); base.position.y = -H - 0.05; g.add(base);
-      // the bench: a pale lab mat with a grid, a rack of test tubes, a pipette and the dish's lid
-      ground(g, -H - 0.1, (c, w) => { c.fillStyle = '#e9eef1'; c.fillRect(0, 0, w, w); c.strokeStyle = 'rgba(80,120,150,0.18)'; c.lineWidth = 2; for (let x = 0; x < w; x += 32) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, w); c.moveTo(0, x); c.lineTo(w, x); c.stroke(); } }, 100, 4);
-      const gy = -H - 0.1;
-      bx(g, 9, 0.5, 2.4, 0x3a7ad8, -10, gy, -10, { shade: 0x1a3a6a }); bx(g, 9, 0.4, 2.4, 0x3a7ad8, -10, gy + 3, -10, { shade: 0x1a3a6a });
-      const liq = [0xe84a6a, 0x4ad08a, 0xf2c23a, 0x8a5ad8];
-      for (let k = 0; k < 4; k++) { const x = -13.2 + k * 2.1; cy(g, 0.42, 0.42, 4.6, 0xeaf6fb, x, gy + 0.1, -10, { shade: 0x9ab8c8 }, 16); cy(g, 0.38, 0.38, 1.6 + k * 0.4, liq[k], x, gy + 0.2, -10, { shade: 0x3a2a4a }, 16); }
-      const pip = mesh(new THREE.CylinderGeometry(0.25, 0.04, 8, 12), toon(0xf4f8fa, { shade: 0x9aa8b0 }), 0.015); pip.rotation.z = Math.PI / 2; pip.rotation.y = 0.6; pip.position.set(11, gy + 0.3, 9); g.add(pip);
-      const bulb = sp(g, 0.6, 0xd83a3a, 14.2, gy + 0.4, 6.8, { shade: 0x6a1010 }); bulb.scale.set(1.3, 0.8, 0.8);
-      const lid = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.5, 0.4, 64), new THREE.MeshBasicMaterial({ color: 0xcfeaf4, transparent: true, opacity: 0.35 })); lid.position.set(13, gy + 0.2, -9); g.add(lid);
-      const lidRim = new THREE.Mesh(new THREE.TorusGeometry(4.5, 0.06, 6, 64), new THREE.MeshBasicMaterial({ color: 0xffffff })); lidRim.rotation.x = Math.PI / 2; lidRim.position.set(13, gy + 0.4, -9); g.add(lidRim);
-    },
-
     // ---------------------------------------------------------------- sushi plate on a conveyor belt
+    // A giant glazed plate on a kaiten-zushi belt. The food, plates and table things are modelled in Blender
+    // (tools/blender/sushi.py -> assets/models/sushi_set.glb) and dropped in when the file arrives.
     sushi(Rn, g, spin) {
       const H = 0.32;
       top(spin, (c) => {
-        c.fillStyle = '#fbfaf6'; c.fillRect(0, 0, W, W);
-        ring(c, RR + 16, C, '#2a3f8a');
-        c.strokeStyle = '#fbfaf6'; c.lineWidth = 5;
-        for (let k = 0; k < 44; k++) { const a = k / 44 * TAU, r = (RR + 16 + C) / 2; const x = C + Math.cos(a) * r, y = C + Math.sin(a) * r; for (const s of [26, 16, 7]) { c.beginPath(); c.arc(x, y, s, a + Math.PI * 0.5 + 0.3, a + Math.PI * 1.5 - 0.3, true); c.stroke(); } }
-        circ(c, RR, null, '#2a3f8a', 8);
-        circ(c, RR * 0.5, null, 'rgba(42,63,138,0.25)', 4);
-      });
-      side(g, null, { color: 0xf2f0ea, shade: 0x9a98a0, h: H }); edgeLine(g);
-      cy(g, RD * 0.7, RD * 0.7, 0.3, 0xe4e2dc, 0, -H - 0.3, 0, { shade: 0x8a8890 }, 64); // the plate's foot
-      // the belt: steel slats with rails, carrying more plates of sushi
-      const BY = -H - 0.3, BW = 15;
-      const belt = ground(g, BY, (c, w) => { c.fillStyle = '#b8bec6'; c.fillRect(0, 0, w, w); c.fillStyle = '#7a828c'; for (let x = 0; x < w; x += 64) c.fillRect(x, 0, 4, w); }, 1, 1);
-      belt.scale.set(200, 1, BW); belt.material.map.repeat.set(40, 1);
-      for (const z of [-BW / 2, BW / 2]) bx(g, 200, 0.8, 0.5, 0x8a929c, 0, BY - 0.2, z, { shade: 0x3a4048, spec: 0.8 });
-      const plateCols = [0xd83a3a, 0xf2c23a, 0x3a7ad8, 0x4ab04a];
-      const rice = toon(0xfbfaf4, { shade: 0xb8b4a8 }), salmon = toon(0xf28a5a, { shade: 0xb04a2a }), tuna = toon(0xc8283a, { shade: 0x6a0e18 }), egg = toon(0xf6d04a, { shade: 0xb08a1a }), nori = toon(0x1a2a1e, { shade: 0x050a06 });
-      const ridePlates = [];
-      [-26, -13, 13, 26].forEach((x, k) => {
-        const pg = new THREE.Group(); pg.position.set(x, BY, 0); g.add(pg); ridePlates.push(pg);
-        cy(pg, 4.6, 4.2, 0.45, plateCols[k], 0, 0, 0, { shade: 0x3a3a3a }, 48); cy(pg, 4.0, 4.0, 0.05, 0xfbfaf6, 0, 0.45, 0, { shade: 0xb8b8b8 }, 48);
-        if (k % 2 === 0) { // two pieces of nigiri
-          for (const dz of [-1.4, 1.4]) { const r1 = mesh(new THREE.SphereGeometry(1, 16, 12), rice, 0.03); r1.scale.set(2.2, 0.9, 1.1); r1.position.set(0, 1.3, dz); pg.add(r1); const f = mesh(new THREE.SphereGeometry(1, 16, 12), k === 0 ? salmon : egg, 0.03); f.scale.set(2.5, 0.35, 1.25); f.position.set(0, 2.1, dz); pg.add(f); if (k === 2) { const b = mesh(BOX(), nori, 0.01); b.scale.set(0.5, 1.6, 2.5); b.position.set(0, 1.6, dz); pg.add(b); } }
-        } else { // a few maki rolls
-          for (const [dx, dz] of [[-1.3, -1.3], [1.3, -1.3], [0, 1.4]]) { const m1 = cy(pg, 1.2, 1.2, 1.6, 0x1a2a1e, dx, 0.5, dz, { shade: 0x050a06 }, 24); const t1 = new THREE.Mesh(new THREE.CircleGeometry(1.05, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xfbfaf4 })); t1.position.set(dx, 2.11, dz); pg.add(t1); const c1 = new THREE.Mesh(new THREE.CircleGeometry(0.45, 16).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: k === 1 ? 0xc8283a : 0x4ab04a })); c1.position.set(dx, 2.12, dz); pg.add(c1); void m1; }
+        // glazed porcelain: warm white, a touch brighter in the middle where the glaze pools
+        const gr = c.createRadialGradient(C, C, 10, C, C, C); gr.addColorStop(0, '#fffdf8'); gr.addColorStop(0.7, '#f6f1e6'); gr.addColorStop(1, '#ebe4d4');
+        c.fillStyle = gr; c.fillRect(0, 0, W, W);
+        // the rim: indigo glaze with seigaiha (overlapping wave scales), a gold line on the inside
+        const r0 = RR + 22;
+        ring(c, r0, C, '#203c7a');
+        c.save(); c.beginPath(); c.arc(C, C, C, 0, TAU); c.arc(C, C, r0, 0, TAU, true); c.clip('evenodd');
+        c.strokeStyle = 'rgba(190,210,240,0.55)'; c.lineWidth = 2.5;
+        const sc = 26;
+        for (let row = 0; row < 48; row++) for (let col = 0; col < 48; col++) {
+          const x = col * sc * 2 + (row % 2) * sc, y = row * sc * 0.55;
+          for (const k of [1, 0.7, 0.4]) { c.beginPath(); c.arc(x, y, sc * k, Math.PI, TAU); c.stroke(); }
         }
+        c.restore();
+        circ(c, r0, null, '#c9a24a', 4); circ(c, C - 4, null, '#162c5c', 6);
+        // a big faint 寿 (celebration) glazed into the well, and the fighting circle
+        c.fillStyle = 'rgba(32,60,122,0.07)'; c.font = 'bold 420px serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('寿', C, C + 10);
+        circ(c, RR, null, '#203c7a', 8);
+        // glaze highlight
+        const hl = c.createRadialGradient(C - 190, C - 230, 5, C - 190, C - 230, 230); hl.addColorStop(0, 'rgba(255,255,255,0.55)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = hl; c.fillRect(0, 0, W, W);
       });
-      // the counter alongside, with tea cups and soy sauce dishes
-      const counter = ground(g, BY - 1.6, (c, w) => { c.fillStyle = '#d8a868'; c.fillRect(0, 0, w, w); c.fillStyle = 'rgba(110,62,26,0.55)'; for (let x = 0; x < w; x += 60) c.fillRect(x, 0, 3, w); c.strokeStyle = 'rgba(120,70,30,0.35)'; c.lineWidth = 3; for (let y = 10; y < w; y += 22) { c.beginPath(); c.moveTo(0, y); for (let x = 0; x <= w; x += 32) c.lineTo(x, y + Math.sin(x * 0.02 + y) * 4); c.stroke(); } }, 240, 10);
-      const props = [], SPAN = 120;
-      for (let k = 0; k < 12; k++) {
-        const pr = new THREE.Group(); pr.position.set(-60 + k * 10, BY - 1.6, (k % 2 ? 1 : -1) * 13); g.add(pr); pr.userData.x0 = -60 + k * 10; props.push(pr);
-        if (k % 2) { cy(pr, 1.1, 0.9, 2.4, 0x6a8a5a, 0, 0, 0, { shade: 0x2a3a22 }, 20); const tea = new THREE.Mesh(new THREE.CircleGeometry(0.95, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x9ab84a })); tea.position.y = 2.2; pr.add(tea); }
-        else { cy(pr, 1.5, 1.2, 0.4, 0xfbfaf6, 0, 0, 0, { shade: 0xb8b8b8 }, 24); const soy = new THREE.Mesh(new THREE.CircleGeometry(1.2, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a140a })); soy.position.y = 0.41; pr.add(soy); }
-      }
+      side(g, (c, w, h) => { c.fillStyle = '#f2ede2'; c.fillRect(0, 0, w, h); c.fillStyle = '#203c7a'; c.fillRect(0, h * 0.12, w, h * 0.22); c.fillStyle = '#c9a24a'; c.fillRect(0, h * 0.36, w, 3); }, { shade: 0x9a98a0, h: H, th: 64, rep: 6 });
+      edgeLine(g);
+      const lip = mesh(new THREE.TorusGeometry(RD + 0.02, 0.07, 10, 128), toon(0xf4efe4, { shade: 0xa8a49a }), 0.02); lip.rotation.x = Math.PI / 2; lip.position.y = 0.03; g.add(lip);
+      cy(g, RD * 0.72, RD * 0.66, 0.3, 0xe8e2d6, 0, -H - 0.3, 0, { shade: 0x8a8890 }, 64); // the plate's foot ring
+      // the belt: brushed-steel slats with dark gaps, rails either side
+      const BY = -H - 0.3, BW = 15, SL = 1.7;
+      const slatM = toon(0xc9ced4, { shade: 0x6a727c, spec: 0.5 });
+      const slats = new THREE.InstancedMesh(new THREE.BoxGeometry(SL - 0.07, 0.12, BW - 0.3), slatM, 120);
+      const m4 = new THREE.Matrix4();
+      for (let k = 0; k < 120; k++) { m4.makeTranslation(-102 + k * SL, BY - 0.06, 0); slats.setMatrixAt(k, m4); }
+      g.add(slats);
+      const under = ground(g, BY - 0.14, (c, w) => { c.fillStyle = '#2a2e34'; c.fillRect(0, 0, w, w); }, 1, 1); under.scale.set(210, 1, BW);
+      for (const z of [-BW / 2 - 0.25, BW / 2 + 0.25]) { bx(g, 210, 0.9, 0.5, 0xb8bec6, 0, BY - 0.5, z, { shade: 0x4a5058, spec: 0.9 }); bx(g, 210, 0.12, 0.62, 0xe6eaee, 0, BY + 0.4, z, { shade: 0x8a9098, spec: 0.9 }); }
+      // the counter: pale hinoki with long grain
+      const counter = ground(g, BY - 1.6, (c, w) => {
+        c.fillStyle = '#e2c79a'; c.fillRect(0, 0, w, w);
+        for (let y = 0; y < w; y += 3) { const t = Math.sin(y * 0.05) * 0.5 + Math.sin(y * 0.013 + 1) * 0.5; c.fillStyle = 'rgba(150,96,44,' + (0.04 + 0.08 * Math.max(0, t)) + ')'; c.fillRect(0, y, w, 2); }
+        c.strokeStyle = 'rgba(140,86,36,0.22)'; c.lineWidth = 2;
+        for (let k = 0; k < 18; k++) { const y0 = Math.random() * w; c.beginPath(); for (let x = 0; x <= w; x += 16) c.lineTo(x, y0 + Math.sin(x * 0.01 + k) * 12 + Math.sin(x * 0.043) * 3); c.stroke(); }
+        c.fillStyle = 'rgba(90,52,20,0.35)'; c.fillRect(0, w - 4, w, 4); // board joint
+      }, 240, 10);
+      // filled in from the Blender set: plates of sushi riding the belt, and tea, soy and ginger along the counter
+      const ridePlates = [], props = [], SPAN = 120, SC = 62;
+      [-26, -13, 13, 26].forEach((x) => { const pg = new THREE.Group(); pg.position.set(x, BY, 0); g.add(pg); ridePlates.push(pg); });
+      S.sushiSet = S.sushiSet || new Promise((res) => new THREE.GLTFLoader().load('assets/models/sushi_set.glb', (gl) => res(gl.scene), undefined, () => res(null)));
+      S.sushiSet.then((set) => {
+        if (!set) return;
+        const part = (name, s) => {
+          const src = set.getObjectByName(name); if (!src) return null;
+          const out = new THREE.Group();
+          src.updateMatrixWorld(true);
+          src.traverse((o) => {
+            if (!o.isMesh) return;
+            const sm = o.material, col = sm.color ? sm.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1);
+            const m = mesh(o.geometry, toon(col.getHex(), { shade: col.clone().multiply(new THREE.Color(0.72, 0.66, 0.74)).getHex(), map: sm.map || undefined, rimAmt: 0.25, spec: sm.roughness < 0.35 ? 0.6 : 0 }), 0.012);
+            // bake the node's transform relative to the asset root
+            const rel = new THREE.Matrix4().copy(src.matrixWorld).invert().multiply(o.matrixWorld); m.applyMatrix4(rel); out.add(m);
+          });
+          out.scale.setScalar(s || SC); return out;
+        };
+        const menu = [['plate_red', ['nigiri_salmon', 'nigiri_salmon']], ['plate_yellow', ['maki_tuna', 'maki_cucumber', 'maki_tuna']], ['plate_blue', ['nigiri_tuna', 'nigiri_ebi']], ['plate_green', ['gunkan_ikura', 'nigiri_tamago']]];
+        ridePlates.forEach((pg, k) => {
+          const [pl, food] = menu[k], plate = part(pl); if (plate) pg.add(plate);
+          food.forEach((f, i) => { const it = part(f); if (!it) return; const n = food.length, a = (i / n) * TAU + 0.6;
+            it.position.set(Math.cos(a) * (n > 2 ? 1.25 : 0.95), 0.9, Math.sin(a) * (n > 2 ? 1.25 : 0.95) * 1.2); it.rotation.y = n > 2 ? a : Math.PI / 2 + 0.25 * (i ? 1 : -1); pg.add(it); });
+        });
+        const table = ['teacup', 'soy_dish', 'gari', 'chopsticks', 'wasabi', 'teacup', 'soy_dish', 'chopsticks', 'gari', 'teacup', 'soy_dish', 'wasabi'];
+        table.forEach((name, k) => {
+          const it = part(name); if (!it) return;
+          const pr = new THREE.Group(); pr.add(it); it.rotation.y = k * 1.3;
+          pr.position.set(-60 + k * 10, BY - 1.6, (k % 2 ? 1 : -1) * (12.5 + (k % 3) * 1.2)); pr.userData.x0 = -60 + k * 10; g.add(pr); props.push(pr);
+        });
+      });
       // in motion: the belt (and every plate on it, ours included) travels together, so they stay put on screen
       // and the counter beside it slides past. The fighting circle never moves.
       const V = 2.2; // world units per second

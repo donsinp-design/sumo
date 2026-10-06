@@ -524,13 +524,43 @@
     });
   }
   // a run of facade panels along a wall face. sd: which side (the panel faces -sd * x)
+  // The flat painted panel shows first; the modelled 3D module (tools/blender/facades.py -> assets/models/facades.glb)
+  // replaces it as soon as that file has loaded.
+  const FAC = { shop: [6, 4.0, 3.4], hall: [3, 5.0, 4.6], bay: [2, 4.0, 4.4] }; // variants, module width, module height
+  function facadeModule(set, name) {
+    set.cache = set.cache || {};
+    if (set.cache[name] !== undefined) return set.cache[name];
+    const src = set.scene.getObjectByName(name); if (!src) return (set.cache[name] = null);
+    src.updateMatrixWorld(true);
+    const parts = [];
+    src.traverse((o) => {
+      if (!o.isMesh) return;
+      const sm = o.material, col = sm.color ? sm.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1);
+      const geo = o.geometry.clone().applyMatrix4(new THREE.Matrix4().copy(src.matrixWorld).invert().multiply(o.matrixWorld));
+      parts.push({ geo, mat: S.toon(col.getHex(), { shade: col.clone().multiply(new THREE.Color(0.7, 0.66, 0.76)).getHex(), map: sm.map || undefined, rimAmt: 0 }) });
+    });
+    return (set.cache[name] = parts);
+  }
   function facade(g, x, z0, z1, h, sd, style, seg) {
     seg = seg || 4; const za = Math.min(z0, z1), len = Math.abs(z1 - z0), n = Math.max(1, Math.round(len / seg)), sl = len / n;
+    const panels = [];
     for (let i = 0; i < n; i++) {
       const v = (Math.floor(Math.abs(za * 7 + i * 13 + sd * 5)) % 7);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(sl, h), S.toon(0xffffff, { map: facadeTex(style, v), shade: 0x9088a0, rimAmt: 0 }));
-      m.position.set(x, h / 2, za + (i + 0.5) * sl); m.rotation.y = -sd * Math.PI / 2; g.add(m);
+      m.position.set(x, h / 2, za + (i + 0.5) * sl); m.rotation.y = -sd * Math.PI / 2; g.add(m); panels.push([m, v]);
     }
+    S.facadeSet = S.facadeSet || new Promise((res) => new THREE.GLTFLoader().load('assets/models/facades.glb', (gl) => res({ scene: gl.scene }), undefined, () => res(null)));
+    S.facadeSet.then((set) => {
+      if (!set || !FAC[style]) return;
+      const [nv, mw, mh] = FAC[style];
+      for (const [m, v] of panels) {
+        const parts = facadeModule(set, style + '_' + (v % nv)); if (!parts || !parts.length) continue;
+        const grp = new THREE.Group();
+        for (const p of parts) grp.add(W.mesh(p.geo, p.mat, 0.012));
+        grp.scale.set(sl / mw, h / mh, 1); grp.position.set(m.position.x, 0, m.position.z); grp.rotation.y = -sd * Math.PI / 2;
+        g.add(grp); grp.updateMatrixWorld(true); m.visible = false;
+      }
+    });
   }
 
   // ---------------------------------------------------------------- awning: curved striped canvas, scalloped valance, steel frame
