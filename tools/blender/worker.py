@@ -10,8 +10,9 @@ import bpy, bmesh, math, sys
 from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 
-out = sys.argv[-2] if len(sys.argv) > 2 and sys.argv[-2].endswith('.glb') else '/tmp/worker.glb'
-prev = sys.argv[-1] if len(sys.argv) > 2 else '/tmp/worker_prev'
+ARGS = [a for a in sys.argv if not a.startswith('shot=')]            # optional shot=front shot=vs ... renders only those
+out = ARGS[-2] if len(ARGS) > 2 and ARGS[-2].endswith('.glb') else '/tmp/worker.glb'
+prev = ARGS[-1] if len(ARGS) > 2 else '/tmp/worker_prev'
 VS = '/tmp/claude-0/-home-user-sumo/f8028735-3c86-5a27-b070-5e521ee72586/scratchpad/sumo_hero.glb'
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -26,7 +27,7 @@ def srgb(h):
     return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
 
 SKIN = mat('Skin', srgb('c98a62'), 0.6)          # tanned, warmer and darker than the sumo
-STUB = mat('Stubble', srgb('a07a64'), 0.85)
+STUB = mat('Stubble', srgb('a8806a'), 0.8)
 HAIR = mat('Hair', srgb('1d1a1c'), 0.5)
 JACKET = mat('Jacket', srgb('233257'), 0.8)      # indigo work jacket
 COLLAR = mat('Collar', srgb('141a2c'), 0.75)
@@ -53,7 +54,7 @@ def limb(a, b, ra, rb):  # a tapered capsule from a to b
 
 # torso: pelvis, a slight paunch, a broad chest, sloping trapezius
 ell(0, 0.015, 0.93, 0.175, 0.12, 0.115)          # pelvis
-ell(0, -0.025, 1.06, 0.175, 0.14, 0.145)         # belly
+ell(0, -0.035, 1.07, 0.178, 0.152, 0.15)         # belly: a solid paunch
 ell(0, 0.0, 1.235, 0.2, 0.125, 0.155)            # chest
 ell(0, 0.04, 1.30, 0.17, 0.095, 0.10)            # upper back
 limb((0, 0.015, 1.38), (0, 0.0, 1.52), 0.066, 0.059)   # thick neck
@@ -64,23 +65,23 @@ ell(0, -0.038, HZ - 0.015, 0.083, 0.072, 0.085)  # face
 ell(0, -0.032, HZ - 0.09, 0.077, 0.07, 0.05)     # jaw
 ell(0, -0.083, HZ - 0.12, 0.036, 0.03, 0.029)    # chin
 ell(0, -0.083, HZ + 0.035, 0.07, 0.025, 0.022)   # brow ridge
-ell(0, -0.108, HZ - 0.012, 0.017, 0.024, 0.032)  # nose bridge
-ell(0, -0.122, HZ - 0.035, 0.021, 0.019, 0.017)  # nose tip
+ell(0, -0.104, HZ - 0.012, 0.015, 0.022, 0.03)   # nose bridge
+ell(0, -0.116, HZ - 0.033, 0.02, 0.017, 0.016)   # nose tip
 for s in (-1, 1):
     ell(s * 0.045, -0.072, HZ - 0.025, 0.03, 0.026, 0.025)    # cheekbones
-    ell(s * 0.093, 0.012, HZ - 0.01, 0.017, 0.028, 0.038)     # ears
+    ell(s * 0.096, 0.016, HZ - 0.008, 0.02, 0.029, 0.04)       # ears
 ARM = {}
 for s in (-1, 1):
     limb((s * 0.05, 0.025, 1.44), (s * 0.21, 0.02, 1.37), 0.058, 0.052)   # trapezius slope
     ell(s * 0.215, 0.01, 1.35, 0.085, 0.085, 0.08)                         # deltoid
     J = Vector((s * 0.22, 0.01, 1.355))
     d1 = Vector((s * math.cos(math.radians(35)), 0, -math.sin(math.radians(35))))
-    E = J + d1 * 0.28
+    E = J + d1 * 0.265
     d2 = Vector((s * 0.68, -0.16, -0.72)).normalized()
-    W = E + d2 * 0.25
-    limb(J, E, 0.075, 0.064)                     # upper sleeve
-    ell(*(E + Vector((0, 0.012, 0.004))), 0.066, 0.066, 0.062)                 # elbow fold
-    limb(E, W, 0.064, 0.054)                     # forearm sleeve, slightly loose
+    W = E + d2 * 0.235
+    limb(J, E, 0.08, 0.068)                     # upper sleeve
+    ell(*(E + Vector((0, 0.012, 0.004))), 0.07, 0.07, 0.066)                 # elbow fold
+    limb(E, W, 0.068, 0.056)                     # forearm sleeve, slightly loose
     limb(W - d2 * 0.02, W + d2 * 0.045, 0.037, 0.039)                       # wrist
     # mitten hand: palm, fingers as one curled block, a separate thumb
     xh = d2; yh = (Vector((0, -1, 0)) - d2 * d2.y).normalized(); zz = xh.cross(yh)
@@ -90,12 +91,12 @@ for s in (-1, 1):
     ell(*(H0 + xh * 0.055), 0.062, 0.05, 0.03, R)                            # palm
     ell(*(H0 + xh * 0.12 - up * 0.01), 0.05, 0.048, 0.026, R)                # fingers
     ell(*(H0 + xh * 0.155 - up * 0.028), 0.03, 0.044, 0.022, R)              # curled finger tips
-    limb(H0 + xh * 0.03 + yh * 0.032 - up * 0.008, H0 + xh * 0.09 + yh * 0.072 - up * 0.024, 0.022, 0.017)   # thumb
+    limb(H0 + xh * 0.03 + yh * 0.035 - up * 0.008, H0 + xh * 0.095 + yh * 0.08 - up * 0.026, 0.023, 0.019)   # thumb
     ARM[s] = (W, d2)
     # legs: baggy trousers, a little blousing over the boot tops, tall wide boots
-    limb((s * 0.095, 0.01, 0.9), (s * 0.115, -0.005, 0.52), 0.112, 0.09)    # thigh
-    ell(s * 0.08, 0.05, 0.88, 0.09, 0.08, 0.09)                              # seat
-    limb((s * 0.115, -0.005, 0.52), (s * 0.12, 0.005, 0.44), 0.09, 0.094)   # knee, trousers bunching into the boot
+    limb((s * 0.1, 0.01, 0.9), (s * 0.118, -0.008, 0.54), 0.11, 0.078)   # thigh, tapering to the knee
+    ell(s * 0.085, 0.05, 0.885, 0.088, 0.078, 0.088)                          # seat
+    limb((s * 0.115, -0.005, 0.54), (s * 0.12, 0.005, 0.445), 0.079, 0.095)  # knee, trousers bunching into the boot
     limb((s * 0.12, 0.008, 0.42), (s * 0.12, 0.015, 0.14), 0.088, 0.078)    # wide boot shaft
     ell(s * 0.12, -0.045, 0.095, 0.08, 0.155, 0.07)                          # boot foot
     ell(s * 0.12, 0.045, 0.1, 0.076, 0.078, 0.08)                            # heel
@@ -114,9 +115,10 @@ vg = body.vertex_groups.new(name='dec')
 for v in body.data.vertices:
     c = v.co; w = 1.0
     if c.z > 1.47 and abs(c.x) < 0.13: w = 0.25 if c.y < 0.0 else 0.5         # the face keeps the most
-    elif c.z > 0.85 and abs(c.x) > 0.6: w = 0.45                               # hands
+    elif c.z > 1.25 and abs(c.x) < 0.14 and (c.y < -0.02 or c.z > 1.4): w = 0.4  # neck and collar line
+    elif c.z > 0.85 and abs(c.x) > 0.58: w = 0.45                              # hands
     vg.add([v.index], w, 'REPLACE')
-BODY_TRIS = 9000
+BODY_TRIS = 7000
 for _ in range(3):
     n = sum(len(p.vertices) - 2 for p in body.data.polygons)
     if n <= BODY_TRIS * 1.05: break
@@ -137,12 +139,17 @@ def path_on_skin(ctrl, n=40):
         t = i / (n - 1) * (len(ctrl) - 1); k = min(int(t), len(ctrl) - 2); f = t - k
         p0, p1, p2, p3 = ctrl[max(k - 1, 0)], ctrl[k], ctrl[k + 1], ctrl[min(k + 2, len(ctrl) - 1)]
         q = 0.5 * ((2 * p1) + (-p0 + p2) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f + (-p0 + 3 * p1 - 3 * p2 + p3) * f ** 3)
-        loc, nor, _, _ = bvh.find_nearest(q); out_.append((loc, nor))
-    return out_
+        loc, nor, _, _ = bvh.find_nearest(q); out_.append(loc)
+    for _ in range(4):   # relax the projected points along the path, then settle them back onto the skin
+        out_ = [out_[0]] + [(out_[i - 1] + 2 * out_[i] + out_[i + 1]) / 4 for i in range(1, n - 1)] + [out_[-1]]
+    res = []
+    for p in out_:
+        loc, nor, _, _ = bvh.find_nearest(p); res.append((loc, nor))
+    return res
 # the jacket's collar line: a V crossing low on the chest, up round the back of the neck
 half = [(0.0, -0.115, 1.30), (0.036, -0.105, 1.36), (0.062, -0.082, 1.41), (0.077, -0.045, 1.445), (0.078, 0.005, 1.462), (0.056, 0.05, 1.468)]
-COLLAR_PATH = path_on_skin(half + [(0, 0.068, 1.466)] + [(-x, y, z) for x, y, z in half[::-1]], 70)
-CP = [(p, n, (COLLAR_PATH[min(i + 1, 69)][0] - COLLAR_PATH[max(i - 1, 0)][0]).normalized()) for i, (p, n) in enumerate(COLLAR_PATH)]
+COLLAR_PATH = path_on_skin(half + [(0, 0.068, 1.466)] + [(-x, y, z) for x, y, z in half[::-1]], 56)
+CP = [(p, n, (COLLAR_PATH[min(i + 1, 55)][0] - COLLAR_PATH[max(i - 1, 0)][0]).normalized()) for i, (p, n) in enumerate(COLLAR_PATH)]
 def inside_collar(c):
     if not (abs(c.x) < 0.2 and c.z > 1.29): return False
     if c.z > 1.52: return True
@@ -200,7 +207,10 @@ def loop_around(center, axis, reach, n=48, zfun=None):
     return pts
 def band(name, pts, hw, ht, off, m_, closed=True, K=10, twist=None, ends=True):
     """a strip (superellipse cross-section, hw wide along the skin, ht thick off it) along surface points"""
-    verts, faces, N = [], [], len(pts)
+    N = len(pts)
+    for _ in range(3):   # calm the normals of the decimated skin so the strip doesn't wobble
+        pts = [(p, (pts[(i - 1) % N][1] + 2 * n + pts[(i + 1) % N][1]).normalized() if (closed or 0 < i < N - 1) else n) for i, (p, n) in enumerate(pts)]
+    verts, faces = [], []
     for i, (p, n) in enumerate(pts):
         a = pts[(i + 1) % N][0] if (closed or i < N - 1) else p; b = pts[i - 1][0] if (closed or i > 0) else p
         t = (a - b).normalized(); side = n.cross(t).normalized(); nn = t.cross(side).normalized()
@@ -217,17 +227,18 @@ def band(name, pts, hw, ht, off, m_, closed=True, K=10, twist=None, ends=True):
         faces.append(tuple(range(K))[::-1]); faces.append(tuple((N - 1) * K + k for k in range(K)))
     return mesh_obj(name, verts, faces, m_)
 # collar band: a wide dark band crossing over at the chest, hiding the jacket / skin border
-band('Collar', COLLAR_PATH, 0.027, 0.008, 0.002, COLLAR, closed=False, K=8)
-band('ShirtNeck', [p for p in loop_around((0, 0.0, 1.425), (0, 0, 1), 0.3, 40) if p[0].y < -0.03 and abs(p[0].x) < 0.07], 0.007, 0.004, 0.0, SHIRT, closed=False, K=6)
+band('Collar', COLLAR_PATH[:28], 0.022, 0.006, 0.003, COLLAR, closed=False, K=6)
+band('Collar', COLLAR_PATH[27:], 0.022, 0.006, 0.0075, COLLAR, closed=False, K=6)   # the left panel laps over the right
+band('ShirtNeck', [p for p in loop_around((0, 0.0, 1.425), (0, 0, 1), 0.3, 40) if p[0].y < -0.03 and abs(p[0].x) < 0.07], 0.007, 0.004, 0.0, SHIRT, closed=False, K=4)
 # cuffs, jacket hem, boot rims
 for s in (-1, 1):
     W, d2 = ARM[s]
-    band('Cuff', loop_around(W - d2 * 0.012, d2, 0.15, 28), 0.02, 0.007, 0.002, JACKET, K=6)
-    band('BootRim', loop_around((s * 0.12, 0.01, BOOTZ + 0.008), (0, 0, 1), 0.16, 32), 0.02, 0.009, 0.0, BOOT, K=6)
-band('Hem', loop_around((0, 0.02, WAIST + 0.012), (0, 0, 1), 0.4, 56), 0.03, 0.009, 0.003, JACKET, K=6)
+    band('Cuff', loop_around(W - d2 * 0.012, d2, 0.15, 20), 0.02, 0.007, 0.002, JACKET, K=5)
+    band('BootRim', loop_around((s * 0.12, 0.01, BOOTZ + 0.008), (0, 0, 1), 0.16, 24), 0.02, 0.009, 0.0, BOOT, K=5)
+band('Hem', loop_around((0, 0.02, WAIST + 0.012), (0, 0, 1), 0.4, 40), 0.03, 0.009, 0.003, JACKET, K=5)
 # chunky soles
 for s in (-1, 1):
-    vs, fs, NS = [], [], 32
+    vs, fs, NS = [], [], 24
     for z, ins in ((0.0, 0.01), (0.007, 0.0), (0.036, 0.0), (0.042, 0.012)):
         for k in range(NS):
             a = 2 * math.pi * k / NS; ca, sa = math.cos(a), math.sin(a)
@@ -239,12 +250,12 @@ for s in (-1, 1):
     mesh_obj('Sole', vs, fs, SOLE)
 
 # ---------------------------------------------------------------- the apron: hangs straight from the chest and belly, flares a little at the hem
-AT, AB, NX, NZ = 1.27, 0.43, 12, 26
+AT, AB, NX, NZ = 1.27, 0.43, 10, 22
 av, af = [], []
 cols = [[None] * (NX + 1) for _ in range(NZ + 1)]
 for i in range(NZ + 1):
     t = i / NZ; z = AT + (AB - AT) * t
-    half = 0.14 + 0.07 * min(t / 0.3, 1) ** 0.7 + 0.025 * max(t - 0.75, 0) / 0.25    # bib, widening at the waist, flared hem
+    half = 0.14 + 0.07 * min(t / 0.3, 1) ** 0.7 + 0.015 * max(t - 0.75, 0) / 0.25    # bib, widening at the waist, flared hem
     for j in range(NX + 1):
         u = -1 + 2 * j / NX; x = u * half
         loc, _ = hit((x, -1, z), (0, 1, 0))
@@ -261,14 +272,19 @@ for it in range(3):
         for j in range(1, NX): cols[i][j] = 0.25 * row[j - 1] + 0.5 * row[j] + 0.25 * row[j + 1]
 for i in range(NZ + 1):
     t = i / NZ; z = AT + (AB - AT) * t
-    half = 0.14 + 0.07 * min(t / 0.3, 1) ** 0.7 + 0.025 * max(t - 0.75, 0) / 0.25
+    half = 0.14 + 0.07 * min(t / 0.3, 1) ** 0.7 + 0.015 * max(t - 0.75, 0) / 0.25
     for j in range(NX + 1):
         u = -1 + 2 * j / NX; x = u * half
         y = cols[i][j] - 0.035 * max(t - 0.7, 0) / 0.3 * (0.6 + 0.4 * abs(u))  # flare at the hem
         y += 0.05 * abs(u) ** 3 * min(t / 0.2, 1)                                # edges curl back round the body
         loc, _ = hit((x, -1, z), (0, 1, 0))
+        y += 0.006 * math.sin(u * math.pi * 2.5) * max(t - 0.3, 0)              # a couple of stiff folds in the rubber
         if loc is not None: y = min(y, loc.y - 0.016)
-        av.append(Vector((x, y, z)))
+        v = Vector((x, y, z))
+        for _ in range(2):
+            l, nrm, _, _ = bvh.find_nearest(v)
+            if (v - l).dot(nrm) < 0.02: v = l + nrm * 0.02                        # never inside or touching the jacket
+        av.append(v)
 for i in range(NZ):
     for j in range(NX): af.append((i * (NX + 1) + j, i * (NX + 1) + j + 1, (i + 1) * (NX + 1) + j + 1, (i + 1) * (NX + 1) + j))
 apron = mesh_obj('Apron', av, af, APRON)
@@ -276,22 +292,21 @@ sol = apron.modifiers.new('sol', 'SOLIDIFY'); sol.thickness = 0.008; sol.offset 
 bpy.ops.object.modifier_apply(modifier='sol')
 # straps: up over the shoulders round the back of the neck, ties round the waist to a bow at the back
 for s in (-1, 1):
-    x0 = s * 0.13
-    band('Strap', path_on_skin([(x0, -0.14, AT + 0.005), (s * 0.12, -0.09, 1.38), (s * 0.1, -0.03, 1.45), (s * 0.06, 0.05, 1.47), (0, 0.075, 1.465)], 18),
-         0.012, 0.004, 0.02, APRON, closed=False, K=6)
-ties = loop_around((0, 0.02, 1.02), (0, 0, 1), 0.4, 64)
+    band('Strap', path_on_skin([(s * 0.125, -0.13, AT + 0.005), (s * 0.135, -0.07, 1.39), (s * 0.125, -0.0, 1.45), (s * 0.075, 0.06, 1.475), (0, 0.082, 1.47)], 16),
+         0.011, 0.0035, 0.018, APRON, closed=False, K=5)
+ties = loop_around((0, 0.02, 1.02), (0, 0, 1), 0.4, 48)
 ties = [p for p in ties if p[0].y > -0.08]
 ties.sort(key=lambda p: math.atan2(p[0].x, p[0].y))
-band('Tie', ties, 0.012, 0.004, 0.003, APRON, closed=False, K=6)
+band('Tie', ties, 0.012, 0.004, 0.003, APRON, closed=False, K=5)
 bk = [p for p in ties if abs(p[0].x) < 0.02][0][0]
 for s in (-1, 1):
-    sphere('Bow', bk + Vector((s * 0.035, 0.018, 0.005)), (0.035, 0.012, 0.02), APRON, 12, 8, (0, s * 0.3, 0))
-    sphere('BowTail', bk + Vector((s * 0.02, 0.016, -0.065)), (0.012, 0.006, 0.06), APRON, 10, 8, (0, s * 0.25, 0))
-sphere('BowKnot', bk + Vector((0, 0.02, 0)), (0.016, 0.012, 0.016), APRON, 10, 8)
+    sphere('Bow', bk + Vector((s * 0.035, 0.018, 0.005)), (0.035, 0.012, 0.02), APRON, 10, 6, (0, s * 0.3, 0))
+    sphere('BowTail', bk + Vector((s * 0.02, 0.016, -0.065)), (0.012, 0.006, 0.06), APRON, 8, 6, (0, s * 0.25, 0))
+sphere('BowKnot', bk + Vector((0, 0.02, 0)), (0.016, 0.012, 0.016), APRON, 8, 6)
 
 # ---------------------------------------------------------------- a crest on the back of the jacket: a ring with a bar (maru ni ichi)
 loc, nor = hit((0, 1, 1.24), (0, -1, 0))
-cy = loc.y
+
 def disc_ring(name, r0, r1, z, m_, seg=40):
     vs, fs = [], []
     for k in range(seg):
@@ -313,61 +328,75 @@ def on_face(x, z, off=0.0):
     loc, nor = hit((x, -1, z), (0, 1, 0)); return loc + nor * off, nor
 for s in (-1, 1):
     p, n = on_face(s * 0.037, HZ + 0.008, 0.0)
-    sphere('Eye', p + Vector((0, 0.002, 0)), (0.0125, 0.008, 0.0165), INK, 12, 8, (0, 0, s * 0.25))
-    sphere('EyeHi', p + Vector((-s * 0.004, -0.007, 0.006)), (0.004, 0.003, 0.0045), WHITE, 8, 6)
+    sphere('Eye', p + Vector((0, 0.002, 0)), (0.0125, 0.008, 0.0165), INK, 10, 7, (0, 0, s * 0.25))
+    sphere('EyeHi', p + Vector((-s * 0.004, -0.007, 0.006)), (0.004, 0.003, 0.0045), WHITE, 6, 5)
     p, n = on_face(s * 0.042, HZ + 0.038, 0.0)
     bpy.ops.mesh.primitive_cube_add(location=p + Vector((0, -0.004, 0))); b = bpy.context.object; b.name = 'Brow'
     b.scale = (0.03, 0.009, 0.0085); b.rotation_euler = (0, -s * 0.38, s * 0.3)
     bpy.ops.object.transform_apply(scale=True, rotation=True)
     bv_ = b.modifiers.new('bev', 'BEVEL'); bv_.width = 0.006; bv_.segments = 2; bpy.ops.object.modifier_apply(modifier='bev'); add(b, HAIR)
-p, n = on_face(0, HZ - 0.075, 0.0)
-bpy.ops.mesh.primitive_torus_add(major_radius=0.024, minor_radius=0.0045, location=p + Vector((0, -0.005, 0.016)), rotation=(math.pi / 2, 0, 0))
+p, n = on_face(0, HZ - 0.072, 0.0)
+bpy.ops.mesh.primitive_torus_add(major_radius=0.03, minor_radius=0.005, major_segments=24, minor_segments=6, location=p + Vector((0, -0.004, -0.022)), rotation=(math.pi / 2, 0, 0))
 mouth = bpy.context.object; mouth.name = 'Mouth'; mouth.scale = (1, 0.6, 1)
 bm = bmesh.new(); bm.from_mesh(mouth.data)                       # keep the upper arc: a hard, downturned mouth
-bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.y < 0.012], context='VERTS'); bm.to_mesh(mouth.data); bm.free()
+bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.y < 0.019], context='VERTS'); bm.to_mesh(mouth.data); bm.free()
 bpy.ops.object.transform_apply(scale=True, rotation=True); add(mouth, INK)
 
 # stubble: a thin shell over the jaw and upper lip
-bm = bmesh.new(); bm.from_mesh(body.data)
-keep = set(f for f in bm.faces if f.material_index == 0 and (lambda c: 1.455 < c.z < HZ - 0.05 and c.y < 0.0 and abs(c.x) < 0.1 and
-                                                               not (c.z > HZ - 0.08 and (abs(c.x) > 0.032 or c.y > -0.08)))(f.calc_center_median()))
-bmesh.ops.delete(bm, geom=[f for f in bm.faces if f not in keep], context='FACES')
-for v in bm.verts: v.co += v.normal * 0.0025
-st = bpy.data.meshes.new('Stubble'); bm.to_mesh(st); bm.free()
-so = bpy.data.objects.new('Stubble', st); scn.collection.objects.link(so); add(so, STUB)
+sv, sf, NT, NZS = [], [], 16, 8
+for a in range(NT + 1):
+    th = math.radians(-100 + 200 * a / NT); dr = Vector((math.sin(th), -math.cos(th), 0))
+    side = min(abs(th) / math.radians(80), 1)
+    z0 = HZ - 0.13 + 0.015 * side                          # along the jaw line
+    z1 = HZ - 0.068 + 0.04 * side ** 2                     # under the mouth, rising to the sideburns
+    for b in range(NZS + 1):
+        z = z0 + (z1 - z0) * b / NZS
+        org = Vector((0, -0.02, z))
+        l, nrm = hit(org + dr * 0.25, -dr)
+        while (l - org).length < 0.076 and z < z1:          # that ray found the neck, not the jaw: move up to the jaw line
+            z += 0.004; org = Vector((0, -0.02, z)); l, nrm = hit(org + dr * 0.25, -dr)
+        sv.append(l + nrm * 0.003)
+for a in range(NT):
+    for b in range(NZS): sf.append((a * (NZS + 1) + b, (a + 1) * (NZS + 1) + b, (a + 1) * (NZS + 1) + b + 1, a * (NZS + 1) + b + 1))
+mesh_obj('Stubble', sv, sf, STUB)
 
-# hair: short, cropped close to the scalp (a sphere cap pulled onto the head), sideburns
-bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=20, location=(0, 0.012, HZ + 0.02)); cap = bpy.context.object; cap.name = 'Hair'
-cap.scale = (0.1, 0.115, 0.107); bpy.ops.object.transform_apply(scale=True)
-def hairline(co):
-    if co.y < 0: return 0.015 + 0.03 * min(-co.y / 0.07, 1)                 # forehead
-    yb = max(0, min(1, (co.y - 0.03) / 0.06))
-    return 0.015 - 0.09 * yb ** 1.5                                          # over the ears, then down the back
-def in_ear(co): return abs(co.x) > 0.075 and -0.025 < co.y < 0.05 and co.z < HZ + 0.035
-bm = bmesh.new(); bm.from_mesh(cap.data)
-bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.z - (HZ + 0.02) < hairline(v.co) or in_ear(v.co)], context='VERTS')
-bm.to_mesh(cap.data); bm.free()
-bpy.context.view_layer.objects.active = cap
-sw = cap.modifiers.new('sw', 'SHRINKWRAP'); sw.target = body; sw.wrap_method = 'NEAREST_SURFACEPOINT'; sw.offset = 0.007; bpy.ops.object.modifier_apply(modifier='sw')
-sol = cap.modifiers.new('sol', 'SOLIDIFY'); sol.thickness = 0.008; sol.offset = 1; bpy.ops.object.modifier_apply(modifier='sol')
-add(cap, HAIR)
-for s in (-1, 1):
-    p, n = on_face(s * 0.083, HZ + 0.0, 0)
-    l, nn, _, _ = bvh.find_nearest(Vector((s * 0.094, -0.035, HZ + 0.0)))
-    sphere('Sideburn', l + nn * 0.002, (0.009, 0.014, 0.026), HAIR, 10, 8)
+# hair: short, cropped close to the scalp. Built as a grid from the hairline up to the crown, every point shot onto the
+# skull, so the hairline is one clean curve (forehead high, over the ears, down to the nape) rather than a stair-step.
+HC = Vector((0, 0.012, HZ + 0.02))
+def hairline(a):   # height above HC of the hairline at azimuth a (0 = front, pi = back)
+    y = -0.11 * math.cos(a)
+    if y < -0.02: return 0.02 + 0.025 * min((-y - 0.02) / 0.05, 1)        # forehead
+    yb = max(0, min(1, (y - 0.035) / 0.075))
+    return 0.02 - 0.1 * (0.5 - 0.5 * math.cos(math.pi * yb))               # over the ears, down the back of the head
+NA, NE = 30, 7
+hv, hf = [], []
+for k in range(NA):
+    a = 2 * math.pi * k / NA; dh = Vector((math.sin(a), -math.cos(a), 0))
+    e0 = math.atan2(hairline(a), 0.1)
+    for r_ in range(NE):
+        e = e0 + (math.radians(84) - e0) * (r_ / (NE - 1)) ** 0.85
+        dr = dh * math.cos(e) + Vector((0, 0, 1)) * math.sin(e)
+        l, nrm = hit(HC + dr * 0.3, -dr); hv.append(l + nrm * 0.003)
+l, nrm = hit(HC + Vector((0, 0, 0.3)), (0, 0, -1)); hv.append(l + nrm * 0.003); top = len(hv) - 1
+for k in range(NA):
+    k2 = (k + 1) % NA
+    for r_ in range(NE - 1): hf.append((k * NE + r_, k2 * NE + r_, k2 * NE + r_ + 1, k * NE + r_ + 1))
+    hf.append((k * NE + NE - 1, k2 * NE + NE - 1, top))
+cap = mesh_obj('Hair', hv, hf, HAIR)
+sol = cap.modifiers.new('sol', 'SOLIDIFY'); sol.thickness = 0.007; sol.offset = 1; bpy.ops.object.modifier_apply(modifier='sol')
 
 # hachimaki: two twisted strands round the forehead, a knot and two short tails at the back
 def head_z(p): return HZ + 0.05 + 0.012 * max(p.y, 0) / 0.1
-ring = loop_around((0, 0.012, HZ + 0.05), (0, 0, 1), 0.3, 56, head_z)
-TW = 7
+ring = loop_around((0, 0.012, HZ + 0.05), (0, 0, 1), 0.3, 42, head_z)
+TW = 6
 for k in range(2):
-    band('Hachimaki', ring, 0.0115, 0.009, 0.012, BAND, K=7,
-         twist=lambda i, side, nn, k=k: (side * math.cos(2 * math.pi * TW * i / 56 + k * math.pi) * 0.0065 +
-                                        nn * math.sin(2 * math.pi * TW * i / 56 + k * math.pi) * 0.004))
+    band('Hachimaki', ring, 0.0115, 0.009, 0.012, BAND, K=5,
+         twist=lambda i, side, nn, k=k: (side * math.cos(2 * math.pi * TW * i / 42 + k * math.pi) * 0.0065 +
+                                        nn * math.sin(2 * math.pi * TW * i / 42 + k * math.pi) * 0.004))
 bk = max(ring, key=lambda p: p[0].y)[0]
-sphere('HachiKnot', bk + Vector((0, 0.022, 0)), (0.024, 0.018, 0.02), BAND, 12, 8)
+sphere('HachiKnot', bk + Vector((0, 0.02, 0.002)), (0.022, 0.016, 0.019), BAND, 8, 6)
 for s in (-1, 1):
-    sphere('HachiTail', bk + Vector((s * 0.014, 0.03, -0.04)), (0.012, 0.006, 0.04), BAND, 10, 8, (0.25, s * 0.2, 0))
+    sphere('HachiTail', bk + Vector((s * 0.012, 0.022, -0.036)), (0.011, 0.005, 0.034), BAND, 8, 6, (0.15, s * 0.18, 0))
 
 # ---------------------------------------------------------------- one object, origin at the feet, export (+ jacket colour variants)
 from collections import Counter
@@ -405,11 +434,14 @@ def shoot(name, pos, look=(0, 0, 0.95), lens=50):
     cam.data.lens = lens
     cam.location = pos; cam.rotation_euler = (Vector(look) - Vector(pos)).to_track_quat('-Z', 'Y').to_euler()
     scn.render.filepath = prev + '_' + name + '.png'; bpy.ops.render.render(write_still=True)
-shoot('front', (1.5, -4.0, 1.5), (0, 0, 0.9))
-shoot('back', (-1.4, 4.0, 1.6), (0, 0, 0.9))
+shoot('front', (1.25, -3.3, 1.45), (0, 0, 0.9))
+shoot('back', (-1.15, 3.3, 1.55), (0, 0, 0.9))
+if ONLY and 'side' in ONLY: shoot('side', (0.9, 0.05, 1.62), (0, 0, 1.6))
+if ONLY and 'hand' in ONLY: shoot('hand', (1.2, -0.9, 1.3), (0.62, -0.05, 1.0))
 shoot('face', (0.38, -0.95, 1.66), (0, 0, 1.56))
 el = math.radians(50)
-shoot('top', (12 * math.cos(el) * math.sin(0.35), -12 * math.cos(el) * math.cos(0.35), 12 * math.sin(el)), (0, 0, 0.8), 50)
+shoot('top', (12 * math.cos(el) * math.sin(0.35), -12 * math.cos(el) * math.cos(0.35), 12 * math.sin(el)), (0, 0, 0.8), 50)        # the game camera
+shoot('topzoom', (12 * math.cos(el) * math.sin(0.35), -12 * math.cos(el) * math.cos(0.35), 12 * math.sin(el)), (0, 0, 0.85), 160)  # same angle, tight
 # the hero and the worker squaring up, seen from the game camera
 if (not ONLY or 'vs' in ONLY) and VS:
     hero.location = (1.0, 0, 0); hero.rotation_euler = (0, 0, -math.pi / 2)
@@ -417,4 +449,4 @@ if (not ONLY or 'vs' in ONLY) and VS:
     bpy.ops.import_scene.gltf(filepath=VS)
     for o in set(scn.objects) - before:
         if o.parent is None: o.rotation_mode = 'XYZ'; o.scale = (1.15, 1.15, 1.15); o.location = (-1.0, 0, 0); o.rotation_euler = (0, 0, math.pi / 2)
-    shoot('vs', (12 * math.cos(el) * math.sin(0.25), -12 * math.cos(el) * math.cos(0.25), 12 * math.sin(el)), (0, 0, 0.9), 50)
+    shoot('vs', (12 * math.cos(el) * math.sin(0.25), -12 * math.cos(el) * math.cos(0.25), 12 * math.sin(el)), (0, 0, 0.9), 85)   # game angle, tighter lens so both read at 640 px
