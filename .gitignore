@@ -5,3 +5,4 @@ dist-web/
 Kumite-web.zip
 dist-kumitegame/
 tools/cmu-bvh/
+__pycache__/
