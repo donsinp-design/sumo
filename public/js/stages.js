@@ -433,16 +433,14 @@
         c.strokeStyle = 'rgba(40,100,40,0.45)'; c.lineWidth = 5;
         for (let k = 0; k < 22; k++) { const a = k / 22 * TAU; c.beginPath(); c.moveTo(C, C); c.quadraticCurveTo(C + Math.cos(a + 0.12) * C * 0.5, C + Math.sin(a + 0.12) * C * 0.5, C + Math.cos(a) * C, C + Math.sin(a) * C); c.stroke(); }
         // the notch every lily pad has, cut in from the edge (outside the fighting circle)
-        c.beginPath(); c.moveTo(C + RR * 0.98, C); c.lineTo(C + C, C - 70); c.lineTo(C + C, C + 70); c.closePath(); c.fillStyle = '#2f6fa0'; c.fill();
+        c.beginPath(); c.moveTo(C + RR * 0.98, C); c.lineTo(C + C, C - 70); c.lineTo(C + C, C + 70); c.closePath(); c.fillStyle = '#5ac6bc'; c.fill();
         circ(c, RR, null, 'rgba(240,255,220,0.8)', 8);
       });
       side(g, null, { color: 0x3a7a30, shade: 0x1a3a14, h: H }); edgeLine(g);
       // the pond: water, more pads, a lotus flower and reeds
-      ground(g, -H + 0.02, (c, w) => {
-        c.fillStyle = '#2f6fa0'; c.fillRect(0, 0, w, w);
-        c.strokeStyle = 'rgba(160,210,240,0.35)'; c.lineWidth = 3;
-        for (let k = 0; k < 40; k++) { const x = Math.random() * w, y = Math.random() * w, r = 10 + Math.random() * 30; c.beginPath(); c.ellipse(x, y, r, r * 0.45, 0, 0.2, Math.PI - 0.2); c.stroke(); }
-      }, 140, 4);
+      // clear pond water: turquoise shallows round the pad, deeper teal further out, caustics and sun glints
+      const pond = S.Water.animate(new THREE.Mesh(new THREE.PlaneGeometry(140, 140).rotateX(-Math.PI / 2), S.Water.pond({ shoreR: RD + 0.5 })));
+      pond.position.y = -H + 0.02; g.add(pond);
       const pads = [];
       for (const [x, z, r] of [[-12, -7, 3.2], [13, -9, 4.2], [-14, 8, 2.6], [11, 10, 3.4], [-4, -14, 2.2], [17, 2, 2.4], [-18, -1, 3.6]]) {
         const pd = cy(g, r, r, 0.12, 0x5aae44, x, -H - 0.04, z, { shade: 0x2a5a20 }, 32); pd.userData.ph = x * 0.7; pads.push(pd);
@@ -462,7 +460,7 @@
       const ripples = [];
       for (let k = 0; k < 4; k++) { const rm = new THREE.Mesh(new THREE.RingGeometry(0.96, 1, 96).rotateX(-Math.PI / 2), glowMat(0xd8f0ff, 0)); rm.position.y = -H + 0.04; g.add(rm); ripples.push(rm); }
       return (T) => {
-        ripples.forEach((rm, k) => { const f = ((T * 0.25 + k / 4) % 1); rm.scale.setScalar(RD + 0.3 + f * 6); rm.material.opacity = 0.5 * (1 - f); });
+        ripples.forEach((rm, k) => { const f = ((T * 0.25 + k / 4) % 1); rm.scale.setScalar(RD + 0.3 + f * 6); rm.material.opacity = 0.3 * (1 - f); });
         for (const pd of pads) pd.position.y = -H - 0.04 + 0.06 * Math.sin(T * 1.3 + pd.userData.ph);
         lotus.rotation.y = Math.sin(T * 0.4) * 0.15;
       };

@@ -1058,7 +1058,7 @@
     killProp(p) { p.dead = true; if (p.mesh.parent) p.mesh.parent.remove(p.mesh); }
     addPuddleMesh(x, z) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.8).rotateX(-Math.PI / 2), this.map.decor.find((d) => d.kind === 'puddle').m.material);
-      m.position.set(x, 0.013, z); m.renderOrder = 1; this.scene.add(m);
+      m.position.set(x, 0.013, z); m.renderOrder = 1; S.Water.animate(m); this.scene.add(m);
     }
     shotStep(dt) {
       for (const s of this.shots) {

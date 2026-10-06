@@ -292,24 +292,14 @@
       }
       c.closePath();
     };
-    // clear water: the floor shows through. Only a faint wet darkening that fades in from a damp edge, a soft
-    // sheen where the rim catches the light, a pale sky reflection and a couple of small glints.
-    const pudTexs = [0, 1, 2, 3].map((v) => W.canvasTex(256, 256, (c) => {
-      const sd = v * 1.7 + 0.4;
-      c.filter = 'blur(6px)'; blob(c, 128, 128, 104, 2, sd); c.fillStyle = 'rgba(30,34,40,0.16)'; c.fill(); c.filter = 'none';   // damp halo
-      blob(c, 128, 128, 96, 2, sd); c.fillStyle = 'rgba(22,30,44,0.2)'; c.fill();                                                   // the water itself
-      c.strokeStyle = 'rgba(235,242,255,0.42)'; c.lineWidth = 2.5; c.stroke();                                                         // rim sheen
-      c.save(); blob(c, 128, 128, 94, 2, sd); c.clip();
-      const gr = c.createLinearGradient(0, 200 - v * 8, 256, 60 - v * 8);
-      gr.addColorStop(0, 'rgba(190,210,240,0)'); gr.addColorStop(0.5, 'rgba(200,218,245,0.34)'); gr.addColorStop(1, 'rgba(190,210,240,0)');
-      c.fillStyle = gr; c.fillRect(0, 0, 256, 256);                                                                                   // sky reflection
-      c.restore();
-      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineCap = 'round';
-      c.lineWidth = 2.5; c.beginPath(); c.moveTo(78, 102); c.lineTo(104, 92); c.stroke();
-      c.lineWidth = 2; c.beginPath(); c.moveTo(152, 156); c.lineTo(166, 151); c.stroke();
+    // clear water (S.Water.puddle): the shape is a soft white mask; the shader darkens the floor a little where it is wet
+    // and adds the light: rim sheen, sky reflection, moving caustics and glints
+    const pudMasks = [0, 1, 2, 3].map((v) => W.canvasTex(256, 256, (c) => {
+      c.filter = 'blur(5px)'; blob(c, 128, 128, 98, 2, v * 1.7 + 0.4); c.fillStyle = '#ffffff'; c.fill(); c.filter = 'none';
     }));
+    const pudMats = pudMasks.map((t) => S.Water.puddle(t));
     for (const p of puddles) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.r * 2.3 * p.sx, p.r * 2.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: pudTexs[(Math.random() * 4) | 0], transparent: true, depthWrite: false }));
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.r * 2.3 * p.sx, p.r * 2.3).rotateX(-Math.PI / 2), pudMats[(Math.random() * 4) | 0]); S.Water.animate(m);
       m.rotation.y = Math.random() < 0.5 ? 0 : Math.PI; m.position.set(p.x, 0.012, p.z); /* only flipped: the wet area (an ellipse along x) must match what you see */ m.renderOrder = 1; g.add(m); decor.push({ m, kind: 'puddle', p: Math.random() * 6 });
     }
 
