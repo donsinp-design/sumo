@@ -1,14 +1,15 @@
-# ROBOT VACUUM stage, fully modelled: two sumos fight on the lid of a giant round robot vacuum (lidar type) parked on a
+# ROBOT VACUUM stage, fully modelled: two sumos fight on the lid of a giant round robot vacuum parked on a
 # light-oak living-room floor next to a flat-woven rug with a fringe; a sock, a phone cable, crumbs and dust bunnies on
-# the floor, the charging dock against the skirting board, a sofa and a potted plant around, daylight from a window.
+# the floor, the charging dock against the skirting board and a potted plant around, daylight from a window.
 # Built entirely by script (Blender 4.2 headless).
 #   python tools/blender/stage_vacuum.py [out_dir] [shot=game|low ...] [fast] [noexport] [norender] [nochars]
 # Writes <out_dir>/vacuum.glb (stage only: Z up, metres, origin at the lid centre, textures packed <= 1024 px, JPEG)
 # and <out_dir>/ex_<shot>.png with the game's masked sumos + gyoji imported from scratchpad/stage.
 #
 # Game contract (public/js/config.js RING_R = 4.6, stages.js vacuum()): the robot's top cover has radius 5.3, top at
-# Z = 0 and flat out to r 5.08 (relief only in the maps: seams, button domes <= 1.5 cm). The fighting circle is a cyan
-# light ring inlaid in a seam at r 4.6. The lidar turret sits on a rear lobe of the body, entirely beyond r 4.75.
+# Z = 0 and flat out to r 5.08: a clean concentric-brushed panel whose only feature is the cyan light ring inlaid in a
+# seam at r 4.6 (the fighting circle), then a piano-black band. No buttons, no lidar turret (removed on feedback).
+# Only what the game camera sees is built (no wheels/underside/sofa); only ex_game.png is rendered by default.
 # Scale: a real robot (radius 17 cm, 9 cm tall) x31; the floor is at Z = -2.9.
 import bpy, bmesh, math, sys, os, time
 import numpy as np
@@ -21,7 +22,7 @@ FLAGW = {'fast', 'noexport', 'norender', 'nochars'}
 ARGS = [a for a in sys.argv[sys.argv.index('--') + 1 if '--' in sys.argv else 1:] if '=' not in a and a not in FLAGW and not a.endswith('.py')]
 OUT = ARGS[0] if ARGS else SCR + '/vacuum'
 os.makedirs(OUT, exist_ok=True)
-SHOTS = [a.split('=', 1)[1] for a in sys.argv if a.startswith('shot=')] or ['game', 'low']
+SHOTS = [a.split('=', 1)[1] for a in sys.argv if a.startswith('shot=')] or ['game']
 FAST = 'fast' in sys.argv
 T0 = time.time()
 def log(*a): print('[vac %5.1fs]' % (time.time() - T0), *a, flush=True)
@@ -42,8 +43,6 @@ TEXN = 1024 if FAST else 2048
 PHI_F = math.radians(-100)                      # the robot's heading (front), seen from above
 FWD = np.array([math.cos(PHI_F), math.sin(PHI_F)], F32)
 RIGHT = np.array([math.sin(PHI_F), -math.cos(PHI_F)], F32)
-TA = PHI_F + math.pi                           # rear: the lidar lobe
-TC = 5.62 * np.array([math.cos(TA), math.sin(TA)], F32); TR = 0.86; LOBE = 1.1
 
 
 # ================================================================ numpy helpers
@@ -299,11 +298,10 @@ def load_img(path, noncolor=False):
     IMGS.append(im); return im
 
 
-# ================================================================ body outline (circle + smooth rear lobe for the lidar)
+# ================================================================ body outline (a plain circle; kept as a table so the sweeps can follow any outline)
 log('outline')
 def sdf(px, py):
-    d1 = np.hypot(px, py) - RT; d2 = np.hypot(px - TC[0], py - TC[1]) - LOBE; k = 0.7
-    h = np.clip(0.5 + 0.5 * (d2 - d1) / k, 0, 1); return d2 * (1 - h) + d1 * h - k * h * (1 - h)
+    return np.hypot(px, py) - RT     # plain circle (the lidar lobe was removed)
 NO = 4096
 THS = np.arange(NO, dtype=F32) / NO * TAU
 rr = np.linspace(8.0, 0.0, 3201, dtype=F32)
@@ -353,7 +351,7 @@ def sweep(name, prof, th0, th1, n, mat, closed_prof=False, full=False, cap=False
 
 # ================================================================ TOP COVER maps (planar, +-LE)
 log('top maps')
-LE = 6.9
+LE = 5.6
 lpx = 2 * LE / TEXN
 g = (np.arange(TEXN, dtype=F32) + 0.5) * lpx - LE
 X, Y = np.meshgrid(g, -g)
@@ -387,47 +385,7 @@ def top_maps():
     emis += (strip * glow * (1 - 0.25 * (np.abs(R - 4.6) / 0.09) ** 2))[..., None] * CY
     # outer band: piano black, with a faint satin edge
     col = lerp(col, hx('060708'), outer); rough = rough * (1 - outer) + 0.06 * outer; metal *= 1 - outer
-    # ---- centre: CLEAN button, status ring, bezel
-    btn = 1 - ss(0.50 - w, 0.50 + w, R); ring = band(R, 0.555, 0.665, w); bez = band(R, 0.68, 0.82, w); gap = band(R, 0.50, 0.555, w) + band(R, 0.665, 0.68, w) + band(R, 0.82, 0.84, w)
-    H += 0.012 * btn * (1 - (R / 0.5) ** 2) + 0.004 * bez - 0.008 * gap
-    col = lerp(col, hx('0b0c0e'), btn + gap); rough = rough * (1 - btn - gap) + 0.12 * btn + 0.5 * gap; metal *= 1 - btn - gap
-    col = lerp(col, hx('8fdcff'), ring); rough = rough * (1 - ring) + 0.3 * ring; metal *= 1 - ring
-    emis += (ring * 1.15)[..., None] * CY
-    col = lerp(col, hx('c9ccd1'), bez); rough = rough * (1 - bez) + 0.2 * bez       # polished, metal
-    # power icon (white print) on the button: ring with a gap toward the front + a bar
-    ang = np.degrees(np.arctan2(LX, LY))
-    pring = band(np.hypot(LX, LY), 0.17, 0.225, w) * ss(36, 42, np.abs(ang)); pbar = band(LX, -0.027, 0.027, w) * band(LY, 0.04, 0.27, w)
-    icon = np.clip(pring + pbar, 0, 1) * btn
-    # home + spot buttons in front of the big one
-    def small_button(cx, cy):
-        rr_ = np.hypot(LX - cx, LY - cy)
-        b = 1 - ss(0.2 - w, 0.2 + w, rr_); bz = band(rr_, 0.2, 0.25, w)
-        return rr_, b, bz
-    nonlocal_icons = []
-    for cx, kind in ((-0.46, 'home'), (0.46, 'spot')):
-        cy = 1.02
-        rr_, b, bz = small_button(cx, cy)
-        H += 0.006 * b * (1 - (rr_ / 0.2) ** 2) + 0.003 * bz
-        col = lerp(col, hx('0b0c0e'), b); rough = rough * (1 - b) + 0.14 * b; metal *= 1 - b
-        col = lerp(col, hx('aeb2b8'), bz); rough = rough * (1 - bz) + 0.22 * bz
-        u, v = LX - cx, LY - cy
-        if kind == 'home':   # house outline: roof chevron + walls + door
-            roof = band(np.abs(u) * 0.95 + (v - 0.105), -0.022, 0.022, w) * band(v, -0.01, 0.11, w)
-            walls = (band(np.abs(u), 0.075, 0.105, w) * band(v, -0.1, 0.04, w)) + band(v, -0.1, -0.075, w) * band(np.abs(u), 0, 0.105, w)
-            door = band(np.abs(u), 0.0, 0.025, w) * band(v, -0.09, -0.02, w)
-            ic = np.clip(roof + walls + door, 0, 1)
-        else:                # spot: dot + ring + dashed ring
-            rq = np.hypot(u, v); aq = np.arctan2(u, v)
-            ic = np.clip((1 - ss(0.03, 0.04, rq)) + band(rq, 0.07, 0.095, w) + band(rq, 0.125, 0.148, w) * (np.cos(aq * 8) > 0), 0, 1)
-        icon = np.clip(icon + ic * b, 0, 1)
-    col = lerp(col, hx('eef1f4'), icon * 0.95); rough = rough * (1 - icon) + 0.35 * icon
-    # brand print toward the rear of the panel
-    tm = text_mask_m(R.shape, 'KUMITE', FONT, -FWD * 3.25, 0.30, FWD, to_px_top, 1.25)
-    tm2 = text_mask_m(R.shape, 'LIDAR  NAV  PRO', FONT, -FWD * 2.82, 0.12, FWD, to_px_top, 1.4)
-    t_all = np.clip(tm + tm2 * 0.85, 0, 1)
-    col = lerp(col, hx('b6bbc2'), t_all * 0.9); rough = rough * (1 - t_all) + 0.45 * t_all; metal *= 1 - 0.7 * t_all
-    H -= 0.001 * t_all
-    # turret collar footprint (geometry covers it) and a fine satin chamfer at the cover edge
+    # a fine satin chamfer at the cover edge
     edge = ss(5.0, 5.08, R) * (1 - ss(6.9, 7.0, R))
     rough = rough + 0.03 * edge
     col = np.clip(col, 0, 1)
@@ -471,37 +429,15 @@ mTrim, nt, bs = principled('mTrim', lin('c4c7cc'), 1.0, 0.24); aniso(nt, bs, 0.6
 mShell, nt, bs = principled('mShell', lin('1c1d20'), 0.0, 0.48); micro_bump(nt, bs, 400, 0.08)
 mBumper, nt, bs = principled('mBumper', lin('121314'), 0.0, 0.4); micro_bump(nt, bs, 600, 0.12)
 mIR, nt, bs = principled('mIRWindow', lin('140608'), 0.0, 0.04, **{'Coat Weight': 1.0, 'Coat Roughness': 0.02})
-mUnder, nt, bs = principled('mUnder', lin('0e0e10'), 0.0, 0.7)
-mTire, nt, bs = principled('mTire', lin('151515'), 0.0, 0.85); micro_bump(nt, bs, 120, 0.3)
 
 arc_ = [(EDGE - EDGE * math.sin(a), -EDGE + EDGE * math.cos(a)) for a in np.linspace(0, math.pi / 2, 9)]
 sweep('top_rim', arc_ + [(0, -0.44), (0.02, -0.47), (0.07, -0.48)], 0, TAU, 576, mPiano, full=True)
 sweep('trim', [(0.07, -0.48), (0.005, -0.5), (0, -0.53), (0, -0.585), (0.06, -0.6)], 0, TAU, 576, mTrim, full=True)
 sweep('shell', [(0.06, -0.6), (0.0, -0.64), (0.0, -2.28), (0.05, -2.42), (0.2, -2.53), (0.5, -2.58)], 0, TAU, 384, mShell, full=True)
-polar_cap('underside', lambda t: off(t, 0.5), 256, -2.58, mUnder, rings=(0.0, 0.5, 1.0))
 # front bumper: half the perimeter, proud of the shell, with end gaps (the seam)
 BA = math.radians(96)
 bump = [(0.12, -0.63), (-0.02, -0.63), (-0.07, -0.68), (-0.1, -0.85), (-0.115, -1.2), (-0.11, -1.6), (-0.085, -1.95), (-0.03, -2.15), (0.08, -2.3), (0.2, -2.34)]
 sweep('bumper', bump, PHI_F - BA, PHI_F + BA, 420, mBumper, closed_prof=True, cap=True)
-sweep('ir_window', [(-0.112, -1.1), (-0.122, -1.13), (-0.122, -1.37), (-0.112, -1.4)], PHI_F - math.radians(20), PHI_F + math.radians(20), 120, mIR, cap=False)
-# drive wheels in their wells, the caster at the front
-for sd in (-1, 1):
-    c = np.array(off(PHI_F + sd * math.pi / 2, 1.5), F32)
-    wob = revolve('wheel', [(0, 0.26), (0.5, 0.26), (0.62, 0.2), (0.64, 0.0), (0.62, -0.2), (0.5, -0.26), (0, -0.26)], 40, mat=mTire)
-    wob.rotation_euler = (math.pi / 2, 0, PHI_F); wob.location = (c[0], c[1], FZ + 0.64)
-cst = revolve('caster', [(0, 0.2), (0.3, 0.2), (0.36, 0), (0.3, -0.2), (0, -0.2)], 24, mat=mTire)
-cf = FWD * 3.8; cst.rotation_euler = (math.pi / 2, 0, PHI_F + math.pi / 2); cst.location = (cf[0], cf[1], FZ + 0.36)
-
-# ---- lidar turret on the rear lobe (beyond r 4.75)
-log('turret')
-mSmoke, nt, bs = principled('mSmokeGlass', lin('07090b'), 0.0, 0.03, **{'Coat Weight': 1.0, 'Coat Roughness': 0.0})
-mCap, nt, bs = principled('mCapAlu', lin('5a5d63'), 1.0, 0.26); aniso(nt, bs, 0.7)
-cx, cy = float(TC[0]), float(TC[1])
-revolve('lidar_collar', [(0, 0.03), (0.9, 0.03), (0.97, 0.015), (0.99, 0.0), (0.99, -0.01)], 96, mat=mTrim, centre=(cx, cy, 0))
-revolve('lidar_body', [(0, 0.76), (0.6, 0.76), (0.74, 0.745), (0.82, 0.7), (0.86, 0.62), (0.86, 0.56), (0.83, 0.545), (0.83, 0.2), (0.86, 0.185), (0.86, 0.03), (0.86, 0.0)], 96, mat=mPiano, centre=(cx, cy, 0))
-revolve('lidar_window', [(0.842, 0.54), (0.848, 0.52), (0.848, 0.21), (0.842, 0.2)], 96, mat=mSmoke, centre=(cx, cy, 0))
-revolve('lidar_cap', [(0, 0.768), (0.5, 0.768), (0.56, 0.762), (0.6, 0.755)], 64, mat=mCap, centre=(cx, cy, 0))
-
 # ---- side brush at the front-right corner: hub, 3 arms of bristle tufts poking out past the bumper
 log('side brush')
 mHub, nt, bs = principled('mBrushHub', lin('2b2d31'), 0.0, 0.35)
@@ -808,17 +744,7 @@ dc.build('dust_core', mDust); db.build('dust_fibres', mFluff)
 
 
 # ================================================================ SOFA corner (left back) and a PLANT (right back)
-log('sofa + plant')
-mSofa, nt, bs = principled('mSofaFabric', lin('5d6a70'), 0.0, 0.92, **{'Sheen Weight': 0.8, 'Sheen Roughness': 0.5}); micro_bump(nt, bs, 25, 0.35, 0.05)
-mWalnut, nt, bs = principled('mWalnut', lin('4a2e1c'), 0.0, 0.35); micro_bump(nt, bs, 3, 0.15, 0.02)
-mBrass, nt, bs = principled('mBrass', lin('c99a52'), 1.0, 0.28)
-SOX = -21.5
-rbox('sofa_base', (SOX - 40, -40, FZ + 3.6), (SOX, WALLY - 0.8, FZ + 9.0), mSofa, bevel=0.9, seg=5)
-rbox('sofa_seat', (SOX - 40, -40.5, FZ + 8.6), (SOX + 0.3, WALLY - 0.8, FZ + 16.0), mSofa, bevel=1.6, seg=5)
-for ly in (WALLY - 3.0, -8.0):
-    revolve('sofa_leg', [(0, 3.62), (0.55, 3.62), (0.52, 1.0), (0.44, 0.5), (0.44, 0.45), (0.38, 0.45), (0.36, 0.02), (0.33, 0.0), (0, 0.0)], 32, mat=mWalnut, centre=(SOX - 1.4, ly, FZ), sharp=50)
-    revolve('sofa_ferrule', [(0, 0.5), (0.45, 0.5), (0.45, 0.02), (0.42, 0.0), (0, 0.0)], 32, mat=mBrass, centre=(SOX - 1.4, ly, FZ + 0.001), sharp=50)
-
+log('plant')
 before = set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=PH + '/plant/potted_plant_04_1k.gltf')
 new = [o for o in bpy.data.objects if o not in before]
@@ -973,7 +899,7 @@ def cam_setup(shot):
 def render(shot):
     cam_setup(shot)
     scn.render.engine = 'CYCLES'; scn.cycles.device = 'CPU'
-    scn.cycles.samples = 16 if FAST else 48; scn.cycles.use_denoising = True; scn.cycles.use_adaptive_sampling = True
+    scn.cycles.samples = 16 if FAST else 32; scn.cycles.use_denoising = True; scn.cycles.use_adaptive_sampling = True
     scn.cycles.max_bounces = 8; scn.cycles.glossy_bounces = 4; scn.cycles.transmission_bounces = 4; scn.cycles.transparent_max_bounces = 8
     scn.cycles.diffuse_bounces = 3; scn.cycles.caustics_reflective = False; scn.cycles.caustics_refractive = False
     scn.cycles.blur_glossy = 1.0; scn.cycles.sample_clamp_indirect = 8.0

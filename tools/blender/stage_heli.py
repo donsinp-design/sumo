@@ -20,8 +20,8 @@ CHARS = ARGS[1] if len(ARGS) > 1 else os.path.join(SP, 'stage')
 PH = os.path.join(SP, 'heli_ph')
 os.makedirs(OUT, exist_ok=True)
 OPT = dict(a.split('=', 1) for a in sys.argv if '=' in a and not a.startswith('-'))
-SHOTS = set(a.split('=', 1)[1] for a in sys.argv if a.startswith('shot=')) or {'game', 'low'}
-SAMPLES = int(OPT.get('samples', 48)); PCT = int(OPT.get('pct', 100))
+SHOTS = set(a.split('=', 1)[1] for a in sys.argv if a.startswith('shot=')) or {'game'}
+SAMPLES = int(OPT.get('samples', 32)); PCT = int(OPT.get('pct', 100))
 NOREN = 'noren' in sys.argv; NOCHARS = 'nochars' in sys.argv
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -988,16 +988,8 @@ def text_mesh(name, body, size, mat_, extrude=0.003):
     return obj(name, me, [mat_])
 
 
-HELI_POS = (-11.6, 8.6, ROOF); HELI_HEAD = math.radians(-28)
-heli = build_heli(HELI_POS, HELI_HEAD, 1.25)
-# its parking box on the roof: a painted steel deck plate with a yellow box and an aiming T
-bm = bmesh.new()
-pcx, pcy = HELI_POS[0], HELI_POS[1]
-Rh = Matrix.Rotation(HELI_HEAD, 4, 'Z'); Mh = Matrix.Translation((pcx, pcy, ROOF)) @ Rh
-add_box(bm, (0, 0, 0.04), (12.0, 6.4, 0.08), 0, M=Mh)
-for (cx, cy, sx, sy) in ((0, 3.0, 11.6, 0.15), (0, -3.0, 11.6, 0.15), (5.8, 0, 0.15, 6.15), (-5.8, 0, 0.15, 6.15), (3.4, 0, 1.6, 0.25), (4.2, 0, 0.25, 1.4)):
-    add_box(bm, (cx, cy, 0.082), (sx, sy, 0.006), 1, M=Mh)
-park = bm_obj('ParkingDeck', bm, [M_CONC, M_YELLOWSTEEL], smooth=0); box_uv(park, 2.6)
+# (the parked helicopter and its parking deck were removed on request; build_heli() is kept for reference)
+
 
 # ================================================================ the city below
 print('city...')
@@ -1005,6 +997,16 @@ bm = bmesh.new(); bmc = bmesh.new()
 rng = np.random.default_rng(42)
 GROUND = -150.0
 REDS = []
+# only what the game camera can see is built (the stage is only ever shown from it)
+_GC = Vector((0, -21 * math.cos(math.radians(50)), 21 * math.sin(math.radians(50))))
+_GR = (Vector((0, 0.6, 0)) - _GC).to_track_quat('-Z', 'Y').to_matrix()
+_TY = math.tan(math.radians(17)) * 1.06; _TX = _TY * 16 / 9
+def seen_pt(p):
+    q = _GR.transposed() @ (Vector(p) - _GC)
+    return q.z < 0 and abs(q.x / -q.z) < _TX and abs(q.y / -q.z) < _TY
+def seen_box(cx, cy, z0, z1, hx, hy):
+    pts = [(cx + sx * hx, cy + sy * hy, z) for sx in (-1, 0, 1) for sy in (-1, 0, 1) for z in (z0, (z0 + z1) / 2, z1)]
+    return any(seen_pt(p) for p in pts)
 for gx in range(-12, 13):
     for gy in range(-8, 14):
         cx = gx * 30.0; cy = gy * 30.0
@@ -1017,6 +1019,8 @@ for gx in range(-12, 13):
         h = rng.uniform(18, hmax)
         target = bm if rng.random() < 0.55 else bmc
         top = GROUND + h
+        if not seen_box(cx, cy, GROUND, GROUND + h + 32, sx / 2 + 3, sy / 2 + 3):
+            rng.random(); rng.random(); continue
         ret = add_box(target, (cx + rng.uniform(-3, 3), cy + rng.uniform(-3, 3), GROUND + h / 2), (sx, sy, h), 0)
         if rng.random() < 0.4:   # setback tier
             h2 = rng.uniform(8, 30); top = GROUND + h + h2
@@ -1028,6 +1032,7 @@ for k in range(110):     # far skyline ring (strongly hazed)
     a = rng.uniform(0, TAU); d = rng.uniform(420, 700); cx, cy = math.cos(a) * d, math.sin(a) * d
     if cy < -150: continue
     h = rng.uniform(60, 200) * (1.5 if rng.random() < 0.15 else 1.0)
+    if not seen_box(cx, cy, GROUND, GROUND + h, 25, 25): continue
     add_box(bm if rng.random() < 0.6 else bmc, (cx, cy, GROUND + h / 2), (rng.uniform(20, 45), rng.uniform(20, 45), h), 0,
             rot=Matrix.Rotation(rng.uniform(0, 1.5), 3, 'Z').to_euler())
 city_g = bm_obj('CityGlass', bm, [M_CITY_G, M_STEELD], smooth=0)
@@ -1135,7 +1140,6 @@ for k, (hc, d) in enumerate(FLOOD_HEADS):
     light('Flood%d' % k, 'SPOT', hc + d * 0.12, hc + d * 10, FE, (1.0, 0.9, 0.78), spot=60, blend=0.7, soft=0.25)
 light('HutLamp', 'POINT', (DX + 0.35, HY - 0.45, ROOF + 2.3), (0, 0, 0), 60, (1.0, 0.75, 0.45), soft=0.1)
 light('SockLamp', 'SPOT', (WX + 0.5, WY - 0.6, ROOF + 0.6), (WX - 1.2, WY + 0.3, 1.8), 300, (1.0, 0.9, 0.75), spot=40, soft=0.1)
-light('HeliLamp', 'SPOT', (-3.0, 3.5, 4.0), (HELI_POS[0], HELI_POS[1], ROOF + 1.5), 2500, (0.95, 0.9, 0.85), spot=45, blend=0.8, soft=0.4)
 
 
 # ================================================================ characters (as stage_render.py)
@@ -1240,7 +1244,7 @@ rl = cnt.nodes['Render Layers']; comp = cnt.nodes['Composite']
 gl = cnt.nodes.new('CompositorNodeGlare'); gl.glare_type = 'FOG_GLOW'; gl.quality = 'HIGH'; gl.threshold = 1.5; gl.mix = -0.75; gl.size = 7
 cnt.links.new(rl.outputs['Image'], gl.inputs['Image']); cnt.links.new(gl.outputs['Image'], comp.inputs['Image'])
 
-for shot in ('game', 'low', 'top', 'hcl'):
+for shot in ('game', 'low', 'top'):
     if shot not in SHOTS: continue
     if shot == 'game':
         el = math.radians(50); dist = 21
@@ -1249,9 +1253,6 @@ for shot in ('game', 'low', 'top', 'hcl'):
     elif shot == 'low':
         cam.location = (9.5, -8.5, 4.2); cam.data.angle_y = math.radians(30)
         cam.rotation_euler = (Vector((0, 0.8, 0.4)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
-    elif shot == 'hcl':
-        cam.location = (-3.0, -1.0, 2.5); cam.data.angle_y = math.radians(35)
-        cam.rotation_euler = (Vector((HELI_POS[0], HELI_POS[1], ROOF + 1.5)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
     else:
         cam.location = (-2, -2, 40); cam.data.angle_y = math.radians(50)
         cam.rotation_euler = (Vector((-2, 0, 0)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
