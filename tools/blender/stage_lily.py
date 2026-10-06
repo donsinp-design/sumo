@@ -1394,7 +1394,7 @@ if not NOCHARS:
         tilt = float(OPT.get('tilt', -0.85))
         for r in roots: r.rotation_euler = (tilt, 0.15, yaw)
         # arms flung up and out, legs kicking
-        for sd, s in (('L', 1), ('R', -1)):
+        for sd, s in (('L', 1), ('R', float(OPT.get('rsign', 1)))):
             set_bone(rig, 'upper_arm.' + sd, (0.0, 0.0, s * 1.9))
             set_bone(rig, 'forearm.' + sd, (0.0, 0.0, s * 0.5))
             set_bone(rig, 'shoulder.' + sd, (0.0, 0.0, s * 0.25))
@@ -1414,7 +1414,7 @@ if not NOCHARS:
             if rig_: c, f, u = head_frame(rig_, roots_); mask(kind, c + f * 0.03, f, u, roots_[0].scale[0] * 0.95)
         gf = (gr[0].matrix_world.to_3x3() @ Vector((0, -1, 0))).normalized()
         mask('kitsune', Vector((GX, GY, main_z(GX, GY) + 1.52 * 1.5)) + gf * 0.02, gf, Vector((0, 0, 1)), 1.5 * 0.62)
-if SPLASH:
+if SPLASH and 'nosplash' not in OPT:
     SPL = build_splash(SPL_C)
 
 
