@@ -50,8 +50,8 @@ RD = R + 0.7            # pad radius
 WZ = -0.16              # water surface
 FLAT = R + 0.25         # the pad is flat out to here, then its rim curls up
 NOTCH_A = math.radians(118)   # the notch points back-left
-NOTCH_RN = R + 0.14     # notch apex (outside the fighting circle)
-NOTCH_TH = math.radians(24)   # half-angle of the V
+NOTCH_RN = R + 0.12     # notch apex (outside the fighting circle)
+NOTCH_TH = math.radians(38)   # half-angle of the V
 SPL_A = math.radians(-140); SPL_R = RD + 1.75   # the splash shot: where the thrown sumo hits the water (front-left)
 SPL_C = Vector((SPL_R * math.cos(SPL_A), SPL_R * math.sin(SPL_A), WZ))
 
@@ -282,14 +282,15 @@ def tex_pad(n, S, padR, ring=None, seed=1, notch=None, old=0.0):
     Y, X = np.meshgrid(p, p, indexing='ij'); rho = np.hypot(X, Y); phi = np.arctan2(Y, X)
     px_m = n / (2 * S)
     Rpx = padR * px_m
-    V = pad_veins(n, Rpx, n / 2, n / 2, 22 if padR > 3 else 16, seed, w0=3.4 if padR > 3 else 2.4, w1=1.1)
+    V = pad_veins(n, Rpx, n / 2, n / 2, 22 if padR > 3 else 16, seed, w0=5.0 if padR > 3 else 3.0, w1=1.8)
     F1, F2 = voronoi(n, 72 if padR > 3 else 48, seed + 3)
     reti = np.exp(-((F2 - F1) / 0.06) ** 2)                    # fine reticulate veinlets
     mott = fbm(n, 6, 5, seed + 5); mott2 = fbm(n, 24, 3, seed + 9)
     t = rho / padR
-    dark, mid, light = np.array(lin('2e5e1c')), np.array(lin('4a8a2c')), np.array(lin('7fb247'))
-    c = dark + (mid - dark) * np.clip(0.55 + 0.9 * (mott - 0.5) + 0.25 * (1 - t), 0, 1)[..., None]
-    c = c * (0.9 + 0.2 * mott2[..., None])
+    dark, mid, light = np.array(lin('2f6a1e')), np.array(lin('55982f')), np.array(lin('86b844'))
+    c = dark + (mid - dark) * np.clip(0.55 + 1.3 * (mott - 0.5) + 0.25 * (1 - t), 0, 1)[..., None]
+    c = c + (light - c) * (0.3 * sstep(0.6, 0.85, fbm(n, 4, 4, seed + 7)))[..., None]
+    c = c * (0.88 + 0.24 * mott2[..., None])
     # warmer, yellower towards the rim; a red-brown margin
     rimy = sstep(0.86, 0.99, t)
     c = c + (np.array(lin('8a9a3a')) - c) * (0.35 * rimy)[..., None]
@@ -298,8 +299,8 @@ def tex_pad(n, S, padR, ring=None, seed=1, notch=None, old=0.0):
         nd = notch_dist(X, Y, *notch); marg = np.maximum(marg, np.exp(-nd / 0.03) * sstep(notch[1] - 0.05, notch[1] + 0.1, rho))
     c = c + (np.array(lin('7a2c22')) - c) * (0.8 * marg)[..., None]
     # veins: pale yellow-green, thinner and fainter towards the rim
-    vcol = np.array(lin('a6c86a'))
-    vi = np.clip(V * 0.85, 0, 1) * (1 - 0.3 * t)
+    vcol = np.array(lin('8fb85a'))
+    vi = np.clip(V * 0.42, 0, 1) * (1 - 0.35 * t)
     c = c + (vcol - c) * vi[..., None]
     c = c + (np.array(lin('6a9a3a')) - c) * (0.22 * reti)[..., None]
     # sparse brown freckles and a few sun-scorched patches near the rim
@@ -314,11 +315,11 @@ def tex_pad(n, S, padR, ring=None, seed=1, notch=None, old=0.0):
     if ring is not None:   # the fighting circle: a pale waxy bloom band with a marginal vein in it
         dr = rho - ring
         band = np.exp(-(dr / 0.035) ** 2); halo = np.exp(-(dr / 0.16) ** 2) * (0.85 + 0.3 * (mott2 - 0.5))
-        c = c + (np.array(lin('c7dc98')) - c) * np.clip(0.72 * band + 0.22 * halo, 0, 1)[..., None]
+        c = c + (np.array(lin('bcd68c')) - c) * np.clip(0.5 * band + 0.2 * halo, 0, 1)[..., None]
         rough = rough + 0.12 * halo
         V = np.maximum(V, band * 0.9)
     # height: veins sunk into the blade, blistered between them, fine cell domes
-    h = -1.0 * V - 0.25 * reti + 0.35 * (1 - F1) * 0.4 + 0.8 * mott2 * 0.3
+    h = -1.4 * V - 0.3 * reti + 0.35 * (1 - F1) * 0.4 + 0.8 * mott2 * 0.3
     nrm = normal_from_h(h, 1.6 * (n / 1024))
     c = np.where((rho > padR + 0.01)[..., None], np.array(lin('7a2c22')), c)
     return c, np.clip(rough, 0.05, 1), nrm
@@ -425,7 +426,7 @@ M_BUDTIP = mat('BudTip', lin('f0a0be'), 0.4, sss=0.2, sss_r=(1, .6, .6))
 M_REED = mat('Reed', lin('6f8a32'), 0.55, sss=0.1, sss_r=(0.5, 1.0, 0.2))
 M_REEDY = mat('ReedDry', lin('a8924a'), 0.6)
 M_CATTAIL = mat('Cattail', lin('4a2c16'), 0.9)
-M_DFLY = mat('DragonBody', lin('1a6a8a'), 0.25, metal=0.6, coat=0.6, coat_r=0.05)
+M_DFLY = mat('DragonBody', lin('1f4f5a'), 0.3, metal=0.35, coat=0.6, coat_r=0.05)
 M_DEYE = mat('DragonEye', lin('1a3a6a'), 0.12, coat=1.0, coat_r=0.02)
 M_DLEG = mat('DragonLeg', lin('141414'), 0.4)
 M_WING = mat('Wing', rough=0.08, tcol=IM_WING, trans=0.92, ior=1.4, spec=0.6)
@@ -502,8 +503,8 @@ def build_pad(name, padR, mats, segs, top_rings, rim_rings, ztop, under, notch_a
 
 
 # ---------------------------------------------------------------- the big pad
-RIM_UP = 0.15
-WAVES = [(0.045, 5, 0.7), (0.03, 8, 2.1), (0.018, 13, 4.0), (0.01, 21, 1.3)]
+RIM_UP = 0.26
+WAVES = [(0.07, 5, 0.7), (0.04, 8, 2.1), (0.025, 13, 4.0), (0.012, 21, 1.3)]
 def ztop_main(r, a):
     t = max(0.0, (r - FLAT) / (RD - FLAT))
     z = RIM_UP * t ** 2.0 + t * t * sum(A * math.sin(k * a + p) for A, k, p in WAVES)
@@ -575,8 +576,8 @@ def drop_mesh():
     """A bead of water: a sessile drop (flattened sphere cut a little below its equator)."""
     global DROP_ME
     if DROP_ME: return DROP_ME
-    prof = [(0.0, 0.0), (0.82, 0.0), (0.97, 0.12), (1.0, 0.28), (0.9, 0.5), (0.68, 0.7), (0.36, 0.84), (0.0, 0.88)]
-    o = lathe('drop_tmp', prof, [M_DROP], segs=12, stage=False, smooth=80)
+    prof = [(0.0, 0.0), (0.9, 0.0), (1.0, 0.22), (0.9, 0.5), (0.6, 0.76), (0.0, 0.88)]
+    o = lathe('drop_tmp', prof, [M_DROP], segs=10, stage=False, smooth=80)
     DROP_ME = o.data; bpy.data.objects.remove(o); return DROP_ME
 
 
@@ -654,6 +655,9 @@ def water_surface():
             k = (j + 1) % segs; bm.faces.new((A[j], A[k], B[k], B[j]))
     centre = bm.faces.new([v for v in rings[0]])
     bmesh.ops.triangulate(bm, faces=[centre])
+    bm.normal_update()
+    down = [f for f in bm.faces if f.normal.z < 0]
+    if down: bmesh.ops.reverse_faces(bm, faces=down)
     me = bpy.data.meshes.new('Water'); bm.to_mesh(me); bm.free(); me.shade_smooth()
     planar_uv(me, WS)
     return obj('Water', me, [M_WATER])
@@ -749,8 +753,9 @@ for k in range(70):
     while True:
         x, y = rr.uniform(-18, 18), rr.uniform(-10, 14)
         if math.hypot(x, y) > RD - 1.5: break
-    zb = bed_z(x, y); L = rr.uniform(0.6, min(2.0, (WZ - 0.25) - zb + 0.2))
-    if L < 0.3: continue
+    zb = bed_z(x, y); hi = min(2.0, (WZ - 0.25) - zb + 0.2)
+    if hi < 0.7: continue
+    L = rr.uniform(0.6, hi)
     for s in range(3):
         weeds.append(ribbon('weed', (x + rr.uniform(-.2, .2), y + rr.uniform(-.2, .2), zb - 0.05), (rr.uniform(-.3, .3), rr.uniform(-.3, .3), 1),
                             L * rr.uniform(0.6, 1.0), rr.uniform(0.06, 0.12), (rr.uniform(-.4, .4), rr.uniform(-.4, .4), 0), M_WEED,
@@ -974,7 +979,7 @@ def frog(loc, yaw, s=1.0):
     return root
 
 
-FROG = frog((-8.9, 3.9, WZ + 0.02), math.radians(-115), s=1.25)
+FROG = frog((-8.9, 3.9, WZ + 0.02), math.radians(-115), s=1.9)
 
 
 # ================================================================ export the stage
@@ -1027,8 +1032,8 @@ def water_render(splash_c=None):
     bump = nt.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 1.0; bump.inputs['Distance'].default_value = 1.0
     lk.new(h, bump.inputs['Height']); lk.new(bump.outputs['Normal'], bs.inputs['Normal'])
     bs.inputs['Base Color'].default_value = (1, 1, 1, 1); bs.inputs['Roughness'].default_value = 0.02
-    va = nt.new('ShaderNodeVolumeAbsorption'); va.inputs['Color'].default_value = (*lin('7fa874'), 1); va.inputs['Density'].default_value = 0.55
-    vs = nt.new('ShaderNodeVolumeScatter'); vs.inputs['Color'].default_value = (*lin('9ab88a'), 1); vs.inputs['Density'].default_value = 0.035
+    va = nt.new('ShaderNodeVolumeAbsorption'); va.inputs['Color'].default_value = (*lin('a9c88e'), 1); va.inputs['Density'].default_value = float(OPT.get('absorb', 0.2))
+    vs = nt.new('ShaderNodeVolumeScatter'); vs.inputs['Color'].default_value = (*lin('9ab88a'), 1); vs.inputs['Density'].default_value = float(OPT.get('scatter', 0.012))
     ad = nt.new('ShaderNodeAddShader'); lk.new(va.outputs[0], ad.inputs[0]); lk.new(vs.outputs[0], ad.inputs[1])
     lk.new(ad.outputs[0], nt['Material Output'].inputs['Volume'])
     # close the water into a slab so the volume has an inside
@@ -1076,7 +1081,7 @@ world = bpy.data.worlds.new('W'); world.use_nodes = True; scn.world = world
 wn, wl = world.node_tree.nodes, world.node_tree.links
 env = wn.new('ShaderNodeTexEnvironment'); env.image = bpy.data.images.load(os.path.join(PH, 'lakeside_sunrise_4k.hdr'))
 SUN_DIR = Vector((-0.86, 0.5, 0.0)).normalized()       # horizontal direction towards the sun (back-left)
-SUN_EL = math.radians(19)
+SUN_EL = math.radians(float(OPT.get('sunel', 25)))
 # the HDRI's own sun sits at u = 0.600 (found by scanning the image): rotate the sky so it lines up with ours
 u_h = 0.6002; phi = (u_h - 0.5) * TAU; d_h = Vector((-math.cos(phi), math.sin(phi), 0))
 rotz = math.atan2(d_h.y, d_h.x) - math.atan2(SUN_DIR.y, SUN_DIR.x)
@@ -1085,13 +1090,13 @@ wl.new(tc.outputs['Generated'], mp.inputs['Vector']); wl.new(mp.outputs['Vector'
 clamp = wn.new('ShaderNodeMix'); clamp.data_type = 'RGBA'; clamp.blend_type = 'DARKEN'; clamp.inputs['Factor'].default_value = 1.0
 clamp.inputs['B'].default_value = (6, 6, 6, 1)
 wl.new(env.outputs['Color'], clamp.inputs['A'])
-bg = wn['Background']; bg.inputs['Strength'].default_value = float(OPT.get('sky', 0.9))
+bg = wn['Background']; bg.inputs['Strength'].default_value = float(OPT.get('sky', 1.1))
 wl.new(clamp.outputs['Result'], bg.inputs['Color'])
 
 sun = bpy.data.objects.new('Sun', bpy.data.lights.new('Sun', 'SUN')); scn.collection.objects.link(sun)
 sdir = Vector((SUN_DIR.x * math.cos(SUN_EL), SUN_DIR.y * math.cos(SUN_EL), math.sin(SUN_EL)))
 sun.rotation_euler = (-sdir).to_track_quat('-Z', 'Y').to_euler()
-sun.data.energy = float(OPT.get('sun', 4.2)); sun.data.color = (1.0, 0.78, 0.52); sun.data.angle = math.radians(2.5)
+sun.data.energy = float(OPT.get('sun', 6.5)); sun.data.color = (1.0, 0.78, 0.52); sun.data.angle = math.radians(2.5)
 
 # dappled light: an unseen canopy of leaves between the sun and the pond's left side
 bpy.ops.mesh.primitive_plane_add(size=1); gobo = bpy.context.object; gobo.name = 'Canopy'
@@ -1378,6 +1383,9 @@ for shot in SHOTS:
     elif shot == 'low':  # the low three-quarter view from the front-right
         cam.location = (9.5, -8.5, 4.2); cam.data.angle_y = math.radians(30)
         cam.rotation_euler = (Vector((0, 0.8, 0.4)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
+    elif shot == 'cam':
+        cam.location = Vector(eval(OPT['cam'])); cam.data.angle_y = math.radians(float(OPT.get('fov', 30)))
+        cam.rotation_euler = (Vector(eval(OPT['tgt'])) - cam.location).to_track_quat('-Z', 'Y').to_euler()
     elif shot == 'splash':
         cam.location = Vector(eval(OPT.get('scam', '(1.2, -14.5, 2.6)'))); cam.data.angle_y = math.radians(float(OPT.get('sfov', 36)))
         cam.rotation_euler = (Vector(eval(OPT.get('stgt', '(-3.2, -2.6, 0.9)'))) - cam.location).to_track_quat('-Z', 'Y').to_euler()
