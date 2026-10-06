@@ -169,7 +169,7 @@ def curve_mesh(name, pts, radius, mat, res=16, bres=4, stage=True, handles='AUTO
 
 def text_mesh(name, body, size, mat, loc, rot_z=0.0, extrude=0.002, align='CENTER', font=None, bold=0.0, stage=True):
     cu = bpy.data.curves.new(name, 'FONT'); cu.body = body; cu.size = size; cu.extrude = extrude
-    cu.align_x = align; cu.align_y = 'CENTER'; cu.offset = bold; cu.resolution_u = 4
+    cu.align_x = align; cu.align_y = 'CENTER'; cu.offset = bold; cu.resolution_u = 3 if size > 0.3 else 2
     if font: cu.font = font
     tmp = bpy.data.objects.new(name + '_t', cu); scn.collection.objects.link(tmp)
     dg = bpy.context.evaluated_depsgraph_get()
@@ -244,13 +244,13 @@ def tex_vinyl():
     gr = sstep(1.96, 2.0, r) * (1 - sstep(5.08, 5.12, r))      # 1 inside the grooved area
     line = 1 - sstep(0.035, 0.045, np.abs(r - R))
     # fine ring ripple (several px period, a moire-free stand-in for the groove pitch) modulated by the music
-    ripple = 0.5 + 0.5 * np.sin(r * TAU / 0.022)
+    ripple = 0.5 + 0.5 * np.sin(r * TAU / 0.052)
     col = 0.030 + 0.016 * m * gr * (1 - gaps) + 0.004 * ripple * gr
     col = col * (1 - line) + 0.86 * line
     rough = (0.34 + 0.08 * m) * gr * (1 - gaps) + 0.12 * (gaps * gr + (1 - gr))
     rough = rough * (1 - line) + 0.42 * line
-    h = (ripple * 0.25 + m * 0.6) * gr * (1 - gaps) - 0.6 * gaps * gr + 0.6 * line
-    return np.clip(col, 0, 1), rough, normal_from_h(h, 1.6)
+    h = (ripple * 0.05 + m * 0.5) * gr * (1 - gaps) - 0.25 * gaps * gr + 0.3 * line
+    return np.clip(col, 0, 1), rough, normal_from_h(h, 1.0)
 
 
 def tex_label():
@@ -457,14 +457,17 @@ def build_deck(prefix, ox=0.0, ring_line=True):
         bmesh.ops.create_cube(bm, size=1, matrix=Matrix.Translation((aw.x + math.cos(a) * 0.44, aw.y + math.sin(a) * 0.44, PL_TOP + 0.08))
                               @ Matrix.Rotation(a, 4, 'Z') @ Matrix.Diagonal((0.36, 0.12, 0.12, 1)))
     P(bm_obj(prefix + 'AdaptorSpokes', bm, [ALU], smooth=0))
-    P(text_mesh(prefix + 'Badge', 'QUARTZ DIRECT DRIVE', 0.16, BLACK, (-3.2, 5.75, PL_TOP), font=FONT_B, extrude=0.002))
+    P(text_mesh(prefix + 'Badge', 'QUARTZ DIRECT DRIVE', 0.16, BLACK, (-3.2, 5.75, PL_TOP + 0.002), font=FONT_B, extrude=0.0))
     if ox:
         for o in parts: o.location.x += ox
     return parts, (Pv, Nd, sl)
 
 
 deck, (PIV, NEEDLE, STROBE) = build_deck('Deck')
-deck2, _ = build_deck('Deck2_', ox=-17.0)
+deck2 = []     # the second deck: linked copies of the first (shared meshes), without the small print
+for o in deck:
+    if any(t in o.name for t in ('Txt', 'Badge', 'LabelK', 'LabelR', 'LabelS', 'LabelB', 'Ticks')): continue
+    c = o.copy(); c.name = 'Deck2_' + o.name[4:]; scn.collection.objects.link(c); c.location.x -= 17.0; STAGE.append(c); deck2.append(c)
 
 
 # ================================================================ the mixer
@@ -600,12 +603,30 @@ def light(name, kind, loc, look, energy, color, size=None, spot=None, blend=0.5,
 
 
 light('Key', 'SPOT', (1.0, -3.0, 17), (0, 0.3, 0), 11000, (1.0, 0.84, 0.66), spot=46, blend=0.55, soft=1.4)
-light('SpotMagenta', 'SPOT', (-15, 11, 15), (-1, 0, 0), 26000, (1.0, 0.18, 0.62), spot=34, blend=0.45, soft=0.6)
-light('SpotCyan', 'SPOT', (16, 10, 14), (2, 1, 0), 22000, (0.15, 0.7, 1.0), spot=36, blend=0.45, soft=0.6)
-light('Softbox', 'AREA', (0, 20, 15), (0, 0, -1), 3500, (0.85, 0.9, 1.0), size=(30, 4))
-light('SoftboxWarm', 'AREA', (-6, 16, 10), (0, 0, -1), 900, (1.0, 0.75, 0.55), size=(10, 1.5))
-light('Fill', 'AREA', (4, -20, 10), (0, 0, 0), 900, (0.6, 0.7, 1.0), size=(14, 6), glossy=False)
-light('StrobeGlow', 'POINT', (STROBE.x + 0.5, STROBE.y + 0.5, PL_TOP + 0.3), (0, 0, 0), 60, (1.0, 0.35, 0.08), soft=0.2)
+light('SpotMagenta', 'SPOT', (-15, 11, 15), (-1, 0, 0), 26000, (1.0, 0.18, 0.62), spot=34, blend=0.45, soft=2.0)
+light('SpotCyan', 'SPOT', (16, 10, 14), (2, 1, 0), 22000, (0.15, 0.7, 1.0), spot=36, blend=0.45, soft=2.0)
+light('Fill', 'AREA', (4, -20, 10), (0, 0, 0), 1200, (0.6, 0.7, 1.0), size=(14, 6), glossy=False)
+light('StrobeGlow', 'POINT', (STROBE.x + 0.45, STROBE.y + 0.45, PL_TOP + 0.25), (0, 0, 0), 6, (1.0, 0.35, 0.08), soft=0.15)
+
+
+def panel(name, loc, look, size, strength, color):
+    """An emissive panel only reflections see (studio-style strip lights for the metal and the vinyl)."""
+    bm = bmesh.new(); bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=0.5)
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
+    o = bpy.data.objects.new(name, me); scn.collection.objects.link(o)
+    o.location = loc; o.scale = (size[0], size[1], 1)
+    o.rotation_euler = (Vector(loc) - Vector(look)).to_track_quat('Z', 'Y').to_euler()
+    m = mat(name, (0, 0, 0), 1.0, emit=color, estr=strength, spec=0.0); me.materials.append(m)
+    o.visible_camera = o.visible_diffuse = o.visible_shadow = o.visible_transmission = o.visible_volume_scatter = False
+    return o
+
+
+for k, y in enumerate((9.0, 13.5, 18.0)):     # long strip lights over the booth: the plinth's brushed highlights
+    panel('Strip%d' % k, (0, y, 19.0), (0, y - 14, 0), (46, 1.1), 7.0, (0.9, 0.95, 1.0))
+panel('Ceiling', (0, 14, 21.0), (0, 10, 0), (70, 30), 0.35, (0.75, 0.8, 1.0))
+panel('BackWall', (-6, 30, 6), (-6, 0, 2), (70, 16), 0.3, (0.7, 0.75, 1.0))
+panel('BackMagenta', (-22, 26, 8), (-6, 0, 0), (3, 14), 6.0, (1.0, 0.2, 0.65))
+panel('BackCyan', (14, 28, 8), (0, 0, 0), (3, 14), 6.0, (0.2, 0.7, 1.0))
 light('MixerGlow', 'AREA', (12.65, 0.0, MT + 1.4), (12.65, 0, 0), 120, (0.8, 0.4, 1.0), size=(4, 10), glossy=False)
 for sx, c in ((-17.5, (1.0, 0.2, 0.6)), (19.5, (0.2, 0.6, 1.0))):
     light('SpkRim', 'SPOT', (sx, 4, 9), (sx, 10.5, -4), 9000, c, spot=40, blend=0.6, soft=0.5)
