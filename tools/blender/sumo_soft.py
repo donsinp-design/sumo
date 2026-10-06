@@ -627,33 +627,92 @@ def apply_pose(rg, spec, hips_off=Vector()):
         bpy.context.view_layer.update()
 def lean(deg):
     a = math.radians(deg); return ((0, -math.sin(a), math.cos(a)), (0, -math.cos(a), -math.sin(a)))
-def stance_spec():
-    sp = {'hips': lean(4), 'spine': lean(9), 'chest': lean(13), 'neck': lean(24), 'head': lean(2)}
+def leg(sp, s, ank, pole, foot, foot_up=(0, 0, 1)):
+    sd = '.L' if s > 0 else '.R'; ank, pole = Vector(ank), Vector(pole)
+    lt = (rig_data.bones['thigh' + sd].length, rig_data.bones['shin' + sd].length)
+    sp['thigh' + sd] = (lambda h, ank=ank, pole=pole, lt=lt: (two_bone(h, ank, lt[0], lt[1], pole) - h, pole))
+    sp['shin' + sd] = (lambda h, ank=ank, pole=pole: (ank - h, pole))
+    sp['foot' + sd] = (foot, foot_up)
+def arm(sp, s, sh, ua, fa, hd, hz):
+    sd = '.L' if s > 0 else '.R'
+    sp['shoulder' + sd] = (sh, None); sp['upper_arm' + sd] = (ua, None); sp['forearm' + sd] = (fa, None); sp['hand' + sd] = (hd, hz)
+# each pose: (spec builder taking a ground offset dz, hips offset); the offset is solved so the lowest skin point sits on the floor
+def stance_spec(dz=0.0):
+    # shiko-dachi-like ready stance: feet wide and turned out, knees over the toes, hips low, back nearly upright,
+    # arms relaxed forward and out, open hands palm-down at belly height, head up looking ahead
+    sp = {'hips': lean(3), 'spine': lean(8), 'chest': lean(10), 'neck': lean(6), 'head': lean(-4)}
     for s in S2:
-        sd = '.L' if s > 0 else '.R'
-        lt = (rig_data.bones['thigh' + sd].length, rig_data.bones['shin' + sd].length)
-        ank = Vector((s * 0.52, 0.0, 0.11)); pole = Vector((s * 0.8, -0.6, 0.0))
-        sp['thigh' + sd] = (lambda h, ank=ank, pole=pole, lt=lt: (two_bone(h, ank, lt[0], lt[1], pole) - h, pole))
-        sp['shin' + sd] = (lambda h, ank=ank, pole=pole: (ank - h, pole))
-        sp['foot' + sd] = ((s * 0.42, -0.86, -0.28), (0, 0, 1))
-        sp['shoulder' + sd] = ((s * 0.93, -0.3, 0.05), None)
-        sp['upper_arm' + sd] = ((s * 0.5, -0.72, -0.48), None)
-        sp['forearm' + sd] = ((s * 0.16, -0.98, -0.02), None)
-        sp['hand' + sd] = ((s * 0.06, -0.78, 0.6), (-s, 0, 0))
+        out = math.radians(38)
+        leg(sp, s, (s * 0.56, 0.02, 0.11 + dz), (s * math.sin(out), -math.cos(out), 0.05),
+            (s * 0.55 * math.sin(out) / 0.6, -0.55 * math.cos(out) / 0.6, -0.3))
+        arm(sp, s, (s * 0.95, -0.28, -0.08), (s * 0.42, -0.42, -0.80), (s * 0.12, -0.95, -0.28),
+            (s * 0.02, -0.97, -0.25), (-s, 0, 0))
     return sp
-STANCE_OFF = Vector((0, 0.03, -0.2))
+STANCE_OFF = Vector((0, 0.03, -0.22))
+def push_spec(dz=0.0):
+    # oshi: driving forward. Torso ~35 degrees forward, left foot planted ahead with the knee bent over it, right leg
+    # long and nearly straight behind on the ball of the foot, both arms out at chest height, palms forward, head up
+    sp = {'hips': lean(22), 'spine': lean(33), 'chest': lean(38), 'neck': lean(10), 'head': lean(-6)}
+    leg(sp, 1, (0.30, -0.36, 0.11 + dz), (0.25, -0.95, 0.1), (0.18, -0.93, -0.32))
+    leg(sp, -1, (-0.27, 0.50, 0.17 + dz), (-0.15, -0.6, -0.8), (-0.05, -0.5, -0.86), (0, -1, 0.3))
+    for s in S2:
+        arm(sp, s, (s * 0.88, -0.45, 0.12), (s * 0.30, -0.92, -0.05), (s * 0.03, -0.97, 0.22),
+            (-s * 0.04, -0.35, 0.94), (-s, 0, 0))
+    return sp
+PUSH_OFF = Vector((0, -0.12, -0.14))
+def charge_spec(dz=0.0):
+    # tachiai / run: ~45 degrees forward and falling into the step. Left thigh driven up and forward, right leg long
+    # behind pushing off the toes; arms bent and pumping low (right forward, left back), head slightly down
+    sp = {'hips': lean(32), 'spine': lean(45), 'chest': lean(50), 'neck': lean(30), 'head': lean(12)}
+    leg(sp, 1, (0.29, -0.40, 0.30 + dz), (0.2, -0.85, 0.45), (0.12, -0.75, -0.65))
+    leg(sp, -1, (-0.25, 0.55, 0.20 + dz), (-0.1, -0.6, -0.8), (-0.03, -0.35, -0.94), (0, -1, 0.3))
+    arm(sp, -1, (-0.85, -0.5, 0.0), (-0.22, -0.80, -0.56), (0.12, -0.92, 0.36), (0.1, -0.98, 0.15), (0, 0, 1))
+    arm(sp, 1, (0.92, -0.25, -0.1), (0.38, 0.40, -0.83), (0.10, -0.70, -0.70), (0.05, -0.85, -0.52), (0, 0, 1))
+    return sp
+CHARGE_OFF = Vector((0, -0.16, -0.08))
 
-apply_pose(rig, stance_spec(), STANCE_OFF)
+def floor_z():
+    bpy.context.view_layer.update()
+    ev = hero.evaluated_get(bpy.context.evaluated_depsgraph_get()); me_ = ev.to_mesh()
+    z = np.empty(len(me_.vertices) * 3); me_.vertices.foreach_get('co', z); ev.to_mesh_clear()
+    return float(z.reshape(-1, 3)[:, 2].min())
+def pose_grounded(rg, fn, off):
+    dz = 0.0
+    for _ in range(3):
+        apply_pose(rg, fn(dz), off + Vector((0, 0, dz)))
+        if rg != rig: break
+        dz -= floor_z()
+    return dz
+POSES = [('stance', stance_spec, STANCE_OFF), ('push', push_spec, PUSH_OFF), ('charge', charge_spec, CHARGE_OFF)]
+POSE_DZ = {}
+def bake_action(name, fn, off):
+    POSE_DZ[name] = pose_grounded(rig, fn, off)
+    act = bpy.data.actions.new(name); act.use_fake_user = True
+    rig.animation_data_create(); rig.animation_data.action = act
+    for pb in rig.pose.bones:
+        pb.rotation_mode = 'QUATERNION'
+        for f in (1, 2): pb.keyframe_insert('location', frame=f); pb.keyframe_insert('rotation_quaternion', frame=f)
+    rig.animation_data.action = None
+    print('pose', name, 'ground dz %.3f' % POSE_DZ[name])
+    return act
+def export_anim(path):                                     # every action baked so far goes out as its own clip
+    for o in scn.objects: o.select_set(o in (hero, rig))
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_skins=True,
+                              export_animations=True, export_animation_mode='ACTIONS', export_apply=False,
+                              export_rest_position_armature=True, export_yup=True)
+
 # the stance as a one-frame clip ("stance") for the game to pose the skinned model with
-act = bpy.data.actions.new('stance'); rig.animation_data_create(); rig.animation_data.action = act
-for pb in rig.pose.bones:
-    pb.rotation_mode = 'QUATERNION'
-    for f in (1, 2): pb.keyframe_insert('location', frame=f); pb.keyframe_insert('rotation_quaternion', frame=f)
-for o in scn.objects: o.select_set(o in (hero, rig))
-bpy.context.view_layer.objects.active = rig
-bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, 'sumo_soft_stance.glb'), export_format='GLB', use_selection=True, export_skins=True,
-                          export_animations=True, export_apply=False, export_rest_position_armature=True, export_yup=True)
+ACTS = {'stance': bake_action(*POSES[0])}
+rig.animation_data.action = ACTS['stance']
+export_anim(os.path.join(OUT, 'sumo_soft_stance.glb'))
+# then all three clips (stance, push, charge) in one file
 rig.animation_data.action = None
+for p_ in POSES[1:]: ACTS[p_[0]] = bake_action(*p_)
+rig.animation_data.action = ACTS['stance']
+export_anim(os.path.join(OUT, 'sumo_soft_poses.glb'))
+rig.animation_data.action = None
+apply_pose(rig, stance_spec(POSE_DZ['stance']), STANCE_OFF + Vector((0, 0, POSE_DZ['stance'])))
 
 # ---------------------------------------------------------------- preview: two of them squaring up, soft pastel light
 if RENDER:
@@ -669,7 +728,7 @@ if RENDER:
     hero2.parent = rig2; hero2.modifiers['Armature'].object = rig2
     for i, m_ in enumerate(hero2.data.materials):
         if m_ == MAW: hero2.data.materials[i] = MAW_RED
-    apply_pose(rig2, stance_spec(), STANCE_OFF)
+    apply_pose(rig2, stance_spec(POSE_DZ['stance']), STANCE_OFF + Vector((0, 0, POSE_DZ['stance'])))
     rig.location = (0, -0.8, 0); rig.rotation_euler = (0, 0, math.pi)     # hero: faces +Y, back to the camera
     rig2.location = (0, 0.8, 0)
     cam = bpy.data.objects.new('Cam', bpy.data.cameras.new('Cam')); scn.collection.objects.link(cam); scn.camera = cam
@@ -681,4 +740,21 @@ if RENDER:
     scn.render.resolution_x = scn.render.resolution_y = RES
     scn.view_settings.view_transform = 'Standard'
     scn.render.filepath = os.path.join(OUT, 'prev_stance.png'); bpy.ops.render.render(write_still=True)
+    # the three clips side by side, seen 3/4 from front-right and above
+    for o in (hero2, rig2): bpy.data.objects.remove(o)
+    rig.location = (0, 0, 0); rig.rotation_euler = (0, 0, 0)
+    el, az, dist = math.radians(30), math.radians(48), 10.5
+    right = Vector((math.cos(az), math.sin(az), 0)); tgt = Vector((0, 0, 0.72))
+    cam.location = tgt + Vector((dist * math.cos(el) * math.sin(az), -dist * math.cos(el) * math.cos(az), dist * math.sin(el)))
+    cam.rotation_euler = (tgt - cam.location).to_track_quat('-Z', 'Y').to_euler(); cam.data.lens = 50
+    for i, (nm, fn, off) in enumerate(POSES):
+        if i == 0: rg, hr = rig, hero
+        else:
+            rg = rig.copy(); scn.collection.objects.link(rg)
+            hr = hero.copy(); hr.data = hero.data.copy(); scn.collection.objects.link(hr); hr.parent = rg; hr.modifiers['Armature'].object = rg
+        rg.animation_data_create(); rg.animation_data.action = ACTS[nm]
+        rg.location = right * (2.05 * (i - 1))
+    scn.frame_set(1)
+    scn.render.resolution_x, scn.render.resolution_y = 1200, 500
+    scn.render.filepath = os.path.join(OUT, 'prev_poses.png'); bpy.ops.render.render(write_still=True)
 print('done')
