@@ -1,7 +1,7 @@
 # TAIKO DRUM stage, fully modelled: two sumos fight on the cowhide head of a giant nagado-daiko standing upright on its
 # wooden stand (dai) on a polished plank stage: rolled-over hide nailed with two rows of iron byou, a lacquered keyaki
-# barrel with brass kan rings, a painted mitsudomoe in the middle; bachi, a hachimaki, a smaller drum, a nobori banner and
-# a string of glowing paper lanterns around, under one warm stage spot in a dark hall. Built by script (Blender 4.2).
+# barrel with brass kan rings, a painted mitsudomoe in the middle; bachi, a hachimaki, a nobori banner and a string of
+# glowing paper lanterns around, under one warm stage spot in a dark hall. Built by script (Blender 4.2).
 #   python tools/blender/stage_taiko.py [out_dir] [shot=game|low ...] [fast] [noexport] [norender] [nochars]
 # Writes <out_dir>/taiko.glb (stage only: Z up, metres, origin at the head centre, textures packed <= 1024 px, JPEG)
 # and <out_dir>/ex_<shot>.png with the game's masked sumos + gyoji imported from scratchpad/stage.
@@ -9,6 +9,7 @@
 # Game contract (public/js/config.js RING_R = 4.6, stages.js taiko()): the drum head has radius 5.3, top at Z = 0 and
 # perfectly flat out to r 4.95 where the hide rolls over the bearing edge (relief only in the maps). The fighting circle
 # is a thin painted line at r 4.6, where the shaved playing area meets the thicker un-shaved rim of the hide.
+# Only what the game camera sees is built (no bottom head); only ex_game.png is rendered by default.
 # Scale: a 2-shaku drum (head 60 cm) x17.7; the barrel is 9 m long and the floor is at Z = -11.4.
 import bpy, bmesh, math, sys, os, time
 import numpy as np
@@ -21,7 +22,7 @@ FLAGW = {'fast', 'noexport', 'norender', 'nochars'}
 ARGS = [a for a in sys.argv[sys.argv.index('--') + 1 if '--' in sys.argv else 1:] if '=' not in a and a not in FLAGW and not a.endswith('.py')]
 OUT = ARGS[0] if ARGS else SCR + '/taiko'
 os.makedirs(OUT, exist_ok=True)
-SHOTS = [a.split('=', 1)[1] for a in sys.argv if a.startswith('shot=')] or ['game', 'low']
+SHOTS = [a.split('=', 1)[1] for a in sys.argv if a.startswith('shot=')] or ['game']
 FAST = 'fast' in sys.argv
 T0 = time.time()
 def log(*a): print('[taiko %5.1fs]' % (time.time() - T0), *a, flush=True)
@@ -490,7 +491,6 @@ def flap_maps():
 log('materials')
 SKIN_A = skin_maps('crest', True)
 mHide = skin_material('crest', SKIN_A)
-mHidePlain = skin_material('plain', skin_maps('plain', False, 1024, 50))
 mFlap, nt, bs = principled('mHideFlap', lin('a8773e'), 0.0, 0.42, **{'Subsurface Weight': 0.35, 'Subsurface Radius': (0.08, 0.04, 0.015)})
 hook_maps(nt, bs, *flap_maps(), mapping=(6, 1, 1))
 RW = PH + '/rosewood_veneer1/'
@@ -515,10 +515,10 @@ mBlackIron, nt, bs = principled('mBlackIron', lin('151413'), 0.8, 0.45)
 
 
 # ================================================================ DRUM builder
-def drum(tag, k, at, crest=True, kan_angles=(math.radians(-42), math.radians(138)), ntack=64, q=1.0, bottom_tacks=True):
+def drum(tag, k, at, crest=True, kan_angles=(math.radians(-42), math.radians(138)), ntack=64, q=1.0, bottom_tacks=True, bottom=True):
     log('drum', tag)
     objs = []
-    hide = mHide if crest else mHidePlain
+    hide = mHide
     # head: flat playing surface, the hide rolling over the bearing edge
     rings = [1.6, 3.4, 4.6, FLAT]
     arc = [(FLAT + ROLL * math.sin(a), -ROLL + ROLL * math.cos(a)) for a in np.linspace(0, math.pi / 2, 7)[1:]]
@@ -547,9 +547,10 @@ def drum(tag, k, at, crest=True, kan_angles=(math.radians(-42), math.radians(138
     zs = np.linspace(-ROLL - 0.25, -LB + ROLL + 0.25, int(24 * q) + 2)
     barrel = revolve('barrel_' + tag, [(float(rb(z)), float(z)) for z in zs], int(128 * q) // 8 * 8, mat=mBarrel); objs.append(barrel)
     # bottom head (mirrored)
-    hb_ = revolve('head_bottom_' + tag, [(0, -LB)] + [(FLAT, -LB)] + [(r, -LB - z) for r, z in arc], 64, mat=hide, uv_planar=LE_S)
-    bm = bmesh.new(); bm.from_mesh(hb_.data); bmesh.ops.reverse_faces(bm, faces=bm.faces); bm.to_mesh(hb_.data); bm.free()
-    objs.append(hb_); objs.append(mirrored(flap, 'flap_bottom_' + tag))
+    if bottom:
+        hb_ = revolve('head_bottom_' + tag, [(0, -LB)] + [(FLAT, -LB)] + [(r, -LB - z) for r, z in arc], 64, mat=hide, uv_planar=LE_S)
+        bm = bmesh.new(); bm.from_mesh(hb_.data); bmesh.ops.reverse_faces(bm, faces=bm.faces); bm.to_mesh(hb_.data); bm.free()
+        objs.append(hb_); objs.append(mirrored(flap, 'flap_bottom_' + tag))
     # byou: two staggered rows of dome-headed iron tacks top and bottom
     tb = Builder()
     TV, TF = lathe_template([(0, 0.078), (0.12, 0.07), (0.19, 0.046), (0.232, 0.014), (0.225, -0.01)], 10)
@@ -591,9 +592,7 @@ def drum(tag, k, at, crest=True, kan_angles=(math.radians(-42), math.radians(138
     xform(objs, k, at)
     return objs
 
-DRUM = drum('main', 1.0, (0, 0, 0))
-SMALL_AT = (-14.2, 3.2, FZ + (LB + STAND_H) * 0.42)
-DRUM_S = drum('small', 0.42, SMALL_AT, crest=False, kan_angles=(math.radians(-20), math.radians(160)), ntack=40, q=0.55, bottom_tacks=False)
+DRUM = drum('main', 1.0, (0, 0, 0), bottom_tacks=False, bottom=False)
 
 
 # ================================================================ FLOOR (polished stage planks)
@@ -877,7 +876,7 @@ def cam_setup(shot):
 def render(shot):
     cam_setup(shot)
     scn.render.engine = 'CYCLES'; scn.cycles.device = 'CPU'
-    scn.cycles.samples = 16 if FAST else 48; scn.cycles.use_denoising = True; scn.cycles.use_adaptive_sampling = True
+    scn.cycles.samples = 16 if FAST else 32; scn.cycles.use_denoising = True; scn.cycles.use_adaptive_sampling = True
     scn.cycles.max_bounces = 8; scn.cycles.glossy_bounces = 4; scn.cycles.transmission_bounces = 4; scn.cycles.transparent_max_bounces = 8
     scn.cycles.diffuse_bounces = 3; scn.cycles.caustics_reflective = False; scn.cycles.caustics_refractive = False
     scn.cycles.blur_glossy = 1.0; scn.cycles.sample_clamp_indirect = 8.0
