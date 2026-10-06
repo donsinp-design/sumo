@@ -355,7 +355,7 @@ def build_crumb_maps():
 def build_cake():
     tc, tr, tn = build_top_maps()
     M_TOP = pmat('m_top', img=image('top_col', tc), ormimg=image('top_orm', orm(tr), True), nimg=image('top_nrm', tn, True),
-                 sss=0.15, sss_r=(1.0, 0.75, 0.6), sss_s=0.015, nstr=2.0)
+                 sss=0.15, sss_r=(1.0, 0.75, 0.6), sss_s=0.015, nstr=1.6)
     sc, sr, sn = build_side_maps()
     M_SIDE = pmat('m_side', img=image('side_col', sc), ormimg=image('side_orm', orm(sr), True), nimg=image('side_nrm', sn, True),
                   sss=0.35, sss_r=(1.0, 0.75, 0.6), sss_s=0.05)
@@ -1009,7 +1009,7 @@ def build_hat_gift_confetti_balloons():
         # curled ribbon down to the table
         end = np.array([x * 0.82, y - 2.0, TZ]); pts = []
         for t in np.linspace(0, 1, 70):
-            p = knot * (1 - t) + end * t + np.array([0.18 * math.sin(t * 38 + k), 0.18 * math.cos(t * 38 + k), 0]) * ss(0.0, 0.1, t) * (1 - t * 0.5)
+            p = knot * (1 - t) + end * t + np.array([0.12 * math.sin(t * 30 + k), 0.12 * math.cos(t * 30 + k), 0]) * ss(0.0, 0.1, t) * (1 - t * 0.8)
             p[2] += 0.6 * math.sin(math.pi * t) * 0.0
             pts.append(p)
         V, F = tube(pts[::2], 0.02, sides=4, rz=1.0); sm_.add(V, F)
@@ -1019,16 +1019,16 @@ def build_hat_gift_confetti_balloons():
 
 # ================================================================ background room (render only)
 def build_room():
-    FLR = pmat('m_floor', '6a4028', rough=0.35)
-    mk('floor', [(-200, -200, TZ - 9), (200, -200, TZ - 9), (200, 200, TZ - 9), (-200, 200, TZ - 9)], [(0, 1, 2, 3)], None, FLR, coll=BG)
-    WAL = pmat('m_wall', 'f0c0b4', rough=0.8)
-    mk('wall', [(-200, 48, TZ - 9), (200, 48, TZ - 9), (200, 48, 80), (-200, 48, 80)], [(0, 1, 2, 3)], None, WAL, coll=BG)
+    FLR = pmat('m_floor', '9a6440', rough=0.3)
+    mk('floor', [(-200, -200, TZ - 7), (200, -200, TZ - 7), (200, 200, TZ - 7), (-200, 200, TZ - 7)], [(0, 1, 2, 3)], None, FLR, coll=BG)
+    WAL = pmat('m_wall', 'f6cfc2', rough=0.8)
+    mk('wall', [(-200, 40, TZ - 9), (200, 40, TZ - 9), (200, 40, 80), (-200, 40, 80)], [(0, 1, 2, 3)], None, WAL, coll=BG)
     LB = pmat('m_bulb', 'ffd090', emit='ffb870', emit_s=30.0)
     rb_ = np.random.default_rng(170)
     for row in range(3):
         for k in range(46):
             x = -70 + k * 3.1 + rb_.uniform(-0.6, 0.6); z = 6 + row * 7 + 4 * math.cos(k * 0.45 + row) + rb_.uniform(-0.4, 0.4)
-            bpy.ops.mesh.primitive_uv_sphere_add(segments=10, ring_count=5, radius=0.35, location=(x, 46.5, z))
+            bpy.ops.mesh.primitive_uv_sphere_add(segments=10, ring_count=5, radius=0.35, location=(x, 38.5, z))
             o = bpy.context.object; o.data.materials.append(LB)
             for c_ in o.users_collection: c_.objects.unlink(o)
             BG.objects.link(o)
@@ -1036,8 +1036,8 @@ def build_room():
     mg = Merge(); fc = ['ff5a7a', '5ac8ff', 'ffd23a', '7ae07a', 'b07aff']
     Mf = [pmat('m_flag_%d' % i, c_, rough=0.7, sheen=0.4) for i, c_ in enumerate(fc)]; mgs = [Merge() for _ in Mf]
     for k in range(30):
-        x = -45 + k * 3.0; z = 30 - 5 * math.sin((k / 29) * math.pi)
-        V = [(x - 1.2, 45, z), (x + 1.2, 45, z), (x, 45, z - 2.4)]; mgs[k % 5].add(V, [(0, 1, 2)])
+        x = -45 + k * 3.0; z = 17 - 4 * math.sin((k / 29) * math.pi)
+        V = [(x - 1.2, 39, z), (x + 1.2, 39, z), (x, 39, z - 2.4)]; mgs[k % 5].add(V, [(0, 1, 2)])
     for i, m in enumerate(Mf): mgs[i].build('bunting_%d' % i, m, coll=BG, smooth=False)
 
 
@@ -1175,7 +1175,7 @@ def setup_light():
     sp.rotation_euler = (Vector((0.3, 0.6, -1.0)) - sp.location).to_track_quat('-Z', 'Y').to_euler()
     area('Fill', (17, -16, 8), (0, 0, -1), 1800, 18, (0.9, 0.9, 1.0))
     area('Rim', (1, 17, 18), (0, 0, 0), 26000, 12, (1.0, 0.9, 0.82))
-    area('Bounce', (0, 0, TZ - 8), (0, 0, 0), 0, 1, (1, 1, 1))
+    area('Wall', (0, 20, 14), (0, 40, 8), 30000, 20, (1.0, 0.75, 0.55))
     for i, p in enumerate(FLAMES):
         c = bpy.data.objects.new('CandleL%d' % i, bpy.data.lights.new('CandleL%d' % i, 'POINT')); scn.collection.objects.link(c)
         c.data.energy = 160; c.data.color = (1.0, 0.58, 0.26); c.data.shadow_soft_size = 0.06; c.location = Vector(p)
