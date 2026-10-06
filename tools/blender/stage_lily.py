@@ -52,6 +52,8 @@ FLAT = R + 0.25         # the pad is flat out to here, then its rim curls up
 NOTCH_A = math.radians(118)   # the notch points back-left
 NOTCH_RN = R + 0.14     # notch apex (outside the fighting circle)
 NOTCH_TH = math.radians(24)   # half-angle of the V
+SPL_A = math.radians(-140); SPL_R = RD + 1.75   # the splash shot: where the thrown sumo hits the water (front-left)
+SPL_C = Vector((SPL_R * math.cos(SPL_A), SPL_R * math.sin(SPL_A), WZ))
 
 
 # ================================================================ helpers
@@ -475,8 +477,7 @@ def build_pad(name, padR, mats, segs, top_rings, rim_rings, ztop, under, notch_a
         rings.append(ring); kinds.append(z == 'top')
     for k in range(len(rings) - 1):
         A, B = rings[k], rings[k + 1]
-        mi = 0 if (kinds[k] and (kinds[k + 1] or k + 1 == len(prof) - len(under))) else 1
-        if kinds[k] and not kinds[k + 1]: mi = 0     # rounding over the lip is still the top skin
+        mi = 0 if kinds[k] else 1     # (rounding over the lip is still the top skin)
         for j in range(segs):
             if len(A) == 1: f = bm.faces.new((A[0], B[j], B[j + 1]))
             elif len(B) == 1: f = bm.faces.new((A[j], B[0], A[j + 1]))
@@ -733,12 +734,12 @@ def ribbon(name, base, dirv, L, w0, bend, mat, segs=7, twist=0.0, sway=(0, 0), w
 def merge(name, objs, mats=None):
     """Join a list of mesh objects into one (keeps their materials)."""
     if not objs: return None
+    for x in objs[1:]:
+        if x in STAGE: STAGE.remove(x)
     bpy.ops.object.select_all(action='DESELECT')
     for o in objs: o.select_set(True)
     bpy.context.view_layer.objects.active = objs[0]
-    bpy.ops.object.join(); o = bpy.context.object; o.name = name
-    for x in objs[1:]:
-        if x in STAGE: STAGE.remove(x)
+    bpy.ops.object.join(); o = bpy.context.view_layer.objects.active; o.name = name
     return o
 
 
@@ -805,8 +806,6 @@ def lily_flower(name, loc, size, openness=1.0, seed=0, rot=0.0):
             me = petal_mesh(L, W, 0.35, 0.10 - 0.05 * wi)
             M = Matrix.Translation((0, 0, 0.02 * wi * size)) @ Matrix.Rotation(a, 4, 'Z') @ Matrix.Translation((size * 0.08, 0, 0)) \
                 @ Matrix.Rotation(-el + rr.uniform(-0.06, 0.06), 4, 'Y') @ Matrix.Rotation(rr.uniform(-0.08, 0.08), 4, 'X')
-            if wi == 0:
-                o_bm = bmesh.new()
             add_me(bm if wi else BM_SEPAL, me, M); bpy.data.meshes.remove(me)
     o = bm_obj(name + '_petals', bm, [M_PETAL], smooth=80)
     o2 = bm_obj(name + '_sepals', BM_SEPAL.copy(), [M_SEPAL], smooth=80); BM_SEPAL.clear()
@@ -820,7 +819,6 @@ def lily_flower(name, loc, size, openness=1.0, seed=0, rot=0.0):
         base = Vector((r0 * math.cos(a), r0 * math.sin(a), size * 0.1))
         tip = base + Vector((math.cos(a) * h * lean * 0.6, math.sin(a) * h * lean * 0.6, h))
         mid = (base + tip) / 2 + Vector((math.cos(a), math.sin(a), 0)) * h * 0.12
-        b2 = bmesh.new()
         s_ = ribbon('stm', base, (tip - base), (tip - base).length, size * 0.035, mid - (base + tip) / 2, M_STAMEN, segs=3, stage=False)
         add_me(hb, s_.data, Matrix()); bpy.data.objects.remove(s_)
     o3 = bm_obj(name + '_heart', hb, [M_STAMEN], smooth=80)
@@ -902,7 +900,7 @@ def dragonfly(loc, yaw, s=1.0):
         z = 0.05 + k * 0.06; r = 0.035 - 0.0018 * k
         prof += [(r * 1.08, z), (r * 0.92, z + 0.05)]
     prof += [(0.02, 0.66), (0, 0.68)]
-    ab = lathe('DF_abdomen', [(r * s, z * s) for r, z in prof], [M_DFLY], segs=10); ab.rotation_euler = (math.pi / 2 + 0.06, 0, 0)
+    ab = lathe('DF_abdomen', [(r * s, z * s) for r, z in prof], [M_DFLY], segs=10); ab.rotation_euler = (-math.pi / 2 - 0.06, 0, 0)
     th = ellipsoid('DF_thorax', (0.07 * s, 0.11 * s, 0.075 * s), M_DFLY, 14, 8, loc=(0, -0.03 * s, 0.01 * s))
     hd = ellipsoid('DF_head', (0.05 * s, 0.04 * s, 0.045 * s), M_DFLY, 12, 8, loc=(0, -0.155 * s, 0.015 * s))
     e1 = ellipsoid('DF_eyeL', (0.05 * s, 0.05 * s, 0.05 * s), M_DEYE, 14, 8, loc=(0.035 * s, -0.17 * s, 0.035 * s))
@@ -934,7 +932,7 @@ def dragonfly(loc, yaw, s=1.0):
     return root, parts
 
 
-DFLY, DFLY_PARTS = dragonfly((6.3, -2.6, 1.9), math.radians(-35), s=2.6)
+DFLY, DFLY_PARTS = dragonfly((6.6, -2.4, 1.7), math.radians(-35), s=1.8)
 
 
 # ================================================================ frog
@@ -942,7 +940,7 @@ def frog(loc, yaw, s=1.0):
     mb = bpy.data.metaballs.new('FrogMB'); mb.resolution = 0.035 * s; mb.render_resolution = 0.035 * s; mb.threshold = 0.6
     def el(co, rad, sz=(1, 1, 1), rot=None):
         e = mb.elements.new(); e.type = 'ELLIPSOID'; e.co = Vector(co) * s; e.radius = rad * s
-        e.size_x, e.size_y, e.size_z = [v * rad * s for v in sz]
+        e.size_x, e.size_y, e.size_z = sz
         if rot: e.rotation = Euler(rot).to_quaternion()
     el((0, 0.05, 0.22), 0.3, (0.95, 1.25, 0.62), (-0.25, 0, 0))     # body
     el((0, -0.26, 0.3), 0.24, (1.0, 0.85, 0.55), (0.1, 0, 0))       # head
@@ -1038,7 +1036,7 @@ def water_render(splash_c=None):
     WATER.visible_shadow = False
 
 
-water_render()
+water_render(SPL_C if SPLASH else None)
 # the pad: waxy sheen micro-bumps, a little translucency under the sun
 for mname in ('PadTop', 'PadSmall', 'PadOld'):
     nt, lk = nodes(MATS[mname]); bs = BSDF[mname]
@@ -1122,13 +1120,10 @@ gobo.data.materials.append(gm)
 gobo.visible_camera = gobo.visible_glossy = gobo.visible_diffuse = gobo.visible_transmission = False
 
 # warm bounce from the low sun off the water onto the undersides
-fill = bpy.data.objects.new('Bounce', bpy.data.lights.new('Bounce', 'AREA')); scn.collection.objects.link(fill)
-fill.data.energy = 900; fill.data.color = (1.0, 0.85, 0.65); fill.data.size = 30; fill.location = (0, 0, -6)
-fill.rotation_euler = (0, 0, 0); fill.rotation_euler = Vector((0, 0, 1)).to_track_quat('-Z', 'Y').to_euler()
-fill.data.shape = 'DISK'; fill.visible_glossy = False
-fill.rotation_euler = Vector((0, 0, 1)).to_track_quat('-Z', 'Y').to_euler()
-fill.location = (0, 0, -0.5); fill.rotation_euler = (math.pi, 0, 0)   # facing up from just under the pads
-fill.data.energy = float(OPT.get('bounce', 0)); fill.hide_render = fill.data.energy <= 0
+if float(OPT.get('bounce', 0)) > 0:
+    fill = bpy.data.objects.new('Bounce', bpy.data.lights.new('Bounce', 'AREA')); scn.collection.objects.link(fill)
+    fill.data.energy = float(OPT['bounce']); fill.data.color = (1.0, 0.85, 0.65); fill.data.size = 30; fill.data.shape = 'DISK'
+    fill.location = (0, 0, -0.5); fill.rotation_euler = (math.pi, 0, 0); fill.visible_glossy = False   # facing up off the water
 
 
 # ================================================================ characters (as stage_render.py)
@@ -1207,9 +1202,6 @@ def head_frame(rig, roots):
     return M.translation + up * 0.11 * roots[0].scale[0], fwd, up
 
 
-# the splash: where the thrown sumo hits the water (front-left of the pad)
-SPL_A = math.radians(-140); SPL_R = RD + 1.75
-SPL_C = Vector((SPL_R * math.cos(SPL_A), SPL_R * math.sin(SPL_A), WZ))
 
 
 def build_splash(c):
@@ -1361,11 +1353,6 @@ if not NOCHARS:
         mask('kitsune', Vector((GX, GY, main_z(GX, GY) + 1.52 * 1.5)) + gf * 0.02, gf, Vector((0, 0, 1)), 1.5 * 0.62)
 if SPLASH:
     SPL = build_splash(SPL_C)
-    # rebuild the water ripples with the impact's rings
-    nt, lk = nodes(M_WATER)
-    for n in list(nt):
-        if n.type in ('MATH', 'SEPXYZ', 'NEW_GEOMETRY', 'BUMP', 'TEX_NOISE', 'VOLUME_ABSORPTION', 'SCATTER', 'ADD_SHADER'): nt.remove(n)
-    WATER.modifiers.clear(); water_render(SPL_C)
 
 
 # ================================================================ cameras & render
