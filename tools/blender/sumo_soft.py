@@ -81,16 +81,16 @@ def limb(a, b, ra, rb, caps=True):
     if caps: ell(a, (ra, ra, ra)); ell(b, (rb, rb, rb))
 
 # torso: one big round belly, a broad chest/back, a full seat (no cleft)
-ell((0, 0.04, 0.86), (0.395, 0.26, 0.25))           # hips and seat
-ell((0, -0.07, 1.01), (0.41, 0.38, 0.36))           # the belly: big and round
-ell((0, -0.15, 0.9), (0.32, 0.25, 0.18))            # lower belly, hanging toward the belt
-ell((0, 0.0, 1.25), (0.39, 0.29, 0.27))             # chest and back in one
-ell((0, 0.02, 1.06), (0.425, 0.29, 0.28))           # waist: fills between belly, back and hips
+# fat and firm: one solid round mochi of a trunk (no sag, nothing hanging), full round back and sides, wide hips
+ell((0, 0.03, 0.86), (0.42, 0.29, 0.26))            # wide hips and a full seat
+ell((0, -0.03, 1.06), (0.44, 0.40, 0.42))           # the core: round all the way round
+ell((0, -0.11, 1.02), (0.38, 0.36, 0.34))           # the belly: high, full, tight
+ell((0, 0.01, 1.27), (0.41, 0.31, 0.27))            # chest and a full rounded back
 # broad soft shoulders and a short thick neck
 for s in S2:
     limb((s * 0.06, 0.05, 1.50), (s * 0.32, 0.03, 1.43), 0.12, 0.11)    # shoulder slope
     ell((s * 0.39, 0.01, 1.38), (0.17, 0.17, 0.165))                   # shoulder ball
-limb((0, 0.03, 1.40), (0, 0.01, 1.62), 0.15, 0.135, caps=False)
+limb((0, 0.03, 1.40), (0, 0.01, 1.62), 0.165, 0.145, caps=False)   # short, thick neck
 # head: a round skull and full cheeks, small ear nubs
 ell(HC, (0.148, 0.158, 0.158))
 ell((0, -0.03, 1.635), (0.142, 0.13, 0.11))
@@ -108,8 +108,8 @@ for s in S2:
     limb(H0 + xh * 0.03 + yh * 0.04 + nin * 0.006, H0 + xh * 0.09 + yh * 0.075 + nin * 0.02, 0.026, 0.022)    # thumb
 # legs: massive smooth thighs, thick calves, simple rounded feet
 for s in S2:
-    limb(HIP[s] + Vector((0, 0, -0.02)), KNEE[s], 0.265, 0.17)
-    limb(KNEE[s], ANK[s], 0.165, 0.105)
+    limb(HIP[s] + Vector((0, 0, -0.02)), KNEE[s], 0.285, 0.18)
+    limb(KNEE[s], ANK[s], 0.172, 0.108)
     ell((s * 0.285, 0.03, 0.31), (0.14, 0.14, 0.17))                   # calf, centred on the shin
     ell((s * 0.30, -0.055, 0.05), (0.115, 0.18, 0.07))                 # foot
     ell((s * 0.30, 0.05, 0.06), (0.09, 0.08, 0.07))                    # heel
@@ -230,7 +230,7 @@ def wrap(name, zfun, h, off, t, K=12):
     o = grid_obj(name, P, UV, MAW)
     WRAPS.append((zfun, h, Rall + off + t)); return o
 BAND_H = 0.085
-band = wrap('Band', lambda th: float(belt_zc(th)) - 0.01, BAND_H, 0.004, 0.032)
+band = wrap('Band', lambda th: float(belt_zc(th)) - 0.01, BAND_H, 0.008, 0.032)
 ZB = float(belt_zc(math.pi)) - 0.01
 
 def pad(name, thc, half_w, zc, h, off, t, bulge=0.25, NI=12, K=12):
@@ -472,7 +472,18 @@ bpy.ops.object.vertex_group_normalize_all(lock_active=False)
 # the trunk bends as one soft volume: whatever share of a vertex belongs to hips / spine / chest is redistributed by
 # height over wide, overlapping bands (bone heat leaves sharp seams there, which crease the belly and back when posed)
 TRUNK = ('hips', 'spine', 'chest')
-gi = {g.name: g.index for g in body.vertex_groups}
+# bone heat leaks the thighs up the round flanks: above the belt the legs have no say (their share goes to the trunk)
+hg0 = body.vertex_groups['hips']
+for v in body.data.vertices:
+    c = v.co
+    if abs(c.x) > 0.6 or c.z < 0.6: continue
+    th = math.atan2(c.x, -(c.y + 0.03)); keep = float(sstep(float(belt_zc(th)) + 0.05, float(belt_zc(th)) - 0.06, c.z))
+    if keep >= 1: continue
+    moved = 0.0
+    for g in v.groups:
+        if body.vertex_groups[g.group].name.startswith(('thigh', 'shin', 'foot')): moved += g.weight * (1 - keep); g.weight *= keep
+    if moved > 0:
+        cur = next((g.weight for g in v.groups if g.group == hg0.index), 0.0); hg0.add([v.index], cur + moved, 'REPLACE')
 for v in body.data.vertices:
     cur = {body.vertex_groups[g.group].name: g.weight for g in v.groups}
     tot = sum(cur.get(n, 0.0) for n in TRUNK)
@@ -483,18 +494,39 @@ for v in body.data.vertices:
         if w_ * tot > 1e-4: body.vertex_groups[n].add([v.index], w_ * tot, 'REPLACE')
         elif n in cur: body.vertex_groups[n].remove([v.index])
 bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+# near the midline the trunk belongs to the chest, not the shoulders (arms coming forward would drag and fold it)
+cg = body.vertex_groups['chest']
+for v in body.data.vertices:
+    lo = 0.2 + 0.14 * float(sstep(1.42, 1.2, v.co.z))                  # lower down, the round sides belong to the trunk too
+    keep = float(sstep(lo, lo + 0.16, abs(v.co.x)))
+    if keep >= 1: continue
+    moved = 0.0
+    for g in v.groups:
+        if body.vertex_groups[g.group].name.startswith(('shoulder', 'upper_arm')): moved += g.weight * (1 - keep); g.weight *= keep
+    if moved > 0:
+        cur = next((g.weight for g in v.groups if g.group == cg.index), 0.0); cg.add([v.index], cur + moved, 'REPLACE')
+bpy.ops.object.vertex_group_normalize_all(lock_active=False)
 # under the belt the skin is bound to the hips (cloth and skin move as one; the legs still bend below it)
 hg = body.vertex_groups['hips']
 for v in body.data.vertices:
     c = v.co
     if abs(c.x) > 0.56 or not (0.5 < c.z < 1.1): continue
     th = math.atan2(c.x, -(c.y + 0.03)); dz = abs(c.z - float(belt_zc(th)) + 0.01)
-    k = 0.85 * float(sstep(0.15, 0.07, dz))
+    k = float(sstep(0.17, 0.09, dz))
     if k <= 0: continue
     for g in v.groups:
         if body.vertex_groups[g.group].name != 'hips': g.weight *= (1 - k)
     cur = next((g.weight for g in v.groups if g.group == hg.index), 0.0)
     hg.add([v.index], cur * (1 - k) + k, 'REPLACE')
+bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+# relax once more and cap to 4 influences here, on the skin alone, so the glTF limit later drops nothing abrupt
+bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
+for _ in range(2):
+    bpy.ops.object.vertex_group_limit_total(group_select_mode='ALL', limit=4)
+    bpy.ops.object.vertex_group_smooth(group_select_mode='ALL', factor=0.6, repeat=6)
+bpy.ops.object.vertex_group_clean(group_select_mode='ALL', limit=0.02)
+bpy.ops.object.vertex_group_limit_total(group_select_mode='ALL', limit=4)
+bpy.ops.object.mode_set(mode='OBJECT')
 bpy.ops.object.vertex_group_normalize_all(lock_active=False)
 
 GN = [g.name for g in body.vertex_groups]
@@ -526,6 +558,11 @@ for o in list(scn.objects):
         top = [t for (so, t) in SAG if so == o][0]; aw = skin_weights(top)
         aw = {g: x for g, x in aw.items() if not g.startswith(('thigh', 'shin'))} or {'hips': 1.0}
         set_weights(o, lambda p, aw=aw: aw)
+    elif nm in ('Band', 'TateMitsu'):                     # cloth rides the hips, never the thighs
+        def cloth_w(p):
+            w_ = {g: x for g, x in skin_weights(p).items() if not g.startswith(('thigh', 'shin'))} or {'hips': 1.0}
+            t_ = sum(w_.values()); return {g: x / t_ for g, x in w_.items()}
+        set_weights(o, skin_weights if nm == 'TateMitsu' else cloth_w)
     else: set_weights(o, skin_weights)
 
 # ---------------------------------------------------------------- one skinned mesh
