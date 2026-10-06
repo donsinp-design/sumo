@@ -656,13 +656,13 @@ def napkin_maps():
     e = np.minimum(np.minimum(xx, 1 - xx), np.minimum(yy, 1 - yy))
     quilt = (np.abs(np.sin((xx + yy) * 40 * math.pi)) * np.abs(np.sin((xx - yy) * 40 * math.pi)))
     border = ss(0.07, 0.065, e) * ss(0.045, 0.05, e)
-    h = 0.02 * gn((N, N), 1.5, 51) + 0.04 * quilt * ss(0.08, 0.1, e) + 0.06 * border
+    h = 0.006 * gn((N, N), 1.5, 51) + 0.03 * quilt * ss(0.08, 0.1, e) + 0.06 * border
     col = np.ones((N, N, 3), F32) * 0.94 - 0.03 * border[..., None]
     col[..., 2] -= 0.01
     return img('napkin_col', col), img('napkin_nrm', normal_from_height(h, 1.0 / N * 2, 1.0), True)
 NP_COL, NP_NRM = napkin_maps()
 mNap, nt, bs = principled('mNapkin', (0.94, 0.94, 0.93, 1), 0, 0.85, **{'Subsurface Weight': 0.15, 'Subsurface Radius': (0.5, 0.5, 0.5)})
-hook_maps(nt, bs, NP_COL, None, NP_NRM)
+hook_maps(nt, bs, NP_COL, None, NP_NRM, nstr=0.35)
 bpy.ops.mesh.primitive_grid_add(x_subdivisions=32, y_subdivisions=32, size=30, location=(GX + 1.5, GY - 1.0, NAPZ))
 nap = bpy.context.object; nap.name = 'napkin'; nap.rotation_euler.z = math.radians(23)
 gnp = gn((64, 64), 4, 52)
@@ -764,6 +764,9 @@ def tri_count(coll):
         ev = o.evaluated_get(dg); me = ev.to_mesh(); me.calc_loop_triangles(); n += len(me.loop_triangles); ev.to_mesh_clear()
     return n
 TRIS = tri_count(STAGE)
+# water lets light through (no refractive caustics in the render): no shadow rays from drops / puddle
+for o in STAGE.all_objects:
+    if o.type == 'MESH' and o.active_material in (mWater, mBub): o.visible_shadow = False
 if 'norender' in sys.argv:
     dg = bpy.context.evaluated_depsgraph_get(); per = []
     for o in STAGE.all_objects:

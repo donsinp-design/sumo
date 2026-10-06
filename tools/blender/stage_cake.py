@@ -247,7 +247,7 @@ ROS = [a for a in ROS if not near_cut(a, 0.07)]
 CANDLES = [wrapd(math.radians(97) + (k + 0.5) / NROS * TAU) for k in range(0, NROS, 3)]
 CANDLES = [a for a in CANDLES if not near_cut(a, 0.12)]
 FIGHTERS = [(-1.0, -0.15), (1.0, 0.15)]
-HAT = (12.4, -3.0); GIFT = (-13.0, 2.6)
+HAT = (9.8, 1.2); GIFT = (-12.4, 3.0)
 GYOJI = (0.35, 4.1)
 log('rosettes', len(ROS), 'candles', len(CANDLES), 'cut opening %.1f..%.1f deg, wall %.2f m' % (math.degrees(TH2), math.degrees(TH1), SMAX))
 
@@ -288,7 +288,7 @@ def build_top_maps():
     fine = gn((n, n), 1.5, 24)
     lip = np.clip(blur(np.abs(np.gradient(h, dx)[1]) + np.abs(np.gradient(h, dx)[0]), 2) * 18, 0, 1)
     rough = np.clip(0.26 - 0.08 * lip + 0.22 * pits + 0.03 * fine + 0.03 * gn((n, n), 60, 25), 0.15, 0.8)
-    base = hx('fcefe0'); tint = hx('fadce0')
+    base = hx('f8e8d8'); tint = hx('f7d8dc')
     col = base + (tint - base) * np.clip(0.5 + 0.35 * gn((n, n), 140, 26), 0, 1)[..., None]
     col = col * (1 - 0.06 * pits[..., None]) * (1 + 0.012 * fine[..., None])
     col = col * (1 - 0.04 * ss(4.9, 5.3, R))[..., None]
@@ -320,13 +320,13 @@ def build_crumb_maps():
     Z = zz[:, None] + wob[None, :]
     pore1 = gn((n, n), (2.2, 1.6), 42); pore2 = gn((n, n), (5, 3.5), 43); pores = np.clip((pore1 * 0.75 + pore2 * 0.55 - 1.0) * 1.4, 0, 1)
     big = np.clip((gn((n, n), (7, 5), 44) - 1.9) * 2, 0, 1)
-    hgt -= 0.006 * pores + 0.01 * big
+    hgt -= 0.01 * pores + 0.016 * big
     for (z0, z1, kind) in LAY:
         m = ((Z <= z0) & (Z > z1)).astype(np.float32)
         if kind == 'sponge':
             t = np.clip(np.minimum(z0 - Z, Z - z1) / 0.03, 0, 1)            # baked skin at the layer faces
             c = sponge[None, None] * (1 + 0.06 * gn((n, n), 20, 45)[..., None])
-            c = c + (hx('b8823e') - c) * np.clip(0.55 * pores + 0.7 * big, 0, 1)[..., None]
+            c = c + (hx('9a6428') - c) * np.clip(0.75 * pores + 0.8 * big, 0, 1)[..., None]
             c = crust + (c - crust) * ss(0.0, 1.0, t)[..., None]
             r = 0.85 * np.ones((n, n))
         elif kind == 'cream':
@@ -364,7 +364,7 @@ def build_cake():
                  sss=0.08, sss_r=(1.0, 0.6, 0.3), sss_s=0.015, nstr=1.5)
     log('cake maps')
     # --- top: polar grid, outer rows bend to follow the cut
-    nseg = 200
+    nseg = 160
     th = list(np.linspace(-math.pi, math.pi, nseg, endpoint=False))
     for extra in (PHN, ang(wall_pt(U1, s_hit(U1, RIN))), ang(wall_pt(U2, s_hit(U2, RIN)))):
         th = [t for t in th if abs(wrapd(t - extra)) > 0.008] + [extra]
@@ -387,7 +387,7 @@ def build_cake():
     # --- side lathe (incl. the rounded top edge), open at the cut
     ra = np.linspace(0, math.pi / 2, 7)
     prof = [(RIN + RE * math.sin(a), -RE + RE * math.cos(a)) for a in ra] + [(RT, z) for z in np.linspace(-RE, -H, 13)[1:]]
-    V = []; UV = []; ncol = 190
+    V = []; UV = []; ncol = 150
     for (r, z) in prof:
         a1 = ang(wall_pt(U1, s_hit(U1, r))); a2 = ang(wall_pt(U2, s_hit(U2, r)))
         a2u = a2 + TAU if a2 < a1 else a2
@@ -422,7 +422,7 @@ def star_tip_nrm():
 _SN, _SR = star_tip_nrm(); _SNI = image('pipe_nrm', _SN, True); _SRI = image('pipe_orm', orm(_SR), True)
 M_PINK = pmat('m_pipe_pink', 'f5aec4', rough=0.42, sss=0.12, sss_r=(1, 0.6, 0.55), sss_s=0.012, nimg=_SNI, ormimg=_SRI, nstr=1.0)
 M_WHITE = pmat('m_pipe_white', 'fcf4ec', rough=0.42, sss=0.12, sss_r=(1, 0.75, 0.6), sss_s=0.012, nimg=_SNI, ormimg=_SRI, nstr=1.0)
-M_LINE = pmat('m_line', 'e2557d', rough=0.32, sss=0.35, sss_r=(1, 0.35, 0.4), sss_s=0.03, bump=(14, 0.15))
+M_LINE = pmat('m_line', 'e2557d', rough=0.45, sss=0.35, sss_r=(1, 0.35, 0.4), sss_s=0.03, bump=(14, 0.15))
 
 def build_drip():
     # band: over the top rim, round the edge and a little way down the side, wavy lower edge
@@ -433,11 +433,11 @@ def build_drip():
         if s <= s_top + s_round:
             a = (s - s_top) / RE; return RIN + RE * math.sin(a), -RE + RE * math.cos(a), math.sin(a), math.cos(a)
         return RT, -RE - (s - s_top - s_round), 1.0, 0.0
-    ncol = 240; band_len = 0.13
+    ncol = 200; band_len = 0.13
     a1 = ang(wall_pt(U1, s_hit(U1, RT))); a2 = ang(wall_pt(U2, s_hit(U2, RT))); a2u = a2 + TAU if a2 < a1 else a2
     cols = np.linspace(a1 + 0.004, a2u - 0.004, ncol + 1)
     wav = 0.05 * gn((1, ncol + 1), (1, 3), 61)[0]
-    V = []; rows = 12
+    V = []; rows = 9
     for i in range(rows):
         for j, a in enumerate(cols):
             smax = s_top + s_round + band_len + wav[j]
@@ -467,7 +467,7 @@ def build_drip():
                 p = np.array([0, 0, -RE - 0.05 - y]) + nrm * (RT - 0.004 + thk * math.cos(phi)) + tg * wy * math.sin(phi)
                 Vd.append(p)
         mg.add(Vd, grid_faces(len(ys), ks + 1))
-        a += (rg.uniform(0.17, 0.42)) / RT
+        a += (rg.uniform(0.22, 0.52)) / RT
     o = mg.build('drips', M_DRIP)
     bm = bmesh.new(); bm.from_mesh(o.data)
     for f in bm.faces:
@@ -478,7 +478,7 @@ def build_drip():
 
 def rosette(c, a0, mat, mg, scale=1.0):
     """a star-tip swirl dollop: a lathe whose 8-ridged cross-section twists as it rises to a soft curled peak."""
-    rows, cols = 13, 32; Hr = 0.42 * scale; R0 = 0.27 * scale
+    rows, cols = 13, 24; Hr = 0.42 * scale; R0 = 0.27 * scale
     V = []; UV = []
     for i in range(rows):
         t = i / (rows - 1)
@@ -488,7 +488,7 @@ def rosette(c, a0, mat, mg, scale=1.0):
         lean = 0.05 * scale * t ** 2
         for j in range(cols + 1):
             an = j / cols * TAU
-            rr = r * (1 + (0.2 - 0.06 * t) * math.cos(8 * an + 2.2 * t + a0))
+            rr = r * (1 + (0.26 - 0.1 * t) * math.cos(8 * an + 3.6 * t + a0))
             V.append((c[0] + rr * math.cos(an) + lean * math.cos(a0), c[1] + rr * math.sin(an) + lean * math.sin(a0), c[2] + z))
             UV.append((j / cols, t))
     mg[mat].add(V, grid_faces(rows, cols + 1), UV)
@@ -508,13 +508,13 @@ def build_piping():
     # base shell border (white), open at the cut
     a1 = ang(wall_pt(U1, s_hit(U1, RT))); a2 = ang(wall_pt(U2, s_hit(U2, RT))); a2u = a2 + TAU if a2 < a1 else a2
     a1 += 0.03; a2u -= 0.03
-    nsh = int((a2u - a1) * RT / 0.45); per = 6
+    nsh = int((a2u - a1) * RT / 0.45); per = 5
     t = np.linspace(0, nsh, nsh * per + 1); f = t % 1.0
     bump = np.sin(math.pi * np.clip(f / 0.4, 0, 1) / 2) * (1 - ss(0.4, 1.0, f)) ** 0.8
     aa = a1 + (a2u - a1) * t / nsh
     rr = RT + 0.04 + 0.05 * bump; zz = -H + 0.07 + 0.04 * bump
     P = np.stack([rr * np.cos(aa), rr * np.sin(aa), zz], 1)
-    V, F, UV = piped(P, 0.04 + 0.1 * bump, 8, 4, 0.18)
+    V, F, UV = piped(P, 0.04 + 0.1 * bump, 6, 3, 0.2)
     mg[M_PINK].add(V, F, UV)
     mg[M_PINK].build('piping_pink', M_PINK, uv=True); mg[M_WHITE].build('piping_white', M_WHITE, uv=True)
     # the fighting circle: a piped line of pink icing, 2.8 cm high
@@ -617,7 +617,7 @@ def build_sprinkles():
     mg = [Merge() for _ in mats]; rg = np.random.default_rng(91)
     def put(c, d, up=(0, 0, 1)):
         V, F = sprinkle(np.asarray(c), d, L=rg.uniform(0.15, 0.23), up=up); mg[rg.integers(len(mats))].add(V, F)
-    n_top = 500 if FAST else 1150; placed = 0
+    n_top = 500 if FAST else 900; placed = 0
     while placed < n_top:   # on the top: half sunk into the buttercream (<= 3 cm proud)
         r = 4.95 * math.sqrt(rg.random()); a = rg.uniform(-math.pi, math.pi)
         if 4.52 < r < 4.68 or in_cut(a, r) or r > rmax(a) - 0.05: continue
@@ -625,16 +625,16 @@ def build_sprinkles():
         if (r * math.cos(a) - GYOJI[0]) ** 2 + (r * math.sin(a) - GYOJI[1]) ** 2 < 0.1: continue
         c = (r * math.cos(a), r * math.sin(a), 0.002); da = rg.uniform(0, TAU)
         put(c, (math.cos(da), math.sin(da), rg.uniform(-0.03, 0.03))); placed += 1
-    for _ in range(40 if FAST else 110):   # stuck on the sides
+    for _ in range(40 if FAST else 80):   # stuck on the sides
         a = rg.uniform(-math.pi, math.pi)
         if near_cut(a, 0.02): continue
         z = -rg.uniform(0.3, 1.9); nrm = np.array([math.cos(a), math.sin(a), 0])
         tg = np.array([-math.sin(a), math.cos(a), 0]); da = rg.uniform(0, TAU)
         put(nrm * (RT + 0.012) + np.array([0, 0, z]), tg * math.cos(da) + np.array([0, 0, math.sin(da)]), up=nrm)
-    for _ in range(30 if FAST else 60):    # fallen onto the stand plate
+    for _ in range(30 if FAST else 40):    # fallen onto the stand plate
         r = rg.uniform(RT + 0.25, 6.05); a = rg.uniform(-math.pi, math.pi); da = rg.uniform(0, TAU)
         put((r * math.cos(a), r * math.sin(a), PZ + 0.025), (math.cos(da), math.sin(da), 0))
-    for _ in range(30 if FAST else 70):   # and onto the cloth
+    for _ in range(30 if FAST else 50):   # and onto the cloth
         r = 6.9 + rg.gamma(1.5, 1.4); a = rg.uniform(-math.pi, math.pi); da = rg.uniform(0, TAU)
         put((r * math.cos(a), r * math.sin(a), TZ + 0.025), (math.cos(da), math.sin(da), 0))
     for i, m in enumerate(mats): mg[i].build('sprinkles_%d' % i, m, smooth=True)
@@ -662,8 +662,8 @@ def build_candles():
         M = pmat('m_candle_%d' % k, img=image('candle_%d' % k, candle_tex(ch)), rough=0.35, sss=0.6, sss_r=(1, 0.75, 0.5), sss_s=0.06, coat=0.15)
         base = np.array([RROS * math.cos(a), RROS * math.sin(a), -0.08])
         tw = rg.uniform(0, TAU)
-        zs = np.r_[np.linspace(0, Hc - 0.03, 18), Hc - 0.01, Hc]
-        segs = 24; V = []; UV = []
+        zs = np.r_[np.linspace(0, Hc - 0.03, 14), Hc - 0.01, Hc]
+        segs = 18; V = []; UV = []
         for i, z in enumerate(zs):
             for j in range(segs + 1):
                 an = j / segs * TAU
@@ -735,23 +735,23 @@ def build_stand():
     for i in range(1, len(p) - 1):   # round the corners a little
         P2 += [p[i] * 0.75 + p[i - 1] * 0.25, p[i], p[i] * 0.75 + p[i + 1] * 0.25] if 0 < i < len(p) - 2 else [p[i]]
     P2.append(p[-1])
-    o = lathe(P2, 64, 'cake_stand', M)
+    o = lathe(P2, 48, 'cake_stand', M)
     bm = bmesh.new(); bm.from_mesh(o.data); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(o.data); bm.free()
     # thin gold band on the rim
-    a = np.linspace(0, TAU, 161)
+    a = np.linspace(0, TAU, 121)
     P = np.stack([6.33 * np.cos(a), 6.33 * np.sin(a), np.full_like(a, PZ + 0.015)], 1)
     V, F = tube(P, 0.03, sides=6, cap=False, rz=1.4); mk('stand_gold', V, F, None, M_GOLD)
     log('stand')
 
 HX, HY, DROP = 19.0, 19.0, 6.5
 def build_cloth():
-    T = 512 if FAST else 1024; th = 8 if not FAST else 4; tile = 1.0
+    T = 512 if FAST else 1024; th = 8 if not FAST else 4; tile = 0.8
     i = np.arange(T) // th; f = (np.arange(T) % th + 0.5) / th
     nth = T // th; chk = nth // 2
     red = ((i // chk) % 2 == 0)
     I, J = np.meshgrid(i, i); FX, FY = np.meshgrid(f, f)
     top = (I + J) % 2 == 0
-    PNK = hx('ef8fb0'); WHT = hx('fbf6f2')
+    PNK = hx('e9799f'); WHT = hx('fbf4ee')
     rt = np.random.default_rng(3)
     slub_c = 1 + 0.05 * rt.standard_normal(nth); slub_r = 1 + 0.05 * rt.standard_normal(nth)
     warp = np.where(red[:, None], PNK, WHT) * slub_c[i][:, None]
@@ -766,8 +766,8 @@ def build_cloth():
     M = pmat('m_cloth', img=image('cloth_col', col), ormimg=image('cloth_orm', orm(rough), True), nimg=image('cloth_nrm', nrm, True),
              sheen=0.7, sheen_r=0.35, sss=0.08, sss_r=(1, 0.5, 0.5), sss_s=0.02)
     def axis(Hh):
-        inner = np.linspace(-Hh + 1.6, Hh - 1.6, int((2 * Hh - 3.2) / 2.0) + 1)
-        edge = np.linspace(Hh - 1.6, Hh + DROP, int((1.6 + DROP) / 0.3) + 1)[1:]
+        inner = np.linspace(-Hh + 1.6, Hh - 1.6, int((2 * Hh - 3.2) / 2.6) + 1)
+        edge = np.linspace(Hh - 1.6, Hh + DROP, int((1.6 + DROP) / 0.4) + 1)[1:]
         return np.r_[-edge[::-1], inner, edge]
     xs, ys = axis(HX), axis(HY)
     A, B = np.meshgrid(xs, ys)
@@ -815,7 +815,7 @@ def build_props():
     rg = np.random.default_rng(141)
     PLATES = [(-9.4, -2.6, 0.3), (10.6, 5.6, -0.4), (-10.0, 8.6, 1.0)]
     for pi_, (x, y, rot) in enumerate(PLATES):
-        Rp = 2.4; segs = 54; rows = np.r_[0, 0.3, 0.6, 0.9, 1.25, 1.55, 1.72, 1.85, 2.0, 2.15, 2.3, Rp]
+        Rp = 2.4; segs = 44; rows = np.r_[0, 0.3, 0.6, 0.9, 1.25, 1.55, 1.72, 1.85, 2.0, 2.15, 2.3, Rp]
         V = []; UV = []
         for r in rows:
             for j in range(segs + 1):
@@ -911,7 +911,7 @@ def build_hat_gift_confetti_balloons():
     sm = o.modifiers.new('thick', 'SOLIDIFY'); sm.thickness = 0.02
     M_TIN = pmat('m_tinsel', 'f2c84a', rough=0.18, metal=1.0)
     mg = Merge(); rg = np.random.default_rng(151); tipc = np.array([hx_, hy_, TZ + hh + 0.12])
-    for k in range(150 if not FAST else 60):
+    for k in range(90 if not FAST else 60):
         d = rg.standard_normal(3); d /= np.linalg.norm(d)
         V, F = sprinkle(tipc + d * 0.2, d, L=0.42, r=0.012); mg.add(V, F)
     mg.build('hat_tinsel', M_TIN)
@@ -1019,9 +1019,9 @@ def build_hat_gift_confetti_balloons():
 
 # ================================================================ background room (render only)
 def build_room():
-    FLR = pmat('m_floor', '3a2418', rough=0.35)
+    FLR = pmat('m_floor', '6a4028', rough=0.35)
     mk('floor', [(-200, -200, TZ - 9), (200, -200, TZ - 9), (200, 200, TZ - 9), (-200, 200, TZ - 9)], [(0, 1, 2, 3)], None, FLR, coll=BG)
-    WAL = pmat('m_wall', 'e8b8b0', rough=0.8)
+    WAL = pmat('m_wall', 'f0c0b4', rough=0.8)
     mk('wall', [(-200, 48, TZ - 9), (200, 48, TZ - 9), (200, 48, 80), (-200, 48, 80)], [(0, 1, 2, 3)], None, WAL, coll=BG)
     LB = pmat('m_bulb', 'ffd090', emit='ffb870', emit_s=30.0)
     rb_ = np.random.default_rng(170)
@@ -1158,7 +1158,7 @@ def place_chars():
 # ================================================================ lights, camera, render
 def setup_light():
     world = bpy.data.worlds.new('W'); world.use_nodes = True; scn.world = world
-    bgn = world.node_tree.nodes['Background']; bgn.inputs['Strength'].default_value = 0.35
+    bgn = world.node_tree.nodes['Background']; bgn.inputs['Strength'].default_value = 0.22
     hdr = os.path.join(SCR, 'ph_cake', 'lebombo_1k.hdr')   # Poly Haven (CC0) interior, for soft reflections only
     if os.path.exists(hdr):
         et = world.node_tree.nodes.new('ShaderNodeTexEnvironment'); et.image = bpy.data.images.load(hdr)
@@ -1168,13 +1168,17 @@ def setup_light():
         l = bpy.data.objects.new(name, bpy.data.lights.new(name, 'AREA')); scn.collection.objects.link(l)
         l.data.energy = energy; l.data.size = size; l.data.shape = shape; l.data.color = color; l.location = loc
         l.rotation_euler = (Vector(target) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler(); return l
-    area('Key', (-8, -7, 22), (0.5, 0.5, 0), 30000, 6, (1.0, 0.82, 0.62))
-    area('Fill', (17, -16, 8), (0, 0, -1), 3000, 18, (0.9, 0.9, 1.0))
-    area('Rim', (2, 20, 19), (0, 0, 0), 14000, 14, (1.0, 0.9, 0.82))
+    area('Key', (-8, -7, 22), (0.5, 0.5, 0), 7000, 8, (1.0, 0.82, 0.62))
+    sp = bpy.data.objects.new('KeySpot', bpy.data.lights.new('KeySpot', 'SPOT')); scn.collection.objects.link(sp)
+    sp.data.energy = 110000; sp.data.color = (1.0, 0.8, 0.58); sp.data.spot_size = math.radians(40); sp.data.spot_blend = 0.85
+    sp.data.shadow_soft_size = 1.6; sp.location = (-6, -7, 25)
+    sp.rotation_euler = (Vector((0.3, 0.6, -1.0)) - sp.location).to_track_quat('-Z', 'Y').to_euler()
+    area('Fill', (17, -16, 8), (0, 0, -1), 1800, 18, (0.9, 0.9, 1.0))
+    area('Rim', (1, 17, 18), (0, 0, 0), 26000, 12, (1.0, 0.9, 0.82))
     area('Bounce', (0, 0, TZ - 8), (0, 0, 0), 0, 1, (1, 1, 1))
     for i, p in enumerate(FLAMES):
         c = bpy.data.objects.new('CandleL%d' % i, bpy.data.lights.new('CandleL%d' % i, 'POINT')); scn.collection.objects.link(c)
-        c.data.energy = 110; c.data.color = (1.0, 0.6, 0.28); c.data.shadow_soft_size = 0.06; c.location = Vector(p)
+        c.data.energy = 160; c.data.color = (1.0, 0.58, 0.26); c.data.shadow_soft_size = 0.06; c.location = Vector(p)
     # bloom around the flames
     scn.use_nodes = True; nt = scn.node_tree; nt.nodes.clear()
     rl = nt.nodes.new('CompositorNodeRLayers'); gl = nt.nodes.new('CompositorNodeGlare'); co = nt.nodes.new('CompositorNodeComposite')

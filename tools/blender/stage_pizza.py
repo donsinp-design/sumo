@@ -649,7 +649,7 @@ def build_pepperoni(TOP):
             q = i / NR
             for j in range(NS):
                 a = j / NS * TAU; rq = q * rad_n[j]
-                z = -0.026 + 0.045 * rim_h[j] * q ** 2.2
+                z = -0.026 + 0.04 * rim_h[j] * q ** 2.2
                 V.append((rq * pr * math.cos(a), rq * pr * math.sin(a), z)); UV.append((0.5 + rq * math.cos(a) / (2 * e), 0.5 + rq * math.sin(a) / (2 * e)))
         for j in range(NS):         # rolled edge going down into the cheese
             a = j / NS * TAU; rq = 1.035 * rad_n[j]
@@ -1115,7 +1115,7 @@ for o in STAGE.objects:
     if o.type != 'MESH': continue
     for v in o.data.vertices:
         w = o.matrix_world @ v.co
-        if math.hypot(w.x, w.y) < RFLAT and w.z > -0.1: zin.append(w.z)
+        if math.hypot(w.x, w.y) < RFLAT and w.z > -0.1 and not o.name.startswith('crust'): zin.append(w.z)
 log('relief inside r<5.3: min %.3f max %.3f' % (min(zin), max(zin)))
 
 

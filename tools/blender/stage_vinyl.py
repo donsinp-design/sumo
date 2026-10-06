@@ -660,7 +660,7 @@ nt.links.new(pv.outputs['Volume'], nt.nodes['Material Output'].inputs['Volume'])
 LASER = {c: mat('Laser' + c, (0, 0, 0), 1.0, emit=lin(h), estr=14) for c, h in (('C', '3ad8ff'), ('M', 'ff3ad8'), ('G', '6aff6a'))}
 for k in range(10):  # two laser fans low over the dance floor behind the booth (the band the game camera sees)
     sd = -1 if k < 5 else 1; j = k % 5
-    src = Vector((sd * 22, 30, -6.0)); tgt = Vector((-sd * 6 + sd * j * 3.0, 4 + j * 1.5, -13.5))
+    src = Vector((sd * 22, 30, -10.0)); tgt = Vector((-sd * 6 + sd * j * 3.0, 4 + j * 1.5, -13.9))
     dirv = (tgt - src); ln = dirv.length
     bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.022, depth=ln, location=(src + tgt) / 2)
     o = bpy.context.object; o.rotation_euler = dirv.to_track_quat('Z', 'Y').to_euler(); o.data.materials.append(LASER['MC'[k // 5]] if j != 2 else LASER['G'])
