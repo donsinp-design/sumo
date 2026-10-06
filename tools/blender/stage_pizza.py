@@ -231,7 +231,7 @@ tries = 0
 while len(LEAVES) < 6 and tries < 5000:
     tries += 1
     r = math.sqrt(rng.uniform(0.3, 1)) * 4.0; a = rng.uniform(0, TAU); x, y = r * math.cos(a), r * math.sin(a)
-    L = rng.uniform(1.0, 1.3)
+    L = rng.uniform(0.85, 1.15)
     if cutdist(x, y) < 0.5 or r > 3.95: continue
     if any(math.hypot(x - px, y - py) < pr + 0.6 for px, py, pr in PEPS): continue
     if any(math.hypot(x - fx, y - fy) < 0.9 for fx, fy in FIGHTERS): continue
@@ -348,7 +348,7 @@ def build_top():
         if rng.uniform() < pr: bl.append((x, y))
     for x, y in bl:
         big = rng.uniform() < 0.28
-        rad = rng.uniform(0.08, 0.24) if big else rng.uniform(0.025, 0.07)
+        rad = rng.uniform(0.1, 0.3) if big else rng.uniform(0.03, 0.08)
         st = stamp_iter((N, N), (x + E) / px, (y + E) / px, m(rad * 1.5))
         if not st: continue
         sy, sx, dx, dy = st
@@ -391,8 +391,8 @@ def build_top():
     ch = mix(ch, hx('f7e0a0'), 0.4 * dome * ss(-0.5, 1.0, nm))
     ch = ch * (1 + 0.04 * ridge[..., None] - 0.03 * ss(-1, 1, ns)[..., None])
     ch = mix(ch, hx('e2a64a'), valley * 0.35)
-    br = np.clip(0.15 + 0.3 * nb + 0.55 * ss(3.9, 5.0, R) + 0.2 * nm, 0, 1) * 0.5 + 0.35 * rim * c
-    ch = mix(ch, hx('dba24e'), br * 0.6)
+    br = np.clip(0.25 + 0.35 * nb + 0.55 * ss(3.9, 5.0, R) + 0.25 * nm, 0, 1) * 0.6 + 0.35 * rim * c
+    ch = mix(ch, hx('d8963e'), br * 0.65)
     ch = mix(ch, hx('e6a444'), ss(0.0, 0.35, BLb)); ch = mix(ch, hx('c86e26'), ss(0.25, 0.8, BLb)); ch = mix(ch, hx('8e4214'), ss(0.7, 1.0, BLb) * 0.8)
     ch = mix(ch, hx('5e2a0e'), BLd * 0.7)
     ch = mix(ch, hx('e88a28'), OIL * 0.45)
@@ -406,12 +406,12 @@ def build_top():
     col = mix(col, hx('b8320e'), chili * 0.9)
     # --- height (metres, within the 3 cm budget)
     Hm = -0.02 + 0.0012 * ns + 0.0008 * pulp * (1 - c)
-    Hm = Hm + c * (0.013 * cs + 0.007 * dome - 0.003 * valley + 0.0025 * ridge * cs + 0.003 * rim) + BLh * c
+    Hm = Hm + c * (0.013 * cs + 0.007 * dome - 0.003 * valley + 0.0014 * ridge * cs + 0.003 * rim) + BLh * c
     Hm = Hm - 0.004 * Ge + SH * S
     Hm = Hm * (1 - UNDER) - 0.028 * UNDER
     Hm = np.clip(np.where(R > 5.35, -0.02, Hm), -0.029, 0.027)
     # --- roughness, sss
-    rough = mix(np.full((N, N), 0.16, np.float32), 0.34 - 0.06 * ridge - 0.08 * dome, c)
+    rough = mix(np.full((N, N), 0.16, np.float32), 0.4 - 0.05 * ridge - 0.06 * dome, c)
     rough = mix(rough, 0.5, ss(0.3, 0.8, BLb)); rough = mix(rough, 0.66, BLd)
     rough = mix(rough, 0.06, OIL * 0.9)
     rough = rough + 0.04 * nf
@@ -485,12 +485,12 @@ def build_crust_tex():
     m = lambda s: (s / dv, s / du)
     n1 = gn((Hp, W), m(0.12), 41); n2 = gn((Hp, W), m(0.035), 42); n3 = gn((Hp, W), m(0.01), 43); n4 = gn((Hp, W), m(0.003), 44)
     # browning
-    B = np.clip(0.22 + 0.6 * top ** 1.4 + 0.16 * n1 + 0.07 * n2, 0, 1)
+    B = np.clip(0.38 + 0.6 * top ** 1.2 + 0.16 * n1 + 0.07 * n2, 0, 1)
     under = ss(-0.13, -0.19, Z)
     TTOP = TT[int(np.argmax(PROF[:, 1]))]
     outer = ss(TTOP, TTOP + 0.08, Tt) * ss(0.3, 0.1, Z)
-    col = mix(hx('ecca8e'), hx('dca150'), ss(0.1, 0.45, B))
-    col = mix(col, hx('c07a32'), ss(0.45, 0.85, B)); col = mix(col, hx('8a4818'), ss(0.85, 1.0, B) * 0.6)
+    col = mix(hx('e4bc7c'), hx('d29242'), ss(0.1, 0.45, B))
+    col = mix(col, hx('b26a28'), ss(0.45, 0.85, B)); col = mix(col, hx('804016'), ss(0.85, 1.0, B) * 0.7)
     # leopard spots + charred bubble tops
     SP = np.zeros((Hp, W), np.float32); HA = np.zeros((Hp, W), np.float32); BH = np.zeros((Hp, W), np.float32)
     rs = np.random.default_rng(55)
@@ -611,7 +611,7 @@ def build_pepperoni(TOP):
     c = (np.arange(N) + 0.5) * px - e; X, Y = np.meshgrid(c, c); R = np.hypot(X, Y); A = np.arctan2(Y, X)
     m = lambda s: s / px
     n1 = gn((N, N), m(0.12), 81); n2 = gn((N, N), m(0.035), 82); n3 = gn((N, N), m(0.01), 83)
-    col = mix(hx('a82c16'), hx('7c1c0e'), ss(-1.2, 1.5, n1 * 0.5 + n2 * 0.4 + 0.4 * n3))
+    col = mix(hx('bc3a1c'), hx('8a2210'), ss(-1.2, 1.5, n1 * 0.5 + n2 * 0.4 + 0.4 * n3))
     FAT = np.zeros((N, N), np.float32)
     rp = np.random.default_rng(5)
     for _ in range(900):
@@ -680,7 +680,7 @@ def build_basil():
         sd = 90 + torn
         n2 = gn((N, W2), 6, sd); n3 = gn((N, W2), 2, sd + 10); n1 = gn((N, W2), 30, sd + 20)
         half = 0.46 * np.sin(math.pi * np.clip(Vv, 0, 1) ** 0.78) ** 0.8
-        half = half * (1 + 0.02 * n2 + 0.012 * n3)
+        half = half * (1 + 0.06 * n1 / 1.0 + 0.03 * n2 + 0.015 * n3)
         du_ = np.abs(U - 0.5)
         inside = ss(half + 0.004, half - 0.004, du_)
         if torn:
@@ -693,19 +693,21 @@ def build_basil():
             v0 = 0.08 + k * 0.095
             vline = v0 + 0.55 * du_ ** 1.1
             sv = np.maximum(sv, ss(0.008, 0.0, np.abs(Vv - vline)) * ss(0.0, 0.02, du_) * ss(half * 0.95, half * 0.6, du_))
-        col = mix(hx('2a4c16'), hx('17300c'), ss(-1, 1.5, n1 * 0.6 + n2 * 0.4))
+        col = mix(hx('2c4818'), hx('17300c'), ss(-1, 1.5, n1 * 0.6 + n2 * 0.4))
         col = mix(col, hx('3e6424'), np.maximum(mid, sv * 0.45))
-        col = mix(col, hx('16300c'), ss(0.8, 1.8, n1 + 0.5 * n2) * 0.7)            # oven-wilted patches
+        col = mix(col, hx('0f2008'), ss(0.4, 1.6, n1 + 0.6 * n2) * 0.85)           # oven-wilted, translucent patches
         edge = ss(half - 0.05, half, du_)
-        col = mix(col, hx('3e4012'), edge * 0.55 * ss(-0.5, 1.0, n2))                # crisp edges
-        rough = np.clip(0.3 + 0.05 * n2 + 0.2 * edge - 0.12 * ss(0.5, 1.5, n1), 0.12, 1)
+        edge = ss(half - 0.09, half, du_)
+        col = mix(col, hx('3a3410'), edge * 0.75 * ss(-0.8, 0.8, n2))                # crisp, browned edges
+        col = mix(col, hx('1a1408'), ss(2.0, 2.6, n3 + n2 * 0.5) * 0.8)              # tiny scorch dots
+        rough = np.clip(0.42 + 0.05 * n2 + 0.2 * edge - 0.12 * ss(0.5, 1.5, n1), 0.12, 1)
         pucker = (np.sin(Vv * 37 + 2 * n2) * np.sin(du_ * 31 + n2) * 0.5) * 0.6 + 0.4 * n2 / 3
         hgt = 0.0012 * pucker - 0.0008 * np.maximum(mid, sv) + 0.0003 * n3
         out_col.append(col); out_a.append(inside); out_r.append(rough); out_n.append(h2n(hgt, 1.0 / W2, 1.0 / N, 1.5))
     col = np.concatenate(out_col, 1); a = np.concatenate(out_a, 1)
     ci = image('basil_col', np.concatenate([col, a[..., None]], -1))
     M = pmat('m_basil', img=ci, alpha=True, ormimg=image('basil_orm', orm(np.concatenate(out_r, 1)), True),
-             nimg=image('basil_nrm', np.concatenate(out_n, 1), True), sss=0.2, sss_r=(0.4, 1.0, 0.3), sss_s=0.01, coat=0.4, coat_r=0.12)
+             nimg=image('basil_nrm', np.concatenate(out_n, 1), True), sss=0.2, sss_r=(0.4, 1.0, 0.3), sss_s=0.01, coat=0.08, coat_r=0.2)
     NU, NV = 9, 16
     for k, (x0, y0, L, rot, torn) in enumerate(LEAVES):
         Wd = L * 0.6
@@ -964,7 +966,8 @@ def build_props():
     STEEL = pmat('m_steel', 'c8c8c6', rough=0.22, metal=1)
     N = 512; u = (np.arange(N) + 0.5) / N; U, Vv = np.meshgrid(u, u); Rw = np.hypot(U - 0.5, Vv - 0.5) * 2; Aw = np.arctan2(Vv - 0.5, U - 0.5)
     circ = np.sin(Rw * 900 + 3 * gn((N, N), 20, 142)) * 0.5 + 0.5
-    smear = ss(0.2, 0.9, gn((N, N), 18, 143) + 1.5 * ss(0.5, 1.0, Rw) * (np.cos(Aw - 0.8) > 0.2))
+    smear = ss(0.3, 0.9, gn((N, N), 10, 143) * 0.6 + 0.8) * ss(0.78, 0.92, Rw) * ss(0.3, 0.7, np.cos(Aw - 0.8))
+    smear = np.maximum(smear, ss(1.6, 2.2, gn((N, N), 4, 144)) * ss(0.6, 0.9, Rw))
     wcol = mix(np.tile(hx('c9c9c6'), (N, N, 1)) * (0.92 + 0.08 * circ[..., None]), hx('8a1e0c'), smear * 0.85)
     wrough = 0.18 + 0.08 * circ + 0.2 * smear
     WH = pmat('m_wheel', img=image('wheel_col', wcol), ormimg=image('wheel_orm', orm(wrough, 1 - smear), True), metal=1)
@@ -981,8 +984,11 @@ def build_props():
     for p in parts:
         p.data.transform(Matrix.Rotation(math.radians(115), 4, 'Z')); p.data.transform(Matrix.Translation((9.6, -1.6, TZ + 0.34)))
     # ---- napkins (right, folded linen)
-    NW = image('napkin_col', np.tile(hx('f1ede3'), (8, 8, 1)))
-    NAP = pmat('m_napkin', 'f2eee4', rough=0.85, sheen=0.7, sss=0.12, sss_s=0.03)
+    Tn = 256; f_ = (np.arange(Tn) % 4 + 0.5) / 4; I_ = np.arange(Tn) // 4
+    FXn, FYn = np.meshgrid(f_, f_); In, Jn = np.meshgrid(I_, I_)
+    hn = np.where((In + Jn) % 2 == 0, np.sin(math.pi * FXn), np.sin(math.pi * FYn)) + 0.3 * gn((Tn, Tn), 0.8, 151)
+    NAP = pmat('m_napkin', 'ece5d6', rough=0.85, sheen=0.7, sss=0.12, sss_s=0.03, nimg=image('napkin_nrm', h2n(hn * 0.001, 0.25 / Tn, 0.25 / Tn, 1.0), True),
+               img=image('napkin_col', np.tile(hx('ece5d6'), (Tn, Tn, 1)) * (0.93 + 0.07 * hn[..., None] / 1.3)))
     for k, (cx, cy, rot, z0) in enumerate(((10.6, 4.4, 0.35, 0.0), (10.45, 4.25, 0.12, 0.16))):
         n = 18; V = []
         for i in range(n + 1):
@@ -991,7 +997,7 @@ def build_props():
                 V.append((x, y, 0))
         V = np.array(V); rn = np.random.default_rng(150 + k)
         e_ = np.maximum(np.abs(V[:, 0]), np.abs(V[:, 1])) / 2.2
-        V[:, 2] = 0.15 - 0.08 * ss(0.85, 1.0, e_) + 0.025 * np.sin(V[:, 0] * 2.1 + k) * np.sin(V[:, 1] * 1.7) + 0.06 * np.exp(-(V[:, 0] / 0.12) ** 2)
+        V[:, 2] = 0.15 - 0.09 * ss(0.8, 1.0, e_) + 0.03 * np.sin(V[:, 0] * 2.1 + k) * np.sin(V[:, 1] * 1.7) + 0.05 * np.exp(-(V[:, 0] / 0.15) ** 2) - 0.03 * np.exp(-((V[:, 1] - 0.4) / 0.1) ** 2)
         Vb = V.copy(); Vb[:, 2] = 0.0
         nv = len(V); F = grid_faces(n + 1, n + 1)
         Fb = [tuple(i + nv for i in f[::-1]) for f in F]
@@ -1000,7 +1006,7 @@ def build_props():
         Fs = [(ring[q], ring[(q + 1) % len(ring)], ring[(q + 1) % len(ring)] + nv, ring[q] + nv) for q in range(len(ring))]
         VV = np.vstack([V, Vb]); cr, sr = math.cos(rot), math.sin(rot)
         VV = np.stack([VV[:, 0] * cr - VV[:, 1] * sr + cx, VV[:, 0] * sr + VV[:, 1] * cr + cy, VV[:, 2] + TZ + 0.02 + z0], -1)
-        o = mk('napkin_%d' % k, VV, F + Fb + Fs, None, NAP)
+        o = mk('napkin_%d' % k, VV, F + Fb + Fs, np.stack([VV[:, 0] / 0.25, VV[:, 1] / 0.25], -1), NAP)
         me = o.data; bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
     # ---- crumbs + spilled chili flakes on the cloth
     CR = bpy.data.materials['m_crust']
@@ -1039,10 +1045,10 @@ def build_room():
     V = [(-200, 75, TZ - 23), (200, 75, TZ - 23), (200, 75, 80), (-200, 75, 80)]
     mk('wall', V, [(0, 1, 2, 3)], None, WAL, coll=BG)
     # warm string lights / sconces -> bokeh
-    LB = pmat('m_bulb', 'ffc070', emit='ffb060', emit_s=40.0)
+    LB = pmat('m_bulb', 'ffc070', emit='ffb060', emit_s=14.0)
     rb_ = np.random.default_rng(170)
-    for k in range(60):
-        x = -90 + k * 3.0 + rb_.uniform(-0.8, 0.8); z = -6 + 4 * math.cos(k * 0.35) + rb_.uniform(-0.5, 0.5)
+    for k in range(36):
+        x = -90 + k * 5.0 + rb_.uniform(-0.8, 0.8); z = -6 + 4 * math.cos(k * 0.35) + rb_.uniform(-0.5, 0.5)
         bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=6, radius=0.5, location=(x, 72, z))
         o = bpy.context.object; o.data.materials.append(LB)
         for c_ in o.users_collection: c_.objects.unlink(o)
@@ -1050,10 +1056,28 @@ def build_room():
     for x in (-40, -12, 22, 48):
         bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=8, radius=1.6, location=(x, 73, -12))
         o = bpy.context.object; o.data.materials.append(pmat('m_sconce', 'ffb060', emit='ff9a40', emit_s=12.0))
-        pl = bpy.data.objects.new('wl', bpy.data.lights.new('wl', 'POINT')); BG.objects.link(pl); pl.location = (x, 70.5, -11); pl.data.energy = 30000; pl.data.color = (1, 0.6, 0.3)
+        pl = bpy.data.objects.new('wl', bpy.data.lights.new('wl', 'POINT')); BG.objects.link(pl); pl.location = (x, 70.5, -11); pl.data.energy = 9000; pl.data.color = (1, 0.6, 0.3)
         for c_ in o.users_collection: c_.objects.unlink(o)
         BG.objects.link(o)
 
+
+# ================================================================ Poly Haven CC0 surroundings (render only, not exported)
+PH = SCR + '/ph'
+def ph_import(rel, loc, rotz, scale=31.0):
+    f = os.path.join(PH, rel)
+    if not os.path.exists(f): log('missing', f); return
+    before = set(bpy.data.objects); bpy.ops.import_scene.gltf(filepath=f)
+    for o in set(bpy.data.objects) - before:
+        for c_ in list(o.users_collection): c_.objects.unlink(o)
+        BG.objects.link(o)
+        if o.parent is None:
+            o.location = loc; o.rotation_mode = 'XYZ'; o.rotation_euler = (0, 0, rotz); o.scale = (scale,) * 3
+
+def build_surroundings():
+    FLOOR = TZ - 23.0
+    ph_import('dining_chair_02/dining_chair_02_1k.gltf', (-8.0, HY + 7.5, FLOOR), 0.15)
+    ph_import('dining_chair_02/dining_chair_02_1k.gltf', (10.0, HY + 8.0, FLOOR), -0.2)
+    ph_import('lemon/lemon_1k.gltf', (-11.8, 5.6, TZ + 1.6), 0.7)
 
 # ================================================================ build
 TOPD = build_pizza_top()
@@ -1064,6 +1088,7 @@ build_tray()
 build_cloth()
 CANDLE = build_props()
 build_room()
+build_surroundings()
 
 def tri_count(objs):
     dg = bpy.context.evaluated_depsgraph_get(); n = 0
@@ -1190,6 +1215,7 @@ def setup_light():
     area('Top', (0, -4, 22), (0, 0, 0), 3000, 12, (1.0, 0.84, 0.66))
     area('Fill', (16, -18, 9), (0, 0, 0), 2500, 16, (1.0, 0.86, 0.72))
     area('Rim', (6, 24, 9), (0, 0, 0.5), 5000, 10, (1.0, 0.88, 0.75))
+    area('Back', (-17, 16, 7), (0, 0, 0), 7000, 12, (1.0, 0.82, 0.62))
     c = bpy.data.objects.new('Candle', bpy.data.lights.new('Candle', 'POINT')); scn.collection.objects.link(c)
     c.data.energy = 3000; c.data.color = (1.0, 0.55, 0.22); c.data.shadow_soft_size = 0.25; c.location = CANDLE
 
@@ -1212,13 +1238,14 @@ def render(shot):
         cam.location = (9.5, -8.5, 4.2); cam.data.angle_y = math.radians(30)
         tgt = Vector((0, 0.8, 0.4))
         cam.rotation_euler = (tgt - cam.location).to_track_quat('-Z', 'Y').to_euler()
-        cam.data.dof.use_dof = True; cam.data.dof.focus_distance = (Vector((0, 0, 1.6)) - cam.location).length; cam.data.dof.aperture_fstop = 5.6
+        cam.data.dof.use_dof = True; cam.data.dof.focus_distance = (Vector((0, 0, 1.6)) - cam.location).length; cam.data.dof.aperture_fstop = 2.0
     scn.render.engine = 'CYCLES'; scn.cycles.device = 'CPU'
     scn.cycles.samples = 16 if FAST else 64; scn.cycles.use_denoising = True
     scn.cycles.caustics_reflective = False; scn.cycles.caustics_refractive = False
     scn.cycles.max_bounces = 8; scn.cycles.transmission_bounces = 8; scn.cycles.glossy_bounces = 4
     scn.render.resolution_x, scn.render.resolution_y = (640, 360) if FAST else (1280, 720)
     scn.view_settings.view_transform = 'AgX'; scn.view_settings.look = 'AgX - Punchy'
+    scn.view_settings.exposure = -0.25
     scn.render.filepath = os.path.join(OUT, 'ex_%s.png' % shot)
     log('rendering', shot); bpy.ops.render.render(write_still=True); log('wrote', scn.render.filepath)
 

@@ -566,6 +566,15 @@ for k, (cm, dx) in enumerate(((RCA_RED, 0.0), (RCA_WHITE, 0.25))):
     cables.append(curve_mesh('Rca%d' % k, [Vector((-8.6, 5.6 - dx, PL_TOP - 1.0)), Vector((-8.4, 4.0 - dx, TABLE + 0.06)),
                                            Vector((-7.1, 7.2 + dx, TABLE + 0.06)), Vector((-6.2, 6.25, PL_TOP - 1.0))], 0.045, CABLE))
 
+# a CC0 boombox (Poly Haven, 1k textures) on the back of the booth as a monitor, outside the low view's frame
+PH = os.path.join(SP, 'vinyl_ph', 'boombox', 'boombox.gltf')
+if os.path.exists(PH):
+    before = set(bpy.data.objects); bpy.ops.import_scene.gltf(filepath=PH)
+    new = [o for o in bpy.data.objects if o not in before]
+    for o in new:
+        if o.parent is None or o.parent not in new: o.location = (4.6, 7.75, TABLE); o.scale = (12,) * 3; o.rotation_euler = (0, 0, 0.12)
+        if o.type == 'MESH': STAGE.append(o)
+
 for o in deck + deck2 + mixer + booth + speakers + cables:
     if not o.data.uv_layers: box_uv(o)
 

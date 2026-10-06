@@ -16,7 +16,7 @@ from mathutils import Vector, Matrix
 
 SCR = '/tmp/claude-0/-home-user-sumo/f8028735-3c86-5a27-b070-5e521ee72586/scratchpad'
 CHAR_DIR = SCR + '/stage'
-FLAGW = {'fast', 'noexport', 'norender'}
+FLAGW = {'fast', 'noexport', 'norender', 'nochars'}
 ARGS = [a for a in sys.argv[sys.argv.index('--') + 1 if '--' in sys.argv else 1:] if '=' not in a and a not in FLAGW and not a.endswith('.py')]
 OUT = ARGS[0] if ARGS else SCR + '/can'
 os.makedirs(OUT, exist_ok=True)
@@ -242,7 +242,7 @@ def lid_maps():
         n = RNG.standard_normal(nr).astype(F32); k = np.fft.rfftfreq(nr)
         n = np.fft.irfft(np.fft.rfft(n) * np.exp(-2 * math.pi ** 2 * (sig * k) ** 2), n=nr).astype(F32); prof += amp * n / n.std()
     spun = np.interp(R, rr, prof).astype(F32)
-    h = spun * 0.00025
+    h = spun * 0.0006
     # opening: score line, anti-fracture score, debossed panel, raised bead
     d = sd_uneven_capsule(X, Y, OPC1, OPR1, OPC2, OPR2)
     h += -0.007 * np.exp(-(d / 0.009) ** 2) - 0.003 * np.exp(-((d + 0.07) / 0.008) ** 2)
@@ -263,11 +263,13 @@ def lid_maps():
     nrm = normal_from_height(h, lpx, 1.0)
     # colour: aluminium, slightly darker grime in the score and at the text, faint water spots
     base = 0.80 + 0.015 * gn(R.shape, 40 * TEX, 3)
-    base -= 0.18 * np.exp(-(d / 0.012) ** 2) + 0.05 * tb
+    base -= 0.35 * np.exp(-(d / 0.012) ** 2) + 0.05 * tb
     spots = np.clip(gn(R.shape, 3 * TEX, 4) - 2.6, 0, 1)
     col = np.stack([base * 0.985, base * 0.99, base * 1.0], -1)
-    rough = 0.17 + 0.03 * gn(R.shape, 25 * TEX, 5) + 0.05 * np.clip(gn(R.shape, (60 * TEX, 8 * TEX), 6), 0, 3) + 0.25 * spots
-    rough += 0.08 * np.exp(-(d / 0.012) ** 2)
+    ink = ss(0.075, 0.06, np.abs(R - RING)) * (1 - 0.15 * ss(0.5, 2.5, gn(R.shape, 4 * TEX, 7)))   # printed ring, slightly worn
+    col = lerp(col, hx('d0142c') * 0.9, ink)
+    rough = 0.30 + 0.03 * gn(R.shape, 25 * TEX, 5) + 0.05 * np.clip(gn(R.shape, (60 * TEX, 8 * TEX), 6), 0, 3) + 0.25 * spots
+    rough += 0.08 * np.exp(-(d / 0.012) ** 2) - 0.12 * ink
     orm = np.stack([np.ones_like(rough), np.clip(rough, 0.05, 1), np.ones_like(rough)], -1)
     return img('lid_col', col), img('lid_orm', orm, True), img('lid_nrm', nrm, True)
 
@@ -276,9 +278,9 @@ del X, Y, R
 
 mLid, nt, bs = principled('mLidAlu', (0.8, 0.8, 0.8, 1), 1.0, 0.18)
 hook_maps(nt, bs, LID_COL, LID_ORM, LID_NRM, metal=True)
-aniso(nt, bs, 0.55, 'Z')
+aniso(nt, bs, 0.8, 'Z')
 mAlu, nt, bs = principled('mCanAlu', lin('d6d9dd'), 1.0, 0.16); aniso(nt, bs, 0.6, 'Z')
-mTab, nt, bs = principled('mTabAlu', lin('e2e5e9'), 1.0, 0.14); aniso(nt, bs, 0.5, 'X')
+mTab, nt, bs = principled('mTabAlu', lin('eceef1'), 1.0, 0.3); aniso(nt, bs, 0.6, 'X')
 
 # ================================================================ LID: geometry
 log('lid geometry')
@@ -291,7 +293,8 @@ P += [(4.18, 0), (4.22, -0.008), (4.25, -0.012), (4.28, -0.008), (4.32, 0), (4.4
       (5.25, 0.265), (5.295, 0.24), (5.33, 0.19), (5.352, 0.10), (5.36, -0.02), (5.362, -0.2), (5.36, -0.36)]
 LID = revolve('lid', P, 192, ('planar', LE), mat=mLid)
 NECK = [(5.36, -0.36), (5.35, -0.46), (5.34, -0.52), (5.35, -0.58), (5.40, -0.72), (5.50, -0.92), (5.66, -1.22),
-        (5.84, -1.58), (6.0, -1.95), (6.11, -2.3), (6.17, -2.58), (6.195, -2.78), (6.2, -2.95)]
+        (5.84, -1.58)]
+SHOULDER = [(5.84, -1.58), (6.0, -1.95), (6.11, -2.3), (6.17, -2.58), (6.195, -2.78), (6.2, -2.95)]   # printed
 revolve('neck', NECK, 160, None, mat=mAlu)
 
 # ================================================================ PULL TAB (stay-on tab, real geometry)
@@ -366,18 +369,32 @@ def bend(ob):
     me.update()
 
 OUTL, HOLE, SLOT = ccw(tab_outline()), ccw(hole_outline()), ccw(slot_outline())
-TZC, TEXT_, TBEV = 0.028, 0.006, 0.013          # tab mid-plane z, half extrude, rounded (hemmed) edge radius
-tab = curve_from('tab', [OUTL, HOLE, SLOT], TZC, TEXT_, TBEV, res=3)
+TZC, TEXT_, TBEV = 0.030, 0.003, 0.02          # tab mid-plane z, half extrude, rounded (hemmed) edge radius
+tab = curve_from('tab', [OUTL, HOLE, SLOT], TZC, TEXT_, TBEV, res=2)
 # embossed ribs: around the finger hole and a hem step inside the outline
-rib1 = curve_from('tab_rib_hole', [offset(HOLE, 0.20)], TZC + TEXT_ + TBEV - 0.009, 0, 0.013, dims='3D', res=2)
-rib2 = curve_from('tab_rib_hem', [offset(OUTL, -0.15)], TZC + TEXT_ + TBEV - 0.010, 0, 0.012, dims='3D', res=2)
+rib1 = curve_from('tab_rib_hole', [offset(HOLE, 0.22)], TZC + TEXT_ + TBEV - 0.004, 0, 0.022, dims='3D', res=3)
+rib2 = curve_from('tab_rib_hem', [offset(OUTL, -0.16)], TZC + TEXT_ + TBEV - 0.006, 0, 0.018, dims='3D', res=3)
 # flatten the rib tubes (stamped ribs are low and broad), then bend everything the same way
 for o in (rib1, rib2):
-    for v in o.data.vertices: v.co.z *= 0.6
+    for v in o.data.vertices: v.co.z *= 0.45
 for o in (tab, rib1, rib2):
     o.data.materials.clear(); o.data.materials.append(mTab); bend(o)
     for p in o.data.polygons: p.use_smooth = True
     o.data.set_sharp_from_angle(angle=math.radians(50))
+def hull(P):
+    P = sorted(map(tuple, P))
+    def half(pts):
+        h = []
+        for p in pts:
+            while len(h) >= 2 and (h[-1][0] - h[-2][0]) * (p[1] - h[-2][1]) - (h[-1][1] - h[-2][1]) * (p[0] - h[-2][0]) <= 0: h.pop()
+            h.append(p)
+        return h
+    lo, up = half(P), half(P[::-1]); return np.array(lo[:-1] + up[:-1], F32)
+OPEN = ccw(hull(arc(OPC1, OPR1, 0, TAU, 60)[:-1] + arc(OPC2, OPR2, 0, TAU, 120)[:-1]))
+bead = curve_from('lid_open_bead', [resample(offset(resample(OPEN, 0.05), 0.15), 0.05)], 0.0, 0, 0.05, dims='3D', res=3)
+for v in bead.data.vertices: v.co.z = max(v.co.z, -0.02) * 0.3
+bead.data.materials.append(mAlu)
+for p in bead.data.polygons: p.use_smooth = True
 # rivet head: a low dome through the tongue, and the lid's rivet button showing through the slot
 bpy.ops.mesh.primitive_uv_sphere_add(segments=40, ring_count=14, radius=0.2, location=(RIV[0], RIV[1], TZC + TEXT_ + TBEV - 0.004))
 riv = bpy.context.object; riv.scale = (1, 1, 0.075); bpy.ops.object.transform_apply(scale=True); bpy.ops.object.shade_smooth()
@@ -394,39 +411,44 @@ STAGE.objects.link(rr_)
 # ================================================================ CAN BODY + LABEL
 log('label')
 LW, LH = 2048 * TEX, 1024 * TEX
-ZT, ZB = -2.95, -19.15                  # label (straight body) span
+ZT, ZB = -1.58, -19.15                  # label span: printed shoulder + straight body
+ZS = -2.95                              # top of the straight body
+VS = (ZT - ZS) / (ZT - ZB)              # label v where the straight body starts
 TH0 = math.radians(-58) - 0.25 * TAU    # theta at u = 0: face centres (u = .25, .75) at -58 deg and 122 deg
 def label_maps():
     shape = (LH, LW)
-    v = ((np.arange(LH, dtype=F32) + 0.5) / LH)[:, None] * np.ones((1, LW), F32)
+    v0 = ((np.arange(LH, dtype=F32) + 0.5) / LH)[:, None] * np.ones((1, LW), F32)
+    v = (v0 - VS) / (1 - VS)                 # design coordinate: 0 at the top of the straight body
+    def VY(c): return (VS + c * (1 - VS)) * LH
+    def VH(c): return c * (1 - VS) * LH
     u = ((np.arange(LW, dtype=F32) + 0.5) / LW)[None, :] * np.ones((LH, 1), F32)
     RED, RED2, WHT, CRM, SIL = hx('c8102e'), hx('8e0a1f'), hx('f7f4ee'), hx('f2e3bf'), hx('c9ccd0')
     col = lerp(RED, RED2, ss(0.35, 1.05, v) * 0.6 + 0.12 * ss(0.5, 2.5, gn(shape, 120 * TEX, 11)))
     white = np.zeros(shape, F32); metal = np.zeros(shape, F32); cream = np.zeros(shape, F32); redtxt = np.zeros(shape, F32)
     shade = np.zeros(shape, F32)
     # top / bottom: unprinted metal edge, then white pinstripe
-    metal = np.maximum(metal, ss(0.012, 0.008, v)); white = np.maximum(white, ss(0.012, 0.014, v) * ss(0.026, 0.023, v))
+    metal = np.maximum(metal, ss(0.010, 0.006, v0)); white = np.maximum(white, ss(0.012, 0.014, v) * ss(0.026, 0.023, v))
     metal = np.maximum(metal, ss(0.988, 0.992, v)); white = np.maximum(white, ss(0.972, 0.975, v) * ss(0.988, 0.985, v))
     for half in (0, 1):
         cx = (0.25 + 0.5 * half) * LW
         # wordmark: bold italic KUMITE with a deep drop shadow, COLA reversed out of a cream swoosh
-        km = text_mask(shape, 'KUMITE', FONT_B, cx, 0.175 * LH, 0.20 * LH, spacing=1.02, maxw=0.43 * LW)
-        sh = np.roll(np.roll(km, int(0.012 * LH), 0), int(0.006 * LW), 1)
+        km = text_mask(shape, 'KUMITE', FONT_B, cx, VY(0.165), VH(0.17), spacing=1.02, maxw=0.25 * LW)
+        sh = np.roll(np.roll(km, int(0.010 * LH), 0), int(0.004 * LW), 1)
         shade = np.maximum(shade, sh * 0.65); white = np.maximum(white, km)
         uu = (u - (0.25 + 0.5 * half)) * 2       # -0.5..0.5 across the face
         top_ = 0.305 + 0.025 * np.sin(uu * TAU * 0.9 + 0.6); bot_ = 0.43 + 0.03 * np.sin(uu * TAU * 0.9 + 0.2)
         band = ss(top_, top_ + 0.004, v) * ss(bot_ + 0.004, bot_, v) * (np.abs(uu) < 0.5)
         cream = np.maximum(cream, band)
         white = np.maximum(white, ss(top_ - 0.016, top_ - 0.012, v) * ss(top_ - 0.006, top_ - 0.010, v) * (np.abs(uu) < 0.5))
-        redtxt = np.maximum(redtxt, text_mask(shape, 'C O L A', FONT_B, cx, 0.368 * LH, 0.075 * LH, spacing=1.0))
-        white = np.maximum(white, text_mask(shape, '組手コーラ', FONT_J, cx, 0.475 * LH, 0.040 * LH, spacing=1.3))
-        white = np.maximum(white, text_mask(shape, 'ICE COLD  ·  ORIGINAL TASTE  ·  350 ml', FONT_R, cx, 0.952 * LH, 0.020 * LH, spacing=1.1))
+        redtxt = np.maximum(redtxt, text_mask(shape, 'C O L A', FONT_B, cx, VY(0.368), VH(0.075), spacing=1.0))
+        white = np.maximum(white, text_mask(shape, '組手コーラ', FONT_J, cx, VY(0.475), VH(0.040), spacing=1.3))
+        white = np.maximum(white, text_mask(shape, 'ICE COLD  ·  ORIGINAL TASTE  ·  350 ml', FONT_R, cx, VY(0.952), VH(0.020), spacing=1.1))
     # fizz bubbles: rising streams, growing as they rise
     bub = np.zeros(shape, F32)
     for s in range(14):
         u0 = RNG.uniform(0, 1); drift = RNG.uniform(-0.03, 0.03)
         for k in range(RNG.integers(7, 13)):
-            t = RNG.uniform(0, 1) ** 0.8; vv = 0.93 - t * 0.42; uu0 = (u0 + drift * t + 0.012 * math.sin(t * 9 + s)) % 1
+            t = RNG.uniform(0, 1) ** 0.8; vv = VS + (0.93 - t * 0.42) * (1 - VS); uu0 = (u0 + drift * t + 0.012 * math.sin(t * 9 + s)) % 1
             r = (4 + 26 * t ** 1.3 + RNG.uniform(0, 6)) * TEX
             cxp, cyp = uu0 * LW, vv * LH
             x0, x1, y0, y1 = int(cxp - r - 3), int(cxp + r + 4), int(cyp - r - 3), int(cyp + r + 4)
@@ -440,11 +462,11 @@ def label_maps():
     col = lerp(col, CRM, cream); col = lerp(col, RED, redtxt * cream)
     col = lerp(col, WHT, white * (1 - redtxt)); col = lerp(col, SIL, metal)
     # condensation: fog (micro droplets, rougher) with clear trails where drops ran down
-    fog = ss(-1.2, 0.6, gn(shape, 40 * TEX, 12)) * ss(0.0, 0.05, v)
+    fog = ss(-1.2, 0.6, gn(shape, 40 * TEX, 12)) * ss(0.0, 0.05, v0)
     trails = []
     clear = np.zeros(shape, F32)
     for k in range(70):
-        tu = RNG.uniform(0.01, 0.99); tv0 = RNG.uniform(0.02, 0.7); tv1 = min(0.985, tv0 + RNG.uniform(0.06, 0.35))
+        tu = RNG.uniform(0.01, 0.99); tv0 = RNG.uniform(VS + 0.01, 0.7); tv1 = min(0.985, tv0 + RNG.uniform(0.06, 0.35))
         w = RNG.uniform(2.5, 6) * TEX
         y0, y1 = int(tv0 * LH), int(tv1 * LH)
         yy = np.arange(y0, y1)
@@ -478,7 +500,7 @@ LB_COL, LB_ORM, LB_NRM, TRAILS = label_maps()
 mLabel, nt, bs = principled('mLabel', (0.8, 0.1, 0.1, 1), 0.3, 0.1, **{'Coat Weight': 0.0})
 hook_maps(nt, bs, LB_COL, LB_ORM, LB_NRM, metal=True)
 log('can body')
-BODY = [(RB, ZT)] + [(RB, float(z)) for z in np.linspace(ZT, ZB, 9)[1:]]
+BODY = SHOULDER + [(RB, float(z)) for z in np.linspace(ZS, ZB, 9)[1:]]
 revolve('can_body', BODY, 160, ('cyl', ZT, ZB, TH0 / TAU % 1.0), mat=mLabel)
 BOT = [(6.2, -19.15), (6.17, -19.5), (6.05, -19.9), (5.8, -20.3), (5.45, -20.65), (5.15, -20.9), (4.98, -20.99),
        (4.85, -21.0), (4.72, -20.96), (4.62, -20.82), (4.5, -20.55), (4.0, -20.2), (3.0, -19.95), (1.5, -19.82), (0, -19.8)]
@@ -522,20 +544,20 @@ items = []
 for tu, tv, w in TRAILS:
     th = TH0 + tu * TAU; z = ZT + (ZB - ZT) * (1 - (1 - tv))
     z = ZT - tv * (ZT - ZB); r = max(0.16, w * TAU * RB * 1.6)
-    if try_place(th, z, r):
+    if z < ZS - 0.3 and try_place(th, z, r):
         items.append(((RB * math.cos(th), RB * math.sin(th), z), (math.cos(th), math.sin(th), 0), (-math.sin(th), math.cos(th), 0), r, r * 0.75, 1.5))
-NDROP = 700 if FAST else 2100
+NDROP = 700 if FAST else 1500
 tries = 0
 while len(items) < NDROP and tries < NDROP * 8:
     tries += 1
-    th = RNG.uniform(0, TAU); z = RNG.uniform(ZB + 0.2, ZT - 0.1)
+    th = RNG.uniform(0, TAU); z = RNG.uniform(ZB + 0.2, ZS - 0.1)
     r = float(np.clip(RNG.lognormal(math.log(0.075), 0.55), 0.03, 0.32))
     if not try_place(th, z, r): continue
     el = 1.0 if r < 0.17 else RNG.uniform(1.0, 1.35)
     items.append(((RB * math.cos(th), RB * math.sin(th), z), (math.cos(th), math.sin(th), 0), (-math.sin(th), math.cos(th), 0), r, r * RNG.uniform(0.55, 0.8), el))
 # a few on the neck
 for k in range(120):
-    i = RNG.integers(3, len(NECK) - 2); f = RNG.uniform(); (r0, z0), (r1, z1) = NECK[i], NECK[i + 1]
+    NS = NECK + SHOULDER[1:]; i = RNG.integers(3, len(NS) - 1); f = RNG.uniform(); (r0, z0), (r1, z1) = NS[i], NS[i + 1]
     rr, zz = r0 + (r1 - r0) * f, z0 + (z1 - z0) * f; th = RNG.uniform(0, TAU)
     nr_ = Vector((zz - z1 if False else (z0 - z1), 0, (r1 - r0))).normalized()  # profile normal in (r, z)
     n = Vector((nr_.x * math.cos(th), nr_.x * math.sin(th), nr_.z)); t = Vector((-math.sin(th), math.cos(th), 0))
@@ -549,11 +571,11 @@ log('droplets', len(items))
 log('counter')
 def wood_maps():
     N = 1024 * TEX; shape = (N, N); rows = np.arange(N)[:, None] * np.ones((1, N))
-    nst = 8; sw = N // nst; st = (rows // sw).astype(int); yl = (rows % sw) / sw
+    nst = 2; sw = N // nst; st = (rows // sw).astype(int); yl = (rows % sw) / sw
     rng = np.random.default_rng(21); tone = rng.uniform(-1, 1, nst)[st]; hue = rng.uniform(-1, 1, nst)[st]
-    grain = gn(shape, (1.0 * TEX, 90 * TEX), 22); grain2 = gn(shape, (3 * TEX, 260 * TEX), 23)
+    grain = gn(shape, (1.2 * TEX, 140 * TEX), 22); grain2 = gn(shape, (6 * TEX, 300 * TEX), 23)
     warp = gn(shape, (40 * TEX, 300 * TEX), 24)
-    rings = np.sin((yl * 9 + 0.9 * warp + st * 1.7) * TAU * 0.5) ** 6
+    rings = np.sin((yl * 14 + 1.6 * warp + st * 1.7) * TAU * 0.5) ** 4
     t = 0.45 + 0.17 * tone + 0.10 * grain2 + 0.07 * grain + 0.2 * rings
     LIGHT, DARK = hx('c99363'), hx('7a4a26')
     col = lerp(DARK, LIGHT, np.clip(t, 0, 1)); col = lerp(col, hx('a8683a'), 0.25 * (hue > 0.3))
@@ -592,53 +614,11 @@ def box(name, lo, hi, mat, coll, uvscale=None, bevel=0.0):
         m = o.modifiers.new('b', 'BEVEL'); m.width = bevel; m.segments = 3
     return o
 
-CX0, CX1, CY0, CY1 = -150, 150, -110, 92
-box('counter', (CX0, CY0, TZ - 8), (CX1, CY1, TZ), mWood, STAGE, uvscale=64.0)
+CX0, CX1, CY0, CY1 = -170, 170, -120, 70
+box('counter', (CX0, CY0, TZ - 8), (CX1, CY1, TZ), mWood, STAGE, uvscale=64.0, bevel=1.6)
 
-# back wall: subway tiles below a big window; window frame and mullions; cream side wall
-def tile_maps():
-    N = 512 * TEX; shape = (N, N); tw, th = N // 2, N // 4      # 2 x 4 tiles per texture
-    yy, xx = np.mgrid[0:N, 0:N].astype(F32); row = (yy // th).astype(int); xo = (xx + (row % 2) * tw / 2) % tw; yo = yy % th
-    g = 3.0 * TEX
-    edge = np.minimum(np.minimum(xo, tw - xo), np.minimum(yo, th - yo))
-    grout = ss(g + 1, g - 1, edge)
-    bevel_h = np.clip(edge - g, 0, 6 * TEX) / (6 * TEX)
-    tid = (row * 7 + ((xx + (row % 2) * tw / 2) // tw).astype(int) * 3) % 11
-    tint = 0.94 + 0.02 * np.sin(tid * 2.3)
-    col = lerp(np.array([0.95, 0.95, 0.93], F32) * tint[..., None], hx('9c968c'), grout)
-    nrm = normal_from_height(ss(0, 1, bevel_h) * 0.25 + 0.01 * gn(shape, 8, 31), 28.0 / tw, 1.0)
-    orm = np.stack([np.ones(shape, F32), 0.08 + 0.7 * grout, np.zeros(shape, F32)], -1)
-    return img('tile_col', col), img('tile_orm', orm, True), img('tile_nrm', nrm, True)
-T_COL, T_ORM, T_NRM = tile_maps()
-mTile, nt, bs = principled('mTile', (0.9, 0.9, 0.9, 1), 0, 0.1); hook_maps(nt, bs, T_COL, T_ORM, T_NRM, mapping=(1, 1, 1))
-mPaint, *_ = principled('mPaint', lin('efe6d6'), 0, 0.6)
-mFrame, *_ = principled('mFrame', lin('f4f2ee'), 0, 0.35)
-WY = CY1 + 1; WX0, WX1, WZ0, WZ1 = -110, 40, 8, 150
-box('wall_tiles', (CX0 - 60, WY, TZ), (CX1 + 60, WY + 4, WZ0), mTile, ROOM, uvscale=56.0)
-box('wall_l', (CX0 - 60, WY, WZ0), (WX0, WY + 4, WZ1 + 60), mPaint, ROOM)
-box('wall_r', (WX1, WY, WZ0), (CX1 + 60, WY + 4, WZ1 + 60), mPaint, ROOM)
-box('wall_t', (WX0, WY, WZ1), (WX1, WY + 4, WZ1 + 60), mPaint, ROOM)
-for (a, b) in (((WX0, WY - 3, WZ0 - 2), (WX1, WY + 6, WZ0 + 3)),          # sill
-               ((WX0, WY - 1, WZ1 - 4), (WX1, WY + 6, WZ1)),
-               ((WX0, WY - 1, WZ0), (WX0 + 4, WY + 6, WZ1)), ((WX1 - 4, WY - 1, WZ0), (WX1, WY + 6, WZ1)),
-               ((-37, WY, WZ0), (-34, WY + 5, WZ1)), ((WX0, WY, 76), (WX1, WY + 5, 79))):
-    box('frame', a, b, mFrame, ROOM, bevel=0.5)
-box('wall_side', (CX0 - 64, -200, TZ - 10), (CX0 - 60, WY + 4, WZ1 + 60), mPaint, ROOM)
-# outside: bright sky over soft greenery, blurred, as an emitter
-def outside_map():
-    W_, H_ = 1024, 512; v = (np.arange(H_, dtype=F32)[:, None] / H_) * np.ones((1, W_), F32)
-    sky = lerp(hx('a9c8ec'), hx('eef4fb'), ss(0.0, 0.75, v))
-    trees = ss(0.62 + 0.12 * gn((H_, W_), (30, 60), 41), 0.66 + 0.12 * gn((H_, W_), (30, 60), 41), v)
-    leaf = lerp(hx('5f8a4a'), hx('a8c47a'), ss(-1, 1.5, gn((H_, W_), 10, 42)))
-    col = lerp(sky, leaf, trees * 0.85)
-    return img('outside', col)
-mOut = bpy.data.materials.new('mOutside'); mOut.use_nodes = True; nt = mOut.node_tree; nt.nodes.clear()
-o_ = nt.nodes.new('ShaderNodeOutputMaterial'); em = nt.nodes.new('ShaderNodeEmission'); em.inputs['Strength'].default_value = 3.2
-tx = tex_node(nt, outside_map()); nt.links.new(tx.outputs['Color'], em.inputs['Color']); nt.links.new(em.outputs[0], o_.inputs[0])
-bpy.ops.mesh.primitive_plane_add(size=1, location=(-30, 175, 70)); op = bpy.context.object; op.scale = (420, 260, 1)
-op.rotation_euler = (math.pi / 2, 0, 0); op.name = 'outside'; op.data.materials.append(mOut)
-for c in op.users_collection: c.objects.unlink(op)
-ROOM.objects.link(op)
+HDRI_ROT = 150
+HDRI = SCR + '/ph/small_empty_house_2k.hdr'   # CC0, Poly Haven (render-only lighting/reflections)
 
 # ================================================================ puddle ring + stray drops on the counter
 log('puddle')
@@ -683,7 +663,7 @@ def napkin_maps():
 NP_COL, NP_NRM = napkin_maps()
 mNap, nt, bs = principled('mNapkin', (0.94, 0.94, 0.93, 1), 0, 0.85, **{'Subsurface Weight': 0.15, 'Subsurface Radius': (0.5, 0.5, 0.5)})
 hook_maps(nt, bs, NP_COL, None, NP_NRM)
-bpy.ops.mesh.primitive_grid_add(x_subdivisions=48, y_subdivisions=48, size=30, location=(GX + 1.5, GY - 1.0, NAPZ))
+bpy.ops.mesh.primitive_grid_add(x_subdivisions=32, y_subdivisions=32, size=30, location=(GX + 1.5, GY - 1.0, NAPZ))
 nap = bpy.context.object; nap.name = 'napkin'; nap.rotation_euler.z = math.radians(23)
 gnp = gn((64, 64), 4, 52)
 for v in nap.data.vertices:
@@ -737,7 +717,7 @@ def straw_map():
     col = lerp(np.array([0.96, 0.95, 0.92], F32) * np.ones((N, N, 1), F32), hx('d21f2b'), m)
     return img('straw_col', col)
 mStraw, nt, bs = principled('mStraw', (1, 1, 1, 1), 0, 0.55); hook_maps(nt, bs, straw_map())
-SL = 44.0
+SL = 38.0
 bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=0.62, depth=SL, end_fill_type='NOTHING', location=(0, 0, 0))
 stw = bpy.context.object; stw.name = 'straw'
 uvl = stw.data.uv_layers.active.data
@@ -784,6 +764,12 @@ def tri_count(coll):
         ev = o.evaluated_get(dg); me = ev.to_mesh(); me.calc_loop_triangles(); n += len(me.loop_triangles); ev.to_mesh_clear()
     return n
 TRIS = tri_count(STAGE)
+if 'norender' in sys.argv:
+    dg = bpy.context.evaluated_depsgraph_get(); per = []
+    for o in STAGE.all_objects:
+        if o.type != 'MESH': continue
+        ev = o.evaluated_get(dg); me = ev.to_mesh(); me.calc_loop_triangles(); per.append((len(me.loop_triangles), o.name)); ev.to_mesh_clear()
+    log(sorted(per, reverse=True)[:12])
 log('stage triangles', TRIS)
 
 
@@ -867,27 +853,22 @@ def add_characters():
 # ================================================================ lights, world, cameras, render
 def setup_lights():
     world = bpy.data.worlds.new('W'); world.use_nodes = True; scn.world = world; nt = world.node_tree
-    bg = nt.nodes['Background']; tc = nt.nodes.new('ShaderNodeTexCoord'); sep = nt.nodes.new('ShaderNodeSeparateXYZ')
-    cr = nt.nodes.new('ShaderNodeValToRGB'); nt.links.new(tc.outputs['Generated'], sep.inputs[0]); nt.links.new(sep.outputs['Z'], cr.inputs['Fac'])
-    cr.color_ramp.elements[0].position = 0.45; cr.color_ramp.elements[0].color = (0.30, 0.27, 0.24, 1)
-    cr.color_ramp.elements[1].position = 0.75; cr.color_ramp.elements[1].color = (0.62, 0.66, 0.72, 1)
-    nt.links.new(cr.outputs['Color'], bg.inputs['Color']); bg.inputs['Strength'].default_value = 0.55
+    bg = nt.nodes['Background']; env = nt.nodes.new('ShaderNodeTexEnvironment'); env.image = bpy.data.images.load(HDRI)
+    tc = nt.nodes.new('ShaderNodeTexCoord'); mp = nt.nodes.new('ShaderNodeMapping'); mp.inputs['Rotation'].default_value = (0, 0, math.radians(HDRI_ROT))
+    nt.links.new(tc.outputs['Generated'], mp.inputs['Vector']); nt.links.new(mp.outputs['Vector'], env.inputs['Vector'])
+    nt.links.new(env.outputs['Color'], bg.inputs['Color']); bg.inputs['Strength'].default_value = 1.0
     sun = bpy.data.objects.new('Sun', bpy.data.lights.new('Sun', 'SUN')); scn.collection.objects.link(sun)
-    sun.data.energy = 4.2; sun.data.angle = math.radians(2.5); sun.data.color = (1.0, 0.97, 0.92)
+    sun.data.energy = 5.0; sun.data.angle = math.radians(2.5); sun.data.color = (1.0, 0.985, 0.96)
     d = Vector((0.33, -0.78, -0.53)).normalized(); sun.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
     key = bpy.data.objects.new('Key', bpy.data.lights.new('Key', 'AREA')); scn.collection.objects.link(key)
-    key.data.shape = 'DISK'; key.data.size = 30; key.data.energy = 3.2e4; key.data.color = (1.0, 0.74, 0.48)
+    key.data.shape = 'DISK'; key.data.size = 30; key.data.energy = 2.4e4; key.data.color = (1.0, 0.76, 0.52)
     key.location = (42, -40, 38); key.rotation_euler = (Vector((0, 0, 0)) - key.location).to_track_quat('-Z', 'Y').to_euler()
-    win = bpy.data.objects.new('WinFill', bpy.data.lights.new('WinFill', 'AREA')); scn.collection.objects.link(win)
-    win.data.shape = 'RECTANGLE'; win.data.size = 150; win.data.size_y = 140; win.data.energy = 8e4; win.data.color = (0.86, 0.92, 1.0)
-    win.location = ((WX0 + WX1) / 2, WY - 2, (WZ0 + WZ1) / 2); win.rotation_euler = (math.radians(90), 0, 0)
-    win.visible_glossy = False; win.visible_camera = False
 
 def cam_setup(shot):
     cam = bpy.data.objects.get('Cam')
     if not cam:
         cam = bpy.data.objects.new('Cam', bpy.data.cameras.new('Cam')); scn.collection.objects.link(cam); scn.camera = cam
-    cam.data.sensor_fit = 'VERTICAL'; cam.data.dof.use_dof = False; cam.data.clip_end = 2000
+    cam.data.sensor_fit = 'VERTICAL'; cam.data.dof.use_dof = False; cam.data.clip_end = 2000; cam.data.type = 'PERSP'
     def aim(loc, tgt, fov, fstop=None, focus=None):
         cam.location = loc; cam.data.angle_y = math.radians(fov)
         cam.rotation_euler = (Vector(tgt) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
@@ -898,9 +879,12 @@ def cam_setup(shot):
         el = math.radians(50); dist = 21
         aim((0, -dist * math.cos(el), dist * math.sin(el)), (0, 0.6, 0), 34)
     elif shot == 'low':
-        aim((12.5, -11.5, 2.7), (0, 0.6, -1.1), 32, 4.0, (0, 0, 1.2))
+        aim((10.0, -9.5, 3.4), (0, 0.6, -0.4), 31, 4.0, (0, 0, 1.2))
     elif shot == 'tab':
-        aim((2.6, -6.6, 0.62), (0.1, -1.4, 0.25), 34, 2.8, (0, -1.3, 0.05))
+        aim((-2.6, -5.6, 2.6), (0.05, -0.75, 0.0), 36, 4.0, (0, -1.2, 0.03))
+    elif shot == 'top':      # debug: orthographic top view of the tab
+        aim((0, 0.1, 6), (0, 0.1, 0), 30); cam.data.type = 'ORTHO'; cam.data.ortho_scale = 6.0
+        cam.rotation_euler = (0, 0, 0)
     elif shot == 'can':
         aim((40, -44, -3.0), (-3.0, 2.0, -8.5), 42, 8.0, (0, -6.2, -10))
 
@@ -918,7 +902,8 @@ def render(shot):
     log('render', shot); bpy.ops.render.render(write_still=True); log('done', scn.render.filepath)
 
 if 'norender' not in sys.argv:
-    add_characters(); setup_lights()
+    if 'nochars' not in sys.argv: add_characters()
+    setup_lights()
     for s in SHOTS: render(s)
 
 # ================================================================ export (stage only, textures <= 1024)
