@@ -406,28 +406,35 @@ def tex_net():
 
 
 def tex_windows(seed, kind='glass'):
-    """Facade: 8 floors x 8 bays per tile (tile = 24 m x 28.8 m). Returns base colour (sRGB) and emission (sRGB)."""
-    n = 512; c = n // 8; rng = np.random.default_rng(seed)
+    """Facade tile: 16 floors x 16 bays (tile = 24 m x 57.6 m; 1.5 m bays, 3.6 m floors). Lit offices come in runs
+    along a floor, with a few whole lit floors. Returns base colour (sRGB) and emission (sRGB)."""
+    n = 512; c = n // 16; rng = np.random.default_rng(seed)
     base = np.zeros((n, n, 3), np.float32); em = np.zeros((n, n, 3), np.float32)
     yy, xx = np.mgrid[0:c, 0:c]
-    for fy in range(8):
-        floor_on = rng.uniform(0.15, 0.7)
-        for bx in range(8):
-            if kind == 'glass':
-                win = (xx >= 3) & (xx < c - 3) & (yy >= 9) & (yy < c - 4)
-                bcol = srgb('1b222c'); wcol = srgb('0d141e') * rng.uniform(0.8, 1.3)
-            else:
-                win = (xx >= 12) & (xx < c - 12) & (yy >= 16) & (yy < c - 12)
-                bcol = srgb('4a4844') * rng.uniform(0.85, 1.1); wcol = srgb('10141a')
-            cell = np.where(win[..., None], wcol, bcol)
+    if kind == 'glass':
+        win = (xx >= 2) & (xx < c - 1) & (yy >= 7) & (yy < c - 2)
+        bcol = srgb('20262e'); wcol0 = srgb('0b1119')
+    else:
+        win = (xx >= 6) & (xx < c - 6) & (yy >= 9) & (yy < c - 6)
+        bcol = srgb('3c3a37'); wcol0 = srgb('0e1116')
+    for fy in range(16):
+        whole = rng.random() < 0.12
+        tint = srgb(rng.choice(['ffcf96', 'ffe2b0', 'f4f0e6', 'dbe6f6', 'ffb878']))
+        lit = np.zeros(16, bool)
+        if whole: lit[:] = rng.random(16) < 0.92
+        else:
+            for _ in range(rng.integers(0, 4)):
+                s0 = rng.integers(0, 16); L = rng.integers(1, 6); lit[s0:s0 + L] = True
+        for bx in range(16):
+            cell = np.where(win[..., None], wcol0 * rng.uniform(0.7, 1.4), bcol * rng.uniform(0.9, 1.08))
             e = np.zeros((c, c, 3), np.float32)
-            if rng.random() < floor_on:
-                tint = srgb(rng.choice(['ffc98a', 'ffd9a0', 'fff1d8', 'd8e8ff', 'ffb070']))
-                I = rng.uniform(0.35, 1.0)
-                grad = 0.75 + 0.25 * (yy / c)          # ceiling light falls off downwards
-                blind = rng.random() < 0.3
-                if blind: grad = grad * (0.4 + 0.6 * ((yy // 3) % 2))
-                e = np.where(win[..., None], tint * I * grad[..., None], 0)
+            if lit[bx]:
+                I = rng.uniform(0.25, 0.75) * (1.3 if whole else 1.0)
+                grad = 0.6 + 0.4 * (yy / c)
+                if rng.random() < 0.35: grad = grad * (0.35 + 0.65 * ((yy // 2) % 2))   # blinds
+                e = np.where(win[..., None], tint * I * grad[..., None] * rng.uniform(0.8, 1.1), 0)
+            elif rng.random() < 0.06:    # a screen / tv glow
+                e = np.where(win[..., None], srgb('7fa8ff') * 0.15, 0)
             base[fy * c:(fy + 1) * c, bx * c:(bx + 1) * c] = cell
             em[fy * c:(fy + 1) * c, bx * c:(bx + 1) * c] = e
     return base, em
@@ -501,8 +508,8 @@ M_COPING = mat('Coping', lin('7d8287'), 0.35, 0.8)
 sc, sn = tex_sock()
 M_SOCK = mat('Windsock', tcol=image('sock_col', sc), tnrm=image('sock_n', sn, True), rough=0.75, sheen=0.4)
 gb, ge = tex_windows(1, 'glass'); cb, ce = tex_windows(2, 'concrete')
-M_CITY_G = mat('CityGlass', tcol=image('cityg_col', gb), temit=image('cityg_em', ge), estr=3.0, rough=0.25, spec=0.6)
-M_CITY_C = mat('CityConc', tcol=image('cityc_col', cb), temit=image('cityc_em', ce), estr=3.0, rough=0.7)
+M_CITY_G = mat('CityGlass', tcol=image('cityg_col', gb), temit=image('cityg_em', ge), estr=1.6, rough=0.25, spec=0.6)
+M_CITY_C = mat('CityConc', tcol=image('cityc_col', cb), temit=image('cityc_em', ce), estr=1.6, rough=0.7)
 sb, se = tex_streets()
 M_STREET = mat('Streets', tcol=image('street_col', sb), temit=image('street_em', se), estr=4.0, rough=0.9)
 tb, te = tex_windows(17, 'glass')
@@ -653,7 +660,8 @@ rail = bm_obj('GuardRail', bm, [M_GALV], smooth=40)
 # tower body: crown louvre band then curtain wall down to the street
 bm = bmesh.new(); add_box(bm, ((X0 + X1) / 2, (Y0 + Y1) / 2, ROOF - 3.5), (X1 - X0 + 0.3, Y1 - Y0 + 0.3, 6.0), 0)
 crown = bm_obj('TowerCrown', bm, [M_LOUVRE], smooth=0); box_uv(crown, 3.0)
-bm = bmesh.new(); add_box(bm, ((X0 + X1) / 2, (Y0 + Y1) / 2, (ROOF - 6.5 - 150) / 2), (X1 - X0, Y1 - Y0, 150 + ROOF + 6.5 + 0.01 + 3), 0)
+FT = ROOF - 9.45
+bm = bmesh.new(); add_box(bm, ((X0 + X1) / 2, (Y0 + Y1) / 2, (FT - 150) / 2), (X1 - X0, Y1 - Y0, FT + 150), 0)
 tower = bm_obj('TowerFacade', bm, [M_TOWER], smooth=0)
 me = tower.data; uvt = me.uv_layers.new(name='UVMap')
 for p in me.polygons:
@@ -661,7 +669,7 @@ for p in me.polygons:
     for li in p.loop_indices:
         co = me.vertices[me.loops[li].vertex_index].co
         u = co.x if abs(n.y) > 0.5 else co.y
-        uvt.data[li].uv = (u / 24.0, co.z / 28.8)
+        uvt.data[li].uv = (u / 24.0, co.z / 57.6)
 
 # ---------------------------------------------------------------- stair hut (front-left), with door, lamp, exit sign
 HX, HY = -13.2, -6.6; HW, HD, HH = 4.2, 3.6, 3.0
@@ -992,8 +1000,8 @@ for gx in range(-12, 13):
         if d > 380: continue
         if rng.random() < 0.12: continue       # parks / plazas
         sx = rng.uniform(13, 22); sy = rng.uniform(13, 22)
-        hmax = 60 + 120 * math.exp(-((d - 140) / 120) ** 2)
-        h = rng.uniform(25, hmax) * (1.35 if rng.random() < 0.08 else 1.0)
+        hmax = 40 + 70 * sstep(60, 200, d) + 90 * sstep(180, 320, d) * (rng.random() < 0.35)
+        h = rng.uniform(18, hmax)
         target = bm if rng.random() < 0.55 else bmc
         top = GROUND + h
         ret = add_box(target, (cx + rng.uniform(-3, 3), cy + rng.uniform(-3, 3), GROUND + h / 2), (sx, sy, h), 0)
@@ -1008,11 +1016,11 @@ city_c = bm_obj('CityConcrete', bmc, [M_CITY_C, M_STEELD], smooth=0)
 for o, sd in ((city_g, 1), (city_c, 2)):
     me = o.data; uvc = me.uv_layers.new(name='UVMap'); r2 = np.random.default_rng(sd)
     for p in me.polygons:
-        n = p.normal; off = (int(r2.integers(8)) / 8, int(r2.integers(8)) / 8)
+        n = p.normal; off = (int(r2.integers(16)) / 16, int(r2.integers(16)) / 16)
         for li in p.loop_indices:
             co = me.vertices[me.loops[li].vertex_index].co
             if abs(n.z) > 0.5: u, v = 0.01, 0.01
-            else: u, v = ((co.x if abs(n.y) > 0.5 else co.y) / 24.0 + off[0], (co.z - GROUND) / 28.8 + off[1])
+            else: u, v = ((co.x if abs(n.y) > 0.5 else co.y) / 24.0 + off[0], (co.z - GROUND) / 57.6 + off[1])
             uvc.data[li].uv = (u, v)
 bm = bmesh.new()
 for (cx, cy, z) in REDS: add_sphere(bm, (cx, cy, z), 0.9, 6, 4, 0)
@@ -1077,7 +1085,7 @@ world = bpy.data.worlds.new('W'); world.use_nodes = True; scn.world = world; nt 
 bg = nt.nodes['Background']
 env = nt.nodes.new('ShaderNodeTexEnvironment'); env.image = bpy.data.images.load(os.path.join(PH, 'rooftop_night.hdr'))
 tco = nt.nodes.new('ShaderNodeTexCoord'); mpw = nt.nodes.new('ShaderNodeMapping')
-mpw.inputs['Rotation'].default_value = (0, 0, math.radians(float(OPT.get('hrot', 90))))
+mpw.inputs['Rotation'].default_value = (0, 0, math.radians(float(OPT.get('hrot', 60))))
 nt.links.new(tco.outputs['Generated'], mpw.inputs['Vector']); nt.links.new(mpw.outputs['Vector'], env.inputs['Vector'])
 sep = nt.nodes.new('ShaderNodeSeparateXYZ'); nt.links.new(tco.outputs['Generated'], sep.inputs['Vector'])
 mr = nt.nodes.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = -0.02; mr.inputs['From Max'].default_value = 0.06
@@ -1204,13 +1212,13 @@ scn.cycles.max_bounces = 6; scn.cycles.glossy_bounces = 3; scn.cycles.transparen
 scn.cycles.sample_clamp_indirect = 6.0; scn.cycles.caustics_reflective = scn.cycles.caustics_refractive = False
 scn.render.resolution_x, scn.render.resolution_y = 1280, 720; scn.render.resolution_percentage = PCT
 scn.view_settings.view_transform = 'AgX'; scn.view_settings.look = 'AgX - Medium High Contrast'
-scn.view_settings.exposure = float(OPT.get('exp', 0.0))
+scn.view_settings.exposure = float(OPT.get('exp', 0.4))
 scn.use_nodes = True; cnt = scn.node_tree
 rl = cnt.nodes['Render Layers']; comp = cnt.nodes['Composite']
 gl = cnt.nodes.new('CompositorNodeGlare'); gl.glare_type = 'FOG_GLOW'; gl.quality = 'HIGH'; gl.threshold = 1.5; gl.mix = -0.75; gl.size = 7
 cnt.links.new(rl.outputs['Image'], gl.inputs['Image']); cnt.links.new(gl.outputs['Image'], comp.inputs['Image'])
 
-for shot in ('game', 'low', 'top'):
+for shot in ('game', 'low', 'top', 'hcl'):
     if shot not in SHOTS: continue
     if shot == 'game':
         el = math.radians(50); dist = 21
@@ -1219,6 +1227,9 @@ for shot in ('game', 'low', 'top'):
     elif shot == 'low':
         cam.location = (9.5, -8.5, 4.2); cam.data.angle_y = math.radians(30)
         cam.rotation_euler = (Vector((0, 0.8, 0.4)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
+    elif shot == 'hcl':
+        cam.location = (-3.0, -1.0, 2.5); cam.data.angle_y = math.radians(35)
+        cam.rotation_euler = (Vector((HELI_POS[0], HELI_POS[1], ROOF + 1.5)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
     else:
         cam.location = (-2, -2, 40); cam.data.angle_y = math.radians(50)
         cam.rotation_euler = (Vector((-2, 0, 0)) - cam.location).to_track_quat('-Z', 'Y').to_euler()
