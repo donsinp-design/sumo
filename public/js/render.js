@@ -533,6 +533,20 @@
         }
         case 'free':
           if (w.contact && w.fwdIn > 0.4) { p = 0.5; c = 0.62; Rh = [0.32, 0.5, 0.88]; Lh = mir(Rh); }
+          else if (!w.contact) {
+            // walking: the guard drops and the arms hang by the belly, swinging against the legs
+            const sp = w.spd !== undefined ? w.spd : Math.hypot(w.vx || 0, w.vz || 0);
+            const dtp = Math.min(0.1, Math.max(0, T - (this.gaitT || T))); this.gaitT = T;
+            this.gaitW = (this.gaitW || 0) + ((w.relaxed ? 1 : Math.min(1, Math.max(0, (sp - 0.4) / 1.2))) - (this.gaitW || 0)) * Math.min(1, dtp * 6);
+            this.gaitPh = (this.gaitPh || 0) + dtp * (4 + sp * 1.6);
+            const k = this.gaitW;
+            if (k > 0.01) {
+              const sw = Math.sin(this.gaitPh) * (0.12 + 0.06 * Math.min(1, sp / 4)) * Math.min(1, sp / 0.8);
+              const hang = (s) => [0.66, 0.04 + Math.abs(s) * 0.25, 0.1 + s];
+              Rh = lerpA(G, hang(sw), k); Lh = mir(lerpA(G, hang(-sw), k));
+              c = 0.42 - 0.12 * k; p = 0.18 - 0.06 * k; tw = 0.06 * Math.sin(this.gaitPh) * k;
+            }
+          }
           break;
         case 'brace': c = 0.88; p = 0.32; Rh = [0.45, 0.32, 0.58]; Lh = mir(Rh); break;
         case 'palm': {

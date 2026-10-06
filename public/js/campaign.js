@@ -1135,6 +1135,7 @@
           const hpr = a.dead ? 0 : a.hp / a.maxHp, st0 = a.stam === undefined ? 1 : a.stam;
           w.bruise = clamp((0.85 - hpr) / 0.65, 0, 1); w.hunch = st === 'free' ? clamp((0.45 - hpr) / 0.35, 0, 1) : 0;
           w.breath = clamp((0.7 - st0) / 0.55, 0, 1); w.sweat = Math.max(clamp((0.45 - st0) / 0.35, 0, 1), clamp((0.3 - hpr) / 0.3, 0, 0.6));
+          w.relaxed = !this.actors.some((E) => E.team === 1 && !E.dead && !E.sleep && Math.hypot(E.x - a.x, E.z - a.z) < 4.5); // guard up only with someone close
           Object.assign(w.fxs, this.sk.fxs()); w.ballRoll = a.sk && a.sk.roll; w.torpedo = !!(a.sk && a.sk.kind === 'torp'); a.view.viewer = -1; }
         if (a.clone) { w.fxs.invuln = 0; }
         w.lifted = st === 'held' || st === 'clawed' || st === 'tossed';

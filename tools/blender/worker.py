@@ -69,7 +69,7 @@ ell(0, -0.104, HZ - 0.012, 0.015, 0.022, 0.03)   # nose bridge
 ell(0, -0.116, HZ - 0.033, 0.02, 0.017, 0.016)   # nose tip
 for s in (-1, 1):
     ell(s * 0.045, -0.072, HZ - 0.025, 0.03, 0.026, 0.025)    # cheekbones
-    ell(s * 0.096, 0.016, HZ - 0.008, 0.02, 0.029, 0.04)       # ears
+    ell(s * 0.09, 0.03, HZ + 0.005, 0.011, 0.017, 0.025)        # ears: small and set back, clear of the jaw
 ARM = {}
 for s in (-1, 1):
     limb((s * 0.05, 0.025, 1.44), (s * 0.21, 0.02, 1.37), 0.058, 0.052)   # trapezius slope
@@ -358,16 +358,18 @@ for a in range(NT + 1):
         sv.append(l + nrm * 0.003)
 for a in range(NT):
     for b in range(NZS): sf.append((a * (NZS + 1) + b, (a + 1) * (NZS + 1) + b, (a + 1) * (NZS + 1) + b + 1, a * (NZS + 1) + b + 1))
-mesh_obj('Stubble', sv, sf, STUB)
+# (no stubble: as a separate shell it read as a mask over the lower face)
 
 # hair: short, cropped close to the scalp. Built as a grid from the hairline up to the crown, every point shot onto the
 # skull, so the hairline is one clean curve (forehead high, over the ears, down to the nape) rather than a stair-step.
 HC = Vector((0, 0.012, HZ + 0.02))
 def hairline(a):   # height above HC of the hairline at azimuth a (0 = front, pi = back)
     y = -0.11 * math.cos(a)
-    if y < -0.02: return 0.02 + 0.025 * min((-y - 0.02) / 0.05, 1)        # forehead
-    yb = max(0, min(1, (y - 0.035) / 0.075))
-    return 0.02 - 0.1 * (0.5 - 0.5 * math.cos(math.pi * yb))               # over the ears, down the back of the head
+    if y < -0.06: return 0.02 + 0.025 * min((-y - 0.02) / 0.05, 1)        # forehead
+    if y < 0.02:                                                            # temples down into short sideburns: no bare skull at the sides
+        t = (y + 0.06) / 0.08; return 0.04 + (-0.045 - 0.04) * (0.5 - 0.5 * math.cos(math.pi * t))
+    yb = max(0, min(1, (y - 0.02) / 0.09))
+    return -0.045 - 0.04 * (0.5 - 0.5 * math.cos(math.pi * yb))            # over the ears, down the back of the head
 NA, NE = 30, 7
 hv, hf = [], []
 for k in range(NA):
