@@ -407,17 +407,10 @@ def build_deck(prefix, ox=0.0, ring_line=True):
     P(rbox(prefix + 'CartStripe', -0.43, 0.43, -0.12, 0.12, ZA - 0.32, ZA - 0.24, RED_ACC, rc=0.02, bev=0.01, bseg=1,
            loc=(CC.x, CC.y, 0), rot=hrot))
     P(curve_mesh(prefix + 'Cantilever', [Vector((Nd.x - h.x * 0.12, Nd.y - h.y * 0.12, 0.16)), Vector((Nd.x, Nd.y, 0.03))], 0.012, GOLD, res=2, handles='VECTOR'))
-    # arm rest with its clip, cue lever, anti-skate dial
+    # arm rest with its clip (the plinth stays clean round the pitch slider: no cue lever, anti-skate or target light)
     P(lathe(prefix + 'ArmRest', [(0, 0.55), (0.2, 0.55), (0.2, 0.25), (0.13, 0.22), (0.13, PL_TOP), (0, PL_TOP)], [ALU, RUBBER], 32,
             loc=(8.25, -0.9, 0), mi=[1, 1, 1, 0, 0]))
     P(rbox(prefix + 'ArmRestCup', -0.25, 0.25, -0.12, 0.12, 0.55, 0.68, RUBBER, rc=0.05, bev=0.02, loc=(8.25, -0.9, 0), rot=(0, 0, 0.4)))
-    P(rbox(prefix + 'CueBase', -0.3, 0.3, -0.45, 0.45, PL_TOP, PL_TOP + 0.25, BLACK, rc=0.1, bev=0.03, loc=(8.35, 1.3, 0)))
-    P(curve_mesh(prefix + 'CueLever', [Vector((8.35, 1.3, PL_TOP + 0.2)), Vector((8.1, 0.95, PL_TOP + 0.6))], 0.05, CHROME, res=2, handles='VECTOR'))
-    P(lathe(prefix + 'CueTip', [(0, 0.14), (0.1, 0.12), (0.14, 0.0), (0.1, -0.12), (0, -0.14)], [BLACK], 24, loc=(8.1, 0.95, PL_TOP + 0.64)))
-    ask = Pv + Vector((1.15, -1.0, 0))
-    P(lathe(prefix + 'AntiSkate', [(0, 0.12), (0.3, 0.12), (0.35, 0.08), (0.35, 0.0), (0, 0.0)], [DARKMET], 48,
-            loc=(ask.x, ask.y, PL_TOP), mod=lambda a, r, z: 1.0 + (0.03 if math.cos(a * 30) > 0 else 0) * (1 if z < 0.09 else 0)))
-    P(rbox(prefix + 'AntiSkateMark', -0.02, 0.02, 0.0, 0.3, PL_TOP + 0.12, PL_TOP + 0.13, INK, rc=0, bev=0, loc=(ask.x, ask.y, 0), rot=(0, 0, 0.7)))
 
     # ---------------- controls on the plinth
     P(rbox(prefix + 'StartStop', -6.35, -4.95, -5.75, -4.8, PL_TOP - 0.02, PL_TOP + 0.14, BLACK, rc=0.12, bev=0.035))
@@ -447,11 +440,6 @@ def build_deck(prefix, ox=0.0, ring_line=True):
     P(bm_obj(prefix + 'PitchTicks', bm, [INK], smooth=0))
     P(lathe(prefix + 'PitchZeroLed', [(0, 0.04), (0.06, 0.03), (0.07, 0.0)], [GREEN_LED], 16, loc=(px + 0.4, -3.6, PL_TOP)))
     P(text_mesh(prefix + 'PitchTxt', 'PITCH', 0.16, INK, (px, -6.0, PL_TOP), font=FONT_B, extrude=0.002))
-    # target light: a pop-up lamp aimed at the needle
-    P(lathe(prefix + 'TargetPost', [(0, 0.55), (0.1, 0.55), (0.1, 0.0), (0, 0.0)], [CHROME], 16, loc=(5.6, -5.0, PL_TOP)))
-    tla = math.atan2(Nd.y + 5.0, Nd.x - 5.6)
-    P(lathe(prefix + 'TargetHead', [(0, 0.3), (0.13, 0.3), (0.15, 0.27), (0.15, 0.0), (0, 0.0)], [BLACK, WHITE_LAMP], 24,
-            loc=(5.6, -5.0, PL_TOP + 0.62), rot=Vector((math.cos(tla), math.sin(tla), -0.6)).to_track_quat('-Z', 'Y').to_euler(), mi=[0, 0, 0, 1]))
     # 45 adaptor in its well at the back-left
     aw = Vector((-5.55, 5.05, 0))
     P(lathe(prefix + 'AdaptorWell', [(0, PL_TOP + 0.003), (0.92, PL_TOP + 0.003), (0.95, PL_TOP - 0.0)], [GLOSSBLACK], 64, loc=aw))
