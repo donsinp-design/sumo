@@ -2386,15 +2386,19 @@
         this.stageTick = (T, ...a) => {   // the built stage's late pieces (models arriving after the switch) stay hidden under the kit
           for (const c of g0.children) if (c !== k) c.visible = false;
           if (sp) for (const c of sp.children) c.visible = false;
-          if (old) old(T, ...a); if (tick) tick(T);
+          if (old) old(T, ...a); if (tick) tick(T, ...a);
         };
       });
       if (KIT_BG[id] !== undefined) this.scene.background.set(KIT_BG[id]);
     }
   };
-  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb' }, KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6 }, KIT_CACHE = {};
+  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb' },
+    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf }, KIT_CACHE = {};
   // a little life in the kit stages: the sushi plates rumble on the belt
   const KIT_TICK = {
+    // the candle flames flicker
+    cake: (k) => { const fl = k.children.filter((c) => /^FLAME_/.test(c.name)); fl.forEach((f, i) => { f.userData.s0 = f.scale.clone(); f.userData.ph = i * 2.3; });
+      return (T) => fl.forEach((f) => { const s = f.userData.s0, j = 0.85 + 0.25 * Math.abs(Math.sin(T * 9 + f.userData.ph)) + 0.08 * Math.sin(T * 23 + f.userData.ph * 3); f.scale.set(s.x * (1.05 - 0.1 * j), s.y * j, s.z * (1.05 - 0.1 * j)); }); },
     sushi: (k) => { const rides = k.children.filter((c) => /^RIDE_/.test(c.name)); rides.forEach((r) => { r.userData.y0 = r.position.y; });
       return (T) => rides.forEach((r, i) => { r.position.y = r.userData.y0 + 0.025 * Math.sin(T * 17 + i * 1.7); }); },
     // the small pads, lotuses and the frog bob on the pond
