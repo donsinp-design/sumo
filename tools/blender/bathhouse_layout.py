@@ -121,6 +121,14 @@ WASHB = dict(x=3.6, z=-1.0)                                         # his yellow
 PUDDLES = [dict(x=-1.2, z=-29.2, rx=1.0, rz=0.6), dict(x=6.2, z=-44.4, rx=1.2, rz=0.7), dict(x=-9.6, z=-44.4, rx=0.9, rz=0.55), dict(x=9.8, z=-33.6, rx=0.8, rz=0.55),
            dict(x=-5.6, z=-48.6, rx=0.9, rz=0.5), dict(x=9.4, z=-66.4, rx=0.7, rz=0.45, f=F, milk=True)]
 
+# everything but the walls breaks under a charge; long pieces in segments of about 2.4 m (only the one you hit goes)
+BREAKABLE = {'lockers', 'bench', 'washrow', 'washisland', 'vanity', 'baskets', 'boiler', 'firewood', 'towels', 'cart', 'washer', 'crates',
+             'lowtable', 'massage', 'fridge', 'vending', 'manga', 'sofa', 'desk', 'cabinet', 'shoes', 'shelf'}
+for s_ in S:
+    if s_['k'] in BREAKABLE:
+        ax = 'x' if s_['x1'] - s_['x0'] >= s_['z1'] - s_['z0'] else 'z'; L = (s_['x1'] - s_['x0']) if ax == 'x' else (s_['z1'] - s_['z0'])
+        s_.update(brk=1, ax=ax, n=max(1, round(L / 2.4)))
+
 LAYOUT = dict(UP=UP, solids=S, blockers=B, doors=DOORS, pool=POOL, locker=LOCKER, crack=CRACK, stairs=STAIRS, courtyard=COURTYARD, exit=EXIT, tatami=TATAMI,
               genkan=GENKAN, entrance=ENTRANCE, office=OFFICE, box=BOX, items=ITEMS, washb=WASHB, puddles=PUDDLES)
 

@@ -700,14 +700,40 @@ def w_crates(m, s, y):
 def w_exitpost(m, s, y):
     m.gbox(s['x0'], s['x1'], s['z0'], s['z1'], y, y + s['h'], 'green', bev=0.03)
 
-# everything but the walls can be smashed by a charge: each of those is its own root, SOLID_<index in the layout>
-BREAKABLE = {'lockers', 'bench', 'washrow', 'washisland', 'vanity', 'baskets', 'boiler', 'firewood', 'towels', 'cart', 'washer', 'crates',
-             'lowtable', 'massage', 'fridge', 'vending', 'manga', 'sofa', 'desk', 'cabinet', 'shoes', 'shelf'}
+# everything but the walls can be smashed by a charge: each segment is its own root, SOLID_<index in the layout>_<segment>.
+# The piece is built whole, then cut at the segment boundaries (bisect) and the cut ends capped (so a neighbour that's left
+# standing is never hollow).
+def split_solid(mb, s, i):
+    bm = mb.bm; n = s['n']; ax = s['ax']
+    lo, hi = (s['x0'], s['x1']) if ax == 'x' else (s['z0'], s['z1'])
+    for k in range(n):
+        a = lo + (hi - lo) * k / n; b = lo + (hi - lo) * (k + 1) / n; bk = bm.copy(); cuts = []
+        for val, keep_above in ((a, True), (b, False)):
+            if (keep_above and k == 0) or (not keep_above and k == n - 1): continue
+            if ax == 'x': co, no = (val, 0, 0), (1, 0, 0); clear_inner, clear_outer = keep_above, not keep_above; cuts.append(('x', val))
+            else: co, no = (0, -val, 0), (0, 1, 0); clear_inner, clear_outer = not keep_above, keep_above; cuts.append(('y', -val))
+            bmesh.ops.bisect_plane(bk, geom=bk.verts[:] + bk.edges[:] + bk.faces[:], dist=1e-5, plane_co=co, plane_no=no, clear_inner=clear_inner, clear_outer=clear_outer)
+        on_cut = lambda v: any(abs((v.co.x if c == 'x' else v.co.y) - val) < 1e-4 for c, val in cuts)
+        edges = [e for e in bk.edges if e.is_boundary and all(on_cut(v) for v in e.verts)]
+        if edges:
+            uvl = bk.loops.layers.uv['PAL']
+            res = bmesh.ops.holes_fill(bk, edges=edges, sides=0)
+            for f in res['faces']:
+                nb = next((lf for e in f.edges for lf in e.link_faces if lf is not f), None)
+                u = nb.loops[0][uvl].uv.copy() if nb else swuv('plaster')
+                for l in f.loops: l[uvl].uv = u
+                f.material_index = nb.material_index if nb else 0
+        me = bpy.data.meshes.new('MOD_SOLID_%02d_%d' % (i, k)); bk.normal_update(); bk.to_mesh(me); bk.free()
+        me.materials.append(M_KIT); me.materials.append(M_GW)
+        try: me.set_sharp_from_angle(angle=math.radians(35))
+        except Exception: pass
+        MODS[me.name] = me; place(me.name, 'SOLID_%02d_%d' % (i, k), c='ENV_DYN')
+    bm.free()
 def build_solids():
     m = GB()
     for i, s in enumerate(LY.S):
         y = ylev(s['f']); fn = globals().get('w_' + s['k']) or (lambda mm, s, y: mm.gbox(s['x0'], s['x1'], s['z0'], s['z1'], y, y + s['h'], 'plaster', bev=0.03))
-        if s['k'] in BREAKABLE: mm = GB(); fn(mm, s, y); obj_from(mm, 'SOLID_%02d' % i, 'ENV_DYN')
+        if s.get('brk'): mm = GB(); fn(mm, s, y); split_solid(mm, s, i)
         else: fn(m, s, y)
     return obj_from(m, 'BUILDING', 'ENV_STAGE')
 

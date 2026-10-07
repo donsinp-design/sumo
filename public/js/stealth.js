@@ -91,7 +91,10 @@
     build() {
       const G = new THREE.Group(); this.scene.add(G); this.G = G;
       const add = (x0, x1, z0, z1, tall) => { const w = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), tall: !!tall }; this.walls.push(w); return w; };
-      this.solidW = LY.solids.map((s) => add(s.x0, s.x1, s.z0, s.z1, s.tall));
+      // breakable pieces collide segment by segment (each can be smashed on its own)
+      this.solidW = LY.solids.map((s) => { if (!s.brk || s.n < 2) return [add(s.x0, s.x1, s.z0, s.z1, s.tall)];
+        return [...Array(s.n)].map((_, k) => s.ax === 'x' ? add(s.x0 + (s.x1 - s.x0) * k / s.n, s.x0 + (s.x1 - s.x0) * (k + 1) / s.n, s.z0, s.z1, s.tall)
+          : add(s.x0, s.x1, s.z0 + (s.z1 - s.z0) * k / s.n, s.z0 + (s.z1 - s.z0) * (k + 1) / s.n, s.tall)); });
       for (const d of LY.doors) {
         if (d.kind === 'slide') { add(d.x0, (d.x0 + d.x1) / 2 + 0.1, d.z - 0.24, d.z - 0.14, true); continue; }
         for (const x of [d.x0 - 0.14, d.x1 + 0.14]) add(x - 0.15, x + 0.15, d.z - 0.28, d.z + 0.28, true);
@@ -134,9 +137,10 @@
       this.lkDoors = [0, 1, 2, 3, 4].map((k) => get('LKDOOR_' + k)).filter(Boolean);
       // everything but the walls breaks under a charge (his own bank of lockers is kept for the story)
       const pad = (i) => String(i).padStart(2, '0'); this.breakables = [];
-      LY.solids.forEach((sd, i) => { const o = get('SOLID_' + pad(i)); if (!o) return;
+      LY.solids.forEach((sd, i) => { if (!sd.brk) return;
         if (sd.k === 'lockers' && Math.abs(sd.x0 - 4) < 1e-6 && Math.abs(sd.z0 + 36.7) < 1e-6) return;
-        this.breakables.push({ o, w: this.solidW[i], s: sd }); });
+        for (let k = 0; k < sd.n; k++) { const o = get('SOLID_' + pad(i) + '_' + k), w = this.solidW[i][k]; if (!o) continue;
+          this.breakables.push({ o, w, s: { k: sd.k, x0: w.x0, x1: w.x1, z0: w.z0, z1: w.z1, h: sd.h, f: sd.f } }); } });
       LY.blockers.forEach((b, i) => { const o = get('PLANT_' + pad(i)); if (o) this.breakables.push({ o, bl: this.blockerB[i], s: { k: 'plant', x0: b.x - b.r * 0.6, x1: b.x + b.r * 0.6, z0: b.z - b.r * 0.6, z1: b.z + b.r * 0.6, h: 1.4 * (b.s || 1), f: b.f } }); });
       if (this.crackDone) { if (this.crackM) this.crackM.visible = false; if (this.rubble) this.rubble.visible = true; }
       if (this.wearing && !this.boxWorn) this.wearBox();
@@ -339,10 +343,10 @@
       P.t += dt; P.cd = Math.max(0, P.cd - dt);
       let mx = c.mx, mz = c.mz; const mag = Math.hypot(mx, mz); if (mag > 1) { mx /= mag; mz /= mag; }
       const wet = inPool(P.x, P.z);
-      // I: TIPTOE. Silent, slow, and tiring: about three seconds on his toes, then the heels come down with a thud
+      // I: TIPTOE. Silent, slow, and tiring: about six seconds on his toes, then the heels come down with a thud
       const tipOn = !!this.keys.KeyI && P.st === 'free' && !wet && !P.tired;
       P.tip += ((tipOn ? 1 : 0) - P.tip) * Math.min(1, dt * 10);
-      if (tipOn) { P.stam -= dt * (Math.hypot(P.vx, P.vz) > 0.4 ? 1 / 3.2 : 1 / 5); if (P.stam <= 0) { P.stam = 0; P.tired = true; this.heelsDown(); } }
+      if (tipOn) { P.stam -= dt * (Math.hypot(P.vx, P.vz) > 0.4 ? 1 / 6.4 : 1 / 10); if (P.stam <= 0) { P.stam = 0; P.tired = true; this.heelsDown(); } }
       else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
       if (P.st === 'free' && c.dash.held && mag > 0.3 && P.cd <= 0 && !wet) { P.st = 'charge'; P.t = 0; P.dur = 0.85; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }
@@ -357,9 +361,21 @@
       // the cracked wall gives way to a charge
       const CK = LY.crack;
       if (P.st === 'charge' && !this.crackDone && P.z < CK.z1 + P.r + 0.25 && P.z > CK.z0 - 0.2 && P.x > CK.x0 && P.x < CK.x1) this.smashCrack();
-      if (P.st === 'charge' && this.breakables) for (const B of this.breakables) {
-        if (B.done) continue; const sd = B.s; if (Math.abs((sd.f ? UP : 0) - P.y) > 1.2) continue;
-        const cx = clamp(P.x, sd.x0, sd.x1), cz = clamp(P.z, sd.z0, sd.z1); if (Math.hypot(P.x - cx, P.z - cz) < P.r + 0.15) this.breakThing(B);
+      P.brkCd = Math.max(0, (P.brkCd || 0) - dt);
+      if (P.st === 'charge' && this.breakables && !P.brkCd) {   // one piece at a time: the nearest one he hits
+        let best = null, bd = P.r + 0.15;
+        for (const B of this.breakables) {
+          if (B.done) continue; const sd = B.s; if (Math.abs((sd.f ? UP : 0) - P.y) > 1.2) continue;
+          const cx = clamp(P.x, sd.x0, sd.x1), cz = clamp(P.z, sd.z0, sd.z1), d = Math.hypot(P.x - cx, P.z - cz); if (d < bd) { bd = d; best = B; }
+        }
+        if (best) { this.breakThing(best); P.brkCd = 0.3; }
+      }
+      if (P.st === 'charge') for (const b of this.buckets) {
+        if (b.state !== 'floor' || Math.abs(b.m.position.y - P.y) > 1.2 || Math.hypot(b.m.position.x - P.x, b.m.position.z - P.z) > P.r + 0.35) continue;
+        const dx = b.m.position.x - P.x, dz = b.m.position.z - P.z, dl = Math.hypot(dx, dz) || 1, a = Math.atan2(0.5 * dz / dl + Math.sin(P.cdir), 0.5 * dx / dl + Math.cos(P.cdir));
+        const L = clamp(this.reach(b.m.position.x, b.m.position.z, a, 6) - 0.5, 0.8, 5.5);
+        b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y; b.tx = b.sx + Math.cos(a) * L; b.tz = b.sz + Math.sin(a) * L;
+        b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz); b.dur = 0.3 + L * 0.05;
       }
       const hit = this.collide(P, P.r);
       // how high he stands: in the bath up to his chest, the stairs, the floor above
@@ -584,7 +600,7 @@
       if (this.freeze) w.fxs.dizzy = 1;
       v.update(w, Math.max(dt, 1e-4), T);
       v.root.position.y += P.y + 0.09 * v.s * P.tip;
-      if (P.tip > 0.05) v.root.rotation.z += Math.sin(T * 13) * 0.05 * P.tip * (1.3 - P.stam);
+      v.root.rotation.z = P.tip > 0.05 ? Math.sin(T * 13) * 0.05 * P.tip * (1.3 - P.stam) : 0;   // (set, not added: it must never build up into a lean)
       v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       if (P.held && P.held.state === 'held') {
         const b = P.held, ha = this._ha || (this._ha = new THREE.Vector3()), hb = this._hb || (this._hb = new THREE.Vector3()), H = { stool: 0.34, oke: 0.26, bucket: 0.42 }[b.kind] || 0.4;
