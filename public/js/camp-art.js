@@ -295,13 +295,13 @@
   function groundTex(kind) {
     return tex('ground' + kind, 1024, 1024, (c, w, h) => {
       const P = {
-        asphalt: { base: '#4c4852', lo: '#3a3640', hi: '#6a6670', agg: 0.9, joints: 0, stones: 0 },
-        plaza: { base: '#6a5f66', lo: '#564c54', hi: '#827880', agg: 0.5, joints: 0, stones: 128 },
-        concrete: { base: '#76868e', lo: '#62727a', hi: '#90a0a8', agg: 0.4, joints: 512, stones: 0, wet: 1 },
-        bay: { base: '#6c6860', lo: '#5a564e', hi: '#86827a', agg: 0.6, joints: 512, stones: 0 },
-        auction: { base: '#8c9294', lo: '#7a8082', hi: '#a4aaac', agg: 0.35, joints: 256, stones: 0, wet: 0.6 },
-        roof: { base: '#5e5a5c', lo: '#4a4648', hi: '#76727a', agg: 1.0, joints: 341, stones: 0 },
-        roofG: { base: '#4e6058', lo: '#3c4c44', hi: '#64786e', agg: 0.6, joints: 256, stones: 0 },
+        asphalt: { base: '#68717d', lo: '#5f6874', hi: '#76818d', agg: 0.08, joints: 0, stones: 0 },
+        plaza: { base: '#8b817d', lo: '#7f7572', hi: '#9a908b', agg: 0.05, joints: 0, stones: 128 },
+        concrete: { base: '#87979b', lo: '#7d8d91', hi: '#98a8aa', agg: 0.04, joints: 512, stones: 0, wet: 1 },
+        bay: { base: '#88837a', lo: '#7c776e', hi: '#99948a', agg: 0.06, joints: 512, stones: 0 },
+        auction: { base: '#9da3a3', lo: '#909696', hi: '#adb3b2', agg: 0.04, joints: 256, stones: 0, wet: 0.6 },
+        roof: { base: '#77777a', lo: '#6c6c70', hi: '#848488', agg: 0.08, joints: 341, stones: 0 },
+        roofG: { base: '#6e8178', lo: '#62756c', hi: '#7d9086', agg: 0.06, joints: 256, stones: 0 },
       }[kind];
       const wrap = (f) => { for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) { c.save(); c.translate(ox, oy); f(); c.restore(); } };
       c.fillStyle = P.base; c.fillRect(0, 0, w, h);
@@ -321,13 +321,6 @@
       // aggregate: sparse crisp dots
       const n = Math.round(1200 * P.agg);
       for (let i = 0; i < n; i++) { c.globalAlpha = 0.5; c.fillStyle = Math.random() < 0.6 ? P.lo : P.hi; const sz = Math.random() < 0.85 ? 1 : 2; c.fillRect(Math.round(Math.random() * w), Math.round(Math.random() * h), sz, sz); } c.globalAlpha = 1;
-      // cracks
-      c.strokeStyle = 'rgba(16,12,20,0.32)'; c.lineCap = 'butt'; c.lineJoin = 'miter';
-      for (let i = 0; i < 3; i++) { // hairline cracks: long, mostly straight, kinked (concrete cracks, not squiggles)
-        let x = Math.random() * w, y = Math.random() * h; const a0 = Math.random() * 6.28, pts = [[x, y]];
-        for (let k = 0; k < 9; k++) { const a = a0 + rnd(-0.35, 0.35); const l = rnd(14, 34); x += Math.cos(a) * l; y += Math.sin(a) * l; pts.push([x, y]); }
-        wrap(() => { c.lineWidth = 1.2; c.beginPath(); pts.forEach(([px, py], k) => (k ? c.lineTo(px, py) : c.moveTo(px, py))); c.stroke(); });
-      }
       // expansion joints (cut lines with a lit edge)
       if (P.joints) for (let t = 0; t < w; t += P.joints) {
         c.fillStyle = 'rgba(20,24,30,0.6)'; c.fillRect(t, 0, 3, h); c.fillRect(0, t, w, 3);
@@ -490,9 +483,9 @@
     return tex('fac' + style + v, 256, 224, (c, w, h) => {
       const R = (a, b) => a + ((v * 9301 + 49297) % 233280) / 233280 * (b - a); // deterministic per variant
       if (style === 'shop') {
-        const walls = ['#8a7a6a', '#6e6a78', '#7a5a4a', '#5e6a6e', '#8a8478'], wc = walls[v % walls.length];
+        const walls = ['#c88676', '#8592ae', '#b88167', '#6f9b98', '#b8a887'], wc = walls[v % walls.length];
         c.fillStyle = wc; c.fillRect(0, 0, w, h);
-        c.fillStyle = 'rgba(0,0,0,0.18)'; for (let y = 8; y < h * 0.36; y += 14) c.fillRect(0, y, w, 2); // siding / tile courses
+        c.fillStyle = 'rgba(52,48,58,0.08)'; for (let y = 8; y < h * 0.36; y += 18) c.fillRect(0, y, w, 2); // broad, quiet siding courses
         // upper floor: two windows with frames, one with an AC unit under it
         for (const x of [36, 150]) { c.fillStyle = '#2a2c38'; c.fillRect(x, 14, 70, 44); c.fillStyle = '#5e7aa0'; c.fillRect(x + 4, 18, 62, 36); c.fillStyle = '#9ab8d8'; c.fillRect(x + 6, 20, 18, 32); c.fillStyle = '#2a2c38'; c.fillRect(x + 34, 18, 3, 36); }
         if (v % 2) { c.fillStyle = '#d4d8dc'; c.fillRect(150, 62, 54, 22); c.fillStyle = '#30343a'; c.beginPath(); c.arc(166, 73, 8, 0, 7); c.fill(); }
@@ -599,8 +592,8 @@
     vm.fragmentShader = vm.fragmentShader.replace('vec3 tx = uHasMap > 0.5 ? texture2D(uMap, vUv).rgb : vec3(1.0);', 'vec4 t4 = texture2D(uMap, vUv); if (t4.a < 0.5) discard; vec3 tx = t4.rgb;');
     const val = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.3), vm); val.rotation.y = Math.PI / 2; val.position.set(fx, fy - 0.15, zc); g.add(val);
     // steel frame: front bar and diagonal arms back to the wall
-    const steel = S.toon(0x6a6e78, { shade: 0x22242c, spec: 0.5 });
-    const bar = W.mesh(new THREE.CylinderGeometry(0.025, 0.025, len, 6), steel, 0.01); bar.rotation.x = Math.PI / 2; bar.position.set(fx, fy + 0.01, zc); g.add(bar);
+    const steel = S.toon(0x7d858b, { shade: 0x566069, spec: 0.08, rimAmt: 0 });
+    const bar = W.mesh(new THREE.CylinderGeometry(0.045, 0.045, len, 8), steel, 0); bar.rotation.x = Math.PI / 2; bar.position.set(fx, fy + 0.01, zc); g.add(bar);
     return { fx, fy };
   }
 

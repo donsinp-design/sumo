@@ -34,18 +34,20 @@
       vec3 n = normalize(vN); vec3 v = normalize(vV);
       vec3 tx = uHasMap > 0.5 ? texture2D(uMap, vUv).rgb : vec3(1.0);
       vec3 base = uColor * vIC * tx, sh = uShade * vIC * tx;
-      // anime: brighter lit side, cool violet shadow, a razor-sharp terminator
-      sh *= mix(vec3(1.0), vec3(0.8, 0.76, 1.1), uAnime);
+      // Kumitegame uses a quiet real-time palette: broad ambient fill, matte
+      // surfaces and soft form shading.  The classic build keeps the punchier
+      // two-step toon response.
+      sh *= mix(vec3(1.0), vec3(0.94, 0.96, 1.02), uAnime);
       float d = dot(n, uLight);
-      float lit = smoothstep(0.0, mix(0.04, 0.012, uAnime), d);
-      float deep = smoothstep(-0.5, -0.46, d);
-      vec3 col = mix(sh * mix(0.78, 0.66, uAnime), sh, deep);
+      float lit = mix(smoothstep(0.0, 0.04, d), smoothstep(-0.55, 0.72, d), uAnime);
+      float deep = mix(smoothstep(-0.5, -0.46, d), smoothstep(-0.82, -0.22, d), uAnime);
+      vec3 col = mix(sh * mix(0.78, 0.9, uAnime), sh, deep);
       col = mix(col, base, lit);
       float fres = 1.0 - max(dot(n, v), 0.0);
       float rim = smoothstep(mix(0.58, 0.6, uAnime), mix(0.62, 0.615, uAnime), fres) * smoothstep(-0.15, 0.2, dot(n, uRimDir));
-      col = mix(col, uRim, min(1.0, rim * uRimAmt * mix(1.0, 1.5, uAnime)));
+      col = mix(col, uRim, min(1.0, rim * uRimAmt * (1.0 - uAnime)));
       vec3 h = normalize(uLight + v);
-      col += uSpec * smoothstep(0.955, 0.965, dot(n, h));
+      col += uSpec * mix(1.0, 0.12, uAnime) * smoothstep(0.955, 0.965, dot(n, h));
       col = mix(col, uFlashCol, uFlash);
       gl_FragColor = vec4(col, uAlpha);
     }`;
@@ -1257,16 +1259,16 @@
           ao += smoothstep(0.03, 0.35, diff) * (1.0 - smoothstep(0.9, 2.6, diff));
         }
         ao = clamp(ao / 12.0, 0.0, 1.0);
-        c *= 1.0 - ao * 0.62;
-        float hz = smoothstep(18.0, 46.0, d0) * 0.55 + (1.0 - step(d0, uFar * 0.8)) * 0.0;
+        c *= 1.0 - ao * 0.24;
+        float hz = smoothstep(24.0, 58.0, d0) * 0.16 + (1.0 - step(d0, uFar * 0.8)) * 0.0;
         c = mix(c, uHaze, hz);
       }
       // anime grade
       float l = L(c);
-      c = mix(vec3(l), c, 1.15);
-      c = mix(c, c * c * (3.0 - 2.0 * c), 0.2);
-      c *= mix(vec3(0.93, 0.9, 1.0), vec3(1.0, 0.98, 0.93), smoothstep(0.1, 0.6, l)); // a faint cool shadow, not violet
-      if (uCine > 0.5) { c = mix(c, c * mix(vec3(0.82, 0.92, 1.08), vec3(1.08, 0.99, 0.88), smoothstep(0.15, 0.7, l)), 0.7); c = (c - 0.5) * 1.08 + 0.5; } // teal shadows, warm light, a little more contrast
+      c = mix(vec3(l), c, 1.06);
+      c = mix(c, c * c * (3.0 - 2.0 * c), 0.08);
+      c *= mix(vec3(0.96, 0.98, 1.02), vec3(1.02, 1.0, 0.96), smoothstep(0.1, 0.6, l));
+      if (uCine > 0.5) c = mix(c, c * mix(vec3(0.94, 0.98, 1.04), vec3(1.04, 1.0, 0.94), smoothstep(0.15, 0.7, l)), 0.24);
       // halftone dots in the shadows (comic print)
       float cell = 4.5 * max(1.0, uPx);
       vec2 g = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy;
@@ -1274,11 +1276,11 @@
       float shade = smoothstep(0.34, 0.1, l);
       c *= 1.0 - step(r, shade * 0.95) * (uCine > 0.5 ? 0.0 : 0.22); // the comic dots belong to versus
       // glow, ink, vignette, grain
-      c += texture2D(tBloom, vUv).rgb * (uCine > 0.5 ? 0.12 : 0.35); // the campaign keeps glow for lights, not skin
-      c = mix(c, vec3(0.1, 0.045, 0.085), edge * 0.92);
-      vec2 vg = vUv - 0.5; c *= 1.0 - dot(vg, vg) * (uCine > 0.5 ? 1.05 : 0.6);
+      c += texture2D(tBloom, vUv).rgb * (uCine > 0.5 ? 0.035 : 0.08);
+      c = mix(c, vec3(0.1, 0.07, 0.08), edge * (uCine > 0.5 ? 0.0 : 0.08));
+      vec2 vg = vUv - 0.5; c *= 1.0 - dot(vg, vg) * (uCine > 0.5 ? 0.08 : 0.12);
       float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 91.7, vec2(12.9898, 78.233))) * 43758.5453);
-      c += (n - 0.5) * (uCine > 0.5 ? 0.018 : 0.035);
+      c += (n - 0.5) * 0.004;
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`;
   class AnimePost {
@@ -1354,7 +1356,7 @@
       r.setPixelRatio(this.pr);
       el.appendChild(r.domElement);
       this.scene = new THREE.Scene();
-      this.scene.background = new THREE.Color(0x150c14);
+      this.scene.background = new THREE.Color(window.KUMITE_STYLE === 'anime' ? 0xa9cad1 : 0x150c14);
       this.cam = new THREE.PerspectiveCamera(34, 1, 0.1, 200);
       this.fx = new FX(this.scene); this.fx.scene = this.scene; this.fx.sandy = true;
       this.views = [];
@@ -1367,16 +1369,17 @@
       this.resize();
       addEventListener('resize', () => this.resize());
     }
-    // the anime look: crisper toon shading, bolder outlines, hard shadows and the ink / grade pass
+    // Kumitegame's permanent soft-city treatment: matte materials, broad light
+    // response and clean silhouettes without ink hulls or rim glow.
     setAnime(on) {
-      this.anime = !!on; SH.uAnime.value = on ? 1 : 0; SH.uOL.value = on ? 1.35 : 1;
+      this.anime = !!on; SH.uAnime.value = on ? 1 : 0; SH.uOL.value = on ? 0 : 1;
       this.applyArena();
       if (on && !this.post) { this.post = new AnimePost(this.r); this.resize(); }
     }
-    // classic look: the square dohyo in a hall full of people. Anime look: a round stage in a black void,
-    // no audience (you still hear them), no corner props: one spotlight and the two of them.
+    // Keep the real venue in Kumitegame: the soft-city material pass needs a
+    // grounded environment, not the old round platform in a black void.
     applyArena() {
-      const classic = this.classicStage !== false, boss = classic && this.anime;
+      const classic = this.classicStage !== false, boss = false;
       if (this.dohyoG) this.dohyoG.visible = classic && !boss;
       if (this.bossG) this.bossG.visible = boss;
       if (this.crowdG) this.crowdG.visible = classic && !boss;

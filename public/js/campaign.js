@@ -56,7 +56,7 @@
     start() {
       const g = this.g;
       this.R = g.R; this.t = 0; this.acc = 0; this.paused = false; this.over = null; this.slow = 0; this.hitstop = 0;
-      this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0x0d0a10);
+      this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xa9cad1);
       this.cam = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 220);
       this.fx = new S.FX(this.scene); this.fx.scene = this.scene; this.fx.noMarks = true; // no footprints piling up over a whole level
       const nFx = this.scene.children.length;
@@ -126,8 +126,12 @@
     addProp(type, x, z, ry) {
       const D = PROPS[type];
       const p = { type, D, x, z, y: 0, vx: 0, vz: 0, vy: 0, r: D.r, hp: D.hp, held: null, thrown: null, ry: ry || 0, spin: 0, dead: false };
-      p.mesh = propMesh(type); p.mesh.position.set(x, 0, z); p.mesh.rotation.y = p.ry; this.scene.add(p.mesh);
-      if (this.flat && S.CampFlat) S.CampFlat.swapProp(this, p);
+      p.mesh = propMesh(type); p.mesh.position.set(x, 0, z); p.mesh.rotation.y = p.ry;
+      // Slightly oversized props stay readable at gameplay distance and share
+      // the chunky environment scale without changing collision/navigation.
+      if (!['tuna', 'onigiri', 'knife'].includes(type)) p.mesh.scale.setScalar(type === 'bottle' ? 1.22 : 1.14);
+      this.scene.add(p.mesh);
+      if (this.flat && S.CampFlat) S.CampFlat.swapProp(this, p); // the kit's chunky props (already at their own scale)
       this.props.push(p);
       return p;
     }
@@ -1332,8 +1336,8 @@
       }
       // ground shadow
       // a soft contact shadow (light enough that the comic halftone pass doesn't print its dot grid over it)
-      WorkerView.shTex = WorkerView.shTex || S.R3.canvasTex(128, 128, (c) => { const gr = c.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(20,10,24,0.55)'); gr.addColorStop(0.55, 'rgba(20,10,24,0.32)'); gr.addColorStop(1, 'rgba(20,10,24,0)'); c.fillStyle = gr; c.fillRect(0, 0, 128, 128); });
-      this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.15 * fw, 0.95 * fw).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: WorkerView.shTex, transparent: true, opacity: 0.55, depthWrite: false }));
+      WorkerView.shTex = WorkerView.shTex || S.R3.canvasTex(128, 128, (c) => { const gr = c.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(42,54,70,0.38)'); gr.addColorStop(0.55, 'rgba(42,54,70,0.2)'); gr.addColorStop(1, 'rgba(42,54,70,0)'); c.fillStyle = gr; c.fillRect(0, 0, 128, 128); });
+      this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.15 * fw, 0.95 * fw).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: WorkerView.shTex, transparent: true, opacity: 0.42, depthWrite: false }));
       this.shadow.renderOrder = 1; scene.add(this.shadow);
       this.walk = 0; this.mats = [skin, shirt, apron, pants];
       this.flashT = 0; this.lastHp = null;
