@@ -67,7 +67,7 @@
         let col = m.color ? m.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1), map = m.map || null;
         if (map) { map.encoding = THREE.LinearEncoding; map.needsUpdate = true; col = new THREE.Color(1, 1, 1); }
         if (name.startsWith('mawashi') && view.arch.belt !== undefined) col = new THREE.Color(view.arch.belt);
-        const f = S.Flat.mat(col, { map, side: m.side });
+        const f = S.Flat.mat(col, { map, side: m.side }); f.name = m.name || '';
         mats.push(f); return f;
       });
       q.material = Array.isArray(q.material) ? nm : nm[0];

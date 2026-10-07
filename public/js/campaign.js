@@ -1688,6 +1688,6 @@
   const mul = (c, k) => { const C = new THREE.Color(c); C.multiplyScalar(k); return C.getHex(); };
   const fmtT = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0') + '.' + Math.floor((t * 10) % 10);
 
-  S.Campaign = Campaign;
+  S.Campaign = Campaign; S.WorkerView = WorkerView;
   S.CAMP = { PROPS, KINDS, POOL };
 })();

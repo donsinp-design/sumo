@@ -943,6 +943,12 @@
       this.mode = 'campaign'; document.body.classList.add('playing', 'campaign');
       this.camp = new S.Campaign(this); this.camp.start();
     }
+    // TEST level: the bathhouse stealth level (stealth.js), run through the same hooks as the campaign
+    startStealth() {
+      this.startAttract(); this.ui.hide(); this.ui.showHud(false); this.ui.hint('');
+      this.mode = 'campaign'; document.body.classList.add('playing', 'campaign');
+      this.camp = new S.Stealth(this); this.camp.start();
+    }
     endCampaign() {
       // cover the screen first, tear down underneath, then reveal the title: never a glimpse of the versus stage
       const done = () => {
@@ -1459,6 +1465,7 @@
           ui.show('select', this.sel); break;
         case 'learn': this.startTutorial(); break;
         case 'campaign': this.startCampaign(); break;
+        case 'test': this.startStealth(); break;
         case 'training': this.sel.c1 = this.sel.c1 || 0; ui.show('trainsel', { c1: this.sel.c1 }); break;
         case 'play': ui.show('play'); break;
         case 'locker': this.openLocker(); break;
