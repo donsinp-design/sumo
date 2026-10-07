@@ -103,6 +103,9 @@
       }
     };
     addPuddles(); ready.then(() => camp.scene && addPuddles());
+    // behind the start line: rooftops and billboards there sit between the camera and the player (they hid him)
+    { const bb = new THREE.Box3(); map.group.updateMatrixWorld(true);
+      map.group.traverse((o) => { if (!o.isMesh || o.isInstancedMesh) return; bb.setFromObject(o); if (!bb.isEmpty() && bb.min.z > 4.4 && bb.max.y > 3) o.visible = false; }); }
     // instanced scenery (fish on ice, stall kit) inside the rebuilt street: those instances go
     const zero = new THREE.Matrix4().makeScale(0, 0, 0), M = new THREE.Matrix4(), P = new THREE.Vector3();
     sc.traverse((o) => {

@@ -4,10 +4,10 @@
 // joints are copied onto the skeleton: torso and head rotations as they are, every limb bone aimed along the view's
 // limb segment. The view's own primitive body is hidden; accessories on its head (masks) ride on the soft head.
 (function () {
-  let tpl = null, rest = null;
+  let tpl = null, rest = null, clips = [];
   const ready = new Promise((res) => {
     if (!THREE.GLTFLoader) return res(null);
-    new THREE.GLTFLoader().load('assets/models/sumo_game.glb', (g) => { tpl = g.scene; prep(); res(tpl); }, undefined, () => res(null));
+    new THREE.GLTFLoader().load('assets/models/sumo_game.glb', (g) => { tpl = g.scene; clips = g.animations || []; prep(); res(tpl); }, undefined, () => res(null));
   });
   const key = (n) => n.replace(/[^A-Za-z]/g, '').toLowerCase();       // 'upper_arm.L' / 'upper_armL' -> 'upperarml'
   const NAMES = ['hips', 'spine', 'belly', 'chest', 'neck', 'head', 'shoulderl', 'upperarml', 'forearml', 'handl', 'shoulderr', 'upperarmr', 'forearmr', 'handr',
@@ -44,6 +44,10 @@
       for (let c = 0; c < 4; c++) if (ji[GET[c]](i) === hi && wi[GET[c]](i) > 0.9) { box.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(hb.matrixWorld).applyMatrix4(inv)); break; }
     }
     rest.headC = box.getCenter(new THREE.Vector3()); rest.headR = box.getSize(new THREE.Vector3()).x / 2;
+    // the approved standing pose (Blender 'stance' clip): its arm bones' local rotations, for standing and walking
+    rest.stance = {};
+    const st = clips.find((c) => /stance/i.test(c.name));
+    if (st) for (const tr of st.tracks) { const m = /^(.*)\.quaternion$/.exec(tr.name); if (m) rest.stance[key(m[1])] = new THREE.Quaternion().fromArray(tr.values, 0); }
   }
 
   // ------------------------------------------------------------------ attach to a WrestlerView
@@ -56,7 +60,7 @@
     const mats = [];
     M.traverse((q) => {
       if (!q.isMesh) return;
-      q.frustumCulled = false; q.castShadow = true; q.receiveShadow = true;
+      q.frustumCulled = false; q.castShadow = true; q.receiveShadow = false; // no self-shadow blotches on the round body
       const ms = Array.isArray(q.material) ? q.material : [q.material];
       const nm = ms.map((m) => {
         const name = (m.name || '').toLowerCase();
@@ -109,6 +113,24 @@
       aim('upperarm' + sd, 'shoulder' + sd, sh, el);
       aim('forearm' + sd, 'upperarm' + sd, el, hd);
       keep('hand' + sd, 'forearm' + sd);
+    }
+    // standing and walking: the arms take the approved stance pose (relaxed, a little forward, palms down) and swing
+    // gently against the steps; fighting moves blend back to the view's IK arms
+    const now = performance.now() / 1000, dtr = Math.min(0.1, now - (S_.tPrev || now)); S_.tPrev = now;
+    S_.wA = (S_.wA === undefined ? view.clipArms || 0 : S_.wA) + ((view.clipArms || 0) - (S_.wA || 0)) * Math.min(1, dtr * 9);
+    if (S_.wA > 0.001 && rest.stance.upperarml) {
+      const spd = Math.min(1, (w.spd || 0) / 3), amp = 0.42 * spd * (view.gaitW || 0), ax = S_.c.set(1, 0, 0).applyQuaternion(bodyQ);
+      const blend = (n, parent, extra) => {
+        const L = rest.stance[n]; if (!L) return;
+        const clipW = wq[parent].clone().multiply(L); if (extra) clipW.premultiply(extra);
+        set(n, wq[n].clone().slerp(clipW, S_.wA), wq[parent]);
+      };
+      for (const sd of ['l', 'r']) {
+        const sw = new THREE.Quaternion().setFromAxisAngle(ax, Math.sin(view.gaitPh || 0) * amp * (sd === 'l' ? 1 : -1));
+        // bring the upper arms in against his sides (the stance spreads the elbows: from behind that read as wide shoulders)
+        const fw = S_.v.set(0, 0, 1).applyQuaternion(bodyQ); sw.multiply(new THREE.Quaternion().setFromAxisAngle(fw, (sd === 'l' ? -1 : 1) * (S.SoftSumo.adduct !== undefined ? S.SoftSumo.adduct : 0.3)));
+        blend('shoulder' + sd, 'chest'); blend('upperarm' + sd, 'shoulder' + sd, sw); blend('forearm' + sd, 'upperarm' + sd); blend('hand' + sd, 'forearm' + sd);
+      }
     }
     for (const L of view.legs) {
       const sd = L.sd > 0 ? 'l' : 'r', h = L.hp, kn = L.kn, ft = L.ft;

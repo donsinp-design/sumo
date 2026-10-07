@@ -9,8 +9,7 @@
   const BOX = () => S.R3.GEO.box;
 
   S.STAGES = [
-    { id: 'dohyo', name: 'DOHYO' }, { id: 'vacuum', name: 'ROBOT VACUUM' }, { id: 'chip', name: 'POKER CHIP' },
-    { id: 'taiko', name: 'TAIKO DRUM' }, { id: 'can', name: 'SODA CAN' }, { id: 'cake', name: 'BIRTHDAY CAKE' },
+    { id: 'dohyo', name: 'DOHYO' }, { id: 'vacuum', name: 'ROBOT VACUUM' }, { id: 'cake', name: 'BIRTHDAY CAKE' }, // (poker chip, taiko drum, soda can: removed)
     { id: 'vinyl', name: 'DJ VINYL' }, { id: 'heli', name: 'HELIPAD' }, { id: 'pizza', name: 'PIZZA' },
     { id: 'watch', name: 'CLOCK' }, { id: 'earth', name: 'FLAT EARTH' },
     { id: 'lily', name: 'LILY PAD' }, { id: 'sushi', name: 'SUSHI TRAIN' },

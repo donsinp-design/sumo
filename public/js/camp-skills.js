@@ -423,9 +423,16 @@
       const c = this.c, have = c.ability && c.ability.id;
       const L = POOL.filter((s) => s.id !== have && s.id !== 'konbini').sort(() => Math.random() - 0.5).slice(0, 3);
       this.shop = { o, L };
-      const el = c.el('.ch-shop'); el.innerHTML = '<h2 data-jp="コンビニ">CONVENIENCE STORE</h2>' + L.map((s, i) => '<button data-shop="' + i + '"><kbd>' + 'JKL'[i] + '</kbd> ' + s.name + '<small>' + s.desc + '</small></button>').join('') + '<button data-shop="x"><kbd>Esc</kbd> WALK OUT</button>';
+      const touch = S.touch && S.touch.on;
+      const el = c.el('.ch-shop'); el.innerHTML = '<h2 data-jp="コンビニ">CONVENIENCE STORE</h2>' + L.map((s, i) => '<button data-shop="' + i + '">' + s.name + '<small>' + s.desc + '</small></button>').join('') + '<button data-shop="x">WALK OUT</button>' +
+        '<p>' + (touch ? 'Tap a skill' : 'W / S or arrows to choose · Enter or J to buy · Esc or K to walk out') + '</p>';
       el.classList.add('on'); c.cardOpen = true; c.shopping = true; c.g.audio.blip(true);
+      this.shopI = 0; this.shopHold = 0; this.markShop();
     }
+    // the shop is a menu like the mask picker: a highlighted line that moves one step per press
+    shopMove(d) { if (!this.shop) return; const n = this.shop.L.length + 1; this.shopI = (this.shopI + d + n) % n; this.markShop(); this.c.g.audio.blip(); }
+    markShop() { const bs = this.c.el('.ch-shop').querySelectorAll('button'); bs.forEach((b, i) => b.classList.toggle('sel', i === this.shopI)); }
+    shopPick() { if (!this.shop) return; this.pick(this.shopI >= this.shop.L.length ? 'x' : this.shopI); }
     pick(i) {
       const c = this.c, S0 = this.shop; if (!S0) return;
       c.el('.ch-shop').classList.remove('on'); this.shop = null; c.cardOpen = false; c.shopping = false; this.kill(S0.o);

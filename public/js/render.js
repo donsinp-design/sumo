@@ -485,7 +485,7 @@
       const t = w.t;
       let c = 0.42, p = 0.18, r = 0, tw = 0, hp = 0, rate = 14, drop = 0;
       const G = [0.52, 0.62, 0.7];
-      this.stompLift = 0; this.hyT = 0; this.turnAway = 0;
+      this.stompLift = 0; this.hyT = 0; this.turnAway = 0; this.clipArms = 0;
       let Rh = G, Lh = mir(G);
       this.hook = 0;
       if (w.fxs && w.fxs.cyclone > 0) { const A = [1.02, 0.95, 0.0]; return { c: 0.32, p: -0.05, r: 0, tw: 0, hp: -0.05, Rh: A, Lh: mir(A), rate: 22, drop: 0 }; } // CYCLONE: arms straight out
@@ -537,6 +537,7 @@
         case 'free':
           if (w.contact && w.fwdIn > 0.4) { p = 0.5; c = 0.62; Rh = [0.32, 0.5, 0.88]; Lh = mir(Rh); }
           else if (!w.contact) {
+            this.clipArms = 1; // (the soft sumo: its own standing pose for the arms, see sumo-soft.js)
             // walking: the guard drops and the arms hang by the belly, swinging against the legs
             const sp = w.spd !== undefined ? w.spd : Math.hypot(w.vx || 0, w.vz || 0);
             const dtp = Math.min(0.1, Math.max(0, T - (this.gaitT || T))); this.gaitT = T;
@@ -687,6 +688,7 @@
       }
       // carrying a prop (campaign): a bottle in one hand at the side; anything bigger gripped in both hands, low in front
       if (w.carry && w.st !== 'fall' && !w.lifted) {
+        this.clipArms = 0;
         const sw = this.gaitW ? Math.sin(this.gaitPh || 0) * 0.08 * this.gaitW : 0;
         if (w.carry.small) Rh = [this.soft ? 0.9 : 0.66, 0.22, 0.3 + sw];
         else { Rh = [0.4, 0.3, 0.66]; Lh = mir(Rh); }

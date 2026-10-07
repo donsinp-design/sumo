@@ -178,8 +178,15 @@
     }
     setPause(on) { this.paused = on; this.el('.ch-pause').classList.toggle('on', on); }
     onKey(e) {
-      if (this.maskOpen) { if (e.repeat) return true; if (e.code === 'ArrowUp' || e.code === 'KeyW') this.maskMove(-1); else if (e.code === 'ArrowDown' || e.code === 'KeyS') this.maskMove(1); else if (e.code === 'Enter' || e.code === 'NumpadEnter') this.pickMask(this.maskI); return true; } // keys move one step per press; Enter wears it
-      if (this.shopping) { if (e.code === 'Escape') this.sk.pick('x'); return true; }
+      if (this.maskOpen) { if (e.repeat) return true; if (e.code === 'ArrowUp' || e.code === 'KeyW') this.maskMove(-1); else if (e.code === 'ArrowDown' || e.code === 'KeyS') this.maskMove(1); else if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'KeyJ') this.pickMask(this.maskI); return true; } // keys move one step per press; Enter wears it
+      if (this.shopping) {
+        if (e.repeat) return true;
+        if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'ArrowLeft' || e.code === 'KeyA') this.sk.shopMove(-1);
+        else if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'ArrowRight' || e.code === 'KeyD') this.sk.shopMove(1);
+        else if (e.code === 'Enter' || e.code === 'NumpadEnter') this.sk.shopPick();
+        else if (e.code === 'Escape') this.sk.pick('x');
+        return true;
+      }
       if (e.code === 'Escape' || e.code === 'KeyP') { if (this.over) return; this.setPause(!this.paused); return true; }
       if (this.paused) { if (e.code === 'KeyR') this.command('retry'); else if (e.code === 'KeyQ') this.command('quit'); else if (e.code === 'Enter' || e.code === 'KeyJ') this.command('resume'); return true; }
       if (this.over) { if (!this.el('.ch-over').classList.contains('on')) return true; if (e.code === 'Enter' || e.code === 'KeyJ' || e.code === 'KeyR' || e.code === 'Space') this.command(this.over === 'win' ? 'quit' : 'retry'); else if (e.code === 'KeyQ' || e.code === 'Escape') this.command('quit'); /* K (grab) never quits: mashing it must not throw the run away */ return true; }
@@ -201,7 +208,11 @@
           if (n >= 12) this.acc = 0;
         }
       } else if (this.maskOpen) { this.ctrl.update(dt); this.maskInput(); }
-      else if (this.shopping) { this.ctrl.update(dt); const k = this.ctrl; if (k.push.pressed) this.sk.pick(0); else if (k.grab.pressed) this.sk.pick(1); else if (k.dash.pressed) this.sk.pick(2); }
+      else if (this.shopping) { // J (or a pad's slap button) buys the highlighted skill, K walks out; a phone stick moves the highlight
+        this.ctrl.update(dt); const k = this.ctrl;
+        if (k.push.pressed) this.sk.shopPick(); else if (k.grab.pressed) this.sk.pick('x');
+        else { const pad = S.touch && S.touch.on ? S.touch.mz : 0; if (Math.abs(pad) > 0.5) { if (!(this.sk.shopHold > 0)) { this.sk.shopMove(pad > 0 ? 1 : -1); this.sk.shopHold = 0.25; } else this.sk.shopHold -= dt; } else this.sk.shopHold = 0; }
+      }
       else if (this.cardOpen) { this.ctrl.update(dt); if (this.ctrl.grab.pressed || this.ctrl.skill.pressed || this.ctrl.push.pressed) this.closeCard(); }
       // the result screen answers the slap button however it's mapped (keys, pad, phone): J = try again / continue, K = quit
       if (this.over && this.el('.ch-over').classList.contains('on')) {
@@ -845,7 +856,7 @@
     drawMasks() {
       const M = S.CampSkills.MASKS, touch = S.touch && S.touch.on;
       this.el('.ch-mask').innerHTML = '<h2 data-jp="面">CHOOSE A MASK</h2>' + M.map((m, i) => '<button data-mask="' + i + '" class="' + (i === this.maskI ? 'sel' : '') + '"><span class="jp">' + m.jp + '</span>' + m.name + '<small>' + m.desc + '</small></button>').join('') +
-        '<p>' + (touch ? 'Tap a mask' : 'W / S to choose · Enter to wear it') + '</p>';
+        '<p>' + (touch ? 'Tap a mask' : 'W / S or arrows to choose · Enter or J to wear it') + '</p>';
     }
     maskMove(d) { const n = S.CampSkills.MASKS.length; this.maskI = (this.maskI + d + n) % n; this.markMask(); this.g.audio.tick && this.g.audio.tick(); }
     markMask() { this.el('.ch-mask').querySelectorAll('[data-mask]').forEach((b) => b.classList.toggle('sel', +b.dataset.mask === this.maskI)); }
