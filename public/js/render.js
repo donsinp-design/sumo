@@ -2392,10 +2392,12 @@
       if (KIT_BG[id] !== undefined) this.scene.background.set(KIT_BG[id]);
     }
   };
-  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb' },
-    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf }, KIT_CACHE = {};
+  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb' },
+    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4 }, KIT_CACHE = {};
   // a little life in the kit stages: the sushi plates rumble on the belt
   const KIT_TICK = {
+    // the record turns with the stage (the wrestlers ride it)
+    vinyl: (k) => { const rec = k.getObjectByName('SPIN_Record'); return (T, dt, m) => { if (rec) rec.rotation.y = -((m && m.stageA) || 0); }; },
     // the candle flames flicker
     cake: (k) => { const fl = k.children.filter((c) => /^FLAME_/.test(c.name)); fl.forEach((f, i) => { f.userData.s0 = f.scale.clone(); f.userData.ph = i * 2.3; });
       return (T) => fl.forEach((f) => { const s = f.userData.s0, j = 0.85 + 0.25 * Math.abs(Math.sin(T * 9 + f.userData.ph)) + 0.08 * Math.sin(T * 23 + f.userData.ph * 3); f.scale.set(s.x * (1.05 - 0.1 * j), s.y * j, s.z * (1.05 - 0.1 * j)); }); },
