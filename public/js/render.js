@@ -545,7 +545,7 @@
             const k = this.gaitW;
             if (k > 0.01) {
               const sw = Math.sin(this.gaitPh) * (0.12 + 0.06 * Math.min(1, sp / 4)) * Math.min(1, sp / 0.8);
-              const hang = (s) => [0.66, 0.04 + Math.abs(s) * 0.25, 0.1 + s];
+              const hang = this.soft ? (s) => [0.86, 0.1 + Math.abs(s) * 0.2, -0.02 + s * 1.3] : (s) => [0.66, 0.04 + Math.abs(s) * 0.25, 0.1 + s]; // the soft sumo's arms hang clear of his round sides
               Rh = lerpA(G, hang(sw), k); Lh = mir(lerpA(G, hang(-sw), k));
               c = 0.42 - 0.12 * k; p = 0.18 - 0.06 * k; tw = 0.06 * Math.sin(this.gaitPh) * k;
             }
@@ -685,7 +685,18 @@
         p += Math.sin(T * 17 + w.idx) * wob * 0.35; r += Math.sin(T * 13 + 1) * wob * 0.3;
         if (wob > 0.2 && (w.st === 'free' || w.st === 'recover')) { Rh = [0.75, 0.7, 0.2]; Lh = mir(Rh); }
       }
+      // carrying a prop (campaign): a bottle in one hand at the side; anything bigger gripped in both hands, low in front
+      if (w.carry && w.st !== 'fall' && !w.lifted) {
+        const sw = this.gaitW ? Math.sin(this.gaitPh || 0) * 0.08 * this.gaitW : 0;
+        if (w.carry.small) Rh = [this.soft ? 0.9 : 0.66, 0.22, 0.3 + sw];
+        else { Rh = [0.4, 0.3, 0.66]; Lh = mir(Rh); }
+      }
       return { c, p, r, tw, hp, Rh, Lh, rate, drop };
+    }
+    // where a hand is (world), on whichever body is showing. sd: +1 / -1
+    handWorld(sd, out) {
+      if (this.soft) { const b = this.soft.B[sd > 0 ? 'handl' : 'handr']; if (b) { b.updateWorldMatrix(true, false); return out.setFromMatrixPosition(b.matrixWorld); } }
+      const A = this.arms[sd > 0 ? 1 : 0]; return A.hand.getWorldPosition(out);
     }
 
     update(w, dt, T) {
@@ -1366,6 +1377,9 @@
       this.cs = { fx: 0, fz: 0, tight: 0, kick: 0, shake: 0, yaw: 0, orbit: false, focusW: 0, fox: 0, foz: 0 };
       this.time = 0; this.excite = 0;
       this.setAnime(window.KUMITE_STYLE === 'anime');
+      // KUMITEGAME: the flat look (flat.js), same as the campaign: one master material, a soft sun with real shadows
+      this.flat = window.KUMITE_STYLE === 'anime' && !!S.Flat;
+      if (this.flat) { this.flatL = S.Flat.lights(this.scene, { r: 16 }); this.flatL.aim(0, 0); this.flatN = 0; const vg = document.getElementById('vignette'); if (vg) vg.style.display = 'none'; }
       this.resize();
       addEventListener('resize', () => this.resize());
     }
@@ -1386,7 +1400,7 @@
       if (this.floorM) this.floorM.visible = classic && !boss;
       if (this.banners) for (const b of this.banners) b.visible = classic && !boss;
       if (this.coneM) this.coneM.visible = classic && !boss; // against pure black the beam reads as a grey slab
-      if (classic) this.scene.background.set(boss ? 0x000000 : 0x150c14); // themed stages set their own sky
+      if (classic) this.scene.background.set(this.flat || (this.flat === undefined && window.KUMITE_STYLE === 'anime' && S.Flat) ? 0xcfe0ee : boss ? 0x000000 : 0x150c14); // themed stages set their own sky
       const d3 = boss && this.ring3d && this.ring3d.length > 0;          // the modelled dohyo replaces the painted one
       if (this.flat2d) for (const o of this.flat2d) o.visible = !d3 && (o.parent === this.spinG ? classic : true);
       if (this.ring3d) for (const o of this.ring3d) o.visible = d3;
@@ -1628,6 +1642,10 @@
           const rest = pool.filter((k) => k !== m0 && k !== m1), rid = rest[(Math.random() * rest.length) | 0];
           const rm = this.ref.mask = S.CampSkills.maskMesh(rid); if (rm) { rm.scale.setScalar(0.78); rm.position.set(0, -0.06, -0.01); this.ref.headG.add(rm); this.ref.maskId = rid; }
         }
+      }
+      if (this.flat && S.SoftSumo) { // the soft sumo, as in the campaign
+        const put = () => { for (const v of this.views) if (!v.soft && this.views.includes(v)) S.SoftSumo.attach(v, { noBlob: true }); };
+        if (S.SoftSumo.loaded) put(); else S.SoftSumo.ready.then(put);
       }
       this.fx.clearDecals();
       this.clearObjs(); this.clearThrown();
@@ -2257,7 +2275,15 @@
       return { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight };
     }
 
-    render() { if (this.anime && this.post) this.post.render(this.scene, this.cam, this.time); else this.r.render(this.scene, this.cam); }
+    render() {
+      if (this.flat) {
+        // new things (stage models loading in, effects, thrown objects) get the master material as they appear
+        if ((this.flatN = (this.flatN || 0) + 1) % 20 === 1) S.Flat.convert(this.scene, { pastel: 0.6 });
+        this.r.shadowMap.enabled = true; this.r.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.r.render(this.scene, this.cam); return;
+      }
+      if (this.anime && this.post) this.post.render(this.scene, this.cam, this.time); else this.r.render(this.scene, this.cam);
+    }
   }
 
   S.Renderer = Renderer;

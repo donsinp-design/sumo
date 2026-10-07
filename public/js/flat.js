@@ -86,7 +86,7 @@ void RE_Direct_Flat( const in IncidentLight directLight, const in GeometricConte
     const R = o.r || 20; Object.assign(sun.shadow.camera, { left: -R, right: R, top: R, bottom: -R, near: 1, far: 90 });
     sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.035; sun.shadow.radius = 4;
     scene.add(sun, sun.target);
-    const off = new THREE.Vector3(-9, 16, -6.5);
+    const off = new THREE.Vector3(-7, 17, 9);   // from behind the camera: the sumo's back (what you see most) is lit, shadows fall away up the street
     return { sun, aim(x, z) { sun.position.set(x + off.x, off.y, z + off.z); sun.target.position.set(x, 0, z); sun.target.updateMatrixWorld(); } };
   }
   S.Flat = { U, patch, mat, pastel, convert, convertMat, lights };

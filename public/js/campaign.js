@@ -91,7 +91,7 @@
     }
     stop() {
       removeEventListener('resize', this.resize);
-      if (this.flat) { this.R.r.shadowMap.enabled = false; this.R.r.localClippingEnabled = false; const vg = document.getElementById('vignette'); if (vg) vg.style.display = ''; }
+      if (this.flat) { this.R.r.shadowMap.enabled = false; this.R.r.localClippingEnabled = false; const vg = document.getElementById('vignette'); if (vg) vg.style.display = this.R.flat ? 'none' : ''; }
       if (this.hud) this.hud.remove();
       this.scene = null;
     }
@@ -999,9 +999,12 @@
         if (p.dead) continue;
         if (p.held) {
           const H = p.held; if (p.attached) continue; // in an enemy's hand (parented to the bone)
-          const sz = H.w ? H.w.szCur : 1, small = p.D.r < 0.2;
-          if (small && H.view && H.view.arms && H.view.arms[1] && H.view.arms[1].hand) { const v = H.view.arms[1].hand.getWorldPosition(new THREE.Vector3()); p.x = v.x; p.y = v.y - 0.08; p.z = v.z; }
-          else { p.x = H.x + Math.cos(H.f) * 0.78 * sz; p.z = H.z + Math.sin(H.f) * 0.78 * sz; p.y = 0.95 * sz; } // hugged against the chest
+          const sz = H.w ? H.w.szCur : 1, small = p.D.r < 0.2, v = this.v3a || (this.v3a = new THREE.Vector3()), u = this.v3b || (this.v3b = new THREE.Vector3());
+          if (!p.hgt) { const bb = new THREE.Box3().setFromObject(p.mesh); p.hgt = Math.max(0.1, (bb.max.y - bb.min.y) || 0.5); }
+          if (H.view && H.view.handWorld) {
+            if (small) { H.view.handWorld(1, v); p.x = v.x; p.y = v.y - p.hgt * 0.35; p.z = v.z; }                                   // in the fist
+            else { H.view.handWorld(1, v); H.view.handWorld(-1, u); v.add(u).multiplyScalar(0.5); p.x = v.x; p.z = v.z; p.y = Math.max(0, v.y - p.hgt * 0.5); } // gripped by its sides
+          } else { p.x = H.x + Math.cos(H.f) * 0.78 * sz; p.z = H.z + Math.sin(H.f) * 0.78 * sz; p.y = 0.95 * sz; } // hugged against the chest
           p.ry = -H.f; continue;
         }
         if (p.thrown || p.hop) {
@@ -1133,7 +1136,9 @@
         const map = { free: 'free', strike: 'palm', grab: 'grab', hold: 'grab', throw: 'heavy', lprep: 'brace', dodge: 'dash', charge: 'charge', parry: 'brace', block: 'brace',
           recover: 'recover', slam: 'heavy', btoss: a.t < 0.3 ? 'grab' : 'heavy', tossed: 'stun', bonk: 'stun', hurt: 'stun', down: 'fall', getup: 'recover', grabbed: 'stun', intro: 'free', roar: 'win', wind: a.atk === 'stomp' ? 'bigstomp' : a.atk === 'charge' ? 'wind' : 'wind',
           act: a.atk === 'stomp' ? 'bigstomp' : a.atk === 'charge' ? 'charge' : 'slap', dazed: 'stun', held: 'stun', thrown: 'fall', clawed: 'stun' };
-        const nst = map[st] || 'free';
+        const prop = a.held && a.held.D ? a.held : null; // carrying a crate / chair / bottle (not a person)
+        const nst = prop && (st === 'hold' || st === 'free') ? 'free' : map[st] || 'free';
+        w.carry = prop ? { small: prop.D.r < 0.2 } : null;
         if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = st === 'hold' || (st === 'btoss' && a.t < 0.3) ? 0.12 : st === 'btoss' ? a.t - 0.3 : a.t;
         if (st === 'wind' && a.atk === 'stomp') w.t = a.t * (0.45 / Math.max(0.01, a.dur)); // lift the leg over the wind-up
         if (st === 'act' && a.atk === 'stomp') w.t = 0.46 + a.t;
@@ -1147,6 +1152,7 @@
           Object.assign(w.fxs, this.sk.fxs()); w.ballRoll = a.sk && a.sk.roll; w.torpedo = !!(a.sk && a.sk.kind === 'torp'); a.view.viewer = -1; }
         if (a.clone) { w.fxs.invuln = 0; }
         w.lifted = st === 'held' || st === 'clawed' || st === 'tossed';
+        if (this.flat && !a.view.soft && S.SoftSumo && S.SoftSumo.loaded) S.SoftSumo.attach(a.view, { noBlob: true }); // finished loading after the start
         a.view.update(w, Math.max(dt, 1e-4), T);
         a.view.root.visible = !(a.iframe > 0 && st === 'getup' && Math.sin(T * 40) > 0) && !(w.fxs.ball > 0); // a daruma replaces the body
       } else { if (a.team === 1) a.engage = !a.dead && Math.hypot(this.P.x - a.x, this.P.z - a.z) < 5.5; a.view.update(a, dt, T); }
