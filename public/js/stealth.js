@@ -13,6 +13,9 @@
   const lerpA = (a, b, k) => a + ang(b - a) * Math.min(1, k);
   const STEP = 1 / 60;
   const SAFE_Z = -27;          // north of this: the bath and the showers (nobody minds a naked man there)
+  // restart points nobody is looking at: the shower side of the locker door, the corner just inside the lobby door
+  const CP = { lockN: { x: 5.8, z: -25.6, f: -Math.PI / 2 }, lockS: { x: -11.2, z: -46.1, f: Math.PI / 2 }, lobby: { x: -11.2, z: -48.1, f: -Math.PI / 2 } };
+  const CENSOR = { w: 0.78, h: 0.42, y: 0.7 };   // the pixel block: his bottom / crotch only
 
   class Stealth {
     constructor(game) { this.g = game; }
@@ -28,7 +31,7 @@
       const r = this.R.r; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
       const vg = document.getElementById('vignette'); if (vg) vg.style.display = 'none';
       this.walls = []; this.blockers = []; this.puddles = []; this.buckets = [];
-      this.build();
+      this.build(); this.buildNav(); this.flying = []; this.grace = 0;
       this.ctrl = new S.Controller(new S.KeySource(S.MAPS.solo, 0));
       this.keys = {};
       this.kd = (e) => { this.keys[e.code] = true; }; this.ku = (e) => { this.keys[e.code] = false; };
@@ -72,7 +75,13 @@
       };
       const floor = (x0, x1, z0, z1, col, y) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0).rotateX(-Math.PI / 2), M(col)); m.position.set((x0 + x1) / 2, y || 0, (z0 + z1) / 2); m.receiveShadow = true; G.add(m); return m; };
       // cut-away walls: low, so the high camera always sees him, but nobody sees through them
-      const wall = (x0, x1, z0, z1, col) => box(x0, x1, z0, z1, 0, 1.15, col || 0xe8ddc9, { tall: true });
+      const wall = (x0, x1, z0, z1, col) => { const m = box(x0, x1, z0, z1, 0, 1.15, col || 0xe8ddc9, { tall: true });
+        box(x0 - 0.03, x1 + 0.03, z0 - 0.03, z1 + 0.03, 1.15, 0.07, new THREE.Color(col || 0xe8ddc9).multiplyScalar(0.72).getHex(), { solid: false }); return m; };
+      // a doorway in a wall along x at z: dark wooden posts, a mat on the floor
+      const door = (gx0, gx1, z, col) => {
+        for (const x of [gx0 - 0.14, gx1 + 0.14]) box(x - 0.16, x + 0.16, z - 0.3, z + 0.3, 0, 1.55, 0x7a5a44);
+        const mat = new THREE.Mesh(new THREE.PlaneGeometry(gx1 - gx0 - 0.4, 0.9).rotateX(-Math.PI / 2), M(col || 0x8fb0a8)); mat.position.set((gx0 + gx1) / 2, 0.012, z); G.add(mat);
+      };
       const label = (text, sub, x, z, w, h, bg, fg, rz) => {
         const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256; const c = cv.getContext('2d');
         c.fillStyle = bg; c.fillRect(0, 0, 512, 256); c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -101,13 +110,18 @@
       for (const z of [-2, -5, -8, -11, -14]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.32, 14), M(0xe2b85e)); st.position.set(-11, 0.16, z); st.castShadow = true; G.add(st);
         const bk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.3, 14), M(0xd3ab7a)); bk.position.set(-11.4, 0.15, z + 0.6); G.add(bk); }
       plant(10.6, 2.8, 1); plant(10.6, -14.6, 0.9); plant(-10.8, 3.2, 0.8);
-      wall(-12, -2.2, -16.2, -15.8, 0xbcd3d6); wall(2.2, 12, -16.2, -15.8, 0xbcd3d6);                  // to the showers: x -2.2 .. 2.2
+      wall(-12, -2.2, -16.2, -15.8, 0xbcd3d6); wall(2.2, 12, -16.2, -15.8, 0xbcd3d6); door(-2.2, 2.2, -16);   // to the showers: x -2.2 .. 2.2
+      // his wash bucket (the yellow plastic kind every bathhouse has), by the towel he slept on: where he left the key... he thinks
+      this.washB = new THREE.Group(); { const y = M(0xf2cf4a), w = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.34, 18, 1, true), M(0xf2cf4a, { side: THREE.DoubleSide })); w.position.y = 0.17; w.castShadow = true;
+        const bt = new THREE.Mesh(new THREE.CircleGeometry(0.22, 18).rotateX(-Math.PI / 2), M(0xf2cf4a, { side: THREE.DoubleSide })); bt.position.y = 0.01; const rim = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.025, 6, 20).rotateX(Math.PI / 2), M(0xe0b43a)); rim.position.y = 0.34;
+        const tw = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.22), M(0xf6eddc)); tw.position.set(0, 0.35, 0); tw.rotation.y = 0.5; this.washB.add(w, bt, rim, tw); this.washTowel = tw; }
+      this.washB.position.set(-6.9, 0, 2.3); G.add(this.washB); this.washSpot = { x: -6.9, z: 2.3 };
       label('男湯', 'BATH', 0, -14.6, 2.4, 1.1, '#2f4b7c', '#f6f1e6');
       // ---- SHOWERS (safe): stalls with low dividers, stools, a bench down the middle
       for (const sd of [-1, 1]) for (const z of [-18, -21, -24]) box(sd > 0 ? 9.6 : -12, sd > 0 ? 12 : -9.6, z - 0.12, z + 0.12, 0, 1.0, 0xc4d8dc);
       for (const sd of [-1, 1]) for (const z of [-19.5, -22.5, -25.5]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.32, 14), M(0xa8dcc6)); st.position.set(sd * 10.6, 0.16, z); G.add(st); }
       box(-2.5, 2.5, -21.9, -21.1, 0, 0.45, 0xbb8b5e);                                                  // bench (solid)
-      wall(-12, 4, -27.2, -26.8, 0xe6d6bb); wall(7.6, 12, -27.2, -26.8, 0xe6d6bb);                     // to the lockers: x 4 .. 7.6
+      wall(-12, 4, -27.2, -26.8, 0xe6d6bb); wall(7.6, 12, -27.2, -26.8, 0xe6d6bb); door(4, 7.6, -27, 0xcf9a7a);   // to the lockers: x 4 .. 7.6
       label('シャワー', 'SHOWERS', 0, -17.4, 2.6, 1.1, '#84b5ad', '#ffffff');
       // ---- LOCKER ROOM (sneak): banks of lockers, benches, puddles
       const lockerTex = (() => { const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128; const c = cv.getContext('2d');
@@ -119,17 +133,17 @@
       puddle(-1.2, -29.2, 1.0, 0.6); puddle(6.2, -44.4, 1.2, 0.7); puddle(-9.6, -44.6, 0.9, 0.6); puddle(9.8, -33.6, 0.8, 0.55);
       this.locker = { x: 8.6, z: -35.25 };                                                              // his locker: number 8, on the bank at z -36
       label('8', null, 8.6, -34.7, 0.7, 0.5, '#f6d55e', '#4d4756');
-      wall(-12, -11.6, -47.2, -46.8, 0xe6d6bb); wall(-8.4, 12, -47.2, -46.8, 0xe6d6bb);                // to the lobby: x -11.6 .. -8.4
+      wall(-12, -11.6, -47.2, -46.8, 0xe6d6bb); wall(-8.4, 12, -47.2, -46.8, 0xe6d6bb); door(-11.6, -8.4, -47, 0xcf9a7a);   // to the lobby: x -11.6 .. -8.4
       label('脱衣所', 'LOCKERS', 5.8, -28.4, 2.4, 1.1, '#cf7a5a', '#fff6e6');
-      plant(-11.1, -45.8, 0.75);
-      bucket(-6.6, -45.6); bucket(0.6, -38.6);
+      plant(-6.0, -46.0, 0.7);
+      bucket(-4.4, -45.6); bucket(0.6, -38.6);
       // ---- LOBBY / RECEPTION (sneak): the counter, a vending machine, benches; the storage door behind the counter
       this.counter = box(3, 9.6, -55.6, -54.4, 0, 1.15, 0xbb8b5e, { tall: false });   // she sees over it
       box(3, 9.6, -55.7, -55.5, 1.15, 0.08, 0xd3ab7a, { solid: false });
       label('受付', 'RECEPTION', 6.3, -53.2, 2.4, 1.0, '#4d4756', '#f6f1e6');
       box(-11.8, -10.6, -56, -54.8, 0, 1.9, 0xdd5a42, { tall: true });                                  // vending machine (cover)
       box(-6, -2, -52.6, -52.0, 0, 0.45, 0x9db5cb); plant(-1.2, -58.6, 0.9);
-      wall(-12, 9.4, -60.2, -59.8, 0xd2c8ba); wall(11.6, 12, -60.2, -59.8, 0xd2c8ba);                  // back wall; the storage door x 9.4 .. 11.6
+      wall(-12, 9.4, -60.2, -59.8, 0xd2c8ba); wall(11.6, 12, -60.2, -59.8, 0xd2c8ba); door(9.4, 11.6, -60, 0x9a8a7a);   // back wall; the storage door x 9.4 .. 11.6
       for (const x of [-2.6, 0, 2.6]) box(x - 1.2, x + 1.2, -59.95, -59.85, 0, 1.1, 0xbfe0f2, { solid: false, cast: false });   // the glass front doors (shut)
       label('倉庫', 'STAFF ONLY', 10.5, -58.8, 2.0, 0.9, '#4d4756', '#f6f1e6');
       puddle(-4, -49.4, 1.1, 0.6); puddle(1.6, -57.4, 0.9, 0.5);
@@ -144,7 +158,7 @@
       this.pantsBox = this.cardboard(1.0); this.pantsBox.position.set(this.boxSpot.x, 0, this.boxSpot.z); this.pantsBox.rotation.y = 0.4; G.add(this.pantsBox);
       // sparkles that mark the next thing to do
       const sp = (x, z) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.sparkTex(), transparent: true, depthWrite: false, color: 0xffe08a })); s.position.set(x, 1.6, z); s.scale.setScalar(1.1); s.renderOrder = 6; s.visible = false; G.add(s); return s; };
-      this.spLocker = sp(this.locker.x, this.locker.z); this.spKey = sp(-8.4, 1.4); this.spBox = sp(this.boxSpot.x, this.boxSpot.z);
+      this.spLocker = sp(this.locker.x, this.locker.z); this.spKey = sp(this.washSpot.x, this.washSpot.z); this.spBox = sp(this.boxSpot.x, this.boxSpot.z);
       this.spLocker.visible = true;
       G.traverse((o) => { if (o.isMesh) o.userData.flatDone = true; });
     }
@@ -172,7 +186,8 @@
     }
 
     // ============================================================== the staff: fixed routes, cones of view
-    // route points: [x, z, wait, look]. exit: the way out from a fixed post to open floor (for going to a noise)
+    // route points: [x, z, wait, look]. They walk between points (and to any noise) by the shortest way round
+    // lockers, benches and walls (a grid path), wait, and look the given way, swaying their head a little.
     makeNpcs() {
       const mk = (kind, route, o) => {
         o = o || {};
@@ -180,17 +195,24 @@
         const v = new S.WorkerView(this.scene, kind, !!o.fat, o.pick); v.walls = this.walls;
         const cone = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0xffcf3a, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide }));
         cone.renderOrder = 2; this.scene.add(cone);
-        return { a, v, route, i: 0, wait: route[0][2], mode: 'route', alarm: 0, cone, range: o.range || 6.4, half: o.half || 0.62, room: o.room, exit: o.exit || null, speed: o.speed || 1.35, sway: o.sway || 0.6, path: null };
+        return { a, v, route, i: 0, wait: route[0][2], mode: 'route', alarm: 0, cone, range: o.range || 6.4, half: o.half || 0.62, room: o.room, speed: o.speed || 1.35, sway: o.sway || 0.6, ear: o.ear || 0, path: null, pi: 0 };
       };
+      const P = Math.PI, U = P / 2;
       return [
-        // locker room: the attendant patrols the aisles, stopping at the ends to look along them
-        mk('fighter', [[-10.4, -33.6, 1.6, 0], [10.4, -33.6, 1.4, Math.PI], [2.6, -33.6, 0, 0], [2.6, -38.9, 0, 0], [10.4, -38.9, 1.4, Math.PI], [-10.4, -38.9, 1.6, 0], [-10.4, -44.2, 1.2, 0], [-10.4, -33.6, 0, 0]], { room: 'lock' }),
-        // a cleaner working along the far aisle
-        mk('grappler', [[-2.4, -44.4, 2.2, -Math.PI / 2], [10.6, -44.4, 2.2, -Math.PI / 2]], { room: 'lock', fat: true, speed: 0.9, range: 5.4 }),
-        // the receptionist: behind the counter, watching the lobby (and the way to the storage door)
-        mk('technical', [[6.6, -57.0, 999, Math.PI / 2]], { room: 'lobby', sway: 0.8, range: 8.2, exit: [[2.2, -57.0], [2.2, -53.4]] }),
-        // someone straightening the lobby benches
-        mk('staff', [[-8.8, -49.6, 1.8, Math.PI / 2], [2.4, -49.6, 1.8, Math.PI / 2]], { room: 'lobby', speed: 1.1 }),
+        // LOCKER ROOM. The attendant walks the two middle aisles, stopping at the ends to look along them
+        mk('fighter', [[-10.4, -33.0, 1.6, 0], [10.6, -33.0, 1.4, P], [2.5, -33.4, 0, 0], [2.5, -38.2, 0, 0], [10.6, -38.2, 1.4, P], [-10.4, -38.2, 1.6, 0]], { room: 'lock' }),
+        // a cleaner mopping along the far aisle
+        mk('grappler', [[-1.0, -44.4, 2.2, -U], [10.6, -44.4, 2.2, -U]], { room: 'lock', fat: true, speed: 0.9, range: 5.4 }),
+        // a customer getting changed at his locker by the shower door: mostly facing it, now and then looking round
+        mk('rusher', [[-5.0, -30.0, 4.2, -U], [-5.0, -30.0, 1.8, P], [-5.0, -30.0, 3.6, -U], [-5.0, -30.0, 1.8, 0.15]], { room: 'lock', pick: 1, range: 5.2, sway: 0.3 }),
+        // an old regular shuffling up and down by the lobby door
+        mk('thrower', [[-7.0, -43.8, 2.6, U], [-3.0, -43.8, 2.2, U]], { room: 'lock', pick: 3, speed: 0.7, range: 4.6 }),
+        // LOBBY. The receptionist, behind the counter right by the storage door: she hears anyone that close
+        mk('technical', [[8.6, -57.2, 999, U]], { room: 'lobby', sway: 0.9, range: 8.2, half: 0.66, ear: 3.0 }),
+        // someone straightening the benches
+        mk('staff', [[-3.6, -50.4, 1.8, -U], [4.6, -50.4, 1.8, -U]], { room: 'lobby', speed: 1.1 }),
+        // a customer at the drinks machine, deciding (forever)
+        mk('thrower', [[-9.4, -55.2, 4.0, P], [-9.4, -55.2, 2.2, 0.35]], { room: 'lobby', pick: 2, range: 5.6, sway: 0.25 }),
       ];
     }
     sees(n, x, z, range) {
@@ -210,47 +232,110 @@
       for (const b of this.blockers) { const h = segCircleT(x0, z0, x1, z1, b.x, b.z, b.r); if (h !== null && h < t) t = h; }
       return t * L;
     }
-    // a noise: anyone in earshot goes to look (by their exit or along their route, then straight there), searches, goes back
+    // ---------------------------------------------------------------- walking: a grid over the floor, A*, then the corners cut
+    buildNav() {
+      const cs = 0.4, x0 = -12.6, z0 = -68.8, nx = Math.ceil(25.2 / cs), nz = Math.ceil((5.2 - z0) / cs), free = new Uint8Array(nx * nz), R = 0.5;
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+        const x = x0 + (i + 0.5) * cs, z = z0 + (j + 0.5) * cs; let ok = true;
+        for (const w of this.walls) if (x > w.x0 - R && x < w.x1 + R && z > w.z0 - R && z < w.z1 + R) { ok = false; break; }
+        if (ok) for (const b of this.blockers) if (Math.hypot(x - b.x, z - b.z) < b.r * 0.55 + R) { ok = false; break; }
+        free[j * nx + i] = ok ? 1 : 0;
+      }
+      this.nav = { cs, x0, z0, nx, nz, free };
+    }
+    cell(x, z) { const N = this.nav; return [clamp(Math.floor((x - N.x0) / N.cs), 0, N.nx - 1), clamp(Math.floor((z - N.z0) / N.cs), 0, N.nz - 1)]; }
+    walkable(x, z) { const N = this.nav, [i, j] = this.cell(x, z); return !!N.free[j * N.nx + i]; }
+    lineWalk(x0, z0, x1, z1) { const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / 0.15); for (let k = 1; k <= n; k++) if (!this.walkable(x0 + (x1 - x0) * k / n, z0 + (z1 - z0) * k / n)) return false; return true; }
+    nearestFree(i, j) {
+      const N = this.nav; if (N.free[j * N.nx + i]) return [i, j];
+      for (let r = 1; r < 12; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue; const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < N.nx && b < N.nz && N.free[b * N.nx + a]) return [a, b]; }
+      return null;
+    }
+    // the way from (x0,z0) to (x1,z1) as a list of points (the end snapped onto the floor), or null
+    navPath(x0, z0, x1, z1) {
+      const N = this.nav, cs = N.cs, s0 = this.nearestFree(...this.cell(x0, z0)), s1 = this.nearestFree(...this.cell(x1, z1));
+      if (!s0 || !s1) return null;
+      const id = (i, j) => j * N.nx + i, goal = id(s1[0], s1[1]), start = id(s0[0], s0[1]), W = (k) => [N.x0 + (k % N.nx + 0.5) * cs, N.z0 + (Math.floor(k / N.nx) + 0.5) * cs];
+      const end = this.walkable(x1, z1) ? [x1, z1] : W(goal);
+      if (start === goal || this.lineWalk(x0, z0, end[0], end[1])) return [end];
+      const g = new Float32Array(N.nx * N.nz).fill(1e9), from = new Int32Array(N.nx * N.nz).fill(-1), shut = new Uint8Array(N.nx * N.nz);
+      const h = (k) => { const dx = Math.abs(k % N.nx - s1[0]), dz = Math.abs(Math.floor(k / N.nx) - s1[1]); return Math.max(dx, dz) + 0.414 * Math.min(dx, dz); };
+      const heap = [], push = (k, f) => { heap.push([f, k]); let c = heap.length - 1; while (c) { const p = (c - 1) >> 1; if (heap[p][0] <= heap[c][0]) break; [heap[p], heap[c]] = [heap[c], heap[p]]; c = p; } };
+      const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let c = 0; for (;;) { const l = 2 * c + 1, r = l + 1; let m = c; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === c) break; [heap[m], heap[c]] = [heap[c], heap[m]]; c = m; } } return top; };
+      g[start] = 0; push(start, h(start)); let found = false;
+      while (heap.length) {
+        const [, k] = pop(); if (shut[k]) continue; shut[k] = 1; if (k === goal) { found = true; break; }
+        const i = k % N.nx, j = Math.floor(k / N.nx);
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+          if (!di && !dj) continue; const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= N.nx || b >= N.nz) continue;
+          const q = id(a, b); if (!N.free[q] || shut[q]) continue; if (di && dj && (!N.free[id(i + di, j)] || !N.free[id(i, j + dj)])) continue;
+          const ng = g[k] + (di && dj ? 1.414 : 1); if (ng < g[q]) { g[q] = ng; from[q] = k; push(q, ng + h(q)); }
+        }
+      }
+      if (!found) return null;
+      const pts = []; for (let k = goal; k !== -1 && k !== start; k = from[k]) pts.push(W(k)); pts.reverse(); pts[pts.length - 1] = end;
+      // cut the corners: from each point, jump to the furthest one in a straight walkable line
+      const out = []; let cx = x0, cz = z0, k = 0;
+      while (k < pts.length) { let far = k; for (let m = pts.length - 1; m > k; m--) if (this.lineWalk(cx, cz, pts[m][0], pts[m][1])) { far = m; break; } out.push(pts[far]); cx = pts[far][0]; cz = pts[far][1]; k = far + 1; }
+      return out;
+    }
+    goTo(n, x, z) { n.path = this.navPath(n.a.x, n.a.z, x, z) || [[x, z]]; n.pi = 0; n.stuckT = 0; }
+    // a noise: anyone in earshot (in that room: walls muffle it) walks over the shortest way to look, searches, goes back
     noise(x, z, radius, msg) {
       this.fx.ring(x, z, radius * 0.4, 0.6); this.fx.ring(x, z, radius * 0.7, 0.9);
-      const room = z > -47 ? 'lock' : 'lobby';                 // a noise carries round its own room (walls muffle it)
+      const room = z > -47 ? 'lock' : 'lobby';
       for (const n of this.npcs) {
-        if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius || n.mode === 'search') continue;
-        let path;
-        if (n.exit) path = n.exit.slice();
-        else { // along the route to the waypoint nearest the noise
-          let j = 0, bd = 1e9; n.route.forEach((p, k) => { const d = Math.hypot(p[0] - x, p[1] - z); if (d < bd) { bd = d; j = k; } });
-          path = []; let k = n.i; for (let s = 0; s < n.route.length && k !== j; s++) { path.push([n.route[k][0], n.route[k][1]]); k = (k + 1) % n.route.length; } path.push([n.route[j][0], n.route[j][1]]);
-          n.backI = j;
-        }
-        if (this.clear(path[path.length - 1][0], path[path.length - 1][1], x, z)) path.push([x, z]);
-        n.path = path; n.pi = 0; n.mode = 'goto'; n.retPath = path.slice(0, -1).reverse().concat([[n.route[n.exit ? 0 : n.backI][0], n.route[n.exit ? 0 : n.backI][1]]]);
+        if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius) continue;
+        const path = this.navPath(n.a.x, n.a.z, x, z); if (!path) continue;
+        n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.noiseAt = [x, z];
         this.popAt(n.a, msg || '?!', 1.6);
       }
     }
     npcStep(n, dt) {
       const a = n.a; a.t += dt;
       let tx = null, tz = null, sp = n.speed;
-      if (n.mode === 'goto' || n.mode === 'return') {
-        const p = n.path[n.pi];
-        if (p) { tx = p[0]; tz = p[1]; sp = n.mode === 'goto' ? 2.5 : 1.4; if (Math.hypot(tx - a.x, tz - a.z) < 0.3) { n.pi++; if (n.pi >= n.path.length) { if (n.mode === 'goto') { n.mode = 'search'; n.wait = 4.2; } else { n.mode = 'route'; n.i = n.exit ? 0 : n.backI; n.wait = n.route[n.i][2]; } } } }
-      } else if (n.mode === 'search') {
+      if (n.mode === 'search') {
         n.wait -= dt; a.f += Math.sin(a.t * 1.7) * dt * 1.8;
-        if (n.wait <= 0) { n.mode = 'return'; n.path = n.retPath; n.pi = 0; }
+        if (n.wait <= 0) { n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); }
+      } else if (n.mode === 'route' && n.wait > 0) {
+        const p = n.route[n.i]; n.wait -= dt; a.f = lerpA(a.f, p[3] + Math.sin(a.t * 0.8) * n.sway, dt * 2.5);
+        if (n.wait <= 0) { n.i = (n.i + 1) % n.route.length; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); }
       } else {
-        const p = n.route[n.i];
-        if (n.wait > 0) { n.wait -= dt; a.f = lerpA(a.f, p[3] + Math.sin(a.t * 0.8) * n.sway, dt * 2.5); if (n.wait <= 0) n.i = (n.i + 1) % n.route.length; }
-        else { tx = p[0]; tz = p[1]; if (Math.hypot(tx - a.x, tz - a.z) < 0.2) { n.wait = p[2] || 0.01; tx = null; } }
+        if (!n.path) this.goTo(n, n.route[n.i][0], n.route[n.i][1]);
+        const p = n.path[n.pi];
+        if (p) { tx = p[0]; tz = p[1]; sp = n.mode === 'goto' ? 2.5 : n.mode === 'return' ? 1.4 : n.speed; if (Math.hypot(tx - a.x, tz - a.z) < 0.25) { n.pi++; if (!n.path[n.pi]) tx = null; } }
+        if (!n.path[n.pi]) { // arrived
+          n.path = null;
+          if (n.mode === 'goto') { n.mode = 'search'; n.wait = 4.2; if (n.noiseAt) a.f = Math.atan2(n.noiseAt[1] - a.z, n.noiseAt[0] - a.x); }
+          else { n.mode = 'route'; n.wait = n.route[n.i][2] || 0.01; }
+        }
       }
       if (tx !== null) { const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz) || 1; a.vx = dx / d * sp; a.vz = dz / d * sp; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 7); }
       else { a.vx *= 0.8; a.vz *= 0.8; }
-      a.x += a.vx * dt; a.z += a.vz * dt;
+      const ox = a.x, oz = a.z; a.x += a.vx * dt; a.z += a.vz * dt;
       this.collide(a, 0.4);
+      // never stuck: if walking gets nowhere for a moment, find the way again
+      if (tx !== null) { n.stuckT = Math.hypot(a.x - ox, a.z - oz) < sp * dt * 0.3 ? (n.stuckT || 0) + dt : 0; if (n.stuckT > 0.8 && n.path) { const e = n.path[n.path.length - 1]; this.goTo(n, e[0], e[1]); } }
     }
+    // push a circle out of every wall and blocker it overlaps (a few passes, so corners can't squeeze it through)
     collide(p, r) {
-      for (const w of this.walls) { const cx = clamp(p.x, w.x0, w.x1), cz = clamp(p.z, w.z0, w.z1), dx = p.x - cx, dz = p.z - cz, d = Math.hypot(dx, dz); if (d < r && d > 1e-6) { p.x = cx + dx / d * r; p.z = cz + dz / d * r; return true; } }
-      for (const b of this.blockers) { const dx = p.x - b.x, dz = p.z - b.z, d = Math.hypot(dx, dz), m = b.r * 0.55 + r; if (d < m && d > 1e-6) { p.x = b.x + dx / d * m; p.z = b.z + dz / d * m; return true; } }
-      return false;
+      let hit = false;
+      for (let pass = 0; pass < 3; pass++) {
+        let moved = false;
+        for (const w of this.walls) {
+          const cx = clamp(p.x, w.x0, w.x1), cz = clamp(p.z, w.z0, w.z1), dx = p.x - cx, dz = p.z - cz, d = Math.hypot(dx, dz);
+          if (d >= r) continue;
+          if (d > 1e-6) { p.x = cx + dx / d * r; p.z = cz + dz / d * r; }
+          else { // centre inside the box: out by the nearest side
+            const o = [[w.x0 - r - p.x, 0], [w.x1 + r - p.x, 0], [0, w.z0 - r - p.z], [0, w.z1 + r - p.z]].sort((A, B) => Math.abs(A[0] + A[1]) - Math.abs(B[0] + B[1]))[0];
+            p.x += o[0]; p.z += o[1];
+          }
+          moved = hit = true;
+        }
+        for (const b of this.blockers) { const dx = p.x - b.x, dz = p.z - b.z, d = Math.hypot(dx, dz), m = b.r * 0.55 + r; if (d < m && d > 1e-6) { p.x = b.x + dx / d * m; p.z = b.z + dz / d * m; moved = hit = true; } }
+        if (!moved) break;
+      }
+      return hit;
     }
 
     // ============================================================== the frame
@@ -288,9 +373,8 @@
         else if (hit) { P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.fx.dust && this.fx.dust(P.x, 0.5, P.z, 5, 0.3, 0.5, 0.3); if (P.z < SAFE_Z) this.noise(P.x, P.z, 5, '?'); }
       }
       if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = 'free'; P.t = 0; if (was === 'charge') P.cd = 0.5; if (was === 'wear') this.win(); }
-      // puddles: anything faster than a careful creep slips
-      const fast = Math.hypot(P.vx, P.vz) > 2.6;
-      if (fast && (P.st === 'free' || P.st === 'charge')) for (const q of this.puddles) if (((P.x - q.x) / q.rx) ** 2 + ((P.z - q.z) / q.rz) ** 2 < 1) {
+      // puddles: walking over them is fine; RUNNING (the charge) over one, you slip
+      if (P.st === 'charge') for (const q of this.puddles) if (((P.x - q.x) / q.rx) ** 2 + ((P.z - q.z) / q.rz) ** 2 < 1) {
         P.st = 'slip'; P.t = 0; P.dur = 1.3; P.fall = Math.atan2(P.vz, P.vx); P.vx *= 0.6; P.vz *= 0.6;
         this.think(['WHOA—!', 'Waaah!', 'Slippery!!'][(this.t * 3 | 0) % 3], 1.2); this.fx.water && this.fx.water(P.x, P.z, 5);
         if (P.z < SAFE_Z) this.noise(P.x, P.z, 7, '?!');
@@ -300,8 +384,9 @@
       const room = P.z > -16 ? 'bath' : P.z > SAFE_Z ? 'shower' : P.z > -47 ? 'lock' : P.z > -60 ? 'lobby' : 'store';
       if (room !== this.room) {
         const from = this.room; this.room = room;
-        if (room === 'lock') { this.cp = from === 'lobby' ? { x: -10, z: -46, f: Math.PI / 2 } : { x: 5.8, z: -27.9, f: -Math.PI / 2 }; if (!this.saidOut) { this.saidOut = true; this.think('Out here I\'m the only one naked... sneak. (Hold I to crouch)', 3.2); } }
-        if (room === 'lobby') this.cp = { x: -10, z: -48, f: -Math.PI / 2 };
+        // checkpoints sit somewhere nobody is looking: the shower side of the locker door, the corner beside the lobby door
+        if (room === 'lock') { this.cp = from === 'lobby' ? CP.lockS : CP.lockN; if (!this.saidOut) { this.saidOut = true; this.think('Out here I\'m the only one naked... sneak. (Hold I to crouch)', 3.2); } }
+        if (room === 'lobby') this.cp = CP.lobby;
         if (room === 'shower' || room === 'bath') this.cp = { x: P.x, z: P.z, f: P.f };
         if (room === 'store' && this.stage === 'storage') { this.stage = 'box'; this.spBox.visible = true; this.think('A cardboard box... it\'ll have to do!', 2.8); this.objective('Put on the BOX (K next to it)'); }
       }
@@ -313,12 +398,21 @@
         b.m.position.set(b.x, b.y, b.z); b.m.rotation.x += dt * 9;
         if (k >= 1) { b.state = 'floor'; b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = 0.3; this.noise(b.x, b.z, 16, '?!'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think('*CLATTER*', 1); }
       }
-      // the staff (nobody minds you in the bath or the showers)
+      for (const f of this.flying) { // locker doors and clothes bursting out
+        if (f.t >= f.dur) continue; f.t = Math.min(f.dur, f.t + dt); const k = f.t / f.dur;
+        f.m.position.set(f.sx + (f.tx - f.sx) * k, f.sy + (f.ty - f.sy) * k + Math.sin(Math.PI * k) * f.h, f.sz + (f.tz - f.sz) * k);
+        f.m.rotation.set(f.r0[0] + (f.r1[0] - f.r0[0]) * k, f.r0[1] + (f.r1[1] - f.r0[1]) * k, f.r0[2] + (f.r1[2] - f.r0[2]) * k);
+      }
+      // the staff (nobody minds you in the bath or the showers; just after a restart they get a moment too)
+      this.grace = Math.max(0, this.grace - dt);
       for (const n of this.npcs) {
         this.npcStep(n, dt);
-        if (P.z > SAFE_Z) { n.alarm = Math.max(0, n.alarm - dt); continue; }
-        const range = this.range(n);
-        if (this.sees(n, P.x, P.z, range)) { const d = Math.hypot(P.x - n.a.x, P.z - n.a.z); n.alarm += dt * (1.0 + 2.2 * (1 - d / range)) * (P.crouch > 0.5 ? 0.8 : 1.15) * (P.st === 'charge' ? 2 : 1); if (d < 1.8) n.alarm = 1; }
+        if (P.z > SAFE_Z || this.grace > 0) { n.alarm = Math.max(0, n.alarm - dt); continue; }
+        const range = this.range(n), d = Math.hypot(P.x - n.a.x, P.z - n.a.z), sameRoom = (P.z > -47) === (n.a.z > -47) && (P.z > -60) === (n.a.z > -60);
+        // right next to someone they hear you, whichever way they face (crouching gets you closer; the receptionist hears everything near her)
+        const ear = n.ear || (P.crouch > 0.5 ? 0.9 : 1.7);
+        if (d < ear && sameRoom && this.clear(n.a.x, n.a.z, P.x, P.z)) { n.alarm += dt * 2.4; if (n.mode === 'route' && n.wait > 0) n.a.f = lerpA(n.a.f, Math.atan2(P.z - n.a.z, P.x - n.a.x), dt * 5); }
+        else if (this.sees(n, P.x, P.z, range)) { n.alarm += dt * (1.0 + 2.2 * (1 - d / range)) * (P.crouch > 0.5 ? 0.8 : 1.15) * (P.st === 'charge' ? 2 : 1); if (d < 1.8) n.alarm = 1; }
         else n.alarm = Math.max(0, n.alarm - dt * 0.6);
         if (n.alarm >= 1) { this.caught(n); break; }
       }
@@ -333,12 +427,14 @@
       }
       if (this.stage === 'locker' && near(this.locker.x, this.locker.z, 1.7)) {
         P.st = 'busy'; P.t = 0; P.dur = 0.8; this.stage = 'key'; this.spLocker.visible = false; this.spKey.visible = true;
-        this.think('Locked. The key... I had it in the bath! Must have dropped it where I woke up.', 3.4);
-        this.objective('Go back to the BATH and look for your locker KEY'); return;
+        this.think('Locked. The key... it must be in my wash bucket, back by the bath where I woke up!', 3.4);
+        this.objective('Go back to the BATH and check your WASH BUCKET for the KEY'); return;
       }
-      if (this.stage === 'key' && near(-8.4, 1.4, 1.8)) {
+      if (this.stage === 'key' && near(this.washSpot.x, this.washSpot.z, 1.6)) {
         P.st = 'busy'; P.t = 0; P.dur = 1.0; this.stage = 'smash'; this.spKey.visible = false; this.spLocker.visible = true;
-        this.think('Not here either... Forget the key. I\'ll just smash it open!', 3.2);
+        P.f = Math.atan2(this.washSpot.z - P.z, this.washSpot.x - P.x);
+        const wb = this.washB; this.G.attach(this.washTowel); this.washTowel.position.set(wb.position.x + 0.7, 0.03, wb.position.z + 0.35); this.washTowel.rotation.set(0, 0.3, 0); this.flying.push({ m: wb, sx: wb.position.x, sy: 0, sz: wb.position.z, tx: wb.position.x + 0.3, ty: 0.34, tz: wb.position.z + 0.2, h: 0.5, t: 0, dur: 0.45, r0: [0, 0, 0], r1: [Math.PI, 0.6, 0] });   // tipped out: nothing
+        this.think('Empty?! No key... Forget it. I\'ll just smash the locker open!', 3.2);
         this.objective('CHARGE into your locker (hold L + direction)'); return;
       }
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { P.st = 'wear'; P.t = 0; P.dur = 0.9; return; }
@@ -346,15 +442,29 @@
     }
     smashLocker() {
       this.stage = 'storage'; this.spLocker.visible = false;
-      const L = this.banks[3]; L.position.z -= 0.05; L.rotation.z = 0.015;
-      for (let k = 0; k < 2; k++) { const d = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.05), S.Flat.mat(0x9db5cb)); d.position.set(this.locker.x - 0.3 + k * 0.6, 0.6, -35.6 + k * 0.3); d.rotation.set(-1.2 - k * 0.2, k * 0.5, 0.3); d.castShadow = true; this.G.add(d); }
-      for (let k = 0; k < 4; k++) { const cl = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.04, 0.2), S.Flat.mat([0xf3b9c7, 0xa8dcc6, 0xf6d55e, 0x9db5cb][k])); cl.position.set(this.locker.x - 0.6 + k * 0.4, 0.03, -34.6 + (k % 2) * 0.3); cl.rotation.y = k; this.G.add(cl); }   // tiny clothes
-      this.fx.dust && this.fx.dust(this.locker.x, 0.8, this.locker.z, 10, 0.4, 0.6, 0.4); this.flash = 0.6;
-      this.noise(this.locker.x, this.locker.z, 26, '!?');
+      const L = this.banks[3]; L.rotation.z = 0.012;
+      const lx = this.locker.x, fz = -35.98, M = (c) => S.Flat.mat(c);
+      // the open lockers: dark inside. His (upper, number 8) is EMPTY; the ones either side spill their clothes
+      const hole = (x, y0) => { const h = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.7), M(0x4d4756)); h.position.set(x, y0 + 0.37, fz + 0.012); this.G.add(h); };
+      const doorOff = (x, y0, sd, k) => { const d = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.74, 0.04), M(0x9db5cb)); d.castShadow = true; this.G.add(d);
+        this.flying.push({ m: d, sx: x, sy: y0 + 0.37, sz: fz + 0.05, tx: x + sd * (0.5 + k), ty: 0.03, tz: fz + 1.0 + k, h: 0.6, t: 0, dur: 0.45 + 0.1 * k, r0: [0, 0, 0], r1: [-Math.PI / 2, sd * 0.8, sd * 0.3] }); };
+      const opens = [[lx, 0.95, 0], [lx - 0.62, 0.95, -1], [lx + 0.62, 0.15, 1], [lx - 1.24, 0.15, -1], [lx + 1.24, 0.95, 1]];
+      opens.forEach(([x, y0, sd], k) => { hole(x, y0); doorOff(x, y0, sd || 1, k * 0.25); });
+      // tiny clothes (a child's shirt, small shorts, socks) flying out of the neighbours' lockers onto the floor
+      const shirt = (c) => { const sh = new THREE.Shape([[-0.09, -0.13], [0.09, -0.13], [0.09, 0.05], [0.16, 0.02], [0.19, 0.08], [0.1, 0.14], [-0.1, 0.14], [-0.19, 0.08], [-0.16, 0.02], [-0.09, 0.05]].map((p) => new THREE.Vector2(p[0], p[1])));
+        const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), S.Flat.mat(c, { side: THREE.DoubleSide })); m.castShadow = true; return m; };
+      const shorts = (c) => { const sh = new THREE.Shape([[-0.11, 0.08], [0.11, 0.08], [0.12, -0.1], [0.02, -0.1], [0, -0.02], [-0.02, -0.1], [-0.12, -0.1]].map((p) => new THREE.Vector2(p[0], p[1])));
+        const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), S.Flat.mat(c, { side: THREE.DoubleSide })); m.castShadow = true; return m; };
+      const items = [shirt(0xf3b9c7), shorts(0x6f8fc8), shirt(0xa8dcc6), shorts(0xf6d55e), shirt(0xf2f2ec), shorts(0xcf7a5a), shirt(0x9db5cb)];
+      items.forEach((m, k) => { const [x, y0] = opens[1 + (k % 4)]; this.G.add(m);
+        this.flying.push({ m, sx: x, sy: y0 + 0.4, sz: fz + 0.1, tx: x + (k % 2 ? 0.5 : -0.5) * (0.5 + (k % 3) * 0.4), ty: 0.02, tz: fz + 0.7 + (k % 4) * 0.35, h: 0.7 + (k % 3) * 0.2, t: 0, dur: 0.5 + k * 0.06, r0: [0, 0, 0], r1: [-Math.PI / 2, 0, k * 1.3] }); });
+      this.fx.dust && this.fx.dust(lx, 0.8, this.locker.z, 10, 0.4, 0.6, 0.4); this.flash = 0.6;
+      this.noise(lx, this.locker.z, 26, '!?');
       if (this.g.audio) { this.g.audio.thump && this.g.audio.thump(9); this.later(0.15, () => this.g.audio.thump && this.g.audio.thump(5)); }
-      this.think('...These clothes are tiny! Nothing my size?!', 2.6);
-      this.later(2.8, () => { if (this.stage === 'storage') { this.think('They heard that! The STORAGE room behind reception... there must be something there.', 3.6); this.objective('Get into STORAGE behind RECEPTION. Throw a bucket to distract the staff (K pick up, K throw)'); } });
-      this.cp = { x: 5.8, z: -27.9, f: -Math.PI / 2 };
+      this.think('...EMPTY?! Someone took my clothes!', 2.2);
+      this.later(2.3, () => { if (this.stage === 'storage') this.think('And everyone else\'s are TINY. Nothing here fits me...', 2.6); });
+      this.later(5.0, () => { if (this.stage === 'storage') { this.think('They heard that! The STORAGE room behind reception... there must be something there.', 3.6); this.objective('Get into STORAGE behind RECEPTION. Throw a bucket to distract the staff (K pick up, K throw)'); } });
+      this.cp = CP.lockN;
     }
     caught(n) {
       this.spotted++; this.freeze = 1.6; this.P.vx = this.P.vz = 0;
@@ -365,7 +475,8 @@
     respawn() {
       const P = this.P; P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.vx = P.vz = 0; P.st = 'free';
       if (P.held) { const b = P.held; P.held = null; b.state = 'floor'; b.m.position.set(b.x0, 0, b.z0); b.m.rotation.set(0, 0, 0); }
-      for (const n of this.npcs) { n.alarm = 0; n.mode = 'route'; n.i = 0; n.wait = n.route[0][2]; n.a.x = n.route[0][0]; n.a.z = n.route[0][1]; n.a.f = n.route[0][3] || 0; }
+      for (const n of this.npcs) { n.alarm = 0; n.mode = 'route'; n.i = 0; n.wait = n.route[0][2]; n.path = null; n.a.x = n.route[0][0]; n.a.z = n.route[0][1]; n.a.f = n.route[0][3] || 0; }
+      this.grace = 2.0;
       this.think(['Too close... try again.', 'Wait for them to look away.', 'Stay behind cover, then move.', 'Crouch (I) when they\'re near.'][this.spotted % 4], 2.2);
     }
     win() {
@@ -396,8 +507,8 @@
         if (m.t <= 0) { m.t = 0.1; const g = m.cv.getContext('2d'), sk = ['#e9b894', '#d9a07c', '#f0c8a8', '#c98a6a', '#e0ac88'];
           g.clearRect(0, 0, 8, 5); for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { if ((x === 0 || x === 7) && Math.random() < 0.6) continue; g.fillStyle = sk[(Math.random() * sk.length) | 0]; g.fillRect(x, y, 1, 1); }
           m.s.material.map.needsUpdate = true; }
-        const s = v.s, cx = this.cam.position.x - P.x, cz = this.cam.position.z - P.z, cl = Math.hypot(cx, cz) || 1, low = P.st === 'slip' ? 0.35 : 0.62 - 0.22 * P.crouch;
-        m.s.position.set(P.x + cx / cl * 0.55 * s, low * s, P.z + cz / cl * 0.55 * s); m.s.scale.set(1.45 * s, 0.82 * s, 1);
+        const s = v.s, cx = this.cam.position.x - P.x, cz = this.cam.position.z - P.z, cl = Math.hypot(cx, cz) || 1, low = P.st === 'slip' ? 0.4 : CENSOR.y - 0.18 * P.crouch;
+        m.s.position.set(P.x + cx / cl * 0.85 * s, low * s, P.z + cz / cl * 0.85 * s); m.s.scale.set(CENSOR.w * s, CENSOR.h * s, 1);
       }
       for (const sp of [this.spLocker, this.spKey, this.spBox]) if (sp.visible) { sp.position.y = 1.6 + Math.sin(T * 3) * 0.12; sp.material.rotation = T * 0.8; }
       this.fx.update(dt); this.fx.updateWater && this.fx.updateWater(dt);
