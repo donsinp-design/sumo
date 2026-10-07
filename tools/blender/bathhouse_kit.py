@@ -834,37 +834,38 @@ def build_details():
 # the cracked wall (and the rubble after the charge), item prototypes, the box, tiny clothes
 # =====================================================================================================================
 def build_crack():
-    """the cracked plaster wall at the end of the corridor, facing you; behind it the back stairs."""
-    C = LY.CRACK; m = GB(); x0, x1, z0, z1, h = C['x0'], C['x1'], C['z0'], C['z1'], C['h']
-    m.gbox(x0, x1, z0 + 0.1, z1 - 0.1, 0.0, h - 0.05, 'dark')                         # seen through the crack
-    crack = [(x0 + 2.2, h + 0.1), (x0 + 2.6, 0.92), (x0 + 2.15, 0.66), (x0 + 2.85, 0.38), (x0 + 2.45, -0.05)]
-    L = [(x0, 0.0), (x0, h)] + [(xx - 0.06, yy) for xx, yy in crack]
-    R = [(xx + 0.06, yy) for xx, yy in reversed(crack)] + [(x1, h), (x1, 0.0)]
-    for poly in (L, R):
-        b = m._begin(); bm = m.bm; P = [(xx, max(0.0, min(h, yy))) for xx, yy in poly]
-        fr = [bm.verts.new((xx, -z1, yy)) for xx, yy in P]; bk = [bm.verts.new((xx, -z0, yy)) for xx, yy in P]
-        try:
-            bm.faces.new(fr); bm.faces.new(list(reversed(bk)))
-            for k in range(len(P)): bm.faces.new((fr[k], fr[(k + 1) % len(P)], bk[(k + 1) % len(P)], bk[k]))
-        except ValueError: pass
-        m._end(b, 'plaster')
-    m.gbox(x0 - 0.03, x0 + 2.1, z0 - 0.03, z1 + 0.03, h - 0.02, h + 0.07, 'wood', bev=0.03); m.gbox(x0 + 2.9, x1 + 0.03, z0 - 0.03, z1 + 0.03, h - 0.02, h + 0.07, 'wood', bev=0.03)
-    m.gbox(x0, x1, z1 - 0.015, z1 + 0.015, 0.0, 0.12, 'wood')
-    f = z1 + 0.012
-    def fq(pts, col): m.vquad([(xx, yy, f) for xx, yy in pts], col)
-    for (ax, ay), (bx, by) in [((x0 + 2.6, 0.92), (x0 + 1.7, 1.05)), ((x0 + 2.15, 0.66), (x0 + 1.3, 0.5)), ((x0 + 2.85, 0.38), (x0 + 3.7, 0.22)), ((x0 + 2.85, 0.38), (x0 + 3.4, 0.8)), ((x0 + 1.7, 1.05), (x0 + 1.2, 1.12))]:
-        d = Vector((bx - ax, by - ay)); n = Vector((-d.y, d.x)).normalized() * 0.018
-        fq([(ax - n.x, ay - n.y), (bx - n.x, by - n.y), (bx + n.x, by + n.y), (ax + n.x, ay + n.y)], 'dark')
-    for xx, yy, w, hh in [(x0 + 1.75, 0.62, 0.34, 0.2), (x0 + 3.2, 0.62, 0.3, 0.22), (x0 + 2.0, 0.22, 0.26, 0.18)]:
-        m.gbox(xx - w / 2, xx + w / 2, z1 - 0.05, z1 + 0.02, yy - hh / 2, yy + hh / 2, 'brick', bev=0.02)
-    for k in range(5): m.gico(x0 + 1.9 + k * 0.28, z1 + 0.25 + (k % 2) * 0.15, 0.04, 0.07 + (k % 3) * 0.03, 'plaster', sub=1, sq=(1, 1, 0.5), jit=0.2)
+    """delivery boxes dumped at the foot of the back stairs, stacked any old how (CRACK_WALL), and where they end up
+    after the charge (CRACK_RUBBLE): knocked to the sides, a couple burst open, the way up clear."""
+    C = LY.CRACK; R2 = random.Random(11)
+    def carton(m, cx, cz, y, w, d, h, rot, col=None, open_=False):
+        col = col or R2.choice(['cardboard', 'cardboard', 'cardboard_dk', 'board2'])
+        M = T(cx, -cz, y + h / 2) @ Rz(rot)
+        m.box(-w / 2, w / 2, -d / 2, d / 2, -h / 2, h / 2, col, bev=0.02, M=M)
+        if not open_:
+            m.box(-w / 2 - 0.004, w / 2 + 0.004, -0.06, 0.06, h / 2 - 0.004, h / 2 + 0.006, 'board', M=M)                   # tape over the top
+            m.box(-0.06, 0.06, -d / 2 - 0.004, -d / 2 + 0.004, -h / 2 + 0.04, h / 2, 'board', M=M)                         # and down the front
+            if R2.random() < 0.6: m.box(0.08, min(w / 2 - 0.04, 0.3), -d / 2 - 0.006, -d / 2, -0.12, 0.08, 'snow', M=M)     # a shipping label
+        else:   # burst open: flaps up
+            for sd in (-1, 1): m.box(-w / 2, w / 2, sd * d / 2 - 0.02, sd * d / 2 + 0.02, h / 2, h / 2 + 0.22, 'cardboard', M=M @ T(0, sd * 0.06, 0) @ Rx(sd * 30))
+    m = GB(); x = C['x0'] + 0.05; tops = []
+    while x < C['x1'] - 0.3:      # bottom row: big cartons, uneven, some pushed forward
+        w = R2.uniform(0.7, 1.15); d = R2.uniform(0.7, 1.15); h = R2.uniform(0.5, 0.75)
+        cz = R2.uniform(C['z0'] + d / 2, C['z1'] - d / 2); cx = x + w / 2
+        carton(m, cx, cz, 0.0, w, d, h, R2.uniform(-12, 12)); tops.append((cx, cz, h, w, d)); x += w + R2.uniform(-0.05, 0.08)
+    for cx, cz, h, w, d in tops:  # a second layer, smaller and askew; here and there a third
+        if R2.random() < 0.75:
+            w2, d2, h2 = R2.uniform(0.45, 0.8), R2.uniform(0.45, 0.8), R2.uniform(0.35, 0.55)
+            carton(m, cx + R2.uniform(-0.15, 0.15), cz + R2.uniform(-0.12, 0.12), h, w2, d2, h2, R2.uniform(-25, 25))
+            if R2.random() < 0.35: carton(m, cx + R2.uniform(-0.1, 0.1), cz, h + h2, 0.4, 0.35, 0.28, R2.uniform(-35, 35))
+    carton(m, C['x1'] - 0.2, C['z1'] + 0.3, 0.0, 0.55, 0.5, 0.4, 28)     # one that slid off the front
     obj_from(m, 'CRACK_WALL', 'ENV_DYN')
-    r = GB()   # after the charge: the stumps either side and rubble spilling onto the corridor floor
-    r.gbox(x0, x0 + 1.0, z0, z1, 0.0, h - 0.25, 'plaster', bev=0.03); r.gbox(x1 - 0.9, x1, z0, z1, 0.0, h - 0.15, 'plaster', bev=0.03)
-    r.gbox(x0 - 0.03, x0 + 1.0, z0 - 0.03, z1 + 0.03, h - 0.27, h - 0.2, 'wood'); r.gbox(x1 - 0.9, x1 + 0.03, z0 - 0.03, z1 + 0.03, h - 0.17, h - 0.1, 'wood')
-    for k in range(14):
-        xx = x0 + 1.2 + (k * 0.37) % 2.6; zz = z1 + 0.3 + (k * 0.61) % 1.6
-        r.gico(xx, zz, 0.06, 0.1 + (k % 3) * 0.05, ['plaster', 'brick', 'plaster_dk'][k % 3], sub=1, sq=(1.2, 1, 0.6), jit=0.2)
+    r = GB()   # after: knocked to both sides against the stair walls, one tipped on its side, two burst open, the middle clear
+    for cx, cz, w, d, h, rot, op in [(7.0, -52.0, 0.8, 0.7, 0.6, 20, False), (7.1, -51.2, 0.6, 0.6, 0.45, -35, True), (6.95, -52.6, 0.5, 0.5, 0.4, 50, False),
+                                     (11.0, -52.2, 0.9, 0.75, 0.6, -15, False), (10.9, -51.3, 0.55, 0.5, 0.4, 40, True), (11.1, -50.6, 0.45, 0.45, 0.35, 10, False),
+                                     (8.0, -50.4, 0.5, 0.45, 0.35, 65, False), (10.2, -49.9, 0.42, 0.4, 0.3, -20, False)]:
+        carton(r, cx, cz, 0.0, w, d, h, rot, open_=op)
+    r.box(-0.4, 0.4, -0.35, 0.35, -0.3, 0.3, 'cardboard', bev=0.02, M=T(7.6, 51.5, 0.38) @ Rz(30) @ Ry(80))   # on its side
+    for k in range(5): r.gbox(8.2 + k * 0.35, 8.5 + k * 0.35, -51.9 + (k % 2) * 0.4, -51.6 + (k % 2) * 0.4, 0.0, 0.015, 'board')   # packing paper
     obj_from(r, 'CRACK_RUBBLE', 'ENV_DYN')
 
 def build_items():

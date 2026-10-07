@@ -11,7 +11,7 @@
 #   changing rm  z -27  .. -47   frosted-glass sliding doors from the wash area; wooden lockers, benches, basket
 #                                shelves, a vanity, a scale, a fan
 #   staff corr.  z -47  .. -53   the wood-fired boiler, firewood, towel shelves, washing machines; a dead end: at its
-#                                east end the cracked plaster wall (facing you) hides the back stairs
+#                                east end a heap of delivery boxes, dumped there for now, blocks the back stairs
 #   back stairs  x 6.6 .. 11.4, z -53 .. -61, up to y 3
 #   courtyard    z -53.4 .. -61, x < 6.4: a small walled garden (not walkable), under the open sky
 # UPPER (y 3)
@@ -64,7 +64,7 @@ solid('towels', -9.6, -6.8, -53, -52.3, 1.5)
 solid('cart', 3.2, 4.4, -52.9, -52.0, 0.8, tall=False)
 solid('washer', -6.6, -3.4, -48.0, -47.2, 1.0)
 solid('crates', -11.8, -10.6, -52.9, -51.7, 0.8, tall=False)
-CRACK = dict(x0=6.6, x1=11.4, z0=-53.4, z1=-53.0, h=1.15, x=9.0, z=-53.2)
+CRACK = dict(x0=6.6, x1=11.4, z0=-53.0, z1=-51.7, h=1.6, x=9.0, z=-52.35)   # the box heap in front of the stairs (charge through it)
 # ---- back stairs
 wall(6.4, 6.6, -61, -53.0, col='plaster_dk', h=UP + 1.0); wall(11.4, 11.6, -61, -53.0, col='plaster_dk', h=UP + 1.0); wall(11.6, 12.4, -53.4, -53, col='plaster_dk')
 STAIRS = dict(x0=6.6, x1=11.4, z0=-61, z1=-53, steps=16)

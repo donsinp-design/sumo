@@ -414,7 +414,7 @@
         if (room === 'store' && this.stage === 'storage') { this.stage = 'box'; this.spBox.visible = true; this.think('A cardboard box... it\'ll have to do!', 2.8); this.objective('Put on the BOX (K next to it)'); }
       }
       if (!this.crackDone && !this.saidCrack && room === 'corr' && P.x > 4) { this.saidCrack = true; this.spCrack.visible = true;
-        this.think('A dead end?! ...but this wall is cracked. One good charge (hold L) should do it.', 3.4); }
+        this.think('The stairs! ...buried under a heap of delivery boxes. One good charge (hold L) should clear them.', 3.4); }
       // fire exit
       if (this.stage === 'exit' && P.x < EXIT.x && P.z < EXIT.z1 && P.z > EXIT.z0) { this.win(); return; }
       // K: use (locker, wash bucket, pick up / throw, put on the box)
@@ -546,14 +546,14 @@
       this.crackDone = true; this.spCrack.visible = false;
       this.walls.splice(this.walls.indexOf(this.crackW), 1); this.buildNav();
       if (this.crackM) this.crackM.visible = false; if (this.rubble) this.rubble.visible = true;
-      const M = S.Flat.mat(0xefe6d6), C = LY.crack;
-      for (let k = 0; k < 10; k++) { const ch = new THREE.Mesh(new THREE.DodecahedronGeometry(0.14 + (k % 3) * 0.05), M); ch.castShadow = true; this.G.add(ch);
-        const x = C.x0 + 1.2 + (k * 0.61) % 2.6, y = 0.2 + (k % 4) * 0.22;
-        this.flying.push({ m: ch, sx: x, sy: y, sz: C.z, tx: x + ((k % 3) - 1) * 0.6, ty: 0.1 + (k % 4) * 0.08, tz: C.z0 - 0.6 - (k % 4) * 0.6, h: 0.5 + (k % 3) * 0.3, t: 0, dur: 0.4 + (k % 4) * 0.08, r0: [0, 0, 0], r1: [k, k * 0.7, k * 1.3] }); }
+      const M = S.Flat.mat(0xd3a96e), C = LY.crack;   // a few cartons go tumbling up the stairs
+      for (let k = 0; k < 7; k++) { const sz = 0.3 + (k % 3) * 0.12, ch = new THREE.Mesh(new THREE.BoxGeometry(sz, sz * 0.8, sz), M); ch.castShadow = true; ch.userData.flatDone = true; this.G.add(ch);
+        const x = C.x0 + 0.8 + (k * 0.67) % 3.2, y = 0.3 + (k % 3) * 0.35, tz = C.z0 - 0.8 - (k % 4) * 0.9;
+        this.flying.push({ m: ch, sx: x, sy: y, sz: C.z, tx: x + ((k % 3) - 1) * 0.7, ty: floorY(x, tz) + sz * 0.4, tz, h: 0.5 + (k % 3) * 0.3, t: 0, dur: 0.4 + (k % 4) * 0.08, r0: [0, 0, 0], r1: [k, k * 0.7, k * 1.3] }); }
       this.fx.dust && this.fx.dust(C.x, 0.8, C.z, 14, 0.6, 0.8, 0.6); this.flash = 0.7;
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(9);
       this.noise(C.x, C.z1 + 0.8, 14, '?!');
-      this.think('Ha! ...stairs! Up we go.', 2.2);
+      this.think('Special delivery! ...up the stairs we go.', 2.2);
     }
     wearBox() {
       if (!this.proto || !this.proto.BOX) return;
