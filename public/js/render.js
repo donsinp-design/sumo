@@ -1404,6 +1404,23 @@
       const d3 = boss && this.ring3d && this.ring3d.length > 0;          // the modelled dohyo replaces the painted one
       if (this.flat2d) for (const o of this.flat2d) o.visible = !d3 && (o.parent === this.spinG ? classic : true);
       if (this.ring3d) for (const o of this.ring3d) o.visible = d3;
+      // KUMITEGAME: the shrine-yard dohyo built from the Blender kit (tools/blender/stage_dohyo_kit.py) replaces the hall
+      if (this.flat) {
+        if (classic && !this.kitDohyo && !this.kitDohyoLoading) {
+          this.kitDohyoLoading = true;
+          new THREE.GLTFLoader().load('assets/models/dohyo_kit.glb', (g) => { this.kitDohyo = S.Flat.kit(g.scene); this.scene.add(this.kitDohyo); this.applyArena(); }, undefined, () => { this.kitDohyoLoading = false; });
+        }
+        const kit = classic && !!this.kitDohyo;
+        if (this.kitDohyo) this.kitDohyo.visible = kit;
+        if (kit) {
+          for (const o of [this.dohyoG, this.floorM, this.coneM, this.motes, this.crowdG, this.bossG]) if (o) o.visible = false;
+          if (this.banners) for (const b of this.banners) b.visible = false;
+          if (this.flat2d) for (const o of this.flat2d) o.visible = false;
+          if (this.ring3d) for (const o of this.ring3d) o.visible = false;
+          for (const c of this.spinG.children) if (c.userData.dohyo) c.visible = false;
+          this.scene.background.set(0xe8dccb);
+        }
+      }
     }
     // adaptive resolution: if frames run slow for a moment, render fewer pixels; if there is plenty of headroom, add them back
     perf(dt) {

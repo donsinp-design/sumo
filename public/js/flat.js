@@ -89,5 +89,18 @@ void RE_Direct_Flat( const in IncidentLight directLight, const in GeometricConte
     const off = new THREE.Vector3(-7, 17, 9);   // from behind the camera: the sumo's back (what you see most) is lit, shadows fall away up the street
     return { sun, aim(x, z) { sun.position.set(x + off.x, off.y, z + off.z); sun.target.position.set(x, 0, z); sun.target.updateMatrixWorld(); } };
   }
-  S.Flat = { U, patch, mat, pastel, convert, convertMat, lights };
+  // a model built from the Blender kit (palette texture or flat colours, glTF linear factors): the master material
+  function kit(root) {
+    const done = new Map();
+    const conv = (m) => {
+      if (done.has(m)) return done.get(m);
+      let f;
+      if (m.map) { m.map.encoding = THREE.LinearEncoding; m.map.needsUpdate = true; f = mat(0xffffff, { map: m.map, side: m.side }); }
+      else f = mat(m.color.clone().convertLinearToSRGB(), { side: m.side });
+      done.set(m, f); return f;
+    };
+    root.traverse((o) => { if (!o.isMesh) return; o.material = Array.isArray(o.material) ? o.material.map(conv) : conv(o.material); o.castShadow = o.receiveShadow = true; o.userData.flatDone = true; });
+    return root;
+  }
+  S.Flat = { U, patch, mat, pastel, convert, convertMat, lights, kit };
 })();

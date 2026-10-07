@@ -70,6 +70,15 @@ def lap(P):
         if n: L[i] = P[n].mean(0) - P[i]
     return L
 P = co.copy()
+# ---- the lower back as one round mass, like the belly: the two rolls either side of the spine and the dimple
+# between them (they read as a chest from behind) are ironed out where the belt meets the back
+lb_w = np.clip(back * 1.4 + 0.1, 0, 1) * np.clip(1 - np.abs(dz - 0.15) / 0.38, 0, 1)
+lbw = np.zeros(nv); lbw[idx] = lb_w
+for _ in range(int(os.environ.get('BACK_IT', '60'))):
+    L = np.zeros_like(P)
+    for i in idx:
+        if lbw[i] > 0.01 and nb[i]: L[i] = P[nb[i]].mean(0) - P[i]
+    P += 0.5 * L * lbw[:, None]
 for _ in range(int(os.environ.get('SMOOTH_IT', '14'))):
     P[idx] += 0.5 * lap(P)[idx]
     P[idx] += -0.53 * lap(P)[idx]
@@ -93,8 +102,10 @@ if FULL > 0:
     grow = 1 + 0.025 * bk
     P[ci, 0] = AX[0] + (P[ci, 0] - AX[0]) * grow; P[ci, 1] = AX[1] + (P[ci, 1] - AX[1]) * grow
     bb_ = ((cth_ + np.pi) / (2 * np.pi) * NB).astype(int) % NB
-    up = np.clip((P[ci, 2] - (beltTop[bb_] - 0.16)) / 0.16, 0, 1)            # the top edge rises, the bottom edge stays
+    T0 = float(np.median(beltTop[np.cos((np.arange(NB) + 0.5) / NB * 2 * np.pi - np.pi) > 0.3]))   # one level for the whole back (the knot made a dip)
+    up = np.clip((P[ci, 2] - (T0 - 0.16)) / 0.16, 0, 1)                        # the top edge rises, the bottom edge stays
     P[ci, 2] += float(os.environ.get("RAISE", "0.2")) * bk ** 1.5 * up
+    P[ci, 2] += 0.05 * np.clip(1 - np.abs(P[ci, 0]) / 0.16, 0, 1) * bk * up   # the knot's top level with the band (no notch)
 me.vertices.foreach_set('co', P.ravel()); me.update()
 
 # ---- close any gap left between the belt and the skin: pull cloth inside-faces onto the skin surface
@@ -117,6 +128,11 @@ for i in cloth:
 me.update(); print('cloth verts snugged', moved)
 skin_bm.free()
 for p in me.polygons: p.use_smooth = True
+# the imported glTF carries its old custom normals: drop them, or the old lumps and dents stay shaded in after smoothing
+bpy.context.view_layer.objects.active = hero
+for o in scn.objects: o.select_set(o == hero)
+if me.has_custom_normals: bpy.ops.mesh.customdata_custom_splitnormals_clear()
+print('custom normals cleared', not me.has_custom_normals)
 if hasattr(me, 'set_sharp_from_angle'): me.set_sharp_from_angle(angle=math.radians(180))
 
 # ---- the seat of the mawashi: below the belt at the back the skin is cloth too (a full, snug wrap, like shorts),
