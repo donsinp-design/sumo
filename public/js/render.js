@@ -2392,10 +2392,27 @@
       if (KIT_BG[id] !== undefined) this.scene.background.set(KIT_BG[id]);
     }
   };
-  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb' },
-    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4 }, KIT_CACHE = {};
+  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb', vacuum: 'assets/models/vacuum_kit.glb' },
+    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4, vacuum: 0xe9d3a8 }, KIT_CACHE = {};
   // a little life in the kit stages: the sushi plates rumble on the belt
   const KIT_TICK = {
+    // the robot drives about: straight for a while, stop, turn on the spot, go again. The floor slides under it
+    // (wrapping every 72 m) and the side brushes spin, turning round with the robot's heading
+    vacuum: (k) => {
+      const floor = k.getObjectByName('FLOOR'), bl = k.getObjectByName('BRUSH_L'), br = k.getObjectByName('BRUSH_R'), TILE = 72;
+      const front = new THREE.Group(); k.add(front); for (const b of [bl, br]) if (b) front.add(b);
+      let a = -Math.PI / 2, mode = 'drive', t = 3, turnTo = a, ox = 0, oz = 0, last = null;
+      return (T) => {
+        const dt = last === null ? 0 : Math.min(0.1, Math.max(0, T - last)); last = T;
+        if (bl) bl.rotation.y += dt * 10; if (br) br.rotation.y -= dt * 10;
+        t -= dt;
+        if (mode === 'drive') { ox -= Math.cos(a) * 1.6 * dt; oz -= Math.sin(a) * 1.6 * dt; if (t <= 0) { mode = 'turn'; turnTo = a + (Math.random() < 0.5 ? -1 : 1) * (1.0 + Math.random() * 1.6); } }
+        else { const d = turnTo - a; a += Math.sign(d) * Math.min(Math.abs(d), dt * 1.3); if (Math.abs(turnTo - a) < 1e-3) { mode = 'drive'; t = 2.5 + Math.random() * 3.5; } }
+        ox = ((ox % TILE) + TILE) % TILE; oz = ((oz % TILE) + TILE) % TILE;
+        if (floor) floor.position.set(ox, floor.position.y, oz);
+        front.rotation.y = -a - Math.PI / 2;
+      };
+    },
     // the record turns with the stage (the wrestlers ride it)
     vinyl: (k) => { const rec = k.getObjectByName('SPIN_Record'); return (T, dt, m) => { if (rec) rec.rotation.y = -((m && m.stageA) || 0); }; },
     // the candle flames flicker
