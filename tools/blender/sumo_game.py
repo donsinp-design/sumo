@@ -92,7 +92,9 @@ if FULL > 0:
     ci = np.where(is_cloth)[0]; cth_, cr_ = polar(P[ci]); bk = np.clip((np.cos(cth_) + 0.35) / 1.0, 0, 1) * FULL
     grow = 1 + 0.025 * bk
     P[ci, 0] = AX[0] + (P[ci, 0] - AX[0]) * grow; P[ci, 1] = AX[1] + (P[ci, 1] - AX[1]) * grow
-    P[ci, 2] += 0.06 * bk
+    bb_ = ((cth_ + np.pi) / (2 * np.pi) * NB).astype(int) % NB
+    up = np.clip((P[ci, 2] - (beltTop[bb_] - 0.16)) / 0.16, 0, 1)            # the top edge rises, the bottom edge stays
+    P[ci, 2] += float(os.environ.get("RAISE", "0.2")) * bk ** 1.5 * up
 me.vertices.foreach_set('co', P.ravel()); me.update()
 
 # ---- close any gap left between the belt and the skin: pull cloth inside-faces onto the skin surface

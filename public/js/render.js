@@ -1396,7 +1396,7 @@
       const classic = this.classicStage !== false, boss = false;
       if (this.dohyoG) this.dohyoG.visible = classic && !boss;
       if (this.bossG) this.bossG.visible = boss;
-      if (this.crowdG) this.crowdG.visible = classic && !boss;
+      if (this.crowdG) this.crowdG.visible = classic && !boss && window.KUMITE_STYLE !== 'anime'; // KUMITEGAME: no audience round the dohyo
       if (this.floorM) this.floorM.visible = classic && !boss;
       if (this.banners) for (const b of this.banners) b.visible = classic && !boss;
       if (this.coneM) this.coneM.visible = classic && !boss; // against pure black the beam reads as a grey slab
