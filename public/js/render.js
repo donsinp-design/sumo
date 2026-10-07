@@ -2393,8 +2393,8 @@
       if (KIT_BG[id] !== undefined) this.scene.background.set(KIT_BG[id]);
     }
   };
-  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb', vacuum: 'assets/models/vacuum_kit.glb', heli: 'assets/models/heli_kit.glb', watch: 'assets/models/clock_kit.glb' },
-    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4, vacuum: 0xe9d3a8, heli: 0xd9d2c8, watch: 0xf6dfc0 }, KIT_CACHE = {};
+  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb', vacuum: 'assets/models/vacuum_kit.glb', heli: 'assets/models/heli_kit.glb', watch: 'assets/models/clock_kit.glb', earth: 'assets/models/earth_kit.glb' },
+    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4, vacuum: 0xe9d3a8, heli: 0xd9d2c8, watch: 0xf6dfc0, earth: 0x6a63a4 }, KIT_CACHE = {};
   // a little life in the kit stages: the sushi plates rumble on the belt
   const KIT_TICK = {
     // the hands keep real time (the model has them pointing at 12)
