@@ -2384,18 +2384,21 @@
         const k = m.clone(); k.traverse((o) => { if (o.isMesh) o.userData.flatDone = true; }); g0.add(k); this.kitStage = k;
         const old = this.stageTick, tick = KIT_TICK[id] && KIT_TICK[id](k), sp = this.stageSpin;
         this.stageTick = (T, ...a) => {   // the built stage's late pieces (models arriving after the switch) stay hidden under the kit
+          if (old) old(T, ...a);   // (first: its tick may switch its own pieces back on)
           for (const c of g0.children) if (c !== k) c.visible = false;
           if (sp) for (const c of sp.children) c.visible = false;
-          if (old) old(T, ...a); if (tick) tick(T, ...a);
+          if (tick) tick(T, ...a);
         };
       });
       if (KIT_BG[id] !== undefined) this.scene.background.set(KIT_BG[id]);
     }
   };
-  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb', vacuum: 'assets/models/vacuum_kit.glb' },
-    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4, vacuum: 0xe9d3a8 }, KIT_CACHE = {};
+  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb', vacuum: 'assets/models/vacuum_kit.glb', heli: 'assets/models/heli_kit.glb' },
+    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4, vacuum: 0xe9d3a8, heli: 0xd9d2c8 }, KIT_CACHE = {};
   // a little life in the kit stages: the sushi plates rumble on the belt
   const KIT_TICK = {
+    // the pad's edge lights blink in a chase
+    heli: (k) => { const L = k.children.filter((c) => /^LIGHT_/.test(c.name)); return (T) => L.forEach((l, i) => { l.visible = Math.floor(T * 2.5 + i) % 3 !== 0; }); },
     // the robot drives about: straight for a while, stop, turn on the spot, go again. The floor slides under it
     // (wrapping every 72 m) and the side brushes spin, turning round with the robot's heading
     vacuum: (k) => {
