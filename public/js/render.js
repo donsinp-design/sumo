@@ -2372,6 +2372,17 @@
     this.stageG = new THREE.Group(); this.scene.add(this.stageG);
     this.stageSpin = new THREE.Group(); this.spinG.add(this.stageSpin);
     this.stageTick = S.STAGE_BUILD[id](this, this.stageG, this.stageSpin) || null;
+    // KUMITEGAME: stages remade from the Blender kit replace the built ones (same size and height, so play is unchanged)
+    const kitFile = this.flat && KIT_STAGES[id];
+    if (kitFile) {
+      for (const c of this.stageG.children) c.visible = false;
+      for (const c of this.stageSpin.children) c.visible = false;
+      const g0 = this.stageG;
+      KIT_CACHE[id] = KIT_CACHE[id] || new Promise((res) => new THREE.GLTFLoader().load(kitFile, (gl) => res(S.Flat.kit(gl.scene)), undefined, () => res(null)));
+      KIT_CACHE[id].then((m) => { if (m && this.stageG === g0) { const k = m.clone(); k.traverse((o) => { if (o.isMesh) o.userData.flatDone = true; }); g0.add(k); this.kitStage = k; } });
+      if (KIT_BG[id] !== undefined) this.scene.background.set(KIT_BG[id]);
+    }
   };
+  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb' }, KIT_BG = { pizza: 0xf3d6cc }, KIT_CACHE = {};
 
 })();
