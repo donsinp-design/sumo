@@ -287,12 +287,20 @@ def mod_border():
         m.lathe([(0.0, -0.2), (0.17, -0.15), (0.25, 0.0), (0.18, 0.14), (0.0, 0.2)], 'frost', 8, M=T((RD + 0.05) * math.cos(a), (RD + 0.05) * math.sin(a), PLATE_Z + 0.12))
     return m.finish('MOD_Border', sharp=80)
 def mod_strawberry():
-    """chunky strawberry: a fat soft cone, green star cap."""
+    """chunky strawberry lying on its side: a heart-shaped cone (pointed tip, wide shoulders), yellow seeds, a leafy
+    cap at the wide end. Lying down so the cone reads from the high game camera (upright it read as a tomato)."""
     m = MB()
-    m.lathe([(0.0, 0.0), (0.1, 0.02), (0.2, 0.12), (0.26, 0.26), (0.25, 0.38), (0.18, 0.46), (0.0, 0.48)], 'berry', 14)
-    n = 10; pts = [((0.2 if i % 2 == 0 else 0.09) * math.cos(2 * math.pi * i / n), (0.2 if i % 2 == 0 else 0.09) * math.sin(2 * math.pi * i / n)) for i in range(n)]
-    m.prism(pts, 0.44, 0.5, 'leaf', bev=0.02)
-    m.cyl(0, 0, 0.55, 0.035, 0.12, 'leaf_dk', 8)
+    R = Matrix.Rotation(math.radians(84), 4, 'X')          # the tip points along -y (out from the cake), the cap faces +y
+    M = T(0, 0, 0.2) @ R
+    prof = [(0.0, -0.36), (0.07, -0.3), (0.15, -0.18), (0.21, -0.04), (0.235, 0.08), (0.22, 0.17), (0.15, 0.23), (0.0, 0.25)]
+    m.lathe(prof, 'berry', 16, M=M)
+    for i in range(18):                                     # seeds dotted over the visible upper side
+        zz = -0.28 + 0.48 * ((i * 0.61) % 1.0); ang = math.radians(-70 + 140 * ((i * 0.37) % 1.0)) + math.pi / 2
+        rr = max(0.04, float(__import__('numpy').interp(zz, [p_[1] for p_ in prof], [p_[0] for p_ in prof]))) + 0.004
+        m.ico(rr * math.cos(ang), rr * math.sin(ang), zz, 0.022, 'acc_yellow', sub=1, sq=(1, 1, 1.4), M=M)
+    n = 10; pts = [((0.21 if i % 2 == 0 else 0.08) * math.cos(2 * math.pi * i / n), (0.21 if i % 2 == 0 else 0.08) * math.sin(2 * math.pi * i / n)) for i in range(n)]
+    m.prism(pts, 0.22, 0.27, 'leaf', bev=0.015, M=M)
+    m.cyl(0, 0, 0.27, 0.03, 0.1, 'leaf_dk', 8, M=M)
     return m.finish('MOD_Strawberry', sharp=60)
 def mod_candle(col):
     m = MB()
@@ -412,7 +420,7 @@ for k in range(ND):
         continue
     place('MOD_Dollop_' + ('frost_pink' if k % 2 else 'frost'), nm('CAKE_Dollop'), (x, y, 0.0), rz=k * 37, s=RNG.uniform(0.95, 1.05), c='ENV_TOPPINGS')
     if k % 9 == 4 or k % 9 == 8:              # strawberries on top of a few dollops
-        place('MOD_Strawberry', nm('CAKE_Strawberry'), (x, y, 0.3), rz=RNG.uniform(0, 360), rx=RNG.uniform(-8, 8), c='ENV_TOPPINGS')
+        place('MOD_Strawberry', nm('CAKE_Strawberry'), (x, y, 0.3), rz=math.degrees(math.atan2(y, x)) - 90 + RNG.uniform(-25, 25), c='ENV_TOPPINGS')   # tip pointing out from the cake
 # table props (only where the camera sees them)
 place('MOD_Present', 'TABLE_Present', (-10.6, 2.2, TBL), rz=18, c='ENV_PROPS')
 place('MOD_Hat', 'TABLE_PartyHat', (10.2, 4.6, TBL), c='ENV_PROPS')

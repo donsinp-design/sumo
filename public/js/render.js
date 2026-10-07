@@ -2396,6 +2396,7 @@
   const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb', vacuum: 'assets/models/vacuum_kit.glb', heli: 'assets/models/heli_kit.glb', watch: 'assets/models/clock_kit.glb', earth: 'assets/models/earth_kit.glb', taiko: 'assets/models/taiko_kit.glb' },
     KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4, vacuum: 0xe9d3a8, heli: 0xd9d2c8, watch: 0xf6dfc0, earth: 0x6a63a4, taiko: 0xf1e3c6 }, KIT_CACHE = {};
   // a little life in the kit stages: the sushi plates rumble on the belt
+  const lilyFloat = (k) => KIT_TICK.lilyFloat(k);
   const KIT_TICK = {
     // the hanging lanterns sway on their cords
     taiko: (k) => { const L = k.children.filter((c) => /^LANTERN_/.test(c.name)); L.forEach((l, i) => { l.userData.r0 = l.rotation.clone(); l.userData.ph = i * 1.7; });
@@ -2428,10 +2429,35 @@
     // the candle flames flicker
     cake: (k) => { const fl = k.children.filter((c) => /^FLAME_/.test(c.name)); fl.forEach((f, i) => { f.userData.s0 = f.scale.clone(); f.userData.ph = i * 2.3; });
       return (T) => fl.forEach((f) => { const s = f.userData.s0, j = 0.85 + 0.25 * Math.abs(Math.sin(T * 9 + f.userData.ph)) + 0.08 * Math.sin(T * 23 + f.userData.ph * 3); f.scale.set(s.x * (1.05 - 0.1 * j), s.y * j, s.z * (1.05 - 0.1 * j)); }); },
-    sushi: (k) => { const rides = k.children.filter((c) => /^RIDE_/.test(c.name)); rides.forEach((r) => { r.userData.y0 = r.position.y; });
-      return (T) => rides.forEach((r, i) => { r.position.y = r.userData.y0 + 0.025 * Math.sin(T * 17 + i * 1.7); }); },
+    // the belt (and everything riding it, the fighting plate too) runs on: the counter and its things slide past
+    sushi: (k) => {
+      const rides = k.children.filter((c) => /^RIDE_/.test(c.name)), counter = k.getObjectByName('COUNTER'), props = k.children.filter((c) => /^PROP_/.test(c.name));
+      rides.forEach((r) => { r.userData.y0 = r.position.y; }); props.forEach((p) => { p.userData.x0 = p.position.x; });
+      const V = 2.2, SPAN = 64;
+      return (T) => {
+        rides.forEach((r, i) => { r.position.y = r.userData.y0 + 0.025 * Math.sin(T * 17 + i * 1.7); });
+        if (counter) counter.position.x = (V * T) % 8;                       // the boards repeat every 8 m
+        props.forEach((p) => { let x = (p.userData.x0 + V * T + SPAN / 2) % SPAN; p.position.x = x - SPAN / 2; });
+      };
+    },
     // the small pads, lotuses and the frog bob on the pond
-    lily: (k) => { const fl = k.children.filter((c) => /^FLOAT_/.test(c.name)); fl.forEach((f, i) => { f.userData.y0 = f.position.y; f.userData.ph = i * 1.9; f.userData.r0 = f.rotation.y; });
+    lily: (k) => {
+      // ripples spread out from the pad and fade, the light streaks drift and shimmer
+      const fade = (o) => { o.traverse((q) => { if (q.isMesh) { const m = S.Flat.patch(q.material.clone()); m.transparent = true; m.depthWrite = false; q.material = m; } }); return o; };
+      const ringA = k.getObjectByName('RIPPLE_A'), ringB = k.getObjectByName('RIPPLE_B'), rings = [];
+      if (ringA) { fade(ringA); rings.push(ringA); for (let i = 1; i < 3; i++) { const c = fade(ringA.clone()); k.add(c); rings.push(c); } }
+      if (ringB) fade(ringB);
+      const streaks = k.children.filter((c) => /^STREAK_/.test(c.name)).map((s, i) => { fade(s); s.userData.x0 = s.position.x; s.userData.z0 = s.position.z; s.userData.ph = i * 1.3; return s; });
+      const op = (o, v) => o.traverse((q) => { if (q.isMesh) q.material.opacity = v; });
+      const tick0 = lilyFloat(k);
+      return (T, ...a) => {
+        rings.forEach((r, i) => { const f = (T * 0.16 + i / 3) % 1; r.scale.setScalar(0.88 + 0.55 * f); op(r, 0.95 * Math.min(1, f * 5) * (1 - f)); });
+        if (ringB) { ringB.rotation.y = T * 0.05; op(ringB, 0.55 + 0.35 * Math.sin(T * 0.9)); }
+        streaks.forEach((s) => { const p = s.userData.ph; s.position.x = s.userData.x0 + 0.6 * Math.sin(T * 0.35 + p); s.position.z = s.userData.z0 + 0.25 * Math.sin(T * 0.27 + p * 2); op(s, 0.45 + 0.45 * (0.5 + 0.5 * Math.sin(T * 1.1 + p * 2.1))); });
+        tick0(T, ...a);
+      };
+    },
+    lilyFloat: (k) => { const fl = k.children.filter((c) => /^FLOAT_/.test(c.name)); fl.forEach((f, i) => { f.userData.y0 = f.position.y; f.userData.ph = i * 1.9; f.userData.r0 = f.rotation.y; });
       return (T) => fl.forEach((f) => { f.position.y = f.userData.y0 + 0.035 + 0.025 * Math.sin(T * 1.3 + f.userData.ph); f.rotation.y = f.userData.r0 + 0.06 * Math.sin(T * 0.5 + f.userData.ph); }); },
   };
 

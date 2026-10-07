@@ -283,15 +283,16 @@ def mod_bed():
     m = MB(); S = 80
     m.box(-S, S, -S, S, WZ - 0.9, WZ - 0.7, 'pond_bed')                                    # opaque pale pond floor under it
     return m.finish('MOD_PondBed', sharp=30)
+STREAKS = ((-4.6, -5.6, 1.8, 0.28, 8), (6.8, -4.6, 1.5, 0.26, -6), (-11.0, 6.6, 2.6, 0.3, 4), (-10.0, 6.0, 1.2, 0.24, 4),
+           (4.6, 11.4, 2.4, 0.28, -3), (13.6, 1.6, 1.8, 0.26, 6))
 def mod_ripples():
-    m = MB(); z = WZ + 0.003
-    annulus(m, 0, 0, 6.1, 6.36, z, 'water_lt', n=160)                                      # concentric rings round the big pad
-    annulus(m, 0, 0, 7.7, 7.9, z, 'water_lt', math.radians(-25), math.radians(120), n=160)
-    annulus(m, 0, 0, 7.7, 7.9, z, 'water_lt', math.radians(160), math.radians(240), n=160)
-    for cx, cy, L, w, a in ((-4.6, -5.6, 1.8, 0.28, 8), (6.8, -4.6, 1.5, 0.26, -6), (-11.0, 6.6, 2.6, 0.3, 4), (-10.0, 6.0, 1.2, 0.24, 4),
-                            (4.6, 11.4, 2.4, 0.28, -3), (13.6, 1.6, 1.8, 0.26, 6)):
-        stadium(m, cx, cy, L, w, a, z, 'water_lt')
-    return m.finish('MOD_Ripples', sharp=30)
+    # separate pieces so the game can move them: the rings spread out and fade, the streaks drift and shimmer
+    z = WZ + 0.003
+    m = MB(); annulus(m, 0, 0, 6.1, 6.36, z, 'water_lt', n=160); m.finish('MOD_RippleA', sharp=30)
+    m = MB(); annulus(m, 0, 0, 7.7, 7.9, z, 'water_lt', math.radians(-25), math.radians(120), n=160)
+    annulus(m, 0, 0, 7.7, 7.9, z, 'water_lt', math.radians(160), math.radians(240), n=160); m.finish('MOD_RippleB', sharp=30)
+    for i, (cx, cy, L, w, a) in enumerate(STREAKS):
+        m = MB(); stadium(m, 0, 0, L, w, a, z, 'water_lt'); m.finish('MOD_Streak%d' % i, sharp=30)
 def mod_ring_small(name, r):
     m = MB(); annulus(m, 0, 0, r, r + 0.13, WZ + 0.003, 'water_lt', n=96); return m.finish(name, sharp=30)
 
@@ -359,7 +360,8 @@ mod_stone('MOD_Stone_A', 1, 1.1); mod_stone('MOD_Stone_B', 2, 0.85)
 # =====================================================================================================================
 place('MOD_PondBed', 'POND_Bed', c='ENV_POND')
 place('MOD_PondWater', 'POND_Water', c='ENV_POND')
-place('MOD_Ripples', 'POND_Ripples', c='ENV_POND')
+place('MOD_RippleA', 'RIPPLE_A', c='ENV_POND'); place('MOD_RippleB', 'RIPPLE_B', c='ENV_POND')
+for i, (cx, cy, L, w, a) in enumerate(STREAKS): place('MOD_Streak%d' % i, 'STREAK_%d' % i, (cx, cy, 0), c='ENV_POND')
 place('MOD_GiantPad', 'PAD_Giant', rz=NOTCH_DIR, c='ENV_PAD')
 
 PZ = WZ + 0.05              # small pads: top 5 cm above the water
@@ -501,7 +503,7 @@ bpy.ops.export_scene.gltf(filepath=OUT + '/lily_kit.glb', export_format='GLB', u
 for m in (M_KIT, M_GW):
     N = m.node_tree.nodes; m.node_tree.links.new(N['VaryMix'].outputs['Result'], N['Principled BSDF'].inputs['Base Color'])
 for o in bpy.data.objects:            # water lets the light through (flat look): no shadows from the surface / ripples
-    if o.name.startswith(('POND_Water', 'POND_Ripples')) or o.name.endswith('_Ripple'): o.visible_shadow = False
+    if o.name.startswith(('POND_Water', 'RIPPLE_', 'STREAK_')) or o.name.endswith('_Ripple'): o.visible_shadow = False
 print('STAGE_TRIS', tris(env), 'objects', len(env))
 bpy.ops.wm.save_as_mainfile(filepath=OUT + '/lily_kit.blend')
 if not NORENDER:

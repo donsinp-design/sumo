@@ -251,14 +251,15 @@ def mod_belt():
     return m.finish('MOD_Belt', sharp=50)
 def mod_counter():
     """pale hinoki counters both sides of the belt: long planks, a darker seam between them."""
-    m = MB(); X = 45
+    m = MB(); X = 48
     for sgn in (-1, 1):
         ya, yb = sgn * CY, sgn * (CY + 26)
         m.box(-X, X, min(ya, yb), max(ya, yb), CT - 1.4, CT - 0.04, 'hinoki_dk', 0.0)
         y0 = CY
         for k, (w, col) in enumerate(((2.6, 'hinoki'), (3.4, 'cream2'), (3.0, 'hinoki'), (4.0, 'cream2'), (14.0, 'hinoki'))):
             a, bb = sgn * (y0 + 0.04), sgn * (y0 + w - 0.04); y0 += w
-            m.box(-X, X, min(a, bb), max(a, bb), CT - 0.3, CT, col, 0.05 if k else 0.12, 2)
+            for x0 in range(-48, 48, 8):          # boards 8 m long with a joint between: the counter visibly slides past the belt
+                m.box(x0 + 0.05, x0 + 7.95, min(a, bb), max(a, bb), CT - 0.3, CT, col, 0.05 if k else 0.12, 2)
     return m.finish('MOD_Counter', sharp=50)
 
 # ---- riding plates + sushi -------------------------------------------------------------------------------------------
