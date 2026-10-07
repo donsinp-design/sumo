@@ -15,7 +15,7 @@
   const SAFE_Z = -27;          // north of this: the bath and the showers (nobody minds a naked man there)
   // restart points nobody is looking at: the shower side of the locker door, the corner just inside the lobby door
   const CP = { lockN: { x: 5.8, z: -25.6, f: -Math.PI / 2 }, lockS: { x: -11.2, z: -46.1, f: Math.PI / 2 }, lobby: { x: -11.2, z: -48.1, f: -Math.PI / 2 } };
-  const CENSOR = { w: 0.78, h: 0.42, y: 0.7 };   // the pixel block: his bottom / crotch only
+  const CENSOR = { w: 0.8, h: 0.5, y: -0.55 };   // hip height below the body centre (the box-pants sit at -0.62)   // the pixel block: his bottom / crotch only
 
   class Stealth {
     constructor(game) { this.g = game; }
@@ -157,16 +157,22 @@
       this.boxSpot = { x: 9, z: -65.2 };
       this.pantsBox = this.cardboard(1.0); this.pantsBox.position.set(this.boxSpot.x, 0, this.boxSpot.z); this.pantsBox.rotation.y = 0.4; G.add(this.pantsBox);
       // sparkles that mark the next thing to do
-      const sp = (x, z) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.sparkTex(), transparent: true, depthWrite: false, color: 0xffe08a })); s.position.set(x, 1.6, z); s.scale.setScalar(1.1); s.renderOrder = 6; s.visible = false; G.add(s); return s; };
+      // the "go here" marker: a soft ring on the floor and a small rounded arrow bobbing above it
+      const sp = (x, z) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.visible = false; G.add(g);
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.78, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false }));
+        ring.position.y = 0.03; ring.renderOrder = 3; g.add(ring);
+        const ar = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.arrowTex(), transparent: true, depthWrite: false, depthTest: false })); ar.scale.set(0.62, 0.62, 1); ar.position.y = 2.3; ar.renderOrder = 7; g.add(ar);
+        g.userData = { ring, ar }; return g; };
       this.spLocker = sp(this.locker.x, this.locker.z); this.spKey = sp(this.washSpot.x, this.washSpot.z); this.spBox = sp(this.boxSpot.x, this.boxSpot.z);
       this.spLocker.visible = true;
       G.traverse((o) => { if (o.isMesh) o.userData.flatDone = true; });
     }
-    sparkTex() {
-      if (this._spark) return this._spark;
-      const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d');
-      c.fillStyle = '#fff'; c.beginPath(); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, r = k % 2 ? 9 : 30; c.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); } c.fill();
-      return (this._spark = new THREE.CanvasTexture(cv));
+    arrowTex() {
+      if (this._arrow) return this._arrow;
+      const cv = document.createElement('canvas'); cv.width = cv.height = 128; const c = cv.getContext('2d');
+      const tri = () => { c.beginPath(); c.moveTo(64, 104); c.lineTo(22, 40); c.quadraticCurveTo(14, 26, 30, 26); c.lineTo(98, 26); c.quadraticCurveTo(114, 26, 106, 40); c.closePath(); };
+      c.lineJoin = 'round'; tri(); c.lineWidth = 16; c.strokeStyle = '#fffaf0'; c.stroke(); c.fillStyle = '#f08a5d'; c.fill();
+      return (this._arrow = new THREE.CanvasTexture(cv));
     }
     // a cardboard box, open at the top: k = 1 on the floor; worn, sized round his hips
     cardboard(k) {
@@ -507,10 +513,12 @@
         if (m.t <= 0) { m.t = 0.1; const g = m.cv.getContext('2d'), sk = ['#e9b894', '#d9a07c', '#f0c8a8', '#c98a6a', '#e0ac88'];
           g.clearRect(0, 0, 8, 5); for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { if ((x === 0 || x === 7) && Math.random() < 0.6) continue; g.fillStyle = sk[(Math.random() * sk.length) | 0]; g.fillRect(x, y, 1, 1); }
           m.s.material.map.needsUpdate = true; }
-        const s = v.s, cx = this.cam.position.x - P.x, cz = this.cam.position.z - P.z, cl = Math.hypot(cx, cz) || 1, low = P.st === 'slip' ? 0.4 : CENSOR.y - 0.18 * P.crouch;
-        m.s.position.set(P.x + cx / cl * 0.85 * s, low * s, P.z + cz / cl * 0.85 * s); m.s.scale.set(CENSOR.w * s, CENSOR.h * s, 1);
+        const s = v.s, hip = (this._hip || (this._hip = new THREE.Vector3())).set(0, (CENSOR.y + 0.2 * P.crouch) * s, 0);
+        v.body.updateWorldMatrix(true, false); v.body.localToWorld(hip); const to = this.cam.position.clone().sub(hip).normalize();
+        m.s.position.copy(hip).addScaledVector(to, 0.95 * s); m.s.scale.set(CENSOR.w * s, CENSOR.h * s, 1);
       }
-      for (const sp of [this.spLocker, this.spKey, this.spBox]) if (sp.visible) { sp.position.y = 1.6 + Math.sin(T * 3) * 0.12; sp.material.rotation = T * 0.8; }
+      for (const sp of [this.spLocker, this.spKey, this.spBox]) if (sp.visible) { const u = sp.userData, k = (T * 0.9) % 1;
+        u.ar.position.y = 2.3 + Math.abs(Math.sin(T * 3.2)) * 0.22; u.ring.scale.setScalar(0.8 + 0.35 * k); u.ring.material.opacity = 0.85 * (1 - k * k); }
       this.fx.update(dt); this.fx.updateWater && this.fx.updateWater(dt);
       // camera: high, behind, following (as in the campaign); closer for the ending
       this.camT.lerp(new THREE.Vector3(this.over ? P.x + 2.2 : clamp(P.x * 0.8, -10, 10), 0, P.z - (this.over ? 0.6 : 2.6)), 1 - Math.exp(-dt * 4));
