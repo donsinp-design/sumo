@@ -2379,10 +2379,24 @@
       for (const c of this.stageSpin.children) c.visible = false;
       const g0 = this.stageG;
       KIT_CACHE[id] = KIT_CACHE[id] || new Promise((res) => new THREE.GLTFLoader().load(kitFile, (gl) => res(S.Flat.kit(gl.scene)), undefined, () => res(null)));
-      KIT_CACHE[id].then((m) => { if (m && this.stageG === g0) { const k = m.clone(); k.traverse((o) => { if (o.isMesh) o.userData.flatDone = true; }); g0.add(k); this.kitStage = k; } });
+      KIT_CACHE[id].then((m) => {
+        if (!m || this.stageG !== g0) return;
+        const k = m.clone(); k.traverse((o) => { if (o.isMesh) o.userData.flatDone = true; }); g0.add(k); this.kitStage = k;
+        const old = this.stageTick, tick = KIT_TICK[id] && KIT_TICK[id](k), sp = this.stageSpin;
+        this.stageTick = (T, ...a) => {   // the built stage's late pieces (models arriving after the switch) stay hidden under the kit
+          for (const c of g0.children) if (c !== k) c.visible = false;
+          if (sp) for (const c of sp.children) c.visible = false;
+          if (old) old(T, ...a); if (tick) tick(T);
+        };
+      });
       if (KIT_BG[id] !== undefined) this.scene.background.set(KIT_BG[id]);
     }
   };
-  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb' }, KIT_BG = { pizza: 0xf3d6cc }, KIT_CACHE = {};
+  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb' }, KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4 }, KIT_CACHE = {};
+  // a little life in the kit stages: the sushi plates rumble on the belt
+  const KIT_TICK = {
+    sushi: (k) => { const rides = k.children.filter((c) => /^RIDE_/.test(c.name)); rides.forEach((r) => { r.userData.y0 = r.position.y; });
+      return (T) => rides.forEach((r, i) => { r.position.y = r.userData.y0 + 0.025 * Math.sin(T * 17 + i * 1.7); }); },
+  };
 
 })();
