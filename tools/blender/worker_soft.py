@@ -183,7 +183,7 @@ def build(key):
               E_((0, -ry + 0.012, hc - 0.03), (0.032, 0.03, 0.03)),                              # a small round nose
               L_((0, 0.0, sh_z - 0.06), (0, 0.0, hc - 0.08), 0.085, 0.085, caps=False)]          # short neck
         for s in S2:
-            sp.append(E_((s * (rx - 0.005), 0.012, hc - 0.015), (0.032, 0.042, 0.052)))          # ear nubs
+            if P['hair'] != 'bob': sp.append(E_((s * (rx - 0.005), 0.012, hc - 0.015), (0.032, 0.042, 0.052)))   # ear nubs (under the bob: none)
             sp += [L_(J[s] + D1[s] * (0.06 if full else 0.0), E[s], ar, ar * 0.9), L_(E[s], W[s], ar * 0.9, ar * 0.8)]
             xh, yh, nin = arm_frame(s); H0 = W[s] + xh * 0.015
             sp += [L_(W[s] - xh * 0.02, H0 + xh * 0.04, ar * 0.82, ar * 0.85, caps=False),
@@ -222,7 +222,7 @@ def build(key):
     DR = bvh_of([drape])
 
     parts = {}
-    parts['Skin'] = fuse('Skin', skin_specs(), M['Skin'], 0.009, 1650 if key != 'f' else 1550, 22)
+    parts['Skin'] = fuse('Skin', skin_specs(), M['Skin'], 0.009, {'m': 1650, 'f': 1500, 'o': 1500}[key], 22)
     parts['Tops'] = fuse('Tops', tops_specs(), M['Tops'], 0.011, 950, 22)
     parts['Bottoms'] = fuse('Bottoms', bottoms_specs(), M['Bottoms'], 0.011, 650, 22)
     parts['Shoes'] = fuse('Shoes', boot_specs(), M['Shoes'], 0.009, 620, 14, floor=True)
@@ -337,7 +337,7 @@ def build(key):
         b = ho.modifiers.new('cut', 'BOOLEAN'); b.operation = 'DIFFERENCE'; b.object = cut; b.solver = 'EXACT'
         bpy.context.view_layer.objects.active = ho; bpy.ops.object.modifier_apply(modifier='cut')
         bpy.data.objects.remove(cut)
-        remesh_smooth(ho, 0.009, 16); decimate(ho, 650); parts['Hair'] = finish(ho, M['Hair'])
+        remesh_smooth(ho, 0.009, 16); decimate(ho, 500); parts['Hair'] = finish(ho, M['Hair'])
     else:   # bald: a short horseshoe of hair round the back and sides
         def inside(d):
             el, ph = el_phi(d); return abs(ph) > 1.45 and -0.42 < el < 0.12 + 0.12 * (abs(ph) - 1.45)
@@ -363,7 +363,7 @@ def build(key):
         kb = (h[0] if h else HC + Vector((0, ry + 0.04, 0.06))) + Vector((0, 0.02, -0.0))
         tails = make([E_(kb, (0.034, 0.026, 0.03)), L_(kb, kb + Vector((0.04, 0.04, -0.12)), 0.02, 0.014),
                       L_(kb, kb + Vector((-0.03, 0.045, -0.105)), 0.02, 0.014)])
-        knot = join(tails, 'BandKnot'); remesh_smooth(knot, 0.007, 8); finish(knot, M['Band'])
+        knot = join(tails, 'BandKnot'); remesh_smooth(knot, 0.007, 8); decimate(knot, 220); finish(knot, M['Band'])
         parts['Band'] = join([cap, knot], 'Band')
     else:   # towel round the neck: a fat soft loop on the shoulders, both ends hanging over the bib
         APB = bvh_of([drape, parts['Apron']])
@@ -381,7 +381,7 @@ def build(key):
                 h = cast(APB, Vector((x, -0.8, z)), (0, 1, 0), 0.8)
                 seq.append(Vector((x, (h[0].y if h else -0.25) - 0.03, z)))
             band_specs += chain([loop[1 if s > 0 else 23]] + seq, 0.042)
-        parts['Band'] = fuse('Band', band_specs, M['Band'], 0.009, 700, 12)
+        parts['Band'] = fuse('Band', band_specs, M['Band'], 0.009, 600, 12)
 
     # face: two small dark dot eyes and small brows
     face = []
@@ -671,9 +671,9 @@ def check_and_render():
         for o in rigs[k][2]: o.location.z = 0
         unpose(rg)
     show_only(None)
-    for i, k in enumerate(rigs): set_root(k, (i - (len(rigs) - 1) / 2) * 1.25)
-    shoot(os.path.join(PREV, 'row_front.png'), Vector((0, 0, 0.9)), 20, 30, 6.5, 50, int(RES * 1.6), RES)
-    shoot(os.path.join(PREV, 'row_back.png'), Vector((0, 0, 0.9)), 200, 45, 6.5, 50, int(RES * 1.6), RES)
+    for i, k in enumerate(rigs): set_root(k, (i - (len(rigs) - 1) / 2) * 1.7)
+    shoot(os.path.join(PREV, 'row_front.png'), Vector((0, 0, 0.9)), 20, 30, 7.5, 50, int(RES * 1.6), RES)
+    shoot(os.path.join(PREV, 'row_back.png'), Vector((0, 0, 0.9)), 200, 45, 7.5, 50, int(RES * 1.6), RES)
     # the same row with game-like recolours of the near-white Tops / Bottoms / Shoes (the game multiplies these)
     TINT = [dict(Tops='5b7fa6', Bottoms='2a2e44', Shoes='22262e'), dict(Tops='e9e2cf', Bottoms='2a2e44', Shoes='f2f2ec'),
             dict(Tops='8a3a32', Bottoms='3a3a40', Shoes='22262e')]
@@ -684,7 +684,7 @@ def check_and_render():
                 if base in TINT[i % 3]:
                     c = srgb(TINT[i % 3][base]); b = m_.node_tree.nodes['Principled BSDF'].inputs['Base Color']
                     b.default_value = tuple(x * y for x, y in zip(b.default_value, (*c, 1)))
-    shoot(os.path.join(PREV, 'row_tinted.png'), Vector((0, 0, 0.9)), 20, 45, 6.5, 50, int(RES * 1.6), RES)
+    shoot(os.path.join(PREV, 'row_tinted.png'), Vector((0, 0, 0.9)), 20, 45, 7.5, 50, int(RES * 1.6), RES)
     return report
 
 print('TRIS', TRIS)

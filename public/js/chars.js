@@ -8,7 +8,11 @@
 (function () {
   const C = S.Chars = { ready: false, models: [] };
   const SH = () => S.R3.SH;
-  const FILES = ['assets/models/vroid_c.glb', 'assets/models/vroid_a.glb', 'assets/models/vroid_b.glb']; // c: man, a/b: women
+  // KUMITEGAME: soft, chunky market workers in the sumo's style (tools/blender/worker_soft.py), flat colours, the flat
+  // master material; same VRoid bone names and facing, so the same retarget drives them
+  const SOFT = window.KUMITE_STYLE === 'anime';
+  const FILES = SOFT ? ['assets/models/worker_m.glb', 'assets/models/worker_f.glb', 'assets/models/worker_o.glb']
+    : ['assets/models/vroid_c.glb', 'assets/models/vroid_a.glb', 'assets/models/vroid_b.glb']; // c: man, a/b: women
   const VS = `
     #include <common>
     #include <morphtarget_pars_vertex>
@@ -109,7 +113,8 @@
   class Body {
     constructor(scene, kind, K, fat, pick) {
       this.scene = scene;
-      const female = kind !== 'grappler' && kind !== 'commander' && (pick === 2 || pick === 4), mi = female ? (pick === 2 ? 1 : 2) : 0; // mostly men, some women
+      const female = kind !== 'grappler' && kind !== 'commander' && (pick === 2 || pick === 4);
+      const mi = SOFT ? (female ? 1 : kind === 'grappler' || kind === 'commander' || pick === 3 ? 2 : 0) : female ? (pick === 2 ? 1 : 2) : 0; // mostly men, some women
       const src = C.models[mi].scene, root = THREE.SkeletonUtils.clone(src);
       this.wrap = new THREE.Group(); scene.add(this.wrap);
       this.inner = new THREE.Group(); this.inner.rotation.y = Math.PI; this.wrap.add(this.inner); // VRM 0.x faces -z
@@ -120,6 +125,13 @@
       root.traverse((o) => {
         if (!o.isSkinnedMesh) return;
         o.frustumCulled = false;
+        if (SOFT && S.Flat) { // flat colours per material, the role's colours on shirt, trousers and boots
+          const nm = o.material.name || '', base = o.material.color ? o.material.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1);
+          const col = /Tops/.test(nm) ? new THREE.Color(kind === 'commander' ? 0xc8231d : shirt) : /Bottoms/.test(nm) ? new THREE.Color(pants === 0x2a2e44 ? 0x4a5068 : 0x34343e)
+            : /Shoes/.test(nm) ? new THREE.Color(pick % 2 ? 0xf2f2ec : 0x2e3440) : base;
+          const m = S.Flat.mat(S.Flat.pastel(col, 0.35)); m.emissive = new THREE.Color(0, 0, 0);
+          o.material = m; o.castShadow = true; o.receiveShadow = true; this.mats.push(m); this.meshes.push(o); return;
+        }
         const om = o.material, name = om.name || '', mode = om.transparent ? 'BLEND' : om.alphaTest > 0 ? 'MASK' : 'OPAQUE';
         let map = om.map;
         if (map) { map.encoding = THREE.LinearEncoding; map.needsUpdate = true; } // the toon shader works on raw texture colours, like every other map in the game
@@ -219,7 +231,7 @@
       return true;
     }
     handPos(side, out) { const b = this.bones[side === 'L' ? 'LeftHand' : 'RightHand']; return b ? b.getWorldPosition(out) : null; }
-    flash(col, amt) { for (const m of this.mats) { m.uniforms.uFlashCol.value.set(col); m.uniforms.uFlash.value = amt; } }
+    flash(col, amt) { for (const m of this.mats) { if (m.uniforms) { m.uniforms.uFlashCol.value.set(col); m.uniforms.uFlash.value = amt; } else m.emissive.set(col).multiplyScalar(amt * 0.8); } }
     dispose() { this.scene.remove(this.wrap); }
   }
   C.Body = Body; C.BIG = BIG;
