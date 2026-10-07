@@ -1,3 +1,21 @@
+# CLOCK (versus stage) in the approved option-2 "soft city" look (KKBC kit language), same method as
+# stage_dohyo_kit.py / stage_pizza_kit.py / stage_sushi_kit.py / stage_lily_kit.py / stage_cake_kit.py / stage_vinyl_kit.py /
+# stage_vacuum_kit.py / stage_heli_kit.py.
+#   <bl python> tools/blender/stage_clock_kit.py [norender] [lowres] [ss=1.5] [exp=1.2 shdk=1.1 ...comp args]
+# Output (scratchpad/vsclock): clock_kit.blend, clock_kit.glb (stage only, Y-up, palette embedded, M_KIT + M_GLASS_WATER),
+#         clock_palette.png, clock_gamecam.exr (light passes) -> clock_gamecam.png (flat composite via kkbc_flat_comp.py)
+# Same delivery rules as the dohyo kit: ONE master material whose colour comes from a 32x32 nearest-filtered palette
+# (8x8 swatches of 4x4 px, every face UV'd to its swatch centre); a second material only for glass/water (unused here,
+# kept so the glb carries the same two materials). The palette is the heli kit's, with the heli-only swatches
+# repurposed for the clock face, the mint bezel, numerals/hands (soft navy), minute dots, the coral second hand and the desk.
+# Roots in the glb:
+#   CLOCK              face (top at z = 0, radius 5.3; soft navy ring line at r = 4.6 = the minute track), minute/hour
+#                      dots, numerals 1-12 (12 at game -z, 3 at +x), chunky mint bezel (outer r 6.05), body down to the desk
+#   HAND_H, HAND_M     hour (2.3 m) / minute (3.6 m) hands, origin at the clock centre, pointing at 12 (game -z) at
+#   HAND_S             rotation 0, lying flat just above the face (z 0.02-0.062); HAND_S carries the centre cap.
+#                      The game turns them about the vertical axis (clockwise from above = negative game-y rotation).
+#   DESK, PROP_*       the desk (top at z = -0.6) with a felt mat, a mug, books, a plant, glasses, a pencil
+# Game (Y up) -> Blender (Z up): (x, y, z)_bl = (x, -z, y)_game. Ring centre at the origin, face top at z = 0.
 import bpy, bmesh, math, os, sys, random, subprocess
 from mathutils import Vector, Matrix
 
@@ -38,7 +56,7 @@ PAL = [
     ('wood', 'bb8b5e'), ('wood_lt', 'd3ab7a'), ('wood_dk', '8c6648'), ('canvas', 'dcc59e'), ('metal', '8f9ba8'), ('metal_lt', 'b6c0c8'), ('stand', 'c4dbea'), ('foam', 'ece9e0'),
     ('leaf', '6aa55a'), ('leaf_lt', 'a2c866'), ('leaf_dk', '4f8a4c'), ('face', 'fbf3e4'), ('face_in', 'f5ead6'), ('bezel', 'a6d8c6'), ('bezel_lt', 'c2e7d8'), ('bezel_dk', '8cc3b1'),
     ('red', 'dd5a42'), ('red_dk', 'b9493c'), ('orange', 'ef9a4c'), ('acc_yellow', 'efc24c'), ('teal', '3f9d97'), ('blue', '3f7fc2'), ('navy', '2f4b7c'), ('green', '4fa56b'),
-    ('pink_acc', 'ef9ab2'), ('numeral', '4e5170'), ('tick', '8d8faa'), ('second', 'e2604a'), ('desk', 'f1dcc0'), ('desk_side', 'e0c4a2'), ('mat', 'd3cbe8'), ('tea', 'b98a67'),
+    ('pink_acc', 'ef9ab2'), ('numeral', '4e5170'), ('tick', '8d8faa'), ('second', 'e2604a'), ('desk', 'f1dcc0'), ('desk_side', 'e0c4a2'), ('mat', 'dcd5ec'), ('tea', 'b98a67'),
 ]
 SW = {n: i for i, (n, h) in enumerate(PAL)}
 GLASSY = {'glass', 'glass_lt', 'water', 'water_lt'}
@@ -191,7 +209,191 @@ def paint(me, col, fn):
         if fn(p):
             for li in p.loop_indices: uvl.data[li].uv = u
 
-#@@STAGE@@
+# =====================================================================================================================
+# dimensions
+# =====================================================================================================================
+RING_R = 4.6               # playable radius (soft ring line on the face = the minute track)
+RD = 5.3                   # clock face radius (face top at z = 0)
+BZ_R = 6.05                # bezel outer radius
+BZ_TOP = 0.24              # bezel crest height above the face
+DESK_Z = -0.6              # the desk the clock lies on (game y = -0.6)
+FONTS = ['/mnt/skills/examples/canvas-design/canvas-fonts/BricolageGrotesque-Bold.ttf', '/mnt/skills/examples/canvas-design/canvas-fonts/WorkSans-Bold.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf']
+FONT = next(f for f in FONTS if os.path.exists(f))
+
+def fillet(pts, r, n=3):
+    """round every corner of a closed outline with a soft arc of radius ~r."""
+    out = []; N = len(pts)
+    for i in range(N):
+        P = Vector(pts[i]); A = Vector(pts[i - 1]); B = Vector(pts[(i + 1) % N])
+        u = (A - P).normalized(); v = (B - P).normalized()
+        d = min(r, (A - P).length * 0.45, (B - P).length * 0.45)
+        p0, p1 = P + u * d, P + v * d
+        for k in range(n + 1):
+            t = k / n; q = (1 - t) ** 2 * p0 + 2 * (1 - t) * t * P + t * t * p1
+            out.append((q.x, q.y))
+    return out
+def rrect(w, h, rc, n=6):
+    pts = []
+    for cx, cy, a0 in ((w / 2 - rc, h / 2 - rc, 0), (-w / 2 + rc, h / 2 - rc, 90), (-w / 2 + rc, -h / 2 + rc, 180), (w / 2 - rc, -h / 2 + rc, 270)):
+        for i in range(n + 1):
+            a = math.radians(a0 + 90 * i / n); pts.append((cx + rc * math.cos(a), cy + rc * math.sin(a)))
+    return pts
+def chaikin(pts, it=2):
+    for _ in range(it):
+        q = []
+        for i in range(len(pts)):
+            a, b = pts[i], pts[(i + 1) % len(pts)]
+            q += [(0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]), (0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1])]
+        pts = q
+    return pts
+def circle(r, n=16, cx=0.0, cy=0.0): return [(cx + r * math.cos(a), cy + r * math.sin(a)) for a in U(n)]
+def text_mesh(m, body, size, x, y, z, col, rz=0.0):
+    """flat filled glyphs (front face only: they lie on the flat face and are only seen from above)."""
+    fnt = bpy.data.fonts.load(FONT, check_existing=True)
+    cu = bpy.data.curves.new('txt', 'FONT'); cu.body = body; cu.font = fnt; cu.size = size; cu.align_x = 'CENTER'; cu.align_y = 'CENTER'
+    cu.fill_mode = 'FRONT'; cu.resolution_u = 4; cu.extrude = 0.0
+    ob = bpy.data.objects.new('tmp_txt', cu); ROOT.objects.link(ob)
+    dg = bpy.context.evaluated_depsgraph_get(); me0 = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+    bpy.data.objects.remove(ob); bpy.data.curves.remove(cu)
+    b = m._begin(); bm2 = bmesh.new(); bm2.from_mesh(me0); bpy.data.meshes.remove(me0)
+    for f in bm2.faces:
+        if f.normal.z < 0: f.normal_flip()
+    bmesh.ops.transform(bm2, matrix=T(x, y, z) @ Rz(rz), verts=bm2.verts)
+    tmp = bpy.data.meshes.new('tmp'); bm2.to_mesh(tmp); bm2.free(); m.bm.from_mesh(tmp); bpy.data.meshes.remove(tmp)
+    fb, eb = b; u = swuv(col)
+    for f in m.bm.faces:
+        if f not in fb:
+            f.material_index = 0; f.smooth = False
+            for l in f.loops: l[m.uv].uv = u
+
+# ---- the clock (static): face + bezel + body, ring line, hour/minute dots, numerals ----------------------------------
+# flat tone zones on the face, centre -> edge: (r0, r1, colour)
+FACE_BANDS = [(0.0, RING_R - 0.07, 'face'), (RING_R - 0.07, RING_R + 0.07, 'numeral'), (RING_R + 0.07, RD, 'face')]
+def mod_clock():
+    m = MB()
+    # body + bezel: soft foot on the desk, round chunky bezel crest, rolling down onto the face at RD
+    prof = [(0.0, DESK_Z), (BZ_R - 0.25, DESK_Z), (BZ_R - 0.08, DESK_Z + 0.03), (BZ_R - 0.01, DESK_Z + 0.12), (BZ_R, -0.3),
+            (BZ_R - 0.02, -0.12), (BZ_R - 0.08, 0.0), (BZ_R - 0.18, 0.1), (BZ_R - 0.32, BZ_TOP - 0.01), (BZ_R - 0.42, BZ_TOP),
+            (RD + 0.24, BZ_TOP - 0.01), (RD + 0.12, BZ_TOP - 0.05), (RD + 0.04, 0.07), (RD + 0.005, 0.025), (RD, 0.0)]
+    for r0, r1, c in reversed(FACE_BANDS):
+        if r0 > 0: prof.append((r0, 0.0))
+    prof.append((0.0, 0.0))
+    m.lathe(prof, 'bezel', 128)
+    # minute dots + chunky hour dots on the track just outside the ring line
+    for k in range(60):
+        a = math.radians(90 - k * 6); r = 4.97
+        if k % 5 == 0:
+            m.lathe([(0.0, -0.01), (0.15, -0.01), (0.15, 0.008), (0.13, 0.016), (0.0, 0.016)], 'numeral', 16, M=T(r * math.cos(a), r * math.sin(a), 0))
+        else:
+            m.lathe([(0.0, -0.01), (0.06, -0.01), (0.06, 0.01), (0.0, 0.01)], 'tick', 8, M=T(r * math.cos(a), r * math.sin(a), 0))
+    # chunky friendly numerals, upright for the camera, 12 at the far side (+y = game -z)
+    for k in range(1, 13):
+        a = math.radians(90 - k * 30); r = 3.78
+        text_mesh(m, str(k), 1.32, r * math.cos(a), r * math.sin(a), 0.006, 'numeral')
+    me = m.finish('MOD_Clock', sharp=40)
+    uvl = me.uv_layers['PAL']
+    for p in me.polygons:
+        r = Vector((p.center.x, p.center.y)).length
+        c = None
+        if p.normal.z > 0.9 and abs(p.center.z) < 0.003 and r < RD:
+            for r0, r1, cc in FACE_BANDS:
+                if r0 <= r < r1: c = cc
+        elif r > RD and p.normal.z > 0.6 and p.center.z > 0.05: c = 'bezel_lt'
+        elif r > RD and p.center.z < -0.35: c = 'bezel_dk'
+        if c:
+            u = swuv(c)
+            for li in p.loop_indices: uvl.data[li].uv = u
+    return me
+
+# ---- the hands: separate roots, pivot at the centre, modelled pointing at 12 (+y), thin, lying just above the face -----
+def mod_hand(name, L, w0, w1, tail, z0, z1, col, hub):
+    m = MB()
+    pts = [(-w0 / 2, -tail), (w0 / 2, -tail), (w1 / 2, L - w1 * 0.9), (0.0, L), (-w1 / 2, L - w1 * 0.9)]
+    m.prism(fillet(pts, max(w1, w0) * 0.45, 4), z0, z1, col, bev=0.008, bseg=1)
+    m.prism(circle(hub, 24), z0, z1, col, bev=0.008, bseg=1)
+    return m.finish(name, sharp=40)
+def mod_second():
+    m = MB(); z0, z1 = 0.05, 0.062
+    m.prism(fillet([(-0.05, -0.9), (0.05, -0.9), (0.04, 4.1), (-0.04, 4.1)], 0.04, 2), z0, z1, 'second')
+    m.prism(circle(0.24, 20, 0.0, -0.9), z0, z1, 'second', bev=0.006, bseg=1)              # round counterweight
+    m.prism(circle(0.2, 20, 0.0, 3.25), z0, z1, 'second', bev=0.006, bseg=1)               # lollipop near the tip
+    # centre cap
+    m.lathe([(0.0, z0 - 0.01), (0.3, z0 - 0.01), (0.3, z1 + 0.012), (0.27, z1 + 0.024), (0.0, z1 + 0.026)], 'second', 28)
+    m.lathe([(0.0, z1 + 0.02), (0.11, z1 + 0.02), (0.11, z1 + 0.03), (0.0, z1 + 0.032)], 'face', 16)
+    return m.finish('MOD_HandS', sharp=40)
+
+# ---- the desk + a few calm props ---------------------------------------------------------------------------------------
+def mod_desk():
+    m = MB()
+    m.box(-45, 45, -30, 50, DESK_Z - 0.5, DESK_Z, 'desk')
+    # a soft felt desk mat under the clock
+    m.prism(rrect(17.0, 15.0, 2.4), DESK_Z, DESK_Z + 0.05, 'mat', M=T(0.0, 0.6, 0), bev=0.025, bseg=1)
+    return m.finish('MOD_Desk', sharp=40)
+def mod_mug():
+    m = MB(); R, H = 1.05, 1.65
+    m.lathe([(0.0, 0.0), (R - 0.12, 0.0), (R, 0.1), (R, H - 0.06), (R - 0.04, H), (R - 0.16, H), (R - 0.16, H - 0.25), (0.0, H - 0.25)], 'coral', 28)
+    m.cyl(0, 0, H - 0.24, R - 0.16, 0.02, 'tea', 24)
+    hp = chaikin([(R - 0.1, 0.35), (R + 0.55, 0.35), (R + 0.72, 0.65), (R + 0.72, 1.05), (R + 0.55, 1.35), (R - 0.1, 1.35),
+                  (R - 0.1, 1.12), (R + 0.36, 1.12), (R + 0.46, 0.98), (R + 0.46, 0.72), (R + 0.36, 0.58), (R - 0.1, 0.58)], 1)
+    m.prism(hp, -0.14, 0.14, 'coral', M=Rx(90), bev=0.05, bseg=1)
+    me = m.finish('MOD_Mug', sharp=50)
+    paint(me, 'offwhite', lambda p: p.center.z > H - 0.26 and Vector((p.center.x, p.center.y)).length < R + 0.02 and p.normal.z > 0.5 and Vector((p.center.x, p.center.y)).length > R - 0.2)
+    return me
+def mod_books():
+    m = MB()
+    for k, (w, d, h, c, rz) in enumerate(((3.6, 2.6, 0.5, 'dusty_blue', 0), (3.3, 2.4, 0.42, 'mustard', 7), (3.0, 2.2, 0.38, 'lilac', -5))):
+        z = sum((0.5, 0.42, 0.38)[:k]); M = Rz(rz)
+        m.box(-w / 2, w / 2, -d / 2, d / 2, z, z + h, c, 0.09, 2, M=M)
+        m.box(-w / 2 + 0.12, w / 2 + 0.02, -d / 2 - 0.02, d / 2 - 0.12, z + 0.08, z + h - 0.08, 'foam', 0.03, 1, M=M)    # page block
+    return m.finish('MOD_Books', sharp=40)
+def mod_plant():
+    m = MB()
+    m.lathe([(0.0, 0.0), (0.72, 0.0), (0.78, 0.06), (0.92, 1.1), (1.02, 1.12), (1.04, 1.3), (0.98, 1.36), (0.85, 1.36), (0.85, 1.25), (0.0, 1.25)], 'terracotta', 24)
+    m.cyl(0, 0, 1.26, 0.85, 0.02, 'wood_dk', 20)
+    for x, y, z, r, c in ((0.0, 0.0, 1.95, 0.85, 'leaf'), (-0.55, 0.25, 1.65, 0.6, 'leaf_lt'), (0.55, -0.1, 1.7, 0.62, 'leaf_dk'), (0.1, 0.45, 2.45, 0.5, 'leaf_lt')):
+        m.ico(x, y, z, r, c, 3, sq=(1, 1, 0.88), jit=0.0)
+    return m.finish('MOD_Plant', sharp=40)
+def mod_glasses():
+    """round reading glasses lying on the desk, arms folded."""
+    m = MB(); R, t, h = 0.72, 0.16, 0.12
+    for cx in (-0.95, 0.95):
+        m.sweep(lambda a: [(R - t / 2, 0.0), (R + t / 2, 0.0), (R + t / 2, h), (R - t / 2, h)], U(28), 'numeral', M=T(cx, 0, 0), closed=True)
+    m.box(-0.28, 0.28, 0.12, 0.26, 0.0, h * 0.8, 'numeral', 0.04, 1)
+    for s, y in ((-1, 0.9), (1, 1.1)):                 # arms folded behind the lenses, hinged at the outer rims
+        m.box(min(s * 1.62, s * 1.86), max(s * 1.62, s * 1.86), -0.08, y + 0.07, 0.0, h * 0.8, 'numeral', 0.04, 1)
+        m.box(-1.86 if s > 0 else -1.7, 1.86 if s < 0 else 1.7, y - 0.06, y + 0.06, 0.0 if s < 0 else 0.1, h * 0.8 + (0.0 if s < 0 else 0.1), 'numeral', 0.04, 1)
+    return m.finish('MOD_Glasses', sharp=40)
+def mod_pencil():
+    m = MB()
+    m.cyl(0, 0, 0.17, 0.17, 2.6, 'acc_yellow', 6, axis='X')
+    m.cyl(-1.42, 0, 0.17, 0.17, 0.26, 'pink_acc', 12, axis='X', bev=0.04)
+    m.cyl(1.55, 0, 0.17, 0.17, 0.5, 'wood_lt', 12, r2=0.05, axis='X')
+    m.cyl(1.83, 0, 0.17, 0.05, 0.08, 'numeral', 8, r2=0.0, axis='X')
+    return m.finish('MOD_Pencil', sharp=40)
+
+for f in (mod_clock, mod_second, mod_desk, mod_mug, mod_books, mod_plant, mod_glasses, mod_pencil): f()
+mod_hand('MOD_HandH', 2.38, 0.5, 0.36, 0.42, 0.02, 0.034, 'numeral', 0.34)
+mod_hand('MOD_HandM', 3.66, 0.36, 0.24, 0.42, 0.035, 0.048, 'numeral', 0.28)
+
+# =====================================================================================================================
+# assemble
+# =====================================================================================================================
+place('MOD_Desk', 'DESK', c='ENV_DESK')
+place('MOD_Clock', 'CLOCK', c='ENV_CLOCK')
+HANDS = {'HAND_H': place('MOD_HandH', 'HAND_H', c='ENV_HANDS'),     # the game turns these about their origin (clock centre)
+         'HAND_M': place('MOD_HandM', 'HAND_M', c='ENV_HANDS'),
+         'HAND_S': place('MOD_HandS', 'HAND_S', c='ENV_HANDS')}
+place('MOD_Mug', 'PROP_Mug', (-8.9, 0.8, DESK_Z), rz=-20, c='ENV_PROPS')
+place('MOD_Books', 'PROP_Books', (-9.9, 7.4, DESK_Z), rz=14, c='ENV_PROPS')
+place('MOD_Plant', 'PROP_Plant', (9.4, 7.2, DESK_Z), c='ENV_PROPS')
+place('MOD_Glasses', 'PROP_Glasses', (9.0, 0.2, DESK_Z), rz=-15, c='ENV_PROPS')
+place('MOD_Pencil', 'PROP_Pencil', (8.4, -3.9, DESK_Z), rz=30, c='ENV_PROPS')
+def set_time(h, mi, s):
+    """clockwise seen from above = negative rotation about +z (12 at +y, 3 at +x)."""
+    HANDS['HAND_S'].rotation_euler.z = -math.radians(s / 60 * 360)
+    HANDS['HAND_M'].rotation_euler.z = -math.radians((mi + s / 60) / 60 * 360)
+    HANDS['HAND_H'].rotation_euler.z = -math.radians(((h % 12) + mi / 60 + s / 3600) / 12 * 360)
+
 # =====================================================================================================================
 # characters: two soft sumos (sumo_game.glb, 'stance' frame 1), game x = -1.5 / +1.5, facing each other
 # =====================================================================================================================
@@ -304,6 +506,7 @@ bpy.ops.export_scene.gltf(filepath=OUT + '/clock_kit.glb', export_format='GLB', 
                           export_cameras=False, export_lights=False, export_materials='EXPORT', export_image_format='AUTO')
 for m in (M_KIT, M_GW):
     N = m.node_tree.nodes; m.node_tree.links.new(N['VaryMix'].outputs['Result'], N['Principled BSDF'].inputs['Base Color'])
+set_time(10, 10, 30)                  # approval render: 10:10:30 (the glb keeps the hands at rotation 0 = 12)
 print('STAGE_TRIS', tris(env), 'objects', len(env))
 bpy.ops.wm.save_as_mainfile(filepath=OUT + '/clock_kit.blend')
 if not NORENDER:
