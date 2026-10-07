@@ -2392,11 +2392,14 @@
       if (KIT_BG[id] !== undefined) this.scene.background.set(KIT_BG[id]);
     }
   };
-  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb' }, KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4 }, KIT_CACHE = {};
+  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb' }, KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6 }, KIT_CACHE = {};
   // a little life in the kit stages: the sushi plates rumble on the belt
   const KIT_TICK = {
     sushi: (k) => { const rides = k.children.filter((c) => /^RIDE_/.test(c.name)); rides.forEach((r) => { r.userData.y0 = r.position.y; });
       return (T) => rides.forEach((r, i) => { r.position.y = r.userData.y0 + 0.025 * Math.sin(T * 17 + i * 1.7); }); },
+    // the small pads, lotuses and the frog bob on the pond
+    lily: (k) => { const fl = k.children.filter((c) => /^FLOAT_/.test(c.name)); fl.forEach((f, i) => { f.userData.y0 = f.position.y; f.userData.ph = i * 1.9; f.userData.r0 = f.rotation.y; });
+      return (T) => fl.forEach((f) => { f.position.y = f.userData.y0 + 0.035 + 0.025 * Math.sin(T * 1.3 + f.userData.ph); f.rotation.y = f.userData.r0 + 0.06 * Math.sin(T * 0.5 + f.userData.ph); }); },
   };
 
 })();

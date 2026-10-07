@@ -97,7 +97,7 @@ void RE_Direct_Flat( const in IncidentLight directLight, const in GeometricConte
       let f;
       // both sides: Blender draws faces either way round, and a few kit pieces export facing down (the pizza's tablecloth)
       if (m.map) { m.map.encoding = THREE.LinearEncoding; m.map.needsUpdate = true; f = mat(0xffffff, { map: m.map, side: THREE.DoubleSide }); }
-      else f = mat(m.color.clone().convertLinearToSRGB(), { side: THREE.DoubleSide });
+      else f = mat(m.color.clone().convertLinearToSRGB(), { side: THREE.DoubleSide, transparent: m.transparent, opacity: m.opacity });   // (water: see-through over the pond floor)
       done.set(m, f); return f;
     };
     root.traverse((o) => { if (!o.isMesh) return; o.material = Array.isArray(o.material) ? o.material.map(conv) : conv(o.material); o.castShadow = o.receiveShadow = true; o.userData.flatDone = true; });
