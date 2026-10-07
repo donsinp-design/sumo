@@ -2,13 +2,15 @@
 // TEST LEVEL: THE BATHHOUSE (a sento in two floors). The sumo dozes off IN the bath and wakes up with no mawashi.
 // GROUND FLOOR  bath hall (Mt Fuji mural) -> wash area / showers -> changing room (lockers) -> back corridor (the boiler)
 //               -> a dead end: a cracked wall. Charge through it -> the back stairs
-// UPSTAIRS      lounge (tatami, massage chairs, milk fridge) -> the front hall: shoe lockers at the entrance, the front
-//               desk (red pillars, lanterns, the bath-token board), the storage room behind it, the FIRE EXIT
+// UPSTAIRS      lounge (tatami, massage chairs, milk fridge) -> the front hall: the genkan with its shoe lockers, the
+//               front desk, the storage room behind it, the FIRE EXIT
+// The building is a Blender kit (tools/blender/bathhouse_kit.py -> bathhouse_kit.glb); its floor plan, and so every
+// collider here, comes from tools/blender/bathhouse_layout.py (-> js/bath-layout.js, S.BathLayout).
 //   1 his locker is locked -> the key must be in his wash bucket by the bath -> it isn't -> smash the locker open
 //   2 his locker is EMPTY, everyone else's clothes are tiny; the crash brings the staff -> try storage, upstairs
 //   3 the back corridor dead-ends at a cracked wall: charge through, up the stairs
 //   4 throw something to draw the receptionist away, into storage: a cardboard box (pants!)
-//   5 in the box, out by the fire exit. If anyone gets a good look, they come for you: lose them within 5 seconds or the box rips
+//   5 in the box, out by the fire exit (still unseen)
 // The bath and the wash area are safe (everyone's naked there); everywhere else, staff and customers walk fixed patterns,
 // their view a cone on the floor. I: crouch. L: charge. K: use / pick up / throw (buckets, wash stools).
 (function () {
@@ -19,16 +21,16 @@
   const UP = 3;                // the upstairs floor height
   // restart points nobody is looking at
   const CP = { lockN: { x: 5.8, z: -25.6, f: -Math.PI / 2 }, lockS: { x: -11.0, z: -45.9, f: Math.PI / 2 }, corr: { x: -10.2, z: -48.4, f: -Math.PI / 2 },
-    stair: { x: 9, z: -56.5, f: -Math.PI / 2 }, store: { x: 9.6, z: -89.6, f: Math.PI / 2 } };
+    stair: { x: 9, z: -56.5, f: -Math.PI / 2 },
+    store: { x: 9.8, z: -89.4, f: Math.PI / 2 } };
   const CENSOR = { w: 0.8, h: 0.5, y: -0.55 };   // the pixel block, at hip height below the body centre (the box-pants sit at -0.62)
-  const POOL = { x0: -2.7, x1: 8.7, z0: -11.7, z1: -2.3 };
-  const EXIT = { x: -12.2, z0: -72.4, z1: -70.6 };
-  const RIP_T = 5;
+  const POOL = S.BathLayout.pool;
+  const LY = S.BathLayout, EXIT = LY.exit;
   // which room a point is in (noise carries round its own room only; walls muffle it)
   function roomAt(x, z) {
     if (z > -16) return 'bath'; if (z > -27) return 'shower'; if (z > -47) return 'lock';
-    if (z > -53.2) return x < 6.2 ? 'corr' : 'stair'; if (z > -61) return 'stair';
-    if (z > -86) return 'up'; return x > 6 ? 'store' : 'up';
+    if (z > -53.2) return 'corr'; if (z > -61) return 'stair';
+    if (z > -86) return 'up'; return x > 4 ? 'store' : 'up';
   }
   const SAFE = { bath: 1, shower: 1 };
   function floorY(x, z) {
@@ -51,7 +53,7 @@
       this.flat = { lights: S.Flat.lights(this.scene, { r: 22 }) };
       const r = this.R.r; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
       const vg = document.getElementById('vignette'); if (vg) vg.style.display = 'none';
-      this.walls = []; this.blockers = []; this.puddles = []; this.buckets = []; this.flying = []; this.soot = []; this.grace = 0;
+      this.walls = []; this.blockers = []; this.puddles = []; this.buckets = []; this.flying = []; this.grace = 0;
       this.build(); this.buildNav();
       this.ctrl = new S.Controller(new S.KeySource(S.MAPS.solo, 0));
       this.keys = {};
@@ -84,213 +86,53 @@
     later(sec, fn) { (this.timers || (this.timers = [])).push({ t: sec, fn }); }
 
     // ============================================================== the bathhouse
+    // colliders from the shared floor plan; the look is the Blender kit, loaded on top (items wait for it to arrive)
     build() {
-      const M = (c, o) => S.Flat.mat(c, o), G = new THREE.Group(); this.scene.add(G); this.G = G;
-      let BY = 0;   // the floor being built (0, or UP for upstairs)
-      const glow = (c, e) => { const m = M(c); m.emissive = new THREE.Color(e); return m; };
-      const box = (x0, x1, z0, z1, y0, h, col, o) => {
-        o = o || {};
-        const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h, z1 - z0), col && col.isMaterial ? col : M(col, o.mat)); m.position.set((x0 + x1) / 2, BY + y0 + h / 2, (z0 + z1) / 2);
-        m.castShadow = o.cast !== false; m.receiveShadow = true; G.add(m);
-        if (o.solid !== false) { const w = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), tall: !!o.tall }; this.walls.push(w); m.userData.wall = w; }
-        return m;
-      };
-      const floor = (x0, x1, z0, z1, col, y, map) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0).rotateX(-Math.PI / 2), M(map ? 0xffffff : col, { map })); m.position.set((x0 + x1) / 2, BY + (y || 0), (z0 + z1) / 2); m.receiveShadow = true; G.add(m); return m; };
-      // cut-away walls: low, so the high camera always sees him, but nobody sees through them; a darker trim on top
-      const wall = (x0, x1, z0, z1, col, h) => { h = h || 1.15; const m = box(x0, x1, z0, z1, 0, h, col || 0xe8ddc9, { tall: true });
-        box(x0 - 0.03, x1 + 0.03, z0 - 0.03, z1 + 0.03, h, 0.07, new THREE.Color(col || 0xe8ddc9).multiplyScalar(0.72).getHex(), { solid: false }); return m; };
-      const door = (gx0, gx1, z, col) => {
-        for (const x of [gx0 - 0.14, gx1 + 0.14]) box(x - 0.16, x + 0.16, z - 0.3, z + 0.3, 0, 1.55, 0x7a5a44);
-        const mat = new THREE.Mesh(new THREE.PlaneGeometry(gx1 - gx0 - 0.4, 0.9).rotateX(-Math.PI / 2), M(col || 0x8fb0a8)); mat.position.set((gx0 + gx1) / 2, BY + 0.012, z); G.add(mat);
-      };
-      const canvas = (w, h, fn) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; fn(cv.getContext('2d'), w, h); const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
-      const label = (text, sub, x, z, w, h, bg, fg, rz) => {
-        const t = canvas(512, 256, (c) => { c.fillStyle = bg; c.fillRect(0, 0, 512, 256); c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle';
-          c.font = '120px "Dela Gothic One", sans-serif'; c.fillText(text, 256, sub ? 100 : 128); if (sub) { c.font = '800 46px "Barlow Condensed", sans-serif'; c.fillText(sub, 256, 205); } });
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), M(0xffffff, { map: t })); m.position.set(x, BY + 0.02, z); m.rotation.set(-Math.PI / 2, 0, rz || 0); G.add(m); return m;
-      };
-      // a panel standing up, facing the camera (+z): murals, the token board, signs
-      const panel = (x, z, y, w, h, tex) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), M(0xffffff, { map: tex })); m.position.set(x, BY + y, z); G.add(m); return m; };
-      const plant = (x, z, s) => { const p = new THREE.Mesh(new THREE.SphereGeometry(0.8 * s, 14, 10), M(0x6aa55a)); p.position.set(x, BY + 1.15 * s, z); p.castShadow = true; G.add(p); box(x - 0.42, x + 0.42, z - 0.42, z + 0.42, 0, 0.6, 0xcf7a5a, { solid: false }); this.blockers.push({ x, z, r: 0.8 * s }); };
-      const pillar = (x, z, h, col) => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, h, 16), M(col || 0xb8322a)); p.position.set(x, BY + h / 2, z); p.castShadow = true; G.add(p);
-        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.12, 16), M(0x3a2a24)); cap.position.set(x, BY + 0.06, z); G.add(cap); this.blockers.push({ x, z, r: 0.55 }); };
-      const lantern = (x, z, y, s) => { const l = new THREE.Mesh(new THREE.SphereGeometry(0.4 * s, 16, 12), glow(0xd8402e, 0x5a1408)); l.scale.y = 1.25; l.position.set(x, BY + y, z); G.add(l);
-        for (const dy of [-0.45, 0.45]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.22 * s, 0.08 * s, 14), M(0x2a2024)); b.position.set(x, BY + y + dy * s, z); G.add(b); } };
-      const puddle = (x, z, rx, rz, col) => {
-        const sh = new THREE.Shape(); for (let k = 0; k <= 24; k++) { const a = k / 24 * Math.PI * 2, rr = 1 + 0.12 * Math.sin(a * 3 + x) + 0.08 * Math.sin(a * 5 + z); const px = Math.cos(a) * rx * rr, pz = Math.sin(a) * rz * rr; if (k) sh.lineTo(px, pz); else sh.moveTo(px, pz); }
-        const m = new THREE.Mesh(new THREE.ShapeGeometry(sh).rotateX(Math.PI / 2), M(col || 0xa8cdea, { side: THREE.DoubleSide })); m.position.set(x, BY + 0.015, z); m.receiveShadow = true; G.add(m);
-        const hl = new THREE.Mesh(new THREE.PlaneGeometry(rx * 0.7, 0.08).rotateX(-Math.PI / 2), M(0xf2f8fc)); hl.position.set(x - rx * 0.1, BY + 0.02, z - rz * 0.25); G.add(hl);
-        this.puddles.push({ x, z, rx, rz });
-      };
-      // things he can pick up and throw (K): cleaning buckets, little wooden wash buckets, plastic wash stools
-      const item = (kind, x, z, col) => {
-        const b = new THREE.Group();
-        if (kind === 'bucket') { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.24, 0.42, 16), M(0xd3ab7a)); m.position.y = 0.21; m.castShadow = true; b.add(m);
-          const band = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.06, 16), M(0x8c6648)); band.position.y = 0.3; b.add(band); }
-        else if (kind === 'oke') { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.26, 14), M(col || 0xd3ab7a)); m.position.y = 0.13; m.castShadow = true; b.add(m); }
-        else { const top = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.07, 16), M(col || 0xe2b85e)); top.position.y = 0.32; top.castShadow = true; b.add(top);   // a bath stool
-          const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.3, 16, 1, true), M(new THREE.Color(col || 0xe2b85e).multiplyScalar(0.85).getHex(), { side: THREE.DoubleSide })); leg.position.y = 0.15; b.add(leg); }
-        b.position.set(x, BY, z); G.add(b); this.buckets.push({ m: b, kind, x, z, y: BY, state: 'floor', x0: x, z0: z, base: BY });
-      };
-
-      // ================================================================ GROUND FLOOR
-      floor(-40, 40, -100, 30, 0xcfd8d4, -0.02);   // outside the building: a plain base, never a void
-      floor(-12, 12, -16, 4.4, 0xd7dfdc); floor(-12, 12, -27, -16, 0xdde5e3); floor(-12, 12, -47, -27, 0xd9be92); floor(-12, 6.2, -53, -47, 0xb9b0a4); floor(6.2, 12, -53, -47, 0xc9b79a);
-      for (let z = 3.4; z > -27; z -= 1.6) floor(-12, 12, z - 0.03, z + 0.03, 0xc5d0cc, 0.002);   // tile joints
-      wall(-12.4, -12, -53.4, 4.4); wall(12, 12.4, -53.4, 4.4); wall(-12.4, 12.4, 4.4, 4.8);
-      // ---- BATH HALL (safe): the big bath, wash stools along the wall, Mt Fuji painted on the far wall
-      box(-3.2, 0, -2.3, -1.8, 0, 0.55, 0xc9a06a); box(2, 9.2, -2.3, -1.8, 0, 0.55, 0xc9a06a);         // the hinoki rim; a gap with steps (x 0..2) on the near side
-      box(-3.2, 9.2, -12.2, -11.7, 0, 0.55, 0xc9a06a); box(-3.2, -2.7, -11.7, -2.3, 0, 0.55, 0xc9a06a); box(8.7, 9.2, -11.7, -2.3, 0, 0.55, 0xc9a06a);
-      for (const [y, z] of [[0.18, -1.55], [0.36, -2.05]]) box(0, 2, z - 0.25, z + 0.25, 0, y, 0xb88f5c, { solid: false });
-      const water = new THREE.Mesh(new THREE.PlaneGeometry(POOL.x1 - POOL.x0, POOL.z1 - POOL.z0).rotateX(-Math.PI / 2), M(0x9cc6e8)); water.position.set((POOL.x0 + POOL.x1) / 2, 0.42, (POOL.z0 + POOL.z1) / 2); G.add(water); this.water = water;
-      const water2 = water.clone(); water2.scale.set(2 / (POOL.x1 - POOL.x0), 1, 0.5 / (POOL.z1 - POOL.z0)); water2.position.set(1, 0.42, -2.05); G.add(water2);
-      for (const z of [-2, -5, -8, -11, -14]) { item('stool', -11, z); item('oke', -11.3, z + 0.65); }
-      plant(10.6, 2.8, 1); plant(10.6, -14.6, 0.9); plant(-10.8, 3.2, 0.8);
-      // the far wall of the bath hall: the classic sento mural (blue sky, Mt Fuji, pines), taller than the other walls
-      const fuji = canvas(1024, 200, (c, W, H) => {
-        const sky = c.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#7fb3e0'); sky.addColorStop(1, '#cfe6f4'); c.fillStyle = sky; c.fillRect(0, 0, W, H);
-        c.fillStyle = '#ffffff'; for (const [x, y, r] of [[120, 50, 26], [160, 44, 32], [200, 52, 22], [760, 40, 24], [800, 34, 30], [840, 44, 22]]) { c.beginPath(); c.arc(x, y, r, 0, 7); c.fill(); }
-        c.fillStyle = '#3f6fae'; c.beginPath(); c.moveTo(250, H); c.lineTo(470, 40); c.lineTo(555, 40); c.lineTo(780, H); c.fill();
-        c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(430, 86); c.lineTo(470, 40); c.lineTo(555, 40); c.lineTo(598, 86); c.lineTo(570, 76); c.lineTo(545, 92); c.lineTo(515, 74); c.lineTo(488, 92); c.lineTo(462, 76); c.fill();
-        c.fillStyle = '#4f8f6a'; for (let x = 0; x < W; x += 46) { c.beginPath(); c.moveTo(x, H); c.lineTo(x + 23, H - 46 - (x * 7 % 30)); c.lineTo(x + 46, H); c.fill(); }
-        c.fillStyle = '#2f6a9e'; c.fillRect(0, H - 14, W, 14); });
-      wall(-12, -2.2, -16.2, -15.8, 0xbcd3d6); box(2.2, 12, -16.2, -15.8, 0, 2.0, 0xbcd3d6, { tall: true }); door(-2.2, 2.2, -16);   // to the wash area: x -2.2 .. 2.2
-      panel(7.1, -15.78, 1.0, 9.8, 1.92, fuji);
-      // his wash bucket (yellow plastic, the kind every bathhouse has), by the steps: where he left the key... he thinks
-      this.washB = new THREE.Group(); { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.34, 18, 1, true), M(0xf2cf4a, { side: THREE.DoubleSide })); w.position.y = 0.17; w.castShadow = true;
-        const bt = new THREE.Mesh(new THREE.CircleGeometry(0.22, 18).rotateX(-Math.PI / 2), M(0xf2cf4a, { side: THREE.DoubleSide })); bt.position.y = 0.01; const rim = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.025, 6, 20).rotateX(Math.PI / 2), M(0xe0b43a)); rim.position.y = 0.34;
-        const tw = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.22), M(0xf6eddc)); tw.position.set(0, 0.35, 0); tw.rotation.y = 0.5; this.washB.add(w, bt, rim, tw); this.washTowel = tw; }
-      this.washB.position.set(3.6, 0, -1.0); G.add(this.washB); this.washSpot = { x: 3.6, z: -1.0 };
-      label('男湯', 'BATH', 0, -14.6, 2.4, 1.1, '#2f4b7c', '#f6f1e6');
-      // ---- WASH AREA / SHOWERS (safe): stalls with low dividers, stools and buckets, a bench down the middle
-      for (const sd of [-1, 1]) for (const z of [-18, -21, -24]) box(sd > 0 ? 9.6 : -12, sd > 0 ? 12 : -9.6, z - 0.12, z + 0.12, 0, 1.0, 0xc4d8dc);
-      for (const sd of [-1, 1]) for (const z of [-19.5, -22.5, -25.5]) { item('stool', sd * 10.4, z, 0xa8dcc6); item('oke', sd * 11.2, z + 0.7); }
-      box(-2.5, 2.5, -21.9, -21.1, 0, 0.45, 0xbb8b5e);
-      wall(-12, 4, -27.2, -26.8, 0xe6d6bb); wall(7.6, 12, -27.2, -26.8, 0xe6d6bb); door(4, 7.6, -27, 0xcf9a7a);   // to the changing room: x 4 .. 7.6
-      label('シャワー', 'WASH AREA', 0, -17.4, 2.6, 1.1, '#84b5ad', '#ffffff');
-      // ---- CHANGING ROOM (sneak): banks of lockers, benches, puddles
-      const lockerTex = canvas(256, 128, (c) => { c.fillStyle = '#9db5cb'; c.fillRect(0, 0, 256, 128); c.fillStyle = '#86a2bc'; for (let x = 0; x < 256; x += 64) c.fillRect(x, 0, 3, 128); c.fillRect(0, 62, 256, 3);
-        c.fillStyle = '#f2ece0'; for (let x = 0; x < 256; x += 64) for (const y of [24, 88]) c.fillRect(x + 44, y, 10, 14); });
-      const bank = (x0, x1, z0, z1) => { const t = lockerTex.clone(); t.needsUpdate = true; t.repeat.set(Math.max(1, (x1 - x0) / 2), 1); return box(x0, x1, z0, z1, 0, 1.75, 0xffffff, { mat: { map: t }, tall: true }); };
-      this.banks = [bank(-9, -1, -31.7, -31), bank(2, 10, -31.7, -31), bank(-7, 1, -36.7, -36), bank(4, 12, -36.7, -36), bank(-12, -4, -41.7, -41), bank(-1, 8, -41.7, -41)];
-      box(-6, -2, -34.2, -33.6, 0, 0.45, 0xbb8b5e); box(5, 9, -39.4, -38.8, 0, 0.45, 0xbb8b5e); box(-9, -5, -39.4, -38.8, 0, 0.45, 0xbb8b5e);
-      puddle(-1.2, -29.2, 1.0, 0.6); puddle(6.2, -44.4, 1.2, 0.7); puddle(-9.6, -44.4, 0.9, 0.55); puddle(9.8, -33.6, 0.8, 0.55);
-      this.locker = { x: 8.6, z: -35.25 };
-      label('8', null, 8.6, -34.7, 0.7, 0.5, '#f6d55e', '#4d4756');
-      wall(-12, -11.6, -47.2, -46.8, 0xe6d6bb); wall(-8.4, 12, -47.2, -46.8, 0xe6d6bb); door(-11.6, -8.4, -47, 0x9a8a7a);   // to the back corridor
-      label('脱衣所', 'CHANGING ROOM', 5.8, -28.4, 2.6, 1.1, '#cf7a5a', '#fff6e6');
-      plant(-6.0, -46.0, 0.7);
-      item('bucket', -4.4, -45.6); item('bucket', 0.6, -38.6);
-      // ---- BACK CORRIDOR (sneak): the boiler room, pipes, laundry, soot sprites. A dead end: the cracked wall
-      wall(-12, 6.4, -53.4, -53, 0x8a7f74);
-      for (const y of [0.35, 0.75]) { const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 18, 10).rotateZ(Math.PI / 2), M(0xb07a52)); pipe.position.set(-2.8, y, -52.85); G.add(pipe); }
-      box(-5, -0.6, -53, -51.9, 0, 1.6, 0x4d4756, { tall: true });                                        // the furnace
-      const mouth = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.6), glow(0xffa04a, 0xff7a20)); mouth.position.set(-2.8, 0.55, -51.88); G.add(mouth);
-      const coal = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), M(0x3a3438)); coal.scale.set(1.3, 0.45, 0.8); coal.position.set(1.2, 0, -52.2); G.add(coal);
-      for (let k = 0; k < 6; k++) { const sp = new THREE.Group(), body = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), M(0x2a2428)); body.position.y = 0.14; sp.add(body);
-        for (const sd of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), M(0xffffff)); e.position.set(sd * 0.05, 0.19, 0.11); sp.add(e); }
-        G.add(sp); this.soot.push({ m: sp, k, x0: -0.4, x1: 1.0, z: -51.4 - (k % 3) * 0.2 }); }
-      for (const [x, c] of [[-8.4, 0xf3b9c7], [-7.4, 0xf6eddc], [3.4, 0xa8dcc6]]) { box(x - 0.4, x + 0.4, -52.9, -52.1, 0, 0.6, 0x9a7a5a); const t = new THREE.Mesh(new THREE.SphereGeometry(0.35, 10, 8), M(c)); t.scale.y = 0.4; t.position.set(x, 0.62, -52.5); G.add(t); }
-      puddle(-5.6, -48.6, 0.9, 0.5);
-      label('関係者以外', 'STAFF ONLY', -6.8, -48.2, 2.4, 0.9, '#4d4756', '#f6f1e6');
-      // the cracked wall (charge through it)
-      const crackTex = canvas(256, 256, (c) => { c.fillStyle = '#b9ab98'; c.fillRect(0, 0, 256, 256); c.strokeStyle = '#4d4756'; c.lineWidth = 7; c.lineJoin = 'round';
-        c.beginPath(); c.moveTo(128, 0); c.lineTo(110, 50); c.lineTo(140, 90); c.lineTo(100, 140); c.lineTo(150, 190); c.lineTo(120, 256); c.moveTo(140, 90); c.lineTo(200, 110); c.moveTo(100, 140); c.lineTo(50, 160); c.stroke(); });
-      this.crackM = box(6, 6.4, -53, -47, 0, 1.15, 0xffffff, { mat: { map: crackTex }, tall: true }); this.crackW = this.crackM.userData.wall; this.crack = { x: 6.2, z: -50 };
-      // ---- BACK STAIRS (behind the cracked wall), up to the first floor
-      wall(6.4, 6.6, -61, -53.4, 0x8a7f74, UP + 1.0); wall(11.4, 11.6, -61, -53.4, 0x8a7f74, UP + 1.0); wall(11.6, 12.4, -53.4, -53, 0x8a7f74);
-      for (let k = 0; k < 16; k++) { const z1 = -53 - k * 0.5; box(6.6, 11.4, z1 - 0.5, z1, 0, UP * (k + 1) / 16, k % 2 ? 0xc9a87a : 0xbd9b6c, { solid: false }); }
-      box(-12.4, 6.4, -61, -53.4, 0, UP, 0xc9bfb2, { solid: false }); box(11.6, 12.4, -61, -53.4, 0, UP, 0xc9bfb2, { solid: false });   // the mass of the floor above
-
-      // ================================================================ UPSTAIRS (y = UP)
-      box(-12.4, 12.4, -92.4, -61, 0, UP - 0.02, 0xc9bfb2, { solid: false });
-      BY = UP;
-      const tatamiT = canvas(256, 256, (c) => { c.fillStyle = '#d8d3a0'; c.fillRect(0, 0, 256, 256); c.fillStyle = '#cfc994'; for (let y = 0; y < 256; y += 6) c.fillRect(0, y, 256, 2);
-        c.fillStyle = '#3f5a4a'; c.fillRect(0, 0, 256, 10); c.fillRect(0, 246, 256, 10); c.fillRect(0, 0, 10, 128); c.fillRect(246, 128, 10, 128); c.fillRect(0, 123, 256, 10); });
-      tatamiT.repeat.set(4, 4);
-      floor(-12, 12, -73, -61, 0xd9be92); floor(-4, 12, -86, -73, 0xc9a87a); floor(-12, -4, -86, -73, 0xc9a87a); floor(-12, -4, -92, -86, 0xb8b4ac); floor(6, 12, -92, -86, 0xcbb79a);
-      for (let z = -61.5; z > -86; z -= 1.2) floor(-12, 12, z - 0.02, z + 0.02, 0xbfa070, 0.002);                       // floorboards
-      // outer walls; the fire exit in the west wall (lounge); the front doors (closed for the night) in the south wall
-      wall(-12.4, -12, -70.6, -61); wall(-12.4, -12, -92.4, -72.4); wall(12, 12.4, -92.4, -61);
-      wall(-12.4, 6.4, -61.4, -61); wall(11.6, 12.4, -61.4, -61);
-      wall(-12.4, 12.4, -92.4, -92);
-      // ---- LOUNGE (休憩室): tatami corner with low tables, massage chairs, milk fridge, drinks machine, manga shelf
-      floor(-12, -4, -70, -62, 0, 0.16, tatamiT); box(-12, -4, -70, -62, 0, 0.15, 0x9a8a5a, { solid: false });
-      for (const [x, z] of [[-9.6, -64.6], [-6.4, -67.6]]) { box(x - 0.8, x + 0.8, z - 0.5, z + 0.5, 0.15, 0.32, 0x7a4a34);
-        for (const [dx, dz] of [[-1.1, 0], [1.1, 0], [0, 0.9]]) { const cu = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.6), M(0xcf5a4a)); cu.position.set(x + dx, BY + 0.21, z + dz); G.add(cu); } }
-      for (const x of [0.5, 2.7, 4.9]) { box(x - 0.8, x + 0.8, -62.6, -61.4, 0, 0.55, 0x7a4a3a); box(x - 0.8, x + 0.8, -61.9, -61.4, 0.55, 0.9, 0x7a4a3a, { solid: false }); for (const sd of [-1, 1]) box(x + sd * 0.7 - 0.1, x + sd * 0.7 + 0.1, -62.6, -61.6, 0.55, 0.3, 0x5a342a, { solid: false }); }
-      const fridgeT = canvas(128, 256, (c) => { c.fillStyle = '#f4f4f0'; c.fillRect(0, 0, 128, 256); c.fillStyle = '#bfe0f2'; c.fillRect(10, 30, 108, 210);
-        for (let r = 0; r < 4; r++) for (let k = 0; k < 5; k++) { const x = 18 + k * 20, y = 50 + r * 50; c.fillStyle = '#ffffff'; c.fillRect(x, y, 13, 34); c.fillStyle = ['#e9e4d6', '#a0704a', '#f2a03a', '#e9e4d6'][r]; c.fillRect(x, y, 13, 16); c.fillStyle = '#cf3a3a'; c.fillRect(x, y - 4, 13, 5); }
-        c.fillStyle = '#2f4b7c'; c.font = '700 22px sans-serif'; c.textAlign = 'center'; c.fillText('牛乳', 64, 22); });
-      box(10.8, 12, -66, -63.6, 0, 1.9, 0xf4f4f0, { tall: true }); panel(11.4, -63.58, 0.95, 1.2, 1.9, fridgeT);
-      box(10.8, 12, -68.6, -67.0, 0, 1.9, 0xdd5a42, { tall: true });
-      box(4, 8, -72.9, -72.4, 0, 1.6, 0x8c6648, { tall: true }); for (let k = 0; k < 3; k++) box(4.1, 7.9, -72.38, -72.3, 0.2 + k * 0.5, 0.36, [0xf3b9c7, 0xa8dcc6, 0xf6d55e][k], { solid: false });
-      box(-1, 4.6, -68.0, -67.3, 0, 0.42, 0x6f8fc8);
-      puddle(9.4, -66.4, 0.7, 0.45, 0xf6f4ec);                                                      // spilt milk
-      item('oke', -3.2, -64.2); item('bucket', 6.6, -70.2);
-      label('休憩室', 'LOUNGE', 1.6, -65.0, 2.4, 1.0, '#6f8fc8', '#ffffff');
-      // the FIRE EXIT: a green door to the outside stairs
-      box(-15, -12.4, -72.8, -70.2, -0.02, 0.04, 0x9aa0a4, { solid: false });
-      for (const z of [-72.6, -70.4]) box(-12.6, -12, z - 0.2, z + 0.2, 0, 2.0, 0x3a8a5a);
-      box(-12.6, -12, -72.6, -70.4, 1.9, 0.2, 0x3a8a5a, { solid: false });
-      wall(-15, -12.4, -73, -72.8); wall(-15, -12.4, -70.2, -70.0); wall(-15.2, -15, -73, -70);
-      const exitT = canvas(256, 128, (c) => { c.fillStyle = '#2f9a5a'; c.fillRect(0, 0, 256, 128); c.fillStyle = '#ffffff'; c.fillRect(170, 18, 64, 92); c.fillStyle = '#2f9a5a'; c.fillRect(182, 30, 40, 80);
-        c.fillStyle = '#ffffff'; c.beginPath(); c.arc(110, 30, 13, 0, 7); c.fill(); c.lineWidth = 15; c.lineCap = 'round'; c.strokeStyle = '#fff';
-        c.beginPath(); c.moveTo(100, 48); c.lineTo(88, 78); c.lineTo(60, 100); c.moveTo(88, 78); c.lineTo(118, 92); c.lineTo(122, 116); c.moveTo(98, 52); c.lineTo(70, 62); c.moveTo(100, 50); c.lineTo(130, 66); c.stroke();
-        c.font = '800 20px "Barlow Condensed", sans-serif'; c.textAlign = 'left'; c.fillText('非常口', 12, 118); });
-      this.exitSign = new THREE.Sprite(new THREE.SpriteMaterial({ map: exitT, depthWrite: false })); this.exitSign.scale.set(1.6, 0.8, 1); this.exitSign.position.set(-11.6, UP + 2.6, -71.5); G.add(this.exitSign);
-      label('非常口', 'FIRE EXIT', -9.6, -71.5, 2.2, 0.9, '#2f9a5a', '#ffffff');
-      // the lounge / hall partition: two openings, each hung with a noren
-      wall(-12, -3, -73.2, -72.8, 0xd2b48c); wall(1, 8, -73.2, -72.8, 0xd2b48c); wall(11, 12, -73.2, -72.8, 0xd2b48c);
-      const norenT = canvas(256, 128, (c) => { c.fillStyle = '#2f4b7c'; c.fillRect(0, 0, 256, 128); c.fillStyle = '#f6f1e6'; for (const x of [85, 171]) c.fillRect(x - 2, 30, 4, 98); c.font = '84px "Dela Gothic One", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('ゆ', 128, 64); });
-      for (const [x0, x1] of [[-3, 1], [8, 11]]) { panel((x0 + x1) / 2, -73.0, 2.05, x1 - x0, 0.6, norenT); box(x0, x1, -73.1, -72.9, 2.32, 0.08, 0x5a3a2a, { solid: false }); }
-      pillar(-3.3, -73.0, 2.8); pillar(1.3, -73.0, 2.8);
-      // ---- FRONT HALL: the front desk (Spirited Away: dark wood, red lacquer, gold trim, lanterns), the bath-token board
-      box(-1, 9, -83.2, -82, 0, 1.05, 0x5a3a2a, { tall: false }); box(-1.05, 9.05, -82.02, -81.96, 0.12, 0.8, 0xb8322a, { solid: false }); box(-1.1, 9.1, -83.3, -81.9, 1.05, 0.07, 0xd9a84a, { solid: false });
-      { const ab = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.06, 0.25), M(0x3a2a24)); ab.position.set(5.2, BY + 1.15, -82.6); G.add(ab);
-        const bell = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), M(0xd9a84a)); bell.position.set(7.6, BY + 1.12, -82.4); G.add(bell); }
-      const tokens = canvas(512, 160, (c) => { c.fillStyle = '#3a2a24'; c.fillRect(0, 0, 512, 160); for (let r = 0; r < 4; r++) for (let k = 0; k < 16; k++) { const x = 12 + k * 31, y = 10 + r * 37; c.fillStyle = (k + r) % 5 ? '#e8d2a6' : '#d8a64a'; c.fillRect(x, y, 22, 30); c.fillStyle = (k * 3 + r) % 4 ? '#2a2024' : '#b8322a'; c.fillRect(x + 9, y + 6, 4, 16); } });
-      wall(-4, 9, -86.2, -85.8, 0x6a4a3a); wall(11, 12, -86.2, -85.8, 0x6a4a3a); door(9, 11, -86, 0x9a8a7a);
-      panel(4, -85.75, 1.62, 6.4, 0.9, tokens); box(0.7, 7.3, -85.95, -85.8, 1.15, 0.95, 0x3a2a24, { solid: false });
-      box(11, 12, -86, -80, 0, 1.9, 0x5a3a2a, { tall: true });                                           // a tall cabinet: the way behind the desk is narrow
-      lantern(-0.4, -82.6, 2.2, 1); lantern(8.4, -82.6, 2.2, 1); lantern(4.2, -77.2, 2.4, 1.2);
-      pillar(-1.8, -82.6, 2.8);
-      label('受付', 'FRONT DESK', 4, -80.0, 2.4, 1.0, '#b8322a', '#f6f1e6');
-      // ---- GENKAN (the entrance): stone floor a step down, walls of wooden shoe lockers, slippers, the front doors
-      box(-4.1, -3.9, -92, -73.2, 0, 0.12, 0x8c6648, { solid: false });
-      const shoeT = canvas(256, 128, (c) => { c.fillStyle = '#b8895a'; c.fillRect(0, 0, 256, 128); c.fillStyle = '#9a6e44'; for (let x = 0; x < 256; x += 32) c.fillRect(x, 0, 3, 128); for (let y = 0; y < 128; y += 32) c.fillRect(0, y, 256, 3);
-        c.fillStyle = '#f2e6c8'; for (let x = 0; x < 256; x += 32) for (let y = 0; y < 128; y += 32) c.fillRect(x + 11, y + 9, 12, 16); });
-      const shoes = (x0, x1, z0, z1) => { const t = shoeT.clone(); t.needsUpdate = true; t.repeat.set(Math.max(1, Math.abs(z1 - z0) / 2), 1); return box(x0, x1, z0, z1, 0, 1.6, 0xffffff, { mat: { map: t }, tall: true }); };
-      shoes(-12, -11.3, -91.8, -76); shoes(-8.6, -7.9, -89.4, -80.6);
-      for (let k = 0; k < 6; k++) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.34), M([0xcf5a4a, 0x6f8fc8][k % 2])); s.position.set(-4.4 - (k % 2) * 0.22, BY + 0.03, -76 - k * 1.6); G.add(s); }
-      for (const x of [-10.6, -8.8, -7.0]) panel(x, -91.95, 0.85, 1.7, 1.7, canvas(64, 64, (c) => { c.fillStyle = '#bfe0f2'; c.fillRect(0, 0, 64, 64); c.fillStyle = '#5a3a2a'; c.fillRect(0, 0, 64, 4); c.fillRect(0, 0, 4, 64); c.fillRect(60, 0, 4, 64); c.fillRect(30, 0, 4, 64); }));
-      panel(-8.8, -91.9, 2.15, 4.2, 0.7, norenT);
-      const closed = canvas(128, 64, (c) => { c.fillStyle = '#f6f1e6'; c.fillRect(0, 0, 128, 64); c.fillStyle = '#b8322a'; c.font = '30px "Dela Gothic One", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('準備中', 64, 26); c.font = '800 16px sans-serif'; c.fillText('CLOSED', 64, 52); });
-      panel(-8.8, -91.85, 1.3, 0.9, 0.45, closed);
-      label('玄関', 'ENTRANCE', -8.0, -78.0, 2.2, 0.9, '#5a3a2a', '#f6f1e6');
-      item('stool', -5.4, -84.4, 0xe2b85e);
-      plant(10.8, -75.0, 0.8);
-      // ---- STORAGE (behind the desk): shelves, and THE box
-      wall(5.6, 6, -92, -86);
-      for (const [x0, x1, z0, z1] of [[6.2, 7.2, -91.6, -87.4], [10.8, 11.8, -91.6, -88.4]]) {
-        box(x0, x1, z0, z1, 0, 1.8, 0xbb8b5e, { tall: true });
-        for (let y = 0.45; y < 1.8; y += 0.6) box(x0 + 0.05, x1 - 0.05, z0 + 0.05, z1 - 0.05, y, 0.22, [0xf3b9c7, 0xa8dcc6, 0xf6eddc][Math.floor(y * 2) % 3], { solid: false });
+      const G = new THREE.Group(); this.scene.add(G); this.G = G;
+      const add = (x0, x1, z0, z1, tall) => { const w = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), tall: !!tall }; this.walls.push(w); return w; };
+      for (const s of LY.solids) add(s.x0, s.x1, s.z0, s.z1, s.tall);
+      for (const d of LY.doors) {
+        if (d.kind === 'slide') { add(d.x0, (d.x0 + d.x1) / 2 + 0.1, d.z - 0.24, d.z - 0.14, true); continue; }
+        for (const x of [d.x0 - 0.14, d.x1 + 0.14]) add(x - 0.15, x + 0.15, d.z - 0.28, d.z + 0.28, true);
       }
-      label('倉庫', 'STORAGE', 10, -84.6, 1.8, 0.8, '#4d4756', '#f6f1e6');
-      this.boxSpot = { x: 9, z: -90.4 };
-      this.pantsBox = this.cardboard(1.0); this.pantsBox.position.set(this.boxSpot.x, UP, this.boxSpot.z); this.pantsBox.rotation.y = 0.4; G.add(this.pantsBox);
-      BY = 0;
+      // dressing in the kit that stands in the way: the back counter behind the desk, boxes on the storage floor
+      add(0, 8.6, -85.8, -85.2, false); add(4.45, 5.15, -87.25, -86.55, false); add(5.95, 6.85, -91.85, -90.95, false); add(10.6, 11.4, -87.4, -86.6, false);
+      const C = LY.crack; this.crackW = add(C.x0, C.x1, C.z0, C.z1, true); this.crack = { x: C.x, z: C.z };
+      for (const b of LY.blockers) this.blockers.push({ x: b.x, z: b.z, r: b.r });
+      for (const q of LY.puddles) this.puddles.push({ x: q.x, z: q.z, rx: q.rx, rz: q.rz });
+      this.locker = { x: LY.locker.x, z: LY.locker.z };
+      this.washSpot = { x: LY.washb.x, z: LY.washb.z }; this.boxSpot = { x: LY.box.x, z: LY.box.z };
+      // things he can pick up and throw (the kit's prototypes are cloned in when it arrives)
+      const holder = (x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); G.add(g); return g; };
+      for (const it of LY.items) { const y = it.f ? UP : 0, m = holder(it.x, y, it.z); m.rotation.y = (it.x * 7 + it.z * 3) % 6.28; this.buckets.push({ m, kind: it.k, x: it.x, z: it.z, y, state: 'floor', x0: it.x, z0: it.z, base: y }); }
+      this.washB = holder(this.washSpot.x, 0, this.washSpot.z);
+      this.pantsBox = holder(this.boxSpot.x, UP, this.boxSpot.z); this.pantsBox.rotation.y = LY.box.ry;
       // "go here" markers: a soft ring on the floor and a small rounded arrow bobbing above it
       const sp = (x, z) => { const g = new THREE.Group(); g.position.set(x, floorY(x, z), z); g.visible = false; G.add(g);
         const ring = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.78, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false }));
         ring.position.y = 0.03; ring.renderOrder = 3; g.add(ring);
         const ar = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.arrowTex(), transparent: true, depthWrite: false, depthTest: false })); ar.scale.set(0.62, 0.62, 1); ar.position.y = 2.3; ar.renderOrder = 7; g.add(ar);
         g.userData = { ring, ar }; return g; };
-      this.spOut = sp(1, -0.9); this.spLocker = sp(this.locker.x, this.locker.z); this.spKey = sp(this.washSpot.x, this.washSpot.z); this.spCrack = sp(5.2, -50);
-      this.spBox = sp(this.boxSpot.x, this.boxSpot.z); this.spExit = sp(-11.4, -71.5);
+      this.spOut = sp(1, -0.9); this.spLocker = sp(this.locker.x, this.locker.z + 0.6); this.spKey = sp(this.washSpot.x, this.washSpot.z); this.spCrack = sp(LY.crack.x, LY.crack.z1 + 0.9);
+      this.spBox = sp(this.boxSpot.x, this.boxSpot.z); this.spExit = sp(-11.4, (EXIT.z0 + EXIT.z1) / 2);
       this.marks = [this.spOut, this.spLocker, this.spKey, this.spCrack, this.spBox, this.spExit];
       this.spOut.visible = true;
-      G.traverse((o) => { if (o.isMesh) o.userData.flatDone = true; });
+      new THREE.GLTFLoader().load('assets/models/bathhouse_kit.glb', (gl) => { if (this.scene) this.dress(S.Flat.kit(gl.scene)); });
+    }
+    dress(root) {
+      this.kit = root; this.scene.add(root);
+      const get = (n) => root.getObjectByName(n), proto = {};
+      for (const n of ['ITEM_STOOL', 'ITEM_OKE', 'ITEM_BUCKET', 'ITEM_WASHB', 'BOX', 'CLOTH_SHIRT', 'CLOTH_SHORTS']) { const o = get(n); if (o) { o.visible = false; proto[n] = o; } }
+      this.proto = proto;
+      const clone = (n) => { const o = proto[n].clone(); o.visible = true; o.position.set(0, 0, 0); o.rotation.set(0, 0, 0); o.traverse((q) => { if (q.isMesh) q.castShadow = true; }); return o; };
+      for (const b of this.buckets) if (proto['ITEM_' + b.kind.toUpperCase()]) b.m.add(clone('ITEM_' + b.kind.toUpperCase()));
+      if (proto.ITEM_WASHB) this.washB.add(clone('ITEM_WASHB'));
+      if (proto.BOX) this.pantsBox.add(clone('BOX'));
+      this.water = get('WATER'); this.crackM = get('CRACK_WALL'); this.rubble = get('CRACK_RUBBLE'); this.holes = get('LKHOLES');
+      if (this.rubble) this.rubble.visible = false; if (this.holes) this.holes.visible = false;
+      this.lkDoors = [0, 1, 2, 3, 4].map((k) => get('LKDOOR_' + k)).filter(Boolean);
+      if (this.crackDone) { if (this.crackM) this.crackM.visible = false; if (this.rubble) this.rubble.visible = true; }
+      if (this.wearing && !this.boxWorn) this.wearBox();
     }
     arrowTex() {
       if (this._arrow) return this._arrow;
@@ -298,16 +140,6 @@
       const tri = () => { c.beginPath(); c.moveTo(64, 104); c.lineTo(22, 40); c.quadraticCurveTo(14, 26, 30, 26); c.lineTo(98, 26); c.quadraticCurveTo(114, 26, 106, 40); c.closePath(); };
       c.lineJoin = 'round'; tri(); c.lineWidth = 16; c.strokeStyle = '#fffaf0'; c.stroke(); c.fillStyle = '#f08a5d'; c.fill();
       return (this._arrow = new THREE.CanvasTexture(cv));
-    }
-    // a cardboard box, open at the top: k = 1 on the floor; worn, sized round his hips
-    cardboard(k) {
-      const g = new THREE.Group(), card = S.Flat.mat(0xd3a96e), dark = S.Flat.mat(0xb98c52), tape = S.Flat.mat(0xe9d6a8);
-      const W = 1.6 * k, H = 0.8 * k, D = 1.4 * k, T = 0.05 * k;
-      const side = (w, h, d, x, y, z, m) => { const s = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m || card); s.position.set(x, y, z); s.castShadow = true; s.receiveShadow = true; g.add(s); return s; };
-      side(W, H, T, 0, H / 2, D / 2); side(W, H, T, 0, H / 2, -D / 2); side(T, H, D, W / 2, H / 2, 0, dark); side(T, H, D, -W / 2, H / 2, 0, dark); side(W, T, D, 0, T / 2, 0, dark);
-      for (const [z, rx] of [[D / 2 + 0.18 * k, 0.5], [-D / 2 - 0.18 * k, -0.5]]) { const f = side(W, T, 0.38 * k, 0, H + 0.06 * k, z); f.rotation.x = rx; }
-      side(0.3 * k, H * 0.9, T * 1.2, 0, H / 2, D / 2 + 0.01, tape);
-      return g;
     }
     makeMosaic() {
       const cv = document.createElement('canvas'); cv.width = 8; cv.height = 5;
@@ -417,7 +249,7 @@
       this.ringAt(x, z, radius * 0.4, 0.6); this.ringAt(x, z, radius * 0.7, 0.9);
       const room = roomAt(x, z);
       for (const n of this.npcs) {
-        if (n.room !== room || n.mode === 'chase' || Math.hypot(n.a.x - x, n.a.z - z) > radius) continue;
+        if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius) continue;
         const path = this.navPath(n.a.x, n.a.z, x, z); if (!path) continue;
         n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.noiseAt = [x, z];
         this.popAt(n.a, msg || '?!', 1.6);
@@ -434,14 +266,12 @@
         const p = n.route[n.i]; n.wait -= dt; a.f = lerpA(a.f, p[3] + Math.sin(a.t * 0.8) * n.sway, dt * 2.5);
         if (n.wait <= 0) { n.i = (n.i + 1) % n.route.length; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); }
       } else {
-        if (n.mode === 'chase') { n.repath = (n.repath || 0) - dt; if (n.repath <= 0 || !n.path) { n.repath = 0.3; this.goTo(n, this.P.x, this.P.z); } }
         if (!n.path) this.goTo(n, n.route[n.i][0], n.route[n.i][1]);
         const p = n.path[n.pi];
-        if (p) { tx = p[0]; tz = p[1]; sp = n.mode === 'chase' ? 3.4 : n.mode === 'goto' ? 2.5 : n.mode === 'return' ? 1.4 : n.speed; if (Math.hypot(tx - a.x, tz - a.z) < 0.25) { n.pi++; if (!n.path[n.pi]) tx = null; } }
+        if (p) { tx = p[0]; tz = p[1]; sp = n.mode === 'goto' ? 2.5 : n.mode === 'return' ? 1.4 : n.speed; if (Math.hypot(tx - a.x, tz - a.z) < 0.25) { n.pi++; if (!n.path[n.pi]) tx = null; } }
         if (!n.path[n.pi]) { // arrived
           n.path = null;
-          if (n.mode === 'chase') { /* keep after him */ }
-          else if (n.mode === 'goto') { n.mode = 'search'; n.wait = 4.2; if (n.noiseAt) a.f = Math.atan2(n.noiseAt[1] - a.z, n.noiseAt[0] - a.x); }
+          if (n.mode === 'goto') { n.mode = 'search'; n.wait = 4.2; if (n.noiseAt) a.f = Math.atan2(n.noiseAt[1] - a.z, n.noiseAt[0] - a.x); }
           else { n.mode = 'route'; n.wait = n.route[n.i][2] || 0.01; }
         }
       }
@@ -499,7 +329,8 @@
       if (mag > 0.3 && P.st === 'free') P.f = lerpA(P.f, Math.atan2(mz, mx), dt * 12);
       P.x += P.vx * dt; P.z += P.vz * dt;
       // the cracked wall gives way to a charge
-      if (P.st === 'charge' && !this.crackDone && P.x > 6 - P.r - 0.25 && P.x < 6.4 && P.z < -47 && P.z > -53) this.smashCrack();
+      const CK = LY.crack;
+      if (P.st === 'charge' && !this.crackDone && P.z < CK.z1 + P.r + 0.25 && P.z > CK.z0 - 0.2 && P.x > CK.x0 && P.x < CK.x1) this.smashCrack();
       const hit = this.collide(P, P.r);
       // how high he stands: in the bath up to his chest, the stairs, the floor above
       const ty = wet ? (P.z > -3.4 && P.x > 0 && P.x < 2 ? -0.3 : -0.62) : floorY(P.x, P.z);
@@ -529,7 +360,7 @@
         if (SAFE[room]) this.cp = { x: P.x, z: P.z, f: P.f };
         if (room === 'store' && this.stage === 'storage') { this.stage = 'box'; this.spBox.visible = true; this.think('A cardboard box... it\'ll have to do!', 2.8); this.objective('Put on the BOX (K next to it)'); }
       }
-      if (!this.crackDone && !this.saidCrack && room === 'corr' && P.x > 1.5) { this.saidCrack = true; this.spCrack.visible = true;
+      if (!this.crackDone && !this.saidCrack && room === 'corr' && P.x > 4) { this.saidCrack = true; this.spCrack.visible = true;
         this.think('A dead end?! ...but this wall is cracked. One good charge (hold L) should do it.', 3.4); }
       // fire exit
       if (this.stage === 'exit' && P.x < EXIT.x && P.z < EXIT.z1 && P.z > EXIT.z0) { this.win(); return; }
@@ -549,10 +380,9 @@
       // the staff (nobody minds you in the bath or the wash area; just after a restart they get a moment too)
       this.grace = Math.max(0, this.grace - dt);
       const pr = roomAt(P.x, P.z);
-      if (this.chase) this.chaseStep(dt);
       for (const n of this.npcs) {
         this.npcStep(n, dt);
-        if (SAFE[pr] || this.grace > 0 || this.chase) { n.alarm = Math.max(0, n.alarm - dt); continue; }
+        if (SAFE[pr] || this.grace > 0) { n.alarm = Math.max(0, n.alarm - dt); continue; }
         const range = this.range(n), d = Math.hypot(P.x - n.a.x, P.z - n.a.z), same = roomAt(n.a.x, n.a.z) === pr;
         // right next to someone they hear you, whichever way they face; crouching gets you closer
         // (the receptionist hears anyone behind her desk; in the box, a crouched creep is quiet even there)
@@ -560,26 +390,10 @@
         if (d < ear && same && this.clear(n.a.x, n.a.z, P.x, P.z)) { n.alarm += dt * 2.4; if (n.mode === 'route' && n.wait > 0) n.a.f = lerpA(n.a.f, Math.atan2(P.z - n.a.z, P.x - n.a.x), dt * 5); }
         else if (same && this.sees(n, P.x, P.z, range)) { n.alarm += dt * (1.0 + 2.2 * (1 - d / range)) * (P.crouch > 0.5 ? 0.8 : 1.15) * (P.st === 'charge' ? 2 : 1); if (d < 1.8) n.alarm = 1; }
         else n.alarm = Math.max(0, n.alarm - dt * 0.6);
-        if (n.alarm >= 1) { if (this.wearing) this.startChase(n); else this.caught(n); break; }
+        if (n.alarm >= 1) { this.caught(n); break; }
       }
     }
     range(n) { return n.range * (this.P.crouch > 0.5 ? 0.6 : 1) * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }
-    // in the box: whoever got a good look comes after you. Lose them (out of sight for a moment) or reach the fire exit
-    // within 5 seconds, or they catch up and the box rips
-    startChase(n) {
-      this.chase = { n, t: RIP_T, lost: 0 }; n.mode = 'chase'; n.path = null; n.repath = 0; n.alarm = 0;
-      this.popAt(n.a, ['Is that box... MOVING?!', 'HEY! That box!', 'Wait... a walking box?!'][this.spotted % 3], 1.8, true);
-      this.think('They\'ve seen the box! Lose them, or get to the fire exit!', 2.2);
-      if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.3);
-    }
-    chaseStep(dt) {
-      const ch = this.chase, n = ch.n, P = this.P, d = Math.hypot(P.x - n.a.x, P.z - n.a.z);
-      ch.t -= dt;
-      const seen = d < 11 && roomAt(n.a.x, n.a.z) === roomAt(P.x, P.z) && this.clear(n.a.x, n.a.z, P.x, P.z);
-      ch.lost = seen ? 0 : ch.lost + dt;
-      if (ch.lost > 1.3) { this.chase = null; n.mode = 'search'; n.wait = 2.5; this.popAt(n.a, '...just a box?', 1.6); this.think('Phew... lost them.', 1.6); return; }
-      if (d < 1.0 || ch.t <= 0) { this.chase = null; this.caught(n, true); }
-    }
     use() {
       const P = this.P, near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
       if (P.held) { // throw it where you face
@@ -595,7 +409,7 @@
       if (this.stage === 'key' && near(this.washSpot.x, this.washSpot.z, 1.6)) {
         P.st = 'busy'; P.t = 0; P.dur = 1.0; this.stage = 'smash'; this.spKey.visible = false; this.spLocker.visible = true;
         P.f = Math.atan2(this.washSpot.z - P.z, this.washSpot.x - P.x);
-        const wb = this.washB; this.G.attach(this.washTowel); this.washTowel.position.set(wb.position.x + 0.7, 0.03, wb.position.z + 0.35); this.washTowel.rotation.set(0, 0.3, 0);
+        const wb = this.washB;
         this.flying.push({ m: wb, sx: wb.position.x, sy: 0, sz: wb.position.z, tx: wb.position.x + 0.3, ty: 0.34, tz: wb.position.z + 0.2, h: 0.5, t: 0, dur: 0.45, r0: [0, 0, 0], r1: [Math.PI, 0.6, 0] });
         this.think('Empty?! No key... Forget it. I\'ll just smash the locker open!', 3.2);
         this.objective('CHARGE into your locker (hold L + direction)'); return;
@@ -617,22 +431,17 @@
     }
     smashLocker() {
       this.stage = 'storage'; this.spLocker.visible = false;
-      const L = this.banks[3]; L.rotation.z = 0.012;
-      const lx = this.locker.x, fz = -35.98, M = (c) => S.Flat.mat(c);
-      const hole = (x, y0) => { const h = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.7), M(0x4d4756)); h.position.set(x, y0 + 0.37, fz + 0.012); this.G.add(h); };
-      const doorOff = (x, y0, sd, k) => { const d = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.74, 0.04), M(0x9db5cb)); d.castShadow = true; this.G.add(d);
-        this.flying.push({ m: d, sx: x, sy: y0 + 0.37, sz: fz + 0.05, tx: x + sd * (0.5 + k), ty: 0.03, tz: fz + 1.0 + k, h: 0.6, t: 0, dur: 0.45 + 0.1 * k, r0: [0, 0, 0], r1: [-Math.PI / 2, sd * 0.8, sd * 0.3] }); };
-      const opens = [[lx, 0.95, 0], [lx - 0.62, 0.95, -1], [lx + 0.62, 0.15, 1], [lx - 1.24, 0.15, -1], [lx + 1.24, 0.95, 1]];
-      opens.forEach(([x, y0, sd], k) => { hole(x, y0); doorOff(x, y0, sd || 1, k * 0.25); });
-      const shirt = (c) => { const sh = new THREE.Shape([[-0.09, -0.13], [0.09, -0.13], [0.09, 0.05], [0.16, 0.02], [0.19, 0.08], [0.1, 0.14], [-0.1, 0.14], [-0.19, 0.08], [-0.16, 0.02], [-0.09, 0.05]].map((p) => new THREE.Vector2(p[0], p[1])));
-        const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), S.Flat.mat(c, { side: THREE.DoubleSide })); m.castShadow = true; return m; };
-      const shorts = (c) => { const sh = new THREE.Shape([[-0.11, 0.08], [0.11, 0.08], [0.12, -0.1], [0.02, -0.1], [0, -0.02], [-0.02, -0.1], [-0.12, -0.1]].map((p) => new THREE.Vector2(p[0], p[1])));
-        const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), S.Flat.mat(c, { side: THREE.DoubleSide })); m.castShadow = true; return m; };
-      const items = [shirt(0xf3b9c7), shorts(0x6f8fc8), shirt(0xa8dcc6), shorts(0xf6d55e), shirt(0xf2f2ec), shorts(0xcf7a5a), shirt(0x9db5cb)];
-      items.forEach((m, k) => { const [x, y0] = opens[1 + (k % 4)]; this.G.add(m);
-        this.flying.push({ m, sx: x, sy: y0 + 0.4, sz: fz + 0.1, tx: x + (k % 2 ? 0.5 : -0.5) * (0.5 + (k % 3) * 0.4), ty: 0.02, tz: fz + 0.7 + (k % 4) * 0.35, h: 0.7 + (k % 3) * 0.2, t: 0, dur: 0.5 + k * 0.06, r0: [0, 0, 0], r1: [-Math.PI / 2, 0, k * 1.3] }); });
-      this.fx.dust && this.fx.dust(lx, 0.8, this.locker.z, 10, 0.4, 0.6, 0.4); this.flash = 0.6;
-      this.noise(lx, this.locker.z, 26, '!?');
+      if (this.holes) this.holes.visible = true;
+      // the five doors fly off (his first: EMPTY behind it); tiny clothes burst out of the other four
+      (this.lkDoors || []).forEach((d, k) => { const sd = k % 2 ? -1 : 1;
+        this.flying.push({ m: d, sx: d.position.x, sy: d.position.y, sz: d.position.z, tx: d.position.x + sd * (0.5 + k * 0.25), ty: 0.03, tz: d.position.z + 1.0 + k * 0.25, h: 0.6, t: 0, dur: 0.45 + 0.1 * k, r0: [0, 0, 0], r1: [-Math.PI / 2, sd * 0.8, sd * 0.3] }); });
+      if (this.proto && this.proto.CLOTH_SHIRT) for (let k = 0; k < 8; k++) {
+        const c = this.proto[k % 2 ? 'CLOTH_SHORTS' : 'CLOTH_SHIRT'].clone(); c.visible = true; this.G.add(c);
+        const src = this.lkDoors[1 + (k % 4)] || this.lkDoors[0], sx = src ? src.position.x : this.locker.x, sy = src ? src.position.y : 1;
+        this.flying.push({ m: c, sx, sy, sz: LY.locker.face + 0.2, tx: sx + (k % 2 ? 0.5 : -0.5) * (0.5 + (k % 3) * 0.4), ty: 0.01, tz: LY.locker.face + 0.8 + (k % 4) * 0.35, h: 0.7 + (k % 3) * 0.2, t: 0, dur: 0.5 + k * 0.06, r0: [0, 0, 0], r1: [0, k * 1.3, 0] });
+      }
+      this.fx.dust && this.fx.dust(this.locker.x, 0.8, this.locker.z, 10, 0.4, 0.6, 0.4); this.flash = 0.6;
+      this.noise(this.locker.x, this.locker.z, 26, '!?');
       if (this.g.audio) { this.g.audio.thump && this.g.audio.thump(9); this.later(0.15, () => this.g.audio.thump && this.g.audio.thump(5)); }
       this.think('...EMPTY?! Someone took my clothes!', 2.2);
       this.later(2.3, () => { if (this.stage === 'storage') this.think('And everyone else\'s are TINY. Nothing here fits me...', 2.6); });
@@ -641,38 +450,40 @@
     }
     smashCrack() {
       this.crackDone = true; this.spCrack.visible = false;
-      this.walls.splice(this.walls.indexOf(this.crackW), 1); this.crackM.visible = false; this.buildNav();
-      const M = S.Flat.mat(0xb9ab98);
-      for (let k = 0; k < 9; k++) { const ch = new THREE.Mesh(new THREE.BoxGeometry(0.25 + (k % 3) * 0.12, 0.22 + (k % 2) * 0.15, 0.3), M); ch.castShadow = true; this.G.add(ch);
-        const z = -48 - (k * 0.61) % 4.2, y = 0.2 + (k % 4) * 0.25;
-        this.flying.push({ m: ch, sx: 6.2, sy: y, sz: z, tx: 7.2 + (k % 4) * 0.7, ty: 0.12, tz: z + ((k % 3) - 1) * 0.6, h: 0.5 + (k % 3) * 0.3, t: 0, dur: 0.4 + (k % 4) * 0.08, r0: [0, 0, 0], r1: [k, k * 0.7, k * 1.3] }); }
-      this.fx.dust && this.fx.dust(6.2, 0.8, -50, 14, 0.6, 0.8, 0.6); this.flash = 0.7;
+      this.walls.splice(this.walls.indexOf(this.crackW), 1); this.buildNav();
+      if (this.crackM) this.crackM.visible = false; if (this.rubble) this.rubble.visible = true;
+      const M = S.Flat.mat(0xefe6d6), C = LY.crack;
+      for (let k = 0; k < 10; k++) { const ch = new THREE.Mesh(new THREE.DodecahedronGeometry(0.14 + (k % 3) * 0.05), M); ch.castShadow = true; this.G.add(ch);
+        const x = C.x0 + 1.2 + (k * 0.61) % 2.6, y = 0.2 + (k % 4) * 0.22;
+        this.flying.push({ m: ch, sx: x, sy: y, sz: C.z, tx: x + ((k % 3) - 1) * 0.6, ty: 0.1 + (k % 4) * 0.08, tz: C.z0 - 0.6 - (k % 4) * 0.6, h: 0.5 + (k % 3) * 0.3, t: 0, dur: 0.4 + (k % 4) * 0.08, r0: [0, 0, 0], r1: [k, k * 0.7, k * 1.3] }); }
+      this.fx.dust && this.fx.dust(C.x, 0.8, C.z, 14, 0.6, 0.8, 0.6); this.flash = 0.7;
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(9);
-      this.noise(5.4, -50, 14, '?!');
+      this.noise(C.x, C.z1 + 0.8, 14, '?!');
       this.think('Ha! ...stairs! Up we go.', 2.2);
     }
+    wearBox() {
+      if (!this.proto || !this.proto.BOX) return;
+      const b = this.proto.BOX.clone(); b.visible = true; b.scale.setScalar(0.95); b.position.set(0, -0.62 * this.view.s, 0.02 * this.view.s); this.view.body.add(b); this.boxWorn = b;
+    }
     putOnBox() {
-      this.wearing = true; this.pantsBox.visible = false; this.spBox.visible = false; this.spExit.visible = true;
-      const b = this.cardboard(0.95); b.position.set(0, -0.62 * this.view.s, 0.02 * this.view.s); this.view.body.add(b); this.boxWorn = b;
+      this.wearing = true; this.pantsBox.visible = false; this.spBox.visible = false; this.spExit.visible = true; this.wearBox();
       this.stage = 'exit'; this.cp = CP.store;
-      this.think('Perfect fit. Now out by the FIRE EXIT... nobody can get a good look at this box.', 3.2);
-      this.objective('Escape by the FIRE EXIT (lounge, green sign). If they spot the box: lose them in 5 seconds or it rips!');
+      this.think('Perfect fit. Now out by the FIRE EXIT... without anyone seeing a walking box.', 3.2);
+      this.objective('Escape by the FIRE EXIT (the green door in the lounge), unseen');
       if (this.g.audio && this.g.audio.swell) this.g.audio.swell(0.4, 1.0);
     }
-    caught(n, rip) {
+    caught(n) {
       this.spotted++; this.freeze = 1.6; this.P.vx = this.P.vz = 0;
-      this.popAt(n.a, rip ? 'GOTCHA!' : ['KYAAA!', 'PERVERT!', 'HEY! YOU THERE!', 'MY EYES!'][this.spotted % 4], 1.5, true);
-      if (rip) { this.think('*RRRIP* ...the box!', 1.5); if (this.boxWorn) this.boxWorn.rotation.z = 0.5; }
+      this.popAt(n.a, this.wearing ? ['Is that box... MOVING?!', 'HEY! That box!', 'A walking box?!'][this.spotted % 3] : ['KYAAA!', 'PERVERT!', 'HEY! YOU THERE!', 'MY EYES!'][this.spotted % 4], 1.5, true);
       if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4);
       this.flash = 1;
     }
     respawn() {
-      const P = this.P; P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.y = floorY(P.x, P.z); P.vx = P.vz = 0; P.st = 'free'; this.chase = null;
-      if (this.boxWorn) this.boxWorn.rotation.z = 0;
+      const P = this.P; P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.y = floorY(P.x, P.z); P.vx = P.vz = 0; P.st = 'free';
       if (P.held) { const b = P.held; P.held = null; b.state = 'floor'; b.m.position.set(b.x0, b.base, b.z0); b.m.rotation.set(0, 0, 0); }
       for (const n of this.npcs) { n.alarm = 0; n.mode = 'route'; n.i = 0; n.wait = n.route[0][2]; n.path = null; n.a.x = n.route[0][0]; n.a.z = n.route[0][1]; n.a.y = floorY(n.a.x, n.a.z); n.a.f = n.route[0][3] || 0; }
       this.grace = 2.0;
-      this.think(this.wearing ? ['A new box... same plan. Don\'t get spotted.', 'Out of sight, then move.', 'Crouch (I) in the box: just a box.'][this.spotted % 3]
+      this.think(this.wearing ? ['Back in the storage room... try again.', 'Out of sight, then move.', 'Crouch (I) when they\'re near.'][this.spotted % 3]
         : ['Too close... try again.', 'Wait for them to look away.', 'Stay behind cover, then move.', 'Crouch (I) when they\'re near.'][this.spotted % 4], 2.2);
     }
     win() {
@@ -696,7 +507,6 @@
       v.update(w, Math.max(dt, 1e-4), T);
       v.root.position.y += P.y; v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       for (const n of this.npcs) { n.v.update(n.a, Math.max(dt, 1e-4), T); this.drawCone(n); }
-      for (const s of this.soot) { const k = (T * 0.35 + s.k * 0.17) % 1, u = k < 0.5 ? k * 2 : 2 - k * 2; s.m.position.set(s.x0 + (s.x1 - s.x0) * u, Math.abs(Math.sin(T * 9 + s.k)) * 0.06, s.z); s.m.rotation.y = k < 0.5 ? Math.PI / 2 : -Math.PI / 2; }
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
       const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath;
       if (m.s.visible) {
@@ -711,7 +521,7 @@
       }
       for (const sp of this.marks) if (sp.visible) { const u = sp.userData, k = (T * 0.9) % 1;
         u.ar.position.y = 2.3 + Math.abs(Math.sin(T * 3.2)) * 0.22; u.ring.scale.setScalar(0.8 + 0.35 * k); u.ring.material.opacity = 0.85 * (1 - k * k); }
-      this.water.position.y = 0.42 + Math.sin(T * 1.3) * 0.01;
+      if (this.water) this.water.position.y = Math.sin(T * 1.3) * 0.01;
       this.fx.update(dt); this.fx.updateWater && this.fx.updateWater(dt);
       // camera: high, behind, following (as in the campaign), up the stairs with him; closer for the ending
       this.camT.lerp(new THREE.Vector3(this.over ? P.x + 2.2 : clamp(P.x * 0.8, -10, 10), Math.max(0, P.y), P.z - (this.over ? 0.6 : 2.6)), 1 - Math.exp(-dt * 4));
@@ -731,7 +541,7 @@
       for (let i = 0; i <= N; i++) { const t = a.f - n.half + (2 * n.half) * i / N, L = this.reach(a.x, a.z, t, range); pos[(i + 1) * 3] = a.x + Math.cos(t) * L; pos[(i + 1) * 3 + 1] = y; pos[(i + 1) * 3 + 2] = a.z + Math.sin(t) * L; }
       const idx = []; for (let i = 1; i <= N; i++) idx.push(0, i + 1, i);
       const g = n.cone.geometry; g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(idx); g.computeBoundingSphere();
-      const k = n.mode === 'chase' ? 1 : clamp(n.alarm, 0, 1); n.cone.material.color.setRGB(1, 0.81 - 0.5 * k, 0.23 - 0.1 * k); n.cone.material.opacity = 0.36 + 0.24 * k;
+      const k = clamp(n.alarm, 0, 1); n.cone.material.color.setRGB(1, 0.81 - 0.5 * k, 0.23 - 0.1 * k); n.cone.material.opacity = 0.36 + 0.24 * k;
     }
 
     // ============================================================== HUD
@@ -744,14 +554,13 @@
         '#stealthHud .st-think.on{opacity:1}#stealthHud .st-think:after{content:"";position:absolute;left:50%;bottom:-12px;width:14px;height:14px;border-radius:50%;background:#fffaf0;transform:translateX(-50%)}' +
         '#stealthHud .st-pop{position:absolute;transform:translate(-50%,-100%);font:400 26px "Dela Gothic One",sans-serif;color:#cf3a3a;text-shadow:0 2px 0 #fff;white-space:nowrap}' +
         '#stealthHud .st-q{position:absolute;transform:translate(-50%,-100%);font:400 24px "Dela Gothic One",sans-serif;color:#e2a13a;text-shadow:0 2px 0 #fff}' +
-        '#stealthHud .st-rip{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:#cf3a3a;color:#fff;padding:8px 18px;border-radius:12px;font:400 26px "Dela Gothic One",sans-serif;display:none;white-space:nowrap}' +
         '#stealthHud .st-help{position:absolute;left:24px;bottom:18px;font-size:16px;opacity:.8;background:rgba(255,250,240,.75);padding:4px 10px;border-radius:8px}' +
         '#stealthHud .st-pause,#stealthHud .st-over{position:absolute;left:0;top:0;bottom:0;width:min(520px,92vw);display:none;pointer-events:auto;background:linear-gradient(90deg,rgba(30,24,36,.92),rgba(30,24,36,.6) 80%,transparent);padding:80px 60px;color:#f4efe6}' +
         '#stealthHud .st-over{left:auto;right:0;text-align:right;background:linear-gradient(270deg,rgba(30,24,36,.92),rgba(30,24,36,.6) 80%,transparent)}#stealthHud .st-over button{margin-left:auto}' +
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-obj"></div><div class="st-rip"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move · hold I crouch · hold L + direction charge · K use / pick up / throw · Esc pause</div>' +
+        '<div class="st-obj"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move · hold I crouch · hold L + direction charge · K use / pick up / throw · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
@@ -765,7 +574,6 @@
     drawHud(dt) {
       const P = this.P, s = this.view.s;
       this.el('.st-safe').style.display = SAFE[roomAt(P.x, P.z)] && !this.over ? 'block' : 'none';
-      const rp = this.el('.st-rip'); if (this.chase && !this.over) { rp.style.display = 'block'; rp.textContent = 'THE BOX IS RIPPING! LOSE THEM: ' + Math.max(0, this.chase.t).toFixed(1); } else rp.style.display = 'none';
       if (this.thinkT > 0) { this.thinkT -= dt; const p = this.project(P.x, P.y + 2.9 * s, P.z), e = this.el('.st-think'); e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; if (this.thinkT <= 0) e.classList.remove('on'); }
       this.pops = this.pops.filter((q) => { q.t -= dt; const p = this.project(q.a.x, (q.a.y || 0) + 2.6 + (1.4 - q.t) * 0.3, q.a.z); q.d.style.left = p.x + 'px'; q.d.style.top = p.y + 'px'; if (q.t <= 0) { q.d.remove(); return false; } return true; });
       if (!this.qs) this.qs = this.npcs.map(() => { const d = document.createElement('div'); d.className = 'st-q'; this.el('.st-pops').appendChild(d); return d; });
