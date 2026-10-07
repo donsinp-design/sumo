@@ -1151,10 +1151,11 @@
       this.sPts.geometry.attributes.position.needsUpdate = true;
     }
     // stepping in water: a few droplets kicked up and thin ripples spreading out (k = how hard: 1 a step, 3 a body)
-    water(x, z, k) {
+    water(x, z, k, y0) {   // y0: the water surface (0: the floor)
+      y0 = y0 || 0;
       if (!this.wPts) {
         const n = this.wN = 120, g = new THREE.BufferGeometry();
-        this.wPos = new Float32Array(n * 3).fill(-50); this.wVel = new Float32Array(n * 3); this.wLife = new Float32Array(n).fill(9); this.wI = 0;
+        this.wPos = new Float32Array(n * 3).fill(-50); this.wVel = new Float32Array(n * 3); this.wLife = new Float32Array(n).fill(9); this.wY = new Float32Array(n); this.wI = 0;
         g.setAttribute('position', new THREE.BufferAttribute(this.wPos, 3));
         this.wPts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xe6f2ff, size: 0.11, transparent: true, opacity: 0.85, depthWrite: false }));
         this.wPts.frustumCulled = false; this.wPts.renderOrder = 4; this.scene.add(this.wPts);
@@ -1166,12 +1167,12 @@
       }
       for (let j = 0; j < 4 + k * 5; j++) {
         const i = this.wI; this.wI = (this.wI + 1) % this.wN; const a = Math.random() * Math.PI * 2, sp = (0.6 + Math.random()) * (0.7 + k * 0.4);
-        this.wPos[i * 3] = x + Math.cos(a) * 0.08; this.wPos[i * 3 + 1] = 0.04; this.wPos[i * 3 + 2] = z + Math.sin(a) * 0.08;
+        this.wPos[i * 3] = x + Math.cos(a) * 0.08; this.wPos[i * 3 + 1] = y0 + 0.04; this.wPos[i * 3 + 2] = z + Math.sin(a) * 0.08; this.wY[i] = y0;
         this.wVel[i * 3] = Math.cos(a) * sp; this.wVel[i * 3 + 1] = 1.4 + Math.random() * (1 + k); this.wVel[i * 3 + 2] = Math.sin(a) * sp; this.wLife[i] = 0;
       }
       for (let j = 0; j < (k > 1.5 ? 2 : 1); j++) {
         const r = this.ripples.find((o) => o.t >= o.max) || this.ripples[0];
-        r.t = -j * 0.15; r.max = 0.7 + k * 0.25; r.size = 0.35 + k * 0.3; r.m.position.set(x, 0.016, z); r.m.visible = true;
+        r.t = -j * 0.15; r.max = 0.7 + k * 0.25; r.size = 0.35 + k * 0.3; r.m.position.set(x, y0 + 0.016, z); r.m.visible = true;
       }
     }
     updateWater(dt) {
@@ -1180,7 +1181,7 @@
         if (this.wLife[i] > 1) continue;
         this.wLife[i] += dt; this.wVel[i * 3 + 1] -= 11 * dt;
         for (let a = 0; a < 3; a++) this.wPos[i * 3 + a] += this.wVel[i * 3 + a] * dt;
-        if (this.wPos[i * 3 + 1] < 0.02 || this.wLife[i] > 1) { this.wPos[i * 3 + 1] = -50; this.wLife[i] = 9; }
+        if (this.wPos[i * 3 + 1] < this.wY[i] + 0.02 || this.wLife[i] > 1) { this.wPos[i * 3 + 1] = -50; this.wLife[i] = 9; }
       }
       this.wPts.geometry.attributes.position.needsUpdate = true;
       for (const r of this.ripples) {

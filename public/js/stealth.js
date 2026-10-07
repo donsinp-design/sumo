@@ -251,13 +251,20 @@
       for (const n of this.npcs) {
         if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius) continue;
         const path = this.navPath(n.a.x, n.a.z, x, z); if (!path) continue;
-        n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.noiseAt = [x, z];
-        this.popAt(n.a, msg || '?!', 1.6);
+        if (n.mode !== 'goto') this.popAt(n.a, msg || '?!', 1.6);
+        n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.noiseAt = [x, z]; n.inv = false;
       }
     }
     ringAt(x, z, size, dur) { this.fx.ring(x, z, size, dur); const r = (this.fx.rings || []).find((o) => o.t === 0 && o.m.position.x === x && o.m.position.z === z); if (r) r.m.position.y = floorY(x, z) + 0.04; }
     npcStep(n, dt) {
-      const a = n.a; a.t += dt;
+      const a = n.a; a.t += dt; n.slipCd = Math.max(0, (n.slipCd || 0) - dt);
+      // down on a puddle: slide to a stop, lie there a moment, get up, carry on (and see nothing meanwhile)
+      if (a.st === 'down' || a.st === 'getup') {
+        a.vx *= 0.9; a.vz *= 0.9; a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4);
+        if (a.st === 'down' && a.t >= a.dur) { a.st = 'getup'; a.t = 0; a.dur = 1.2; }
+        else if (a.st === 'getup' && a.t >= a.dur) { a.st = 'free'; a.t = 0; a.slipFall = false; }
+        return;
+      }
       let tx = null, tz = null, sp = n.speed;
       if (n.mode === 'search') {
         n.wait -= dt; a.f += Math.sin(a.t * 1.7) * dt * 1.8;
@@ -268,7 +275,7 @@
       } else {
         if (!n.path) this.goTo(n, n.route[n.i][0], n.route[n.i][1]);
         const p = n.path[n.pi];
-        if (p) { tx = p[0]; tz = p[1]; sp = n.mode === 'goto' ? 2.5 : n.mode === 'return' ? 1.4 : n.speed; if (Math.hypot(tx - a.x, tz - a.z) < 0.25) { n.pi++; if (!n.path[n.pi]) tx = null; } }
+        if (p) { tx = p[0]; tz = p[1]; sp = n.mode === 'goto' ? (n.inv ? 1.9 : 2.5) : n.mode === 'return' ? 1.4 : n.speed; if (Math.hypot(tx - a.x, tz - a.z) < 0.25) { n.pi++; if (!n.path[n.pi]) tx = null; } }
         if (!n.path[n.pi]) { // arrived
           n.path = null;
           if (n.mode === 'goto') { n.mode = 'search'; n.wait = 4.2; if (n.noiseAt) a.f = Math.atan2(n.noiseAt[1] - a.z, n.noiseAt[0] - a.x); }
@@ -279,6 +286,14 @@
       else { a.vx *= 0.8; a.vz *= 0.8; }
       const ox = a.x, oz = a.z; a.x += a.vx * dt; a.z += a.vz * dt;
       this.collide(a, 0.4); a.y = floorY(a.x, a.z);
+      // running (hurrying to a noise) over a puddle: they slip too. Walking is fine
+      const spd = Math.hypot(a.vx, a.vz);
+      if (spd > 2.2 && !n.slipCd) for (const q of this.puddles) if (Math.abs(floorY(q.x, q.z) - a.y) < 1 && ((a.x - q.x) / q.rx) ** 2 + ((a.z - q.z) / q.rz) ** 2 < 1) {
+        a.st = 'down'; a.t = 0; a.dur = 1.3; a.slipFall = true; a.fallX = -a.vx / spd; a.fallZ = -a.vz / spd; a.vx *= 0.7; a.vz *= 0.7; n.slipCd = 4; n.alarm = 0;
+        this.popAt(a, ['WAAH!', 'Whoa—!', 'Oof!'][(this.t * 3 | 0) % 3], 1.2); this.fx.water && this.fx.water(a.x, a.z, 5);
+        if (this.g.audio && this.g.audio.thump) this.g.audio.thump(5);
+        break;
+      }
       if (tx !== null) { n.stuckT = Math.hypot(a.x - ox, a.z - oz) < sp * dt * 0.3 ? (n.stuckT || 0) + dt : 0; if (n.stuckT > 0.8 && n.path) { const e = n.path[n.path.length - 1]; this.goTo(n, e[0], e[1]); } }
     }
     // push a circle out of every wall and blocker it overlaps (a few passes, so corners can't squeeze it through)
@@ -336,6 +351,12 @@
       const ty = wet ? (P.z > -3.4 && P.x > 0 && P.x < 2 ? -0.3 : -0.62) : floorY(P.x, P.z);
       P.y = Math.abs(ty - P.y) > 1 && !wet ? ty : P.y + (ty - P.y) * Math.min(1, dt * (wet || P.y < -0.05 ? 6 : 20));
       if (!wet && !this.outOfBath && P.y > -0.2) this.leaveBath();
+      // splashing: wading through the bath, or stepping through a puddle
+      const moving = Math.hypot(P.vx, P.vz) > 0.6, inPud = this.puddles.some((q) => Math.abs(floorY(q.x, q.z) - P.y) < 1 && ((P.x - q.x) / q.rx) ** 2 + ((P.z - q.z) / q.rz) ** 2 < 1);
+      if (moving && (wet || inPud)) { this.splT = (this.splT || 0) - dt; if (this.splT <= 0) { this.splT = wet ? 0.24 : 0.32;
+        const s = this.view.s, sd = (this.stepSd = -(this.stepSd || 1)); this.fx.water && this.fx.water(P.x + Math.cos(P.f + sd * 1.2) * 0.45 * s, P.z + Math.sin(P.f + sd * 1.2) * 0.45 * s, wet ? 0.8 : 0.35, wet ? POOL.water : P.y); } }
+      else this.splT = 0;
+      if (wet !== this.wasWet) { if (this.wasWet !== undefined) this.fx.water && this.fx.water(P.x, P.z, 1.6, POOL.water); this.wasWet = wet; }
       if (P.st === 'charge') {
         if (this.stage === 'smash' && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.25) { this.smashLocker(); P.st = 'busy'; P.t = 0; P.dur = 0.5; }
         else if (hit) { P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.fx.dust && this.fx.dust(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (!SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, 5, '?'); }
@@ -366,11 +387,15 @@
       if (this.stage === 'exit' && P.x < EXIT.x && P.z < EXIT.z1 && P.z > EXIT.z0) { this.win(); return; }
       // K: use (locker, wash bucket, pick up / throw, put on the box)
       if (c.grab.pressed && P.st === 'free') this.use();
-      if (P.held) { const b = P.held, s = this.view.s; b.m.position.set(P.x + Math.cos(P.f) * 0.75 * s, P.y + 1.15 * s, P.z + Math.sin(P.f) * 0.75 * s); }
+      // a charge is loud: heavy running footsteps carry round the room
+      if (P.st === 'charge' && !SAFE[roomAt(P.x, P.z)]) { this.stompT = (this.stompT || 0) - dt; if (this.stompT <= 0) { this.stompT = 0.3; this.noise(P.x, P.z, 8, '?'); } } else this.stompT = 0;
       for (const b of this.buckets) if (b.state === 'fly') {
         b.t += dt; const k = Math.min(1, b.t / b.dur); b.x = b.sx + (b.tx - b.sx) * k; b.z = b.sz + (b.tz - b.sz) * k; b.y = b.sy + (b.ty - b.sy) * k + Math.sin(Math.PI * k) * 1.6;
         b.m.position.set(b.x, b.y, b.z); b.m.rotation.x += dt * 9;
-        if (k >= 1) { b.state = 'floor'; b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + 0.3; if (!SAFE[roomAt(b.x, b.z)]) this.noise(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think('*CLATTER*', 1); }
+        if (k >= 1) { b.state = 'floor';
+          const pud = this.puddles.some((q) => ((b.x - q.x) / q.rx) ** 2 + ((b.z - q.z) / q.rz) ** 2 < 1.4);
+          if (b.wet) { this.fx.water && (this.fx.water(b.x, b.z, 2.4, POOL.water), this.fx.water(b.x + 0.2, b.z - 0.1, 1.4, POOL.water)); b.m.rotation.set(0.3, 0.4, 0.2); b.m.position.y = b.ty; }
+          else { if (pud && this.fx.water) this.fx.water(b.x, b.z, 1.4, b.ty); b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + 0.3; } if (!SAFE[roomAt(b.x, b.z)]) this.noise(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think(b.wet ? '*SPLOOSH*' : '*CLATTER*', 1); }
       }
       for (const f of this.flying) {
         if (f.t >= f.dur) continue; f.t = Math.min(f.dur, f.t + dt); const k = f.t / f.dur;
@@ -382,14 +407,20 @@
       const pr = roomAt(P.x, P.z);
       for (const n of this.npcs) {
         this.npcStep(n, dt);
-        if (SAFE[pr] || this.grace > 0) { n.alarm = Math.max(0, n.alarm - dt); continue; }
+        if (SAFE[pr] || this.grace > 0 || n.a.st !== 'free') { n.alarm = Math.max(0, n.alarm - dt); continue; }
         const range = this.range(n), d = Math.hypot(P.x - n.a.x, P.z - n.a.z), same = roomAt(n.a.x, n.a.z) === pr;
         // right next to someone they hear you, whichever way they face; crouching gets you closer
         // (the receptionist hears anyone behind her desk; in the box, a crouched creep is quiet even there)
         const ear = P.crouch > 0.5 && (!n.ear || this.wearing) ? 0.9 : (n.ear || 1.7);
-        if (d < ear && same && this.clear(n.a.x, n.a.z, P.x, P.z)) { n.alarm += dt * 2.4; if (n.mode === 'route' && n.wait > 0) n.a.f = lerpA(n.a.f, Math.atan2(P.z - n.a.z, P.x - n.a.x), dt * 5); }
-        else if (same && this.sees(n, P.x, P.z, range)) { n.alarm += dt * (1.0 + 2.2 * (1 - d / range)) * (P.crouch > 0.5 ? 0.8 : 1.15) * (P.st === 'charge' ? 2 : 1); if (d < 1.8) n.alarm = 1; }
+        let noticed = false;
+        if (d < ear && same && this.clear(n.a.x, n.a.z, P.x, P.z)) { noticed = true; n.alarm += dt * 2.4; if (n.mode === 'route' && n.wait > 0) n.a.f = lerpA(n.a.f, Math.atan2(P.z - n.a.z, P.x - n.a.x), dt * 5); }
+        else if (same && this.sees(n, P.x, P.z, range)) { noticed = true; n.alarm += dt * (1.0 + 2.2 * (1 - d / range)) * (P.crouch > 0.5 ? 0.8 : 1.15) * (P.st === 'charge' ? 2 : 1); if (d < 1.8) n.alarm = 1; }
         else n.alarm = Math.max(0, n.alarm - dt * 0.6);
+        // "?": something's there. They walk over to where they saw it (following it while it stays in view), then look round
+        if (noticed && n.alarm > 0.3 && n.alarm < 1) {
+          if (n.mode !== 'goto' || !n.inv) { const path = this.navPath(n.a.x, n.a.z, P.x, P.z); if (path) { n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.inv = true; n.noiseAt = [P.x, P.z]; n.invT = 0.5; this.popAt(n.a, '?', 1.2); } }
+          else if ((n.invT -= dt) <= 0) { n.invT = 0.5; n.noiseAt = [P.x, P.z]; this.goTo(n, P.x, P.z); }
+        }
         if (n.alarm >= 1) { this.caught(n); break; }
       }
     }
@@ -398,7 +429,8 @@
       const P = this.P, near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
       if (P.held) { // throw it where you face
         const b = P.held; P.held = null; b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y;
-        const L = Math.max(1, this.reach(P.x, P.z, P.f, 8) - 0.6); b.tx = P.x + Math.cos(P.f) * L; b.tz = P.z + Math.sin(P.f) * L; b.ty = floorY(b.tx, b.tz);
+        const L = Math.max(1, this.reach(P.x, P.z, P.f, 8) - 0.6); b.tx = P.x + Math.cos(P.f) * L; b.tz = P.z + Math.sin(P.f) * L;
+        b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz);   // into the bath: it floats
         b.dur = 0.35 + L * 0.05; P.st = 'busy'; P.t = 0; P.dur = 0.3; this.w.hand = 1; return;
       }
       if (this.stage === 'locker' && near(this.locker.x, this.locker.z, 1.7)) {
@@ -416,7 +448,7 @@
       }
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { P.st = 'wear'; P.t = 0; P.dur = 0.9; return; }
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
-        b.state = 'held'; P.held = b; b.m.rotation.set(0, 0, 0);
+        b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0);
         if (!this.saidItem) { this.saidItem = true; this.think('If I throw this (K), whoever hears it will go and look...', 2.4); }
         return;
       }
@@ -481,7 +513,7 @@
     respawn() {
       const P = this.P; P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.y = floorY(P.x, P.z); P.vx = P.vz = 0; P.st = 'free';
       if (P.held) { const b = P.held; P.held = null; b.state = 'floor'; b.m.position.set(b.x0, b.base, b.z0); b.m.rotation.set(0, 0, 0); }
-      for (const n of this.npcs) { n.alarm = 0; n.mode = 'route'; n.i = 0; n.wait = n.route[0][2]; n.path = null; n.a.x = n.route[0][0]; n.a.z = n.route[0][1]; n.a.y = floorY(n.a.x, n.a.z); n.a.f = n.route[0][3] || 0; }
+      for (const n of this.npcs) { n.alarm = 0; n.a.st = 'free'; n.a.slipFall = false; n.mode = 'route'; n.i = 0; n.wait = n.route[0][2]; n.path = null; n.a.x = n.route[0][0]; n.a.z = n.route[0][1]; n.a.y = floorY(n.a.x, n.a.z); n.a.f = n.route[0][3] || 0; }
       this.grace = 2.0;
       this.think(this.wearing ? ['Back in the storage room... try again.', 'Out of sight, then move.', 'Crouch (I) when they\'re near.'][this.spotted % 3]
         : ['Too close... try again.', 'Wait for them to look away.', 'Stay behind cover, then move.', 'Crouch (I) when they\'re near.'][this.spotted % 4], 2.2);
@@ -506,6 +538,12 @@
       if (this.freeze) w.fxs.dizzy = 1;
       v.update(w, Math.max(dt, 1e-4), T);
       v.root.position.y += P.y; v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
+      if (P.held && P.held.state === 'held') {
+        const b = P.held, ha = this._ha || (this._ha = new THREE.Vector3()), hb = this._hb || (this._hb = new THREE.Vector3()), H = { stool: 0.34, oke: 0.26, bucket: 0.42 }[b.kind] || 0.4;
+        if (b.kind === 'oke') { v.handWorld(1, ha); b.m.position.set(ha.x, ha.y - H * 0.75, ha.z); }   // by its rim, in one fist
+        else { v.handWorld(1, ha); v.handWorld(-1, hb); ha.add(hb).multiplyScalar(0.5); b.m.position.set(ha.x, ha.y - H * 0.5, ha.z); }   // gripped by its sides
+        b.m.rotation.set(0, -P.f, 0);
+      }
       for (const n of this.npcs) { n.v.update(n.a, Math.max(dt, 1e-4), T); this.drawCone(n); }
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
       const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath;
@@ -522,6 +560,7 @@
       for (const sp of this.marks) if (sp.visible) { const u = sp.userData, k = (T * 0.9) % 1;
         u.ar.position.y = 2.3 + Math.abs(Math.sin(T * 3.2)) * 0.22; u.ring.scale.setScalar(0.8 + 0.35 * k); u.ring.material.opacity = 0.85 * (1 - k * k); }
       if (this.water) this.water.position.y = Math.sin(T * 1.3) * 0.01;
+      for (const b of this.buckets) if (b.wet && b.state === 'floor') { b.m.position.y = b.ty + Math.sin(T * 1.6 + b.x) * 0.03; b.m.rotation.z = 0.2 + Math.sin(T * 1.1 + b.z) * 0.08; }
       this.fx.update(dt); this.fx.updateWater && this.fx.updateWater(dt);
       // camera: high, behind, following (as in the campaign), up the stairs with him; closer for the ending
       this.camT.lerp(new THREE.Vector3(this.over ? P.x + 2.2 : clamp(P.x * 0.8, -10, 10), Math.max(0, P.y), P.z - (this.over ? 0.6 : 2.6)), 1 - Math.exp(-dt * 4));
@@ -535,7 +574,7 @@
       this.drawHud(dt);
     }
     drawCone(n) {
-      const a = n.a, N = 22, P = this.P, hide = SAFE[roomAt(P.x, P.z)] || Math.abs(a.y - P.y) > 1.6;
+      const a = n.a, N = 22, P = this.P, hide = SAFE[roomAt(P.x, P.z)] || Math.abs(a.y - P.y) > 1.6 || a.st !== 'free';
       n.cone.visible = !hide; if (hide) return;
       const range = this.range(n), pos = new Float32Array((N + 2) * 3), y = a.y + 0.03; pos[0] = a.x; pos[1] = y; pos[2] = a.z;
       for (let i = 0; i <= N; i++) { const t = a.f - n.half + (2 * n.half) * i / N, L = this.reach(a.x, a.z, t, range); pos[(i + 1) * 3] = a.x + Math.cos(t) * L; pos[(i + 1) * 3 + 1] = y; pos[(i + 1) * 3 + 2] = a.z + Math.sin(t) * L; }
