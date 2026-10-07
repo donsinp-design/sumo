@@ -12,7 +12,8 @@
 //   4 throw something to draw the receptionist away, into storage: a cardboard box (pants!)
 //   5 in the box, out by the fire exit (still unseen)
 // The bath and the wash area are safe (everyone's naked there); everywhere else, staff and customers walk fixed patterns,
-// their view a cone on the floor. I: crouch. L: charge. K: use / pick up / throw (buckets, wash stools).
+// their view a cone on the floor. Walking is heard by anyone close; I: tiptoe (silent, slow, and he's too heavy to keep
+// it up for long); L: charge (loud). K: use / pick up / throw (buckets, wash stools).
 (function () {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const ang = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -61,7 +62,7 @@
       addEventListener('keydown', this.kd); addEventListener('keyup', this.ku);
       // the player: the soft sumo, no mawashi, up to his chest in the bath
       const arch = S.ARCH[g.sel && g.sel.c1 !== undefined ? g.sel.c1 : 0];
-      this.P = { x: 1.2, z: -6.2, y: -0.62, f: Math.PI / 2, vx: 0, vz: 0, r: 0.7, st: 'free', t: 0, dur: 0, crouch: 0, chargeT: 0, cd: 0, held: null };
+      this.P = { x: 1.2, z: -6.2, y: -0.62, f: Math.PI / 2, vx: 0, vz: 0, r: 0.7, st: 'free', t: 0, dur: 0, crouch: 0, tip: 0, stam: 1, tired: false, chargeT: 0, cd: 0, held: null };
       this.view = new S.WrestlerView(this.scene, arch, this.fx, S.DEF_EQ); this.view.viewer = 0; this.view.match = null;
       this.w = { x: 0, z: 0, y: 0, f: 0, fx: 0, fz: 1, vx: 0, vz: 0, st: 'free', t: 0, dur: 1, fxs: {}, a: arch, idx: 0, szCur: 1, squash: 0, bal: 1, tx: 0, tz: 0, power: 0, pre: null, preT: 0,
         hand: 0, windPow: 0, charges: 0, uprightT: 0, throatT: 0, lifted: false, down: false, fallX: 0, fallZ: 1, clinch: null, slideT: 0, spd: 0, crouchT: 0, lean: 0, gulpI: -1, contact: false, fwdIn: 0, ddx: 0, ddz: 0, boomT: 0, relaxed: true };
@@ -90,7 +91,7 @@
     build() {
       const G = new THREE.Group(); this.scene.add(G); this.G = G;
       const add = (x0, x1, z0, z1, tall) => { const w = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), tall: !!tall }; this.walls.push(w); return w; };
-      for (const s of LY.solids) add(s.x0, s.x1, s.z0, s.z1, s.tall);
+      this.solidW = LY.solids.map((s) => add(s.x0, s.x1, s.z0, s.z1, s.tall));
       for (const d of LY.doors) {
         if (d.kind === 'slide') { add(d.x0, (d.x0 + d.x1) / 2 + 0.1, d.z - 0.24, d.z - 0.14, true); continue; }
         for (const x of [d.x0 - 0.14, d.x1 + 0.14]) add(x - 0.15, x + 0.15, d.z - 0.28, d.z + 0.28, true);
@@ -98,7 +99,7 @@
       // dressing in the kit that stands in the way: the back counter behind the desk, boxes on the storage floor
       add(0, 8.6, -85.8, -85.2, false); add(4.45, 5.15, -87.25, -86.55, false); add(5.95, 6.85, -91.85, -90.95, false); add(10.6, 11.4, -87.4, -86.6, false);
       const C = LY.crack; this.crackW = add(C.x0, C.x1, C.z0, C.z1, true); this.crack = { x: C.x, z: C.z };
-      for (const b of LY.blockers) this.blockers.push({ x: b.x, z: b.z, r: b.r });
+      this.blockerB = LY.blockers.map((b) => { const o = { x: b.x, z: b.z, r: b.r }; this.blockers.push(o); return o; });
       for (const q of LY.puddles) this.puddles.push({ x: q.x, z: q.z, rx: q.rx, rz: q.rz });
       this.locker = { x: LY.locker.x, z: LY.locker.z };
       this.washSpot = { x: LY.washb.x, z: LY.washb.z }; this.boxSpot = { x: LY.box.x, z: LY.box.z };
@@ -131,6 +132,12 @@
       this.water = get('WATER'); this.crackM = get('CRACK_WALL'); this.rubble = get('CRACK_RUBBLE'); this.holes = get('LKHOLES');
       if (this.rubble) this.rubble.visible = false; if (this.holes) this.holes.visible = false;
       this.lkDoors = [0, 1, 2, 3, 4].map((k) => get('LKDOOR_' + k)).filter(Boolean);
+      // everything but the walls breaks under a charge (his own bank of lockers is kept for the story)
+      const pad = (i) => String(i).padStart(2, '0'); this.breakables = [];
+      LY.solids.forEach((sd, i) => { const o = get('SOLID_' + pad(i)); if (!o) return;
+        if (sd.k === 'lockers' && Math.abs(sd.x0 - 4) < 1e-6 && Math.abs(sd.z0 + 36.7) < 1e-6) return;
+        this.breakables.push({ o, w: this.solidW[i], s: sd }); });
+      LY.blockers.forEach((b, i) => { const o = get('PLANT_' + pad(i)); if (o) this.breakables.push({ o, bl: this.blockerB[i], s: { k: 'plant', x0: b.x - b.r * 0.6, x1: b.x + b.r * 0.6, z0: b.z - b.r * 0.6, z1: b.z + b.r * 0.6, h: 1.4 * (b.s || 1), f: b.f } }); });
       if (this.crackDone) { if (this.crackM) this.crackM.visible = false; if (this.rubble) this.rubble.visible = true; }
       if (this.wearing && !this.boxWorn) this.wearBox();
     }
@@ -245,14 +252,14 @@
     }
     goTo(n, x, z) { n.path = this.navPath(n.a.x, n.a.z, x, z) || [[x, z]]; n.pi = 0; n.stuckT = 0; }
     // a noise: anyone in earshot (in that room) walks over the shortest way to look, searches, goes back
-    noise(x, z, radius, msg) {
-      this.ringAt(x, z, radius * 0.4, 0.6); this.ringAt(x, z, radius * 0.7, 0.9);
+    noise(x, z, radius, msg, soft) {   // soft: footsteps (no ripples on the floor; they walk over to look)
+      if (!soft) { this.ringAt(x, z, radius * 0.4, 0.6); this.ringAt(x, z, radius * 0.7, 0.9); }
       const room = roomAt(x, z);
       for (const n of this.npcs) {
-        if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius) continue;
+        if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius || n.a.st !== 'free') continue;
         const path = this.navPath(n.a.x, n.a.z, x, z); if (!path) continue;
         if (n.mode !== 'goto') this.popAt(n.a, msg || '?!', 1.6);
-        n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.noiseAt = [x, z]; n.inv = false;
+        n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.noiseAt = [x, z]; n.inv = !!soft;
       }
     }
     ringAt(x, z, size, dur) { this.fx.ring(x, z, size, dur); const r = (this.fx.rings || []).find((o) => o.t === 0 && o.m.position.x === x && o.m.position.z === z); if (r) r.m.position.y = floorY(x, z) + 0.04; }
@@ -332,11 +339,15 @@
       P.t += dt; P.cd = Math.max(0, P.cd - dt);
       let mx = c.mx, mz = c.mz; const mag = Math.hypot(mx, mz); if (mag > 1) { mx /= mag; mz /= mag; }
       const wet = inPool(P.x, P.z);
-      P.crouch += ((this.keys.KeyI && P.st === 'free' && !wet ? 1 : 0) - P.crouch) * Math.min(1, dt * 10);
+      // I: TIPTOE. Silent, slow, and tiring: about three seconds on his toes, then the heels come down with a thud
+      const tipOn = !!this.keys.KeyI && P.st === 'free' && !wet && !P.tired;
+      P.tip += ((tipOn ? 1 : 0) - P.tip) * Math.min(1, dt * 10);
+      if (tipOn) { P.stam -= dt * (Math.hypot(P.vx, P.vz) > 0.4 ? 1 / 3.2 : 1 / 5); if (P.stam <= 0) { P.stam = 0; P.tired = true; this.heelsDown(); } }
+      else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
       if (P.st === 'free' && c.dash.held && mag > 0.3 && P.cd <= 0 && !wet) { P.st = 'charge'; P.t = 0; P.dur = 0.85; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }
       let spd = 0;
-      if (P.st === 'free') spd = wet ? 2.0 : P.crouch > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
+      if (P.st === 'free') spd = wet ? 2.0 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
       if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; if (!c.dash.held && P.t > 0.25) P.t = P.dur; }
       const dir = P.st === 'charge' || mag > 0.3;
       P.vx += ((dir ? mx : 0) * spd - P.vx) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10)); P.vz += ((dir ? mz : 0) * spd - P.vz) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10));
@@ -346,6 +357,10 @@
       // the cracked wall gives way to a charge
       const CK = LY.crack;
       if (P.st === 'charge' && !this.crackDone && P.z < CK.z1 + P.r + 0.25 && P.z > CK.z0 - 0.2 && P.x > CK.x0 && P.x < CK.x1) this.smashCrack();
+      if (P.st === 'charge' && this.breakables) for (const B of this.breakables) {
+        if (B.done) continue; const sd = B.s; if (Math.abs((sd.f ? UP : 0) - P.y) > 1.2) continue;
+        const cx = clamp(P.x, sd.x0, sd.x1), cz = clamp(P.z, sd.z0, sd.z1); if (Math.hypot(P.x - cx, P.z - cz) < P.r + 0.15) this.breakThing(B);
+      }
       const hit = this.collide(P, P.r);
       // how high he stands: in the bath up to his chest, the stairs, the floor above
       const ty = wet ? (P.z > -3.4 && P.x > 0 && P.x < 2 ? -0.3 : -0.62) : floorY(P.x, P.z);
@@ -354,7 +369,8 @@
       // splashing: wading through the bath, or stepping through a puddle
       const moving = Math.hypot(P.vx, P.vz) > 0.6, inPud = this.puddles.some((q) => Math.abs(floorY(q.x, q.z) - P.y) < 1 && ((P.x - q.x) / q.rx) ** 2 + ((P.z - q.z) / q.rz) ** 2 < 1);
       if (moving && (wet || inPud)) { this.splT = (this.splT || 0) - dt; if (this.splT <= 0) { this.splT = wet ? 0.24 : 0.32;
-        const s = this.view.s, sd = (this.stepSd = -(this.stepSd || 1)); this.fx.water && this.fx.water(P.x + Math.cos(P.f + sd * 1.2) * 0.45 * s, P.z + Math.sin(P.f + sd * 1.2) * 0.45 * s, wet ? 0.8 : 0.35, wet ? POOL.water : P.y); } }
+        const s = this.view.s, sd = (this.stepSd = -(this.stepSd || 1)); this.fx.water && this.fx.water(P.x + Math.cos(P.f + sd * 1.2) * 0.45 * s, P.z + Math.sin(P.f + sd * 1.2) * 0.45 * s, wet ? 0.8 : 0.35, wet ? POOL.water : P.y);
+        if (!wet && !SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, P.tip > 0.5 ? 2.4 : 4.5, '?', true); } }
       else this.splT = 0;
       if (wet !== this.wasWet) { if (this.wasWet !== undefined) this.fx.water && this.fx.water(P.x, P.z, 1.6, POOL.water); this.wasWet = wet; }
       if (P.st === 'charge') {
@@ -373,7 +389,7 @@
       const room = roomAt(P.x, P.z);
       if (room !== this.room) {
         const from = this.room; this.room = room;
-        if (room === 'lock') { this.cp = from === 'corr' ? CP.lockS : CP.lockN; if (!this.saidOut) { this.saidOut = true; this.think('Out here I\'m the only one naked... sneak. (Hold I to crouch)', 3.2); } }
+        if (room === 'lock') { this.cp = from === 'corr' ? CP.lockS : CP.lockN; if (!this.saidOut) { this.saidOut = true; this.think('Out here I\'m the only one naked... they\'ll hear me walk. (Hold I to tiptoe)', 3.4); } }
         if (room === 'corr') { this.cp = CP.corr; if (this.stage === 'storage' && !this.saidCorr) { this.saidCorr = true; this.think('The back corridor... staff use it to get upstairs, I bet.', 2.6); } }
         if (room === 'stair' || (room === 'up' && from === 'stair')) this.cp = CP.stair;
         if (room === 'up' && from === 'stair' && !this.saidUp) { this.saidUp = true; this.think('The lounge... and the front desk is past it. The storage must be behind the desk.', 3.4); }
@@ -388,7 +404,9 @@
       // K: use (locker, wash bucket, pick up / throw, put on the box)
       if (c.grab.pressed && P.st === 'free') this.use();
       // a charge is loud: heavy running footsteps carry round the room
-      if (P.st === 'charge' && !SAFE[roomAt(P.x, P.z)]) { this.stompT = (this.stompT || 0) - dt; if (this.stompT <= 0) { this.stompT = 0.3; this.noise(P.x, P.z, 8, '?'); } } else this.stompT = 0;
+      // footsteps: walking is heard by anyone close by (they come and look), the charge further; tiptoe is silent
+      const loud = SAFE[roomAt(P.x, P.z)] ? 0 : P.st === 'charge' ? 5 : P.st === 'free' && P.tip < 0.5 && Math.hypot(P.vx, P.vz) > 1.2 ? 2.8 : 0;
+      if (loud) { this.stompT = (this.stompT || 0) - dt; if (this.stompT <= 0) { this.stompT = P.st === 'charge' ? 0.35 : 0.5; this.noise(P.x, P.z, loud, '?', true); } } else this.stompT = 0;
       for (const b of this.buckets) if (b.state === 'fly') {
         b.t += dt; const k = Math.min(1, b.t / b.dur); b.x = b.sx + (b.tx - b.sx) * k; b.z = b.sz + (b.tz - b.sz) * k; b.y = b.sy + (b.ty - b.sy) * k + Math.sin(Math.PI * k) * 1.6;
         b.m.position.set(b.x, b.y, b.z); b.m.rotation.x += dt * 9;
@@ -409,12 +427,12 @@
         this.npcStep(n, dt);
         if (SAFE[pr] || this.grace > 0 || n.a.st !== 'free') { n.alarm = Math.max(0, n.alarm - dt); continue; }
         const range = this.range(n), d = Math.hypot(P.x - n.a.x, P.z - n.a.z), same = roomAt(n.a.x, n.a.z) === pr;
-        // right next to someone they hear you, whichever way they face; crouching gets you closer
-        // (the receptionist hears anyone behind her desk; in the box, a crouched creep is quiet even there)
-        const ear = P.crouch > 0.5 && (!n.ear || this.wearing) ? 0.9 : (n.ear || 1.7);
+        // right next to someone they hear you, whichever way they face; on tiptoe you can get much closer
+        // (the receptionist, at her desk, still catches a tiptoe that comes right up behind her)
+        const ear = P.tip > 0.5 ? (n.ear ? 1.2 : 0.6) : (n.ear || 1.7);
         let noticed = false;
         if (d < ear && same && this.clear(n.a.x, n.a.z, P.x, P.z)) { noticed = true; n.alarm += dt * 2.4; if (n.mode === 'route' && n.wait > 0) n.a.f = lerpA(n.a.f, Math.atan2(P.z - n.a.z, P.x - n.a.x), dt * 5); }
-        else if (same && this.sees(n, P.x, P.z, range)) { noticed = true; n.alarm += dt * (1.0 + 2.2 * (1 - d / range)) * (P.crouch > 0.5 ? 0.8 : 1.15) * (P.st === 'charge' ? 2 : 1); if (d < 1.8) n.alarm = 1; }
+        else if (same && this.sees(n, P.x, P.z, range)) { noticed = true; n.alarm += dt * (1.0 + 2.2 * (1 - d / range)) * 1.15 * (P.st === 'charge' ? 2 : 1); if (d < 1.8) n.alarm = 1; }
         else n.alarm = Math.max(0, n.alarm - dt * 0.6);
         // "?": something's there. They walk over to where they saw it (following it while it stays in view), then look round
         if (noticed && n.alarm > 0.3 && n.alarm < 1) {
@@ -424,7 +442,35 @@
         if (n.alarm >= 1) { this.caught(n); break; }
       }
     }
-    range(n) { return n.range * (this.P.crouch > 0.5 ? 0.6 : 1) * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }
+    range(n) { return n.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }
+    breakThing(B) {
+      const P = this.P, sd = B.s; B.done = true; B.o.visible = false;
+      if (B.w) this.walls.splice(this.walls.indexOf(B.w), 1); if (B.bl) this.blockers.splice(this.blockers.indexOf(B.bl), 1);
+      this.buildNav(); P.vx *= 0.7; P.vz *= 0.7;
+      // pieces in its own colours (its most common palette swatch), flung away from him, left lying where they land
+      let mat = null, uv = null;
+      B.o.traverse((q) => { if (!q.isMesh || mat) return; mat = q.material; const a = q.geometry.attributes.uv; if (!a) return;
+        const cnt = {}, st = Math.max(1, (a.count / 80) | 0); for (let k = 0; k < a.count; k += st) { const key = a.getX(k).toFixed(3) + ',' + a.getY(k).toFixed(3); cnt[key] = (cnt[key] || 0) + 1; }
+        uv = Object.entries(cnt).sort((x, y) => y[1] - x[1])[0][0].split(',').map(Number); });
+      const y0 = sd.f ? UP : 0, cx = (sd.x0 + sd.x1) / 2, cz = (sd.z0 + sd.z1) / 2, area = (sd.x1 - sd.x0) * (sd.z1 - sd.z0), n = clamp(Math.round(area * 2.5), 6, 18), h = Math.min(sd.h || 1, 1.9);
+      const ax = cx - P.x, az = cz - P.z, al = Math.hypot(ax, az) || 1;
+      for (let k = 0; k < n; k++) {
+        const r = 0.12 + Math.random() * 0.16, g = new THREE.DodecahedronGeometry(r);
+        if (uv) { const a = g.attributes.uv; for (let q = 0; q < a.count; q++) a.setXY(q, uv[0], uv[1]); }
+        const m = new THREE.Mesh(g, mat || S.Flat.mat(0xbb8b5e)); m.castShadow = true; m.userData.flatDone = true; this.G.add(m);
+        const sx = sd.x0 + Math.random() * (sd.x1 - sd.x0), sz = sd.z0 + Math.random() * (sd.z1 - sd.z0), d = 0.6 + Math.random() * 1.6, sp = (Math.random() - 0.5) * 1.6;
+        this.flying.push({ m, sx, sy: y0 + Math.random() * h, sz, tx: sx + (ax / al) * d - (az / al) * sp, ty: y0 + r * 0.6, tz: sz + (az / al) * d + (ax / al) * sp, h: 0.4 + Math.random() * 0.6, t: 0, dur: 0.35 + Math.random() * 0.3, r0: [0, 0, 0], r1: [Math.random() * 6, Math.random() * 6, Math.random() * 6] });
+      }
+      this.fx.dust && this.fx.dust(cx, y0 + 0.6, cz, 10, 0.5, 0.7, 0.5); this.flash = 0.5;
+      if (this.g.audio && this.g.audio.thump) this.g.audio.thump(8);
+      if (!SAFE[roomAt(cx, cz)]) this.noise(cx, cz, 12, '!?');
+      this.think(['*CRASH*', 'Oops.', '...that was loud.', 'Sorry!'][(this.t * 3 | 0) % 4], 1.2);
+    }
+    heelsDown() {   // out of puff on tiptoe: the heels come down, THUD
+      const P = this.P; this.think(['Hff... too heavy...', 'Ugh, my calves...', 'Can\'t... stay up...'][(this.t * 2 | 0) % 3], 1.4);
+      if (this.g.audio && this.g.audio.thump) this.g.audio.thump(4);
+      if (!SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, 4.5, '?', true);
+    }
     use() {
       const P = this.P, near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
       if (P.held) { // throw it where you face
@@ -515,8 +561,8 @@
       if (P.held) { const b = P.held; P.held = null; b.state = 'floor'; b.m.position.set(b.x0, b.base, b.z0); b.m.rotation.set(0, 0, 0); }
       for (const n of this.npcs) { n.alarm = 0; n.a.st = 'free'; n.a.slipFall = false; n.mode = 'route'; n.i = 0; n.wait = n.route[0][2]; n.path = null; n.a.x = n.route[0][0]; n.a.z = n.route[0][1]; n.a.y = floorY(n.a.x, n.a.z); n.a.f = n.route[0][3] || 0; }
       this.grace = 2.0;
-      this.think(this.wearing ? ['Back in the storage room... try again.', 'Out of sight, then move.', 'Crouch (I) when they\'re near.'][this.spotted % 3]
-        : ['Too close... try again.', 'Wait for them to look away.', 'Stay behind cover, then move.', 'Crouch (I) when they\'re near.'][this.spotted % 4], 2.2);
+      this.think(this.wearing ? ['Back in the storage room... try again.', 'Out of sight, then move.', 'Tiptoe (I) past them... but not for long.'][this.spotted % 3]
+        : ['Too close... try again.', 'Wait for them to look away.', 'Stay behind cover, then move.', 'Tiptoe (I) past them... but not for long.'][this.spotted % 4], 2.2);
     }
     win() {
       this.over = 'win'; this.spExit.visible = false; this.P.vx = this.P.vz = 0;
@@ -534,10 +580,12 @@
       const nst = P.st === 'charge' ? 'charge' : P.st === 'slip' ? 'fall' : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.t > 0.3 && P.t < 1.0; } else w.down = false;
-      w.hand = 1; w.hunch = P.crouch; w.relaxed = true; w.fxs = {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : null;
+      w.hand = 1; w.hunch = 0; w.tiptoe = P.tip; w.relaxed = true; w.fxs = {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : null;
       if (this.freeze) w.fxs.dizzy = 1;
       v.update(w, Math.max(dt, 1e-4), T);
-      v.root.position.y += P.y; v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
+      v.root.position.y += P.y + 0.09 * v.s * P.tip;
+      if (P.tip > 0.05) v.root.rotation.z += Math.sin(T * 13) * 0.05 * P.tip * (1.3 - P.stam);
+      v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       if (P.held && P.held.state === 'held') {
         const b = P.held, ha = this._ha || (this._ha = new THREE.Vector3()), hb = this._hb || (this._hb = new THREE.Vector3()), H = { stool: 0.34, oke: 0.26, bucket: 0.42 }[b.kind] || 0.4;
         if (b.kind === 'oke') { v.handWorld(1, ha); b.m.position.set(ha.x, ha.y - H * 0.75, ha.z); }   // by its rim, in one fist
@@ -552,7 +600,7 @@
         if (m.t <= 0) { m.t = 0.1; const g = m.cv.getContext('2d'), sk = ['#e9b894', '#d9a07c', '#f0c8a8', '#c98a6a', '#e0ac88'];
           g.clearRect(0, 0, 8, 5); for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { if ((x === 0 || x === 7) && Math.random() < 0.6) continue; g.fillStyle = sk[(Math.random() * sk.length) | 0]; g.fillRect(x, y, 1, 1); }
           m.s.material.map.needsUpdate = true; }
-        const s = v.s, hip = (this._hip || (this._hip = new THREE.Vector3())).set(0, (CENSOR.y + 0.2 * P.crouch) * s, 0);
+        const s = v.s, hip = (this._hip || (this._hip = new THREE.Vector3())).set(0, CENSOR.y * s, 0);
         v.body.updateWorldMatrix(true, false); v.body.localToWorld(hip); const to = this.cam.position.clone().sub(hip).normalize();
         const pop = m.pop > 0 ? (m.pop -= dt, 1 + Math.sin(Math.max(0, m.pop) / 0.5 * Math.PI) * 0.6) : 1;
         m.s.position.copy(hip).addScaledVector(to, 0.95 * s); m.s.scale.set(CENSOR.w * s * pop, CENSOR.h * s * pop, 1);
@@ -593,13 +641,14 @@
         '#stealthHud .st-think.on{opacity:1}#stealthHud .st-think:after{content:"";position:absolute;left:50%;bottom:-12px;width:14px;height:14px;border-radius:50%;background:#fffaf0;transform:translateX(-50%)}' +
         '#stealthHud .st-pop{position:absolute;transform:translate(-50%,-100%);font:400 26px "Dela Gothic One",sans-serif;color:#cf3a3a;text-shadow:0 2px 0 #fff;white-space:nowrap}' +
         '#stealthHud .st-q{position:absolute;transform:translate(-50%,-100%);font:400 24px "Dela Gothic One",sans-serif;color:#e2a13a;text-shadow:0 2px 0 #fff}' +
+        '#stealthHud .st-stam{position:absolute;width:64px;height:9px;border-radius:6px;background:rgba(255,250,240,.85);transform:translate(-50%,-100%);display:none;padding:2px}#stealthHud .st-stam i{display:block;height:100%;border-radius:4px;background:#84b5ad}#stealthHud .st-stam.tired i{background:#e59d86}' +
         '#stealthHud .st-help{position:absolute;left:24px;bottom:18px;font-size:16px;opacity:.8;background:rgba(255,250,240,.75);padding:4px 10px;border-radius:8px}' +
         '#stealthHud .st-pause,#stealthHud .st-over{position:absolute;left:0;top:0;bottom:0;width:min(520px,92vw);display:none;pointer-events:auto;background:linear-gradient(90deg,rgba(30,24,36,.92),rgba(30,24,36,.6) 80%,transparent);padding:80px 60px;color:#f4efe6}' +
         '#stealthHud .st-over{left:auto;right:0;text-align:right;background:linear-gradient(270deg,rgba(30,24,36,.92),rgba(30,24,36,.6) 80%,transparent)}#stealthHud .st-over button{margin-left:auto}' +
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-obj"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move · hold I crouch · hold L + direction charge · K use / pick up / throw · Esc pause</div>' +
+        '<div class="st-obj"></div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · hold L + direction charge (loud) · K use / pick up / throw · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
@@ -612,6 +661,9 @@
     project(x, y, z) { const v = new THREE.Vector3(x, y, z).project(this.cam); return { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight }; }
     drawHud(dt) {
       const P = this.P, s = this.view.s;
+      const sb = this.el('.st-stam');
+      if (P.stam < 0.999 && !this.over) { const q = this.project(P.x, P.y + 2.55 * s, P.z); sb.style.display = 'block'; sb.style.left = q.x + 'px'; sb.style.top = q.y + 'px'; sb.firstChild.style.width = (P.stam * 100) + '%'; sb.classList.toggle('tired', P.tired); }
+      else sb.style.display = 'none';
       this.el('.st-safe').style.display = SAFE[roomAt(P.x, P.z)] && !this.over ? 'block' : 'none';
       if (this.thinkT > 0) { this.thinkT -= dt; const p = this.project(P.x, P.y + 2.9 * s, P.z), e = this.el('.st-think'); e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; if (this.thinkT <= 0) e.classList.remove('on'); }
       this.pops = this.pops.filter((q) => { q.t -= dt; const p = this.project(q.a.x, (q.a.y || 0) + 2.6 + (1.4 - q.t) * 0.3, q.a.z); q.d.style.left = p.x + 'px'; q.d.style.top = p.y + 'px'; if (q.t <= 0) { q.d.remove(); return false; } return true; });

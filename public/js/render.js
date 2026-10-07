@@ -693,6 +693,13 @@
         if (w.carry.small) Rh = [this.soft ? 0.9 : 0.66, 0.22, 0.3 + sw];
         else { Rh = [0.4, 0.3, 0.66]; Lh = mir(Rh); }
       }
+      // tiptoeing (the bathhouse): drawn up tall, chin up, hands lifted in front, wrists limp, each little step dabbing
+      if (w.tiptoe > 0 && !w.carry && w.st !== 'fall' && !w.lifted) {
+        const k = w.tiptoe, ph = this.gaitPh || 0, sw = Math.sin(ph) * 0.06 * (this.gaitW || 0);
+        this.clipArms = 0;
+        Rh = lerpA(Rh, [0.42, 0.92 + sw, 0.42], k); Lh = lerpA(Lh, [-0.42, 0.92 - sw, 0.42], k);
+        p -= 0.1 * k; hp -= 0.18 * k; c *= 1 - 0.6 * k; rate = Math.max(rate, 12);
+      }
       return { c, p, r, tw, hp, Rh, Lh, rate, drop };
     }
     // where a hand is (world), on whichever body is showing. sd: +1 / -1

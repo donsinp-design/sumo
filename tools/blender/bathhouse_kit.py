@@ -700,12 +700,15 @@ def w_crates(m, s, y):
 def w_exitpost(m, s, y):
     m.gbox(s['x0'], s['x1'], s['z0'], s['z1'], y, y + s['h'], 'green', bev=0.03)
 
+# everything but the walls can be smashed by a charge: each of those is its own root, SOLID_<index in the layout>
+BREAKABLE = {'lockers', 'bench', 'washrow', 'washisland', 'vanity', 'baskets', 'boiler', 'firewood', 'towels', 'cart', 'washer', 'crates',
+             'lowtable', 'massage', 'fridge', 'vending', 'manga', 'sofa', 'desk', 'cabinet', 'shoes', 'shelf'}
 def build_solids():
     m = GB()
-    for s in LY.S:
-        y = ylev(s['f']); fn = globals().get('w_' + s['k'])
-        if fn: fn(m, s, y)
-        else: m.gbox(s['x0'], s['x1'], s['z0'], s['z1'], y, y + s['h'], 'plaster', bev=0.03)
+    for i, s in enumerate(LY.S):
+        y = ylev(s['f']); fn = globals().get('w_' + s['k']) or (lambda mm, s, y: mm.gbox(s['x0'], s['x1'], s['z0'], s['z1'], y, y + s['h'], 'plaster', bev=0.03))
+        if s['k'] in BREAKABLE: mm = GB(); fn(mm, s, y); obj_from(mm, 'SOLID_%02d' % i, 'ENV_DYN')
+        else: fn(m, s, y)
     return obj_from(m, 'BUILDING', 'ENV_STAGE')
 
 # =====================================================================================================================
@@ -783,12 +786,13 @@ def build_details():
         m.gbox(x - w / 2, x + w / 2, z - w / 2, z + w / 2, y0, y0 + h, c, bev=0.03)
     m.gcyl(11.4, -86.7, y, 0.025, 1.4, 'wood_lt', seg=6); m.gico(11.4, -86.7, y + 0.08, 0.16, 'towel', sq=(1, 1, 0.6))
     # plants (potted, on the floor), puddles
-    for b in LY.B:
+    for bi, b in enumerate(LY.B):
         if b['k'] == 'plant':
-            y = ylev(b['f']); s = b['s']
+            y = ylev(b['f']); s = b['s']; m0 = m; m = GB()
             m.gcyl(b['x'], b['z'], y, 0.42 * s, 0.6 * s, 'terracotta', seg=14, r2=0.34 * s, bev=0.03)
             for dx, dz, dy, r in [(0, 0, 1.0, 0.55), (0.32, 0.18, 0.86, 0.38), (-0.3, -0.12, 0.9, 0.4), (0.05, -0.28, 1.25, 0.36)]:
                 m.gico(b['x'] + dx * s, b['z'] + dz * s, y + dy * s, r * s, 'leaf' if dy < 1.1 else 'leaf_lt', sq=(1, 1, 0.9), jit=0.08)
+            obj_from(m, 'PLANT_%02d' % bi, 'ENV_DYN'); m = m0
         elif b['k'] == 'pillar':
             y = ylev(b['f']); m.gcyl(b['x'], b['z'], y, 0.26, 2.0, 'hinoki', seg=16, bev=0.03); m.gcyl(b['x'], b['z'], y, 0.36, 0.1, 'stone', seg=16, bev=0.03)
             m.gcyl(b['x'], b['z'], y + 2.0, 0.34, 0.06, 'wood_dk', seg=16)
