@@ -61,6 +61,7 @@
       this.fx = new S.FX(this.scene); this.fx.scene = this.scene; this.fx.noMarks = true; // no footprints piling up over a whole level
       const nFx = this.scene.children.length;
       this.map = S.CampMap.build(this.scene);
+      if (S.CampFlat) S.CampFlat.setup(this); // the flat look: soft sun, pastel master material, the rebuilt first street
       { // the market never moves: work out its transforms once instead of for thousands of objects every frame
         const swing = new Set(this.map.decor.filter((d) => d.kind === 'lantern' || d.kind === 'arrow').map((d) => d.m)); // these move
         this.scene.updateMatrixWorld(true);
@@ -90,6 +91,7 @@
     }
     stop() {
       removeEventListener('resize', this.resize);
+      if (this.flat) { this.R.r.shadowMap.enabled = false; this.R.r.localClippingEnabled = false; const vg = document.getElementById('vignette'); if (vg) vg.style.display = ''; }
       if (this.hud) this.hud.remove();
       this.scene = null;
     }
@@ -108,6 +110,7 @@
         const arch = o.arch || S.ARCH[1];
         a.view = new S.WrestlerView(this.scene, arch, this.fx, o.lo || (kind === 'player' ? S.DEF_EQ : S.profile.randomLoadout()));
         a.view.viewer = 0; a.view.match = null;
+        if (this.flat && S.SoftSumo) S.SoftSumo.attach(a.view, { noBlob: true }); // the soft, rounded sumo
         if (a.view.mats) for (const m of a.view.mats) {
           if (m.uniforms && m.uniforms.uRimAmt) m.uniforms.uRimAmt.value = 0; // no rim glow in the market: it read as a halo
           if (m.fragmentShader) { m.fragmentShader = m.fragmentShader.replace('sh *= mix(vec3(1.0), vec3(0.8, 0.76, 1.1), uAnime);', 'sh *= mix(vec3(1.0), vec3(0.9, 0.86, 0.9), uAnime);'); m.needsUpdate = true; } // a warm skin shadow, not a violet one (that read as a pink sash)
@@ -124,6 +127,7 @@
       const D = PROPS[type];
       const p = { type, D, x, z, y: 0, vx: 0, vz: 0, vy: 0, r: D.r, hp: D.hp, held: null, thrown: null, ry: ry || 0, spin: 0, dead: false };
       p.mesh = propMesh(type); p.mesh.position.set(x, 0, z); p.mesh.rotation.y = p.ry; this.scene.add(p.mesh);
+      if (this.flat && S.CampFlat) S.CampFlat.swapProp(this, p);
       this.props.push(p);
       return p;
     }
@@ -1114,7 +1118,7 @@
       this.cam.lookAt(this.camT.x, 0.6, this.camT.z);
       this.cam.updateMatrixWorld();
       S.R3.setLight(this.cam, R.anime);
-      if (R.anime && R.post) { const u = R.post.comp.uniforms; u.uCine.value = 1; R.post.render(this.scene, this.cam, T); u.uCine.value = 0; } else R.r.render(this.scene, this.cam);
+      if (this.flat) { S.CampFlat.frame(this); R.r.render(this.scene, this.cam); } else if (R.anime && R.post) { const u = R.post.comp.uniforms; u.uCine.value = 1; R.post.render(this.scene, this.cam, T); u.uCine.value = 0; } else R.r.render(this.scene, this.cam);
       this.drawHud();
     }
     drawActor(a, dt, T) {

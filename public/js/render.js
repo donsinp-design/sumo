@@ -264,6 +264,7 @@
       this.flash = 0; this.lastSquash = 0; this.hook = 0; this.footInit = false;
       this.v1 = new THREE.Vector3(); this.v2 = new THREE.Vector3(); this.v3 = new THREE.Vector3(); this.v4 = new THREE.Vector3();
       this.faceParts = [];
+      this.baseMeshes = []; this.root.traverse((o) => { if (o.isMesh && o.parent && !o.parent.isMesh) this.baseMeshes.push(o); }); // the primitive body (a soft sumo hides it)
       this.dress(add);
     }
     // ---- cosmetics
@@ -772,7 +773,7 @@
 
       // arms (body space); NO ARMS hides them
       const armless = !!(w.fxs && w.fxs.noarms > 0);
-      for (const A of this.arms) { A.up.visible = A.lo.visible = A.hand.visible = !armless; }
+      for (const A of this.arms) { A.up.visible = A.lo.visible = A.hand.visible = !armless && !this.soft; }
       const kh = 1 - Math.exp(-dt * tp.rate);
       for (const A of this.arms) {
         const tg = A.sd > 0 ? tp.Rh : tp.Lh;
@@ -783,6 +784,7 @@
         ik(A.sh, tip, A.l1, A.l2, pole, this.v4);
         seg(A.up, A.sh, this.v4); seg(A.lo, this.v4, tip);
         A.hand.position.copy(tip);
+        (A.el = A.el || new THREE.Vector3()).copy(this.v4);
       }
 
       // feet (world) -> legs (root space)
@@ -809,6 +811,7 @@
         if (w.st === 'air' || w.torpedo) foot.set(Lg.sd * 0.45 * s, hip.y - 0.6 * s, -0.5 * s);
         ik(hip, foot, Lg.l1, Lg.l2, pole, this.v4);
         seg(Lg.thigh, hip, this.v4); seg(Lg.calf, this.v4, foot);
+        (Lg.hp = Lg.hp || new THREE.Vector3()).copy(hip); (Lg.kn = Lg.kn || new THREE.Vector3()).copy(this.v4); (Lg.ft = Lg.ft || new THREE.Vector3()).copy(foot);
         Lg.foot.position.set(foot.x, Math.max(foot.y - 0.02 * s, 0.05 * s + (w.y > 0.12 ? -1 : 0)), foot.z + 0.08 * s);
         Lg.foot.rotation.y = Lg.sd * 0.4;
       }
@@ -819,6 +822,7 @@
       if (this.sink > 0.3) this.shadow.visible = false;
       this.shadow.scale.set(sc, 1, sc * (1 + ps.drop * 0.6));
       this.shadow.rotation.y = Math.PI / 2 - w.f;
+      if (this.soft) S.SoftSumo.drive(this, w);
     }
 
     updateFeet(w, dt, T) {
