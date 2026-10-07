@@ -485,8 +485,8 @@ body.campaign #hud, body.campaign #hint { display: none !important; }
 #campHud .ch-pause h2::before, #campHud .ch-over h2::before { content: attr(data-jp); display: block; font: 400 15px 'Dela Gothic One', sans-serif; letter-spacing: 0.5em; color: #d8262e; margin-bottom: 10px; }
 #campHud .ch-pause button, #campHud .ch-over button { position: relative; display: block; width: auto; margin: 0; padding: 6px 0 6px 0; font: 700 30px 'Barlow Condensed', sans-serif; letter-spacing: 0.06em; border: 0; background: none; color: rgba(244,239,230,0.55); cursor: pointer; text-align: left; transition: color .12s, padding .12s; }
 #campHud .ch-pause button:first-of-type, #campHud .ch-over button:first-of-type { margin-top: 26px; }
-#campHud .ch-pause button:hover, #campHud .ch-over button:hover, #campHud .ch-pause button:focus-visible, #campHud .ch-over button:focus-visible { color: #f4efe6; padding-left: 26px; outline: none; }
-#campHud .ch-pause button:hover::before, #campHud .ch-over button:hover::before { content: ''; position: absolute; left: 0; top: 50%; width: 14px; height: 4px; margin-top: -2px; background: #d8262e; }
+#campHud .ch-pause button.sel, #campHud .ch-pause button:hover, #campHud .ch-over button:hover, #campHud .ch-pause button:focus-visible, #campHud .ch-over button:focus-visible { color: #f4efe6; padding-left: 26px; outline: none; }
+#campHud .ch-pause button.sel::before, #campHud .ch-pause button:hover::before, #campHud .ch-over button:hover::before { content: ''; position: absolute; left: 0; top: 50%; width: 14px; height: 4px; margin-top: -2px; background: #d8262e; }
 #campHud .ch-pause button kbd, #campHud .ch-over button kbd { margin-left: 10px; vertical-align: 5px; }
 #campHud .ch-pause p, #campHud .ch-over p { font-size: 16px; opacity: 0.75; max-width: 400px; margin: 4px 0 0; line-height: 1.5; }
 #campHud .ch-over .ch-total { font: 700 52px/1 'Barlow Condensed', sans-serif; letter-spacing: 0.08em; margin: 18px 0 6px; color: #f4efe6; }

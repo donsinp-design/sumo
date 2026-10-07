@@ -104,8 +104,8 @@ if FULL > 0:
     bb_ = ((cth_ + np.pi) / (2 * np.pi) * NB).astype(int) % NB
     T0 = float(np.median(beltTop[np.cos((np.arange(NB) + 0.5) / NB * 2 * np.pi - np.pi) > 0.3]))   # one level for the whole back (the knot made a dip)
     up = np.clip((P[ci, 2] - (T0 - 0.16)) / 0.16, 0, 1)                        # the top edge rises, the bottom edge stays
-    P[ci, 2] += float(os.environ.get("RAISE", "0.2")) * bk ** 1.5 * up
-    P[ci, 2] += 0.05 * np.clip(1 - np.abs(P[ci, 0]) / 0.16, 0, 1) * bk * up   # the knot's top level with the band (no notch)
+    P[ci, 2] += float(os.environ.get("RAISE", "0.06")) * bk ** 1.5 * up
+    P[ci, 2] += 0.03 * np.clip(1 - np.abs(P[ci, 0]) / 0.16, 0, 1) * bk * up   # the knot's top level with the band (no notch)
 me.vertices.foreach_set('co', P.ravel()); me.update()
 
 # ---- close any gap left between the belt and the skin: pull cloth inside-faces onto the skin surface

@@ -780,7 +780,7 @@
       const q = w.squash;
       const heave = bk * Math.max(0, Math.sin(bph)) * 0.045;
       this.body.scale.set(1 + 0.08 * q + heave, 1 - 0.12 * q, 1 + 0.08 * q + heave * 1.4);
-      if (w.sweat > 0 && this.fx && Math.random() < dt * 9 * w.sweat) { const a = Math.random() * 6.28; this.fx.salt(w.x + Math.cos(a) * 0.3 * s, 1.9 * s, w.z + Math.sin(a) * 0.3 * s, Math.cos(a) * 1.2, Math.sin(a) * 1.2); } // sweat flicking off
+      if (w.sweat > 0 && this.fx && Math.random() < dt * 4 * w.sweat) { const a = Math.random() * 6.28; (this.fx.sweat ? this.fx.sweat.bind(this.fx) : this.fx.salt.bind(this.fx))(w.x + Math.cos(a) * 0.45 * s, 1.5 * s, w.z + Math.sin(a) * 0.45 * s, Math.cos(a) * 1.2, Math.sin(a) * 1.2); } // sweat flicking off
       this.head.rotation.x = ps.hp;
       // sagari swing
       const lvf = w.vx * w.fx + w.vz * w.fz;
@@ -1068,7 +1068,34 @@
         this.saltLife[i] = 0;
       }
     }
+    // sweat: a few clear drops flicking off and falling (not a burst of white grains like the salt)
+    sweat(x, y, z, dx, dz) {
+      if (!this.swPts) {
+        const n = this.swN = 60, g = new THREE.BufferGeometry();
+        this.swPos = new Float32Array(n * 3); this.swVel = new Float32Array(n * 3); this.swLife = new Float32Array(n).fill(9);
+        g.setAttribute('position', new THREE.BufferAttribute(this.swPos, 3));
+        const tex = canvasTex(32, 32, (c) => { const gr = c.createRadialGradient(16, 13, 1, 16, 16, 14); gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.45, 'rgba(170,215,245,0.85)'); gr.addColorStop(1, 'rgba(170,215,245,0)'); c.fillStyle = gr; c.beginPath(); c.arc(16, 16, 14, 0, 7); c.fill(); });
+        this.swPts = new THREE.Points(g, new THREE.PointsMaterial({ map: tex, color: 0xffffff, size: 0.09, transparent: true, opacity: 0.85, depthWrite: false }));
+        this.swPts.frustumCulled = false; this.swPts.renderOrder = 4; this.scene.add(this.swPts); this.swI = 0;
+        for (let i = 0; i < n; i++) this.swPos[i * 3 + 1] = -50;
+      }
+      for (let k = 0; k < 2; k++) {
+        const i = this.swI; this.swI = (this.swI + 1) % this.swN;
+        this.swPos[i * 3] = x; this.swPos[i * 3 + 1] = y; this.swPos[i * 3 + 2] = z;
+        this.swVel[i * 3] = dx * (0.5 + Math.random() * 0.6); this.swVel[i * 3 + 1] = 0.6 + Math.random() * 0.8; this.swVel[i * 3 + 2] = dz * (0.5 + Math.random() * 0.6);
+        this.swLife[i] = 0;
+      }
+    }
     updateSalt(dt) {
+      if (this.swPts) {
+        for (let i = 0; i < this.swN; i++) {
+          if (this.swLife[i] > 2) continue;
+          this.swLife[i] += dt; this.swVel[i * 3 + 1] -= 9 * dt;
+          for (let a = 0; a < 3; a++) this.swPos[i * 3 + a] += this.swVel[i * 3 + a] * dt;
+          if (this.swPos[i * 3 + 1] < 0.03 || this.swLife[i] > 1.2) { this.swPos[i * 3 + 1] = -50; this.swLife[i] = 9; }
+        }
+        this.swPts.geometry.attributes.position.needsUpdate = true;
+      }
       if (!this.saltPts) return;
       for (let i = 0; i < this.saltN; i++) {
         if (this.saltLife[i] > 3) continue;

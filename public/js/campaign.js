@@ -176,7 +176,10 @@
       else if (c === 'retry') { this.setPause(false); this.retry(); }
       else if (c === 'quit') { this.g.endCampaign(); }
     }
-    setPause(on) { this.paused = on; this.el('.ch-pause').classList.toggle('on', on); }
+    setPause(on) { this.paused = on; this.el('.ch-pause').classList.toggle('on', on); if (on) { this.pauseI = 0; this.markPause(); } }
+    // the pause menu moves like the others: a highlighted line, one step per press
+    markPause() { this.el('.ch-pause').querySelectorAll('button').forEach((b, i) => b.classList.toggle('sel', i === this.pauseI)); }
+    pauseMove(d) { const n = this.el('.ch-pause').querySelectorAll('button').length; this.pauseI = ((this.pauseI || 0) + d + n) % n; this.markPause(); this.g.audio.blip(); }
     onKey(e) {
       if (this.maskOpen) { if (e.repeat) return true; if (e.code === 'ArrowUp' || e.code === 'KeyW') this.maskMove(-1); else if (e.code === 'ArrowDown' || e.code === 'KeyS') this.maskMove(1); else if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'KeyJ') this.pickMask(this.maskI); return true; } // keys move one step per press; Enter wears it
       if (this.shopping) {
@@ -188,7 +191,14 @@
         return true;
       }
       if (e.code === 'Escape' || e.code === 'KeyP') { if (this.over) return; this.setPause(!this.paused); return true; }
-      if (this.paused) { if (e.code === 'KeyR') this.command('retry'); else if (e.code === 'KeyQ') this.command('quit'); else if (e.code === 'Enter' || e.code === 'KeyJ') this.command('resume'); return true; }
+      if (this.paused) {
+        if (e.repeat) return true;
+        if (e.code === 'ArrowUp' || e.code === 'KeyW') this.pauseMove(-1);
+        else if (e.code === 'ArrowDown' || e.code === 'KeyS') this.pauseMove(1);
+        else if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'KeyJ') { const b = this.el('.ch-pause').querySelectorAll('button')[this.pauseI || 0]; this.command(b ? b.dataset.c : 'resume'); }
+        else if (e.code === 'KeyR') this.command('retry'); else if (e.code === 'KeyQ') this.command('quit');
+        return true;
+      }
       if (this.over) { if (!this.el('.ch-over').classList.contains('on')) return true; if (e.code === 'Enter' || e.code === 'KeyJ' || e.code === 'KeyR' || e.code === 'Space') this.command(this.over === 'win' ? 'quit' : 'retry'); else if (e.code === 'KeyQ' || e.code === 'Escape') this.command('quit'); /* K (grab) never quits: mashing it must not throw the run away */ return true; }
       return false;
     }
