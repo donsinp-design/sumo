@@ -14,7 +14,7 @@
 #   HAND_H, HAND_M     hour (2.3 m) / minute (3.6 m) hands, origin at the clock centre, pointing at 12 (game -z) at
 #   HAND_S             rotation 0, lying flat just above the face (z 0.02-0.062); HAND_S carries the centre cap.
 #                      The game turns them about the vertical axis (clockwise from above = negative game-y rotation).
-#   DESK, PROP_*       the desk (top at z = -0.6) with a felt mat, a mug, books, a plant, glasses, a pencil
+#   DESK, PROP_*       the desk (top at z = -0.6) with a felt mat, a mug, books, a plant, a pencil
 # Game (Y up) -> Blender (Z up): (x, y, z)_bl = (x, -z, y)_game. Ring centre at the origin, face top at z = 0.
 import bpy, bmesh, math, os, sys, random, subprocess
 from mathutils import Vector, Matrix
@@ -386,7 +386,7 @@ HANDS = {'HAND_H': place('MOD_HandH', 'HAND_H', c='ENV_HANDS'),     # the game t
 place('MOD_Mug', 'PROP_Mug', (-8.9, 0.8, DESK_Z), rz=-20, c='ENV_PROPS')
 place('MOD_Books', 'PROP_Books', (-9.9, 7.4, DESK_Z), rz=14, c='ENV_PROPS')
 place('MOD_Plant', 'PROP_Plant', (9.4, 7.2, DESK_Z), c='ENV_PROPS')
-place('MOD_Glasses', 'PROP_Glasses', (9.0, 0.2, DESK_Z), rz=-15, c='ENV_PROPS')
+# (no glasses) place('MOD_Glasses', 'PROP_Glasses', (9.0, 0.2, DESK_Z), rz=-15, c='ENV_PROPS')
 place('MOD_Pencil', 'PROP_Pencil', (8.4, -3.9, DESK_Z), rz=30, c='ENV_PROPS')
 def set_time(h, mi, s):
     """clockwise seen from above = negative rotation about +z (12 at +y, 3 at +x)."""

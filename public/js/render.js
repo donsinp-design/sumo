@@ -2393,10 +2393,14 @@
       if (KIT_BG[id] !== undefined) this.scene.background.set(KIT_BG[id]);
     }
   };
-  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb', vacuum: 'assets/models/vacuum_kit.glb', heli: 'assets/models/heli_kit.glb' },
-    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4, vacuum: 0xe9d3a8, heli: 0xd9d2c8 }, KIT_CACHE = {};
+  const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb', vacuum: 'assets/models/vacuum_kit.glb', heli: 'assets/models/heli_kit.glb', watch: 'assets/models/clock_kit.glb' },
+    KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4, vacuum: 0xe9d3a8, heli: 0xd9d2c8, watch: 0xf6dfc0 }, KIT_CACHE = {};
   // a little life in the kit stages: the sushi plates rumble on the belt
   const KIT_TICK = {
+    // the hands keep real time (the model has them pointing at 12)
+    watch: (k) => { const hH = k.getObjectByName('HAND_H'), hM = k.getObjectByName('HAND_M'), hS = k.getObjectByName('HAND_S');
+      return () => { const d = new Date(), s = d.getSeconds() + d.getMilliseconds() / 1000, mi = d.getMinutes() + s / 60, h = (d.getHours() % 12) + mi / 60;
+        if (hS) hS.rotation.y = -s / 60 * Math.PI * 2; if (hM) hM.rotation.y = -mi / 60 * Math.PI * 2; if (hH) hH.rotation.y = -h / 12 * Math.PI * 2; }; },
     // the pad's edge lights blink in a chase
     heli: (k) => { const L = k.children.filter((c) => /^LIGHT_/.test(c.name)); return (T) => L.forEach((l, i) => { l.visible = Math.floor(T * 2.5 + i) % 3 !== 0; }); },
     // the robot drives about: straight for a while, stop, turn on the spot, go again. The floor slides under it
