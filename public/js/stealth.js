@@ -23,12 +23,13 @@
   // restart points nobody is looking at
   const CP = { lockN: { x: 5.8, z: -25.6, f: -Math.PI / 2 }, lockS: { x: -11.0, z: -45.9, f: Math.PI / 2 }, corr: { x: -10.2, z: -48.4, f: -Math.PI / 2 },
     stair: { x: 9, z: -56.5, f: -Math.PI / 2 },
-    store: { x: 9.8, z: -89.4, f: Math.PI / 2 } };
+    store: { x: 9.8, z: -89.4, f: Math.PI / 2 }, laundry: { x: 10.9, z: -49.5, f: 0 } };
   const CENSOR = { w: 0.8, h: 0.5, y: -0.55 };   // the pixel block, at hip height below the body centre (the box-pants sit at -0.62)
   const POOL = S.BathLayout.pool;
   const LY = S.BathLayout, EXIT = LY.exit;
   // which room a point is in (noise carries round its own room only; walls muffle it)
   function roomAt(x, z) {
+    if (x > 12.4 && z < -43.6 && z > -61) return 'laundry';
     if (z > -16) return 'bath'; if (z > -27) return 'shower'; if (z > -47) return 'lock';
     if (z > -53.2) return 'corr'; if (z > -61) return 'stair';
     if (z > -86) return 'up'; return x > 4 ? 'store' : 'up';
@@ -58,7 +59,7 @@
       this.build(); this.buildNav();
       this.ctrl = new S.Controller(new S.KeySource(S.MAPS.solo, 0));
       this.keys = {};
-      this.kd = (e) => { this.keys[e.code] = true; }; this.ku = (e) => { this.keys[e.code] = false; };
+      this.kd = (e) => { this.keys[e.code] = true; if (e.code === 'KeyI' && !e.repeat) this.iPress = true; }; this.ku = (e) => { this.keys[e.code] = false; };
       addEventListener('keydown', this.kd); addEventListener('keyup', this.ku);
       // the player: the soft sumo, no mawashi, up to his chest in the bath
       const arch = S.ARCH[g.sel && g.sel.c1 !== undefined ? g.sel.c1 : 0];
@@ -97,6 +98,7 @@
           : add(s.x0, s.x1, s.z0 + (s.z1 - s.z0) * k / s.n, s.z0 + (s.z1 - s.z0) * (k + 1) / s.n, s.tall)); });
       for (const d of LY.doors) {
         if (d.kind === 'slide') { add(d.x0, (d.x0 + d.x1) / 2 + 0.1, d.z - 0.24, d.z - 0.14, true); continue; }
+        if (d.kind === 'zframe') { for (const z of [d.z0 - 0.14, d.z1 + 0.14]) add(d.x - 0.28, d.x + 0.28, z - 0.15, z + 0.15, true); continue; }
         for (const x of [d.x0 - 0.14, d.x1 + 0.14]) add(x - 0.15, x + 0.15, d.z - 0.28, d.z + 0.28, true);
       }
       // dressing in the kit that stands in the way: the back counter behind the desk, boxes on the storage floor
@@ -118,10 +120,36 @@
         const ar = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.arrowTex(), transparent: true, depthWrite: false, depthTest: false })); ar.scale.set(0.62, 0.62, 1); ar.position.y = 2.3; ar.renderOrder = 7; g.add(ar);
         g.userData = { ring, ar }; return g; };
       this.spOut = sp(1, -0.9); this.spLocker = sp(this.locker.x, this.locker.z + 0.6); this.spKey = sp(this.washSpot.x, this.washSpot.z); this.spCrack = sp(LY.crack.x, LY.crack.z1 + 0.9);
-      this.spBox = sp(this.boxSpot.x, this.boxSpot.z); this.spExit = sp(-11.4, (EXIT.z0 + EXIT.z1) / 2);
-      this.marks = [this.spOut, this.spLocker, this.spKey, this.spCrack, this.spBox, this.spExit];
+      this.spBox = sp(this.boxSpot.x, this.boxSpot.z); this.spTowel = sp(LY.towel.x, LY.towel.z); this.spExit = sp(-11.4, (EXIT.z0 + EXIT.z1) / 2);
+      this.marks = [this.spOut, this.spLocker, this.spKey, this.spCrack, this.spBox, this.spExit, this.spTowel];
       this.spOut.visible = true;
-      new THREE.GLTFLoader().load('assets/models/bathhouse_kit.glb', (gl) => { if (this.scene) this.dress(S.Flat.kit(gl.scene)); });
+      // laundry carts: push them about (K), hide inside (I, standing still next to one)
+      this.carts = (LY.carts || []).map((q) => { const c = { x: q.x, z: q.z, f: q.r || 0, vx: 0, vz: 0, m: holder(q.x, 0, q.z), w: add(0, 0, 0, 0, false) }; this.cartBox(c); return c; });
+      new THREE.GLTFLoader().load('assets/models/bathhouse_kit.glb' + (LY.v ? '?v=' + LY.v : ''), (gl) => { if (this.scene) this.dress(S.Flat.kit(gl.scene)); });
+    }
+    // the cart's collider: the box round it, turned (1.3 long, 0.9 wide)
+    cartBox(c) {
+      const ca = Math.abs(Math.cos(c.f)), sa = Math.abs(Math.sin(c.f)), hx = ca * 0.66 + sa * 0.46, hz = sa * 0.66 + ca * 0.46, w = c.w;
+      if (c.off) { w.x0 = w.x1 = w.z0 = w.z1 = 1e4; return; }
+      w.x0 = c.x - hx; w.x1 = c.x + hx; w.z0 = c.z - hz; w.z1 = c.z + hz;
+      c.m.position.set(c.x, 0, c.z); c.m.rotation.y = -c.f;
+    }
+    cartStep(dt) {
+      const P = this.P;
+      for (const c of this.carts) {
+        if (c === P.cart) continue;
+        if (Math.abs(c.vx) + Math.abs(c.vz) > 0.05) {   // sent rolling by a charge
+          c.off = true; this.cartBox(c); c.x += c.vx * dt; c.z += c.vz * dt; c.vx *= 0.96; c.vz *= 0.96; c.f += (c.spin || 0) * dt;
+          const q = { x: c.x, z: c.z }; if (this.collide(q, 0.55)) { c.vx *= -0.4; c.vz *= -0.4; } c.x = q.x; c.z = q.z; c.off = false; this.cartBox(c);
+        }
+      }
+      if (P.cart) {   // pushing: the cart rolls in front of him; he steers it
+        const c = P.cart, d = 1.35 * this.view.s / 1.15; c.off = true; this.cartBox(c);
+        c.f = lerpA(c.f, P.f, dt * 8); const q = { x: P.x + Math.cos(c.f) * d, z: P.z + Math.sin(c.f) * d };
+        this.collide(q, 0.55); c.x = q.x; c.z = q.z; P.x = c.x - Math.cos(c.f) * d; P.z = c.z - Math.sin(c.f) * d;
+        c.m.position.set(c.x, 0, c.z); c.m.rotation.y = -c.f;
+      }
+      if (P.hidden) { const c = P.hidden; if (c.mesh) { c.mesh.scale.y = 1 + Math.sin(this.t * 2.2) * 0.02; } }
     }
     dress(root) {
       this.kit = root; this.scene.add(root);
@@ -132,6 +160,7 @@
       for (const b of this.buckets) if (proto['ITEM_' + b.kind.toUpperCase()]) b.m.add(clone('ITEM_' + b.kind.toUpperCase()));
       if (proto.ITEM_WASHB) this.washB.add(clone('ITEM_WASHB'));
       if (proto.BOX) this.pantsBox.add(clone('BOX'));
+      const cartP = get('ITEM_CART'); if (cartP) { cartP.visible = false; for (const c of this.carts) { const o = cartP.clone(); o.visible = true; o.position.set(0, 0, 0); c.m.add(o); c.mesh = o; } }
       this.water = get('WATER'); this.crackM = get('CRACK_WALL'); this.rubble = get('CRACK_RUBBLE'); this.holes = get('LKHOLES');
       if (this.rubble) this.rubble.visible = false; if (this.holes) this.holes.visible = false;
       this.lkDoors = [0, 1, 2, 3, 4].map((k) => get('LKDOOR_' + k)).filter(Boolean);
@@ -174,7 +203,7 @@
       const P = Math.PI, U = P / 2;
       return [
         // CHANGING ROOM. The attendant walks the two middle aisles, stopping at the ends to look along them
-        mk('fighter', [[-10.4, -33.0, 1.6, 0], [10.6, -33.0, 1.4, P], [2.5, -33.4, 0, 0], [2.5, -38.2, 0, 0], [10.6, -38.2, 1.4, P], [-10.4, -38.2, 1.6, 0]], { room: 'lock' }),
+        mk('fighter', [[-10.4, -33.0, 1.6, 0], [10.6, -33.0, 1.4, P], [2.5, -33.4, 0, 0], [2.5, -38.2, 0, 0], [10.6, -38.2, 1.4, P], [-3.6, -38.2, 1.8, P], [2.5, -38.2, 0, 0], [2.5, -33.4, 0, 0]], { room: 'lock' }),
         mk('grappler', [[-1.0, -44.4, 2.2, -U], [10.6, -44.4, 2.2, -U]], { room: 'lock', fat: true, speed: 0.9, range: 5.4 }),
         mk('rusher', [[-5.0, -30.0, 4.2, -U], [-5.0, -30.0, 1.8, P], [-5.0, -30.0, 3.6, -U], [-5.0, -30.0, 1.8, 0.15]], { room: 'lock', pick: 1, range: 5.2, sway: 0.3 }),
         mk('thrower', [[-7.0, -43.8, 2.6, U], [-3.0, -43.8, 2.2, U]], { room: 'lock', pick: 3, speed: 0.7, range: 4.6 }),
@@ -188,6 +217,10 @@
         mk('technical', [[8.0, -84.6, 999, U]], { room: 'up', sway: 0.9, range: 8.2, half: 0.66, ear: 3.6 }),
         mk('staff', [[-2.6, -77.4, 2.2, U], [9.6, -77.4, 2.2, U]], { room: 'up', speed: 1.1 }),
         mk('staff', [[-6.2, -88.8, 999, U]], { room: 'up', pick: 2, sway: 0.7, range: 6.0 }),
+        // LAUNDRY ROOM. Two working the aisles between the machines, one folding at the table by the door
+        mk('fighter', [[13.4, -53.3, 2.0, 0], [21.4, -53.3, 2.0, P]], { room: 'laundry', pick: 2, speed: 1.1, range: 5.8 }),
+        mk('grappler', [[15.8, -56.4, 2.2, 0], [21.6, -56.4, 2.4, P]], { room: 'laundry', pick: 3, fat: true, speed: 0.9, range: 5.2 }),
+        mk('staff', [[16.6, -48.4, 4.0, U], [16.6, -48.4, 2.2, -U + 0.5]], { room: 'laundry', pick: 4, sway: 0.4, range: 5.6 }),
       ];
     }
     sees(n, x, z, range) {
@@ -209,7 +242,7 @@
     }
     // ---------------------------------------------------------------- walking: a grid over the floor, A*, then the corners cut
     buildNav() {
-      const cs = 0.4, x0 = -15.6, z0 = -93.2, nx = Math.ceil(28.4 / cs), nz = Math.ceil((5.2 - z0) / cs), free = new Uint8Array(nx * nz), R = 0.5;
+      const cs = 0.4, x0 = -15.6, z0 = -93.2, nx = Math.ceil(39.2 / cs), nz = Math.ceil((5.2 - z0) / cs), free = new Uint8Array(nx * nz), R = 0.5;
       for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
         const x = x0 + (i + 0.5) * cs, z = z0 + (j + 0.5) * cs; let ok = true;
         for (const w of this.walls) if (x > w.x0 - R && x < w.x1 + R && z > w.z0 - R && z < w.z1 + R) { ok = false; break; }
@@ -342,21 +375,37 @@
       const P = this.P, c = this.ctrl;
       P.t += dt; P.cd = Math.max(0, P.cd - dt);
       let mx = c.mx, mz = c.mz; const mag = Math.hypot(mx, mz); if (mag > 1) { mx /= mag; mz /= mag; }
-      const wet = inPool(P.x, P.z);
+      const wet = inPool(P.x, P.z), iPress = this.iPress; this.iPress = false;
+      // hidden in a cart: still as a heap of towels. Any move (or I) and he climbs out
+      if (P.hidden) {
+        P.vx = P.vz = 0;
+        if (iPress || mag > 0.5) { const hc = P.hidden; P.hidden = null; this.view.root.visible = true; hc.off = false; this.cartBox(hc);
+          const a = mag > 0.5 ? Math.atan2(mz, mx) : hc.f + Math.PI; P.x = hc.x + Math.cos(a) * 1.3; P.z = hc.z + Math.sin(a) * 1.3; this.collide(P, P.r); P.f = a; }
+        else { this.cartStep(dt); this.grace = Math.max(this.grace, 0); this.npcsOnly(dt); return; }
+      }
+      if (iPress && P.st === 'free' && !wet && !P.held) {   // I next to a cart, standing still: climb in
+        const near = this.carts.find((cc) => Math.hypot(cc.x - P.x, cc.z - P.z) < 2.0);
+        if (near && (mag < 0.3 || P.cart)) { if (P.cart) P.cart = null; P.hidden = near; near.off = true; this.cartBox(near); P.x = near.x; P.z = near.z; this.view.root.visible = false; P.tip = 0;
+          if (!this.saidCart) { this.saidCart = true; this.think('...just a cart of towels. Nothing to see.', 2.0); } return; }
+      }
       // I: TIPTOE. Silent, slow, and tiring: about six seconds on his toes, then the heels come down with a thud
-      const tipOn = !!this.keys.KeyI && P.st === 'free' && !wet && !P.tired;
+      const tipOn = !!this.keys.KeyI && P.st === 'free' && !wet && !P.tired && !P.cart;
+      // in the bath, I: duck right under (just bubbles on the water)
+      P.sub = wet && !!this.keys.KeyI && P.st === 'free';
+      if (P.sub) { this.bubT = (this.bubT || 0) - dt; if (this.bubT <= 0) { this.bubT = 0.45; this.fx.water && this.fx.water(P.x + (Math.random() - 0.5) * 0.4, P.z + (Math.random() - 0.5) * 0.4, 0.15, POOL.water); }
+        if (!this.saidSub) { this.saidSub = true; this.think('Blub... blub...', 1.4); } }
       P.tip += ((tipOn ? 1 : 0) - P.tip) * Math.min(1, dt * 10);
       if (tipOn) { P.stam -= dt * (Math.hypot(P.vx, P.vz) > 0.4 ? 1 / 6.4 : 1 / 10); if (P.stam <= 0) { P.stam = 0; P.tired = true; this.heelsDown(); } }
       else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
-      if (P.st === 'free' && c.dash.held && mag > 0.3 && P.cd <= 0 && !wet) { P.st = 'charge'; P.t = 0; P.dur = 0.85; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }
+      if (P.st === 'free' && c.dash.held && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { P.st = 'charge'; P.t = 0; P.dur = 0.85; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }
       let spd = 0;
-      if (P.st === 'free') spd = wet ? 2.0 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
+      if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 2.6 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
       if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; if (!c.dash.held && P.t > 0.25) P.t = P.dur; }
       const dir = P.st === 'charge' || mag > 0.3;
       P.vx += ((dir ? mx : 0) * spd - P.vx) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10)); P.vz += ((dir ? mz : 0) * spd - P.vz) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10));
       if (P.st === 'slip' || P.st === 'busy' || P.st === 'wear') { P.vx *= 0.9; P.vz *= 0.9; }
-      if (mag > 0.3 && P.st === 'free') P.f = lerpA(P.f, Math.atan2(mz, mx), dt * 12);
+      if (mag > 0.3 && P.st === 'free') P.f = lerpA(P.f, Math.atan2(mz, mx), dt * (P.cart ? 4 : 12));
       P.x += P.vx * dt; P.z += P.vz * dt;
       // the cracked wall gives way to a charge
       const CK = LY.crack;
@@ -370,6 +419,11 @@
         }
         if (best) { this.breakThing(best); P.brkCd = 0.3; }
       }
+      if (P.st === 'charge') for (const cc of this.carts) {
+        if (cc === P.cart || cc === P.hidden || Math.hypot(cc.x - P.x, cc.z - P.z) > P.r + 0.75 || (Math.abs(cc.vx) + Math.abs(cc.vz)) > 1) continue;
+        cc.vx = Math.cos(P.cdir) * 6; cc.vz = Math.sin(P.cdir) * 6; cc.spin = (Math.random() - 0.5) * 4; this.noise(cc.x, cc.z, 8, '?!');
+        if (this.g.audio && this.g.audio.thump) this.g.audio.thump(5);
+      }
       if (P.st === 'charge') for (const b of this.buckets) {
         if (b.state !== 'floor' || Math.abs(b.m.position.y - P.y) > 1.2 || Math.hypot(b.m.position.x - P.x, b.m.position.z - P.z) > P.r + 0.35) continue;
         const dx = b.m.position.x - P.x, dz = b.m.position.z - P.z, dl = Math.hypot(dx, dz) || 1, a = Math.atan2(0.5 * dz / dl + Math.sin(P.cdir), 0.5 * dx / dl + Math.cos(P.cdir));
@@ -377,9 +431,10 @@
         b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y; b.tx = b.sx + Math.cos(a) * L; b.tz = b.sz + Math.sin(a) * L;
         b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz); b.dur = 0.3 + L * 0.05;
       }
+      this.cartStep(dt);
       const hit = this.collide(P, P.r);
       // how high he stands: in the bath up to his chest, the stairs, the floor above
-      const ty = wet ? (P.z > -3.4 && P.x > 0 && P.x < 2 ? -0.3 : -0.62) : floorY(P.x, P.z);
+      const ty = wet ? (P.sub ? -1.6 : P.z > -3.4 && P.x > 0 && P.x < 2 ? -0.3 : -0.62) : floorY(P.x, P.z);
       P.y = Math.abs(ty - P.y) > 1 && !wet ? ty : P.y + (ty - P.y) * Math.min(1, dt * (wet || P.y < -0.05 ? 6 : 20));
       if (!wet && !this.outOfBath && P.y > -0.2) this.leaveBath();
       // splashing: wading through the bath, or stepping through a puddle
@@ -390,7 +445,7 @@
       else this.splT = 0;
       if (wet !== this.wasWet) { if (this.wasWet !== undefined) this.fx.water && this.fx.water(P.x, P.z, 1.6, POOL.water); this.wasWet = wet; }
       if (P.st === 'charge') {
-        if (this.stage === 'smash' && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.25) { this.smashLocker(); P.st = 'busy'; P.t = 0; P.dur = 0.5; }
+        if (this.stage === 'smash' && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.25) { this.hitLocker(); P.st = 'busy'; P.t = 0; P.dur = 0.5; }
         else if (hit) { P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.fx.dust && this.fx.dust(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (!SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, 5, '?'); }
       }
       if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = 'free'; P.t = 0; if (was === 'charge') P.cd = 0.5; if (was === 'wear') this.putOnBox(); }
@@ -406,7 +461,9 @@
       if (room !== this.room) {
         const from = this.room; this.room = room;
         if (room === 'lock') { this.cp = from === 'corr' ? CP.lockS : CP.lockN; if (!this.saidOut) { this.saidOut = true; this.think('Out here I\'m the only one naked... they\'ll hear me walk. (Hold I to tiptoe)', 3.4); } }
-        if (room === 'corr') { this.cp = CP.corr; if (this.stage === 'storage' && !this.saidCorr) { this.saidCorr = true; this.think('The back corridor... staff use it to get upstairs, I bet.', 2.6); } }
+        if (room === 'laundry' || (room === 'corr' && from === 'laundry')) this.cp = CP.laundry;
+        if (room === 'laundry' && this.stage === 'towel' && !this.saidLaundry) { this.saidLaundry = true; this.think('The towels are on the shelf at the far end... past all these machines.', 3.0); }
+        if (room === 'corr' && from !== 'laundry') { this.cp = CP.corr; if (this.stage === 'storage' && !this.saidCorr) { this.saidCorr = true; this.think('The back corridor... staff use it to get upstairs, I bet.', 2.6); } }
         if (room === 'stair' || (room === 'up' && from === 'stair')) this.cp = CP.stair;
         if (room === 'up' && from === 'stair' && !this.saidUp) { this.saidUp = true; this.think('The lounge... and the front desk is past it. The storage must be behind the desk.', 3.4); }
         if (room === 'store') this.cp = CP.store;
@@ -441,7 +498,7 @@
       const pr = roomAt(P.x, P.z);
       for (const n of this.npcs) {
         this.npcStep(n, dt);
-        if (SAFE[pr] || this.grace > 0 || n.a.st !== 'free') { n.alarm = Math.max(0, n.alarm - dt); continue; }
+        if (SAFE[pr] || this.grace > 0 || n.a.st !== 'free' || P.hidden) { n.alarm = Math.max(0, n.alarm - dt); continue; }
         const range = this.range(n), d = Math.hypot(P.x - n.a.x, P.z - n.a.z), same = roomAt(n.a.x, n.a.z) === pr;
         // right next to someone they hear you, whichever way they face; on tiptoe you can get much closer
         // (the receptionist, at her desk, still catches a tiptoe that comes right up behind her)
@@ -458,6 +515,7 @@
         if (n.alarm >= 1) { this.caught(n); break; }
       }
     }
+    npcsOnly(dt) { this.grace = Math.max(0, this.grace - dt); for (const n of this.npcs) { this.npcStep(n, dt); n.alarm = Math.max(0, n.alarm - dt); } }
     range(n) { return n.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }
     breakThing(B) {
       const P = this.P, sd = B.s; B.done = true; B.o.visible = false;
@@ -506,8 +564,17 @@
         const wb = this.washB;
         this.flying.push({ m: wb, sx: wb.position.x, sy: 0, sz: wb.position.z, tx: wb.position.x + 0.3, ty: 0.34, tz: wb.position.z + 0.2, h: 0.5, t: 0, dur: 0.45, r0: [0, 0, 0], r1: [Math.PI, 0.6, 0] });
         this.think('Empty?! No key... Forget it. I\'ll just smash the locker open!', 3.2);
-        this.objective('CHARGE into your locker (hold L + direction)'); return;
+        this.objective('CHARGE into your locker (hold L + direction). It will take a few hits: hide when they come running'); return;
       }
+      if (this.stage === 'towel' && near(LY.towel.x, LY.towel.z, 1.8)) {
+        P.st = 'busy'; P.t = 0; P.dur = 1.0; this.stage = 'storage'; this.spTowel.visible = false; P.f = -Math.PI / 2;
+        this.think('A towel! ...it wouldn\'t even cover one cheek.', 2.6);
+        this.later(2.8, () => { if (this.stage === 'storage') { this.think('Hand towels. ALL of them. ...The STORAGE room, upstairs behind the front desk. Up the back stairs!', 3.6); this.objective('Get UPSTAIRS (the back stairs, past the boxes), into STORAGE behind the FRONT DESK'); } });
+        return;
+      }
+      if (P.cart) { P.cart.off = false; this.cartBox(P.cart); P.cart = null; return; }   // let go of the cart
+      if (!P.held) { const cc = this.carts.find((q) => Math.hypot(q.x - P.x, q.z - P.z) < 2.0 && (Math.abs(q.vx) + Math.abs(q.vz)) < 0.3);
+        if (cc) { P.cart = cc; P.f = Math.atan2(cc.z - P.z, cc.x - P.x); if (!this.saidPush) { this.saidPush = true; this.think('Rolling... (K let go · I hop inside and hide)', 2.4); } return; } }
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { P.st = 'wear'; P.t = 0; P.dur = 0.9; return; }
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
         b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0);
@@ -522,6 +589,19 @@
       this.think('...WAIT. Where is my MAWASHI?!', 2.6);
       this.later(2.8, () => this.think('In the bath nobody minds. Out by the lockers, nobody can see me like this.', 3.2));
       this.objective('Find your LOCKER (through the wash area)');
+    }
+    // his locker takes three charges: a dent, a bad dent, then the doors burst. Each one is heard across the room
+    hitLocker() {
+      this.lockerHits = (this.lockerHits || 0) + 1; const k = this.lockerHits, D = this.lkDoors || [];
+      if (k >= 3) { this.smashLocker(); return; }
+      if (D[0]) { D[0].position.z -= k === 1 ? 0.05 : 0.09; D[0].rotation.set(-0.12 * k, 0.04 * k, 0.05 * k); if (k === 2) D[0].scale.y = 0.93; }
+      if (D[1]) D[1].rotation.set(0, -0.06 * k, 0.03 * k); if (D[2]) D[2].rotation.set(0.02 * k, 0, -0.035 * k);
+      if (k === 2) { if (D[3]) D[3].rotation.y = 0.18; if (D[4]) D[4].position.z -= 0.03; }
+      this.fx.dust && this.fx.dust(this.locker.x, 1.0, this.locker.z, 6, 0.3, 0.4, 0.3); this.flash = 0.35;
+      if (this.g.audio && this.g.audio.thump) this.g.audio.thump(7);
+      this.noise(this.locker.x, this.locker.z, 14, '?!');
+      this.think(k === 1 ? 'BONK. ...just a dent. Again!' : 'CRUNCH! Nearly... once more!', 1.8);
+      this.objective('CHARGE your locker again (' + (3 - k) + ' more). Hide when they come to look');
     }
     smashLocker() {
       this.stage = 'storage'; this.spLocker.visible = false;
@@ -538,8 +618,9 @@
       this.noise(this.locker.x, this.locker.z, 26, '!?');
       if (this.g.audio) { this.g.audio.thump && this.g.audio.thump(9); this.later(0.15, () => this.g.audio.thump && this.g.audio.thump(5)); }
       this.think('...EMPTY?! Someone took my clothes!', 2.2);
-      this.later(2.3, () => { if (this.stage === 'storage') this.think('And everyone else\'s are TINY. Nothing here fits me...', 2.6); });
-      this.later(5.0, () => { if (this.stage === 'storage') { this.think('They heard that! There\'s a STORAGE room behind the front desk, upstairs... through the back corridor!', 3.8); this.objective('Get UPSTAIRS (the back corridor), into STORAGE behind the FRONT DESK'); } });
+      this.stage = 'towel'; this.objective('They heard that! Get away from the lockers and HIDE');
+      this.later(2.3, () => { if (this.stage === 'towel') this.think('And everyone else\'s are TINY. Nothing here fits me...', 2.6); });
+      this.later(5.0, () => { if (this.stage === 'towel') { this.think('A towel, at least! The LAUNDRY room, at the end of the back corridor.', 3.4); this.objective('Get a TOWEL from the LAUNDRY room (through the staff door, along the back corridor)'); this.spTowel.visible = true; } });
       this.cp = CP.lockN;
     }
     smashCrack() {
@@ -567,6 +648,7 @@
       if (this.g.audio && this.g.audio.swell) this.g.audio.swell(0.4, 1.0);
     }
     caught(n) {
+      this.catcher = n;
       this.spotted++; this.freeze = 1.6; this.P.vx = this.P.vz = 0;
       this.popAt(n.a, this.wearing ? ['Is that box... MOVING?!', 'HEY! That box!', 'A walking box?!'][this.spotted % 3] : ['KYAAA!', 'PERVERT!', 'HEY! YOU THERE!', 'MY EYES!'][this.spotted % 4], 1.5, true);
       if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4);
@@ -575,7 +657,10 @@
     respawn() {
       const P = this.P; P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.y = floorY(P.x, P.z); P.vx = P.vz = 0; P.st = 'free';
       if (P.held) { const b = P.held; P.held = null; b.state = 'floor'; b.m.position.set(b.x0, b.base, b.z0); b.m.rotation.set(0, 0, 0); }
-      for (const n of this.npcs) { n.alarm = 0; n.a.st = 'free'; n.a.slipFall = false; n.mode = 'route'; n.i = 0; n.wait = n.route[0][2]; n.path = null; n.a.x = n.route[0][0]; n.a.z = n.route[0][1]; n.a.y = floorY(n.a.x, n.a.z); n.a.f = n.route[0][3] || 0; }
+      // the staff are where they were: nobody resets. Whoever caught him looks round for a moment
+      for (const n of this.npcs) { n.alarm = 0; if (n === this.catcher) { n.mode = 'search'; n.wait = 3.0; n.path = null; } }
+      if (P.cart) { P.cart.off = false; this.cartBox(P.cart); P.cart = null; }
+      if (P.hidden) { P.hidden.off = false; this.cartBox(P.hidden); P.hidden = null; this.view.root.visible = true; }
       this.grace = 2.0;
       this.think(this.wearing ? ['Back in the storage room... try again.', 'Out of sight, then move.', 'Tiptoe (I) past them... but not for long.'][this.spotted % 3]
         : ['Too close... try again.', 'Wait for them to look away.', 'Stay behind cover, then move.', 'Tiptoe (I) past them... but not for long.'][this.spotted % 4], 2.2);
@@ -596,10 +681,10 @@
       const nst = P.st === 'charge' ? 'charge' : P.st === 'slip' ? 'fall' : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.t > 0.3 && P.t < 1.0; } else w.down = false;
-      w.hand = 1; w.hunch = 0; w.tiptoe = P.tip; w.relaxed = true; w.fxs = {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : null;
+      w.hand = 1; w.hunch = 0.55 * P.tip; w.tiptoe = P.tip; w.relaxed = true; w.fxs = {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : null;
       if (this.freeze) w.fxs.dizzy = 1;
       v.update(w, Math.max(dt, 1e-4), T);
-      v.root.position.y += P.y + 0.09 * v.s * P.tip;
+      v.root.position.y += P.y + 0.04 * v.s * P.tip; v.root.visible = !P.hidden;
       v.root.rotation.z = P.tip > 0.05 ? Math.sin(T * 13) * 0.05 * P.tip * (1.3 - P.stam) : 0;   // (set, not added: it must never build up into a lean)
       v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       if (P.held && P.held.state === 'held') {
@@ -610,7 +695,7 @@
       }
       for (const n of this.npcs) { n.v.update(n.a, Math.max(dt, 1e-4), T); this.drawCone(n); }
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
-      const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath;
+      const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden;
       if (m.s.visible) {
         m.t -= dt;
         if (m.t <= 0) { m.t = 0.1; const g = m.cv.getContext('2d'), sk = ['#e9b894', '#d9a07c', '#f0c8a8', '#c98a6a', '#e0ac88'];
@@ -627,7 +712,7 @@
       for (const b of this.buckets) if (b.wet && b.state === 'floor') { b.m.position.y = b.ty + Math.sin(T * 1.6 + b.x) * 0.03; b.m.rotation.z = 0.2 + Math.sin(T * 1.1 + b.z) * 0.08; }
       this.fx.update(dt); this.fx.updateWater && this.fx.updateWater(dt);
       // camera: high, behind, following (as in the campaign), up the stairs with him; closer for the ending
-      this.camT.lerp(new THREE.Vector3(this.over ? P.x + 2.2 : clamp(P.x * 0.8, -10, 10), Math.max(0, P.y), P.z - (this.over ? 0.6 : 2.6)), 1 - Math.exp(-dt * 4));
+      this.camT.lerp(new THREE.Vector3(this.over ? P.x + 2.2 : clamp(P.x * 0.8, -10, 18), Math.max(0, P.y), P.z - (this.over ? 0.6 : 2.6)), 1 - Math.exp(-dt * 4));
       const dist = this.over ? 9 : 15, sh = this.flash ? this.flash * 0.25 : 0; this.flash = Math.max(0, (this.flash || 0) - dt * 2);
       this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh, this.camT.y + dist * 0.64, this.camT.z + dist * 0.77);
       this.cam.lookAt(this.camT.x, this.camT.y + 0.6, this.camT.z); this.cam.updateMatrixWorld();
@@ -664,7 +749,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-obj"></div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · hold L + direction charge (loud) · K use / pick up / throw · Esc pause</div>' +
+        '<div class="st-obj"></div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });

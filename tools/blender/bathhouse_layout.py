@@ -30,10 +30,11 @@ B = []      # round blockers (plants, pillars)
 def blocker(k, x, z, r, f=0, **kw): B.append(dict(k=k, x=x, z=z, r=r, f=f, **kw))
 DOORS = []  # doorways (posts both sides, a threshold)
 def door(x0, x1, z, f=0, kind='frame'): DOORS.append(dict(x0=x0, x1=x1, z=z, f=f, kind=kind))
+def zdoor(z0, z1, x, f=0): DOORS.append(dict(z0=z0, z1=z1, x=x, f=f, kind='zframe'))   # a doorway in a wall running along z
 
 # ================================================================ GROUND
 # outer shell
-wall(-12.4, -12, -53.4, 4.4, col='tile'); wall(12, 12.4, -53.4, 4.4, col='tile'); wall(-12.4, 12.4, 4.4, 4.8, col='tile')
+wall(-12.4, -12, -53.4, 4.4, col='tile'); wall(12, 12.4, -48.4, 4.4, col='tile'); wall(12, 12.4, -53.4, -50.6, col='tile'); zdoor(-50.6, -48.4, 12.2); wall(-12.4, 12.4, 4.4, 4.8, col='tile')
 # ---- bath hall: the bath (rim pieces; the gap x 0..2 on the near side has the steps)
 for x0, x1, z0, z1 in [(-3.2, 0, -2.3, -1.8), (2, 9.2, -2.3, -1.8), (-3.2, 9.2, -12.2, -11.7), (-3.2, -2.7, -11.7, -2.3), (8.7, 9.2, -11.7, -2.3)]:
     solid('rim', x0, x1, z0, z1, 0.55, tall=False)
@@ -54,17 +55,27 @@ for x0, x1, z0, z1 in [(-6, -2, -34.2, -33.6), (5, 9, -39.4, -38.8), (-9, -5, -3
     solid('bench', x0, x1, z0, z1, 0.45, tall=False)
 solid('vanity', 11.2, 12, -46.6, -42.4, 0.85, tall=False)          # mirrors and hair dryers on the east wall
 solid('baskets', -12, -11.3, -35.5, -32.0, 1.4)                    # rattan basket shelves
-LOCKER = dict(x=8.615, z=-35.25, face=-35.98, bank=3)                 # his: number 8, top row, on the bank at z -36
+# his: number 8, top row, at the far end of the bank at z -41 (deep in the room: it takes three charges to burst open)
+LOCKER = dict(x=-12 + 2.5 * 8 / 13, z=-40.25, face=-40.98, bank=4, bx0=-12, bz0=-41.7)
 wall(-12, -11.6, -47.2, -46.8); wall(-8.4, 12, -47.2, -46.8); door(-11.6, -8.4, -47)   # the staff door
 # ---- staff corridor
 wall(-12, 6.4, -53.4, -53, col='plaster_dk')
 solid('boiler', -5.0, -0.6, -53, -51.9, 1.6)
 solid('firewood', 0.2, 2.6, -53, -52.2, 0.9, tall=False)
 solid('towels', -9.6, -6.8, -53, -52.3, 1.5)
-solid('cart', 3.2, 4.4, -52.9, -52.0, 0.8, tall=False)
 solid('washer', -6.6, -3.4, -48.0, -47.2, 1.0)
 solid('crates', -11.8, -10.6, -52.9, -51.7, 0.8, tall=False)
 CRACK = dict(x0=6.6, x1=11.4, z0=-53.0, z1=-51.7, h=1.6, x=9.0, z=-52.35)   # the box heap in front of the stairs (charge through it)
+# ---- LAUNDRY ROOM (east of the corridor, beside the back stairs): rows of big washers and dryers make a maze,
+# carts, a folding table; the towel shelf at the far end
+wall(12, 22.8, -44.0, -43.6, col='tile'); wall(22.4, 22.8, -61, -43.6, col='tile'); wall(12, 22.8, -61, -60.6, col='tile'); wall(12, 12.4, -60.6, -53.4, col='tile')
+LAUNDRY = dict(x0=12.4, x1=22.4, z0=-60.6, z1=-44.0)
+for x0, x1, z0, z1 in [(12.4, 19.4, -52.2, -51.2), (15.4, 22.4, -55.4, -54.4), (12.4, 19.4, -58.3, -57.3)]:
+    solid('washer', x0, x1, z0, z1, 1.4, big=True)
+solid('foldtable', 15.0, 18.2, -47.6, -46.6, 0.85, tall=False)
+solid('towelshelf', 12.6, 16.2, -60.6, -59.9, 1.6)
+TOWEL = dict(x=14.4, z=-59.2)
+CARTS = [dict(x=-2.4, z=-45.9, r=0.2), dict(x=3.8, z=-52.3, r=0.0), dict(x=20.6, z=-47.4, r=1.3), dict(x=13.6, z=-56.0, r=0.4)]
 # ---- back stairs
 wall(6.4, 6.6, -61, -53.0, col='plaster_dk', h=UP + 1.0); wall(11.4, 11.6, -61, -53.0, col='plaster_dk', h=UP + 1.0); wall(11.6, 12.4, -53.4, -53, col='plaster_dk')
 STAIRS = dict(x0=6.6, x1=11.4, z0=-61, z1=-53, steps=16)
@@ -116,23 +127,26 @@ for sd in (-1, 1):
     for z in (-18.6, -21.2, -23.8): ITEMS += [dict(k='stool', x=sd * 10.5, z=z), dict(k='oke', x=sd * 10.2, z=z - 0.65)]
 for z in (-19.7, -23.5):
     for x in (-7.6, -4.4, 4.4, 7.6): ITEMS += [dict(k='stool', x=x, z=z)]
-ITEMS += [dict(k='bucket', x=-4.4, z=-45.4), dict(k='bucket', x=0.6, z=-38.6), dict(k='oke', x=-3.2, z=-64.2, f=F), dict(k='bucket', x=5.6, z=-70.4, f=F), dict(k='stool', x=-5.4, z=-84.4, f=F)]
+ITEMS += [dict(k='bucket', x=21.4, z=-58.8), dict(k='bucket', x=-4.4, z=-45.4), dict(k='bucket', x=0.6, z=-38.6), dict(k='oke', x=-3.2, z=-64.2, f=F), dict(k='bucket', x=5.6, z=-70.4, f=F), dict(k='stool', x=-5.4, z=-84.4, f=F)]
 WASHB = dict(x=3.6, z=-1.0)                                         # his yellow wash bucket by the steps
 PUDDLES = [dict(x=-1.2, z=-29.2, rx=1.0, rz=0.6), dict(x=6.2, z=-44.4, rx=1.2, rz=0.7), dict(x=-9.6, z=-44.4, rx=0.9, rz=0.55), dict(x=9.8, z=-33.6, rx=0.8, rz=0.55),
            dict(x=-5.6, z=-48.6, rx=0.9, rz=0.5), dict(x=9.4, z=-66.4, rx=0.7, rz=0.45, f=F, milk=True)]
 
 # everything but the walls breaks under a charge; long pieces in segments of about 2.4 m (only the one you hit goes)
 BREAKABLE = {'lockers', 'bench', 'washrow', 'washisland', 'vanity', 'baskets', 'boiler', 'firewood', 'towels', 'cart', 'washer', 'crates',
-             'lowtable', 'massage', 'fridge', 'vending', 'manga', 'sofa', 'desk', 'cabinet', 'shoes', 'shelf'}
+             'lowtable', 'massage', 'fridge', 'vending', 'manga', 'sofa', 'desk', 'cabinet', 'shoes', 'shelf', 'foldtable'}
 for s_ in S:
     if s_['k'] in BREAKABLE:
         ax = 'x' if s_['x1'] - s_['x0'] >= s_['z1'] - s_['z0'] else 'z'; L = (s_['x1'] - s_['x0']) if ax == 'x' else (s_['z1'] - s_['z0'])
         s_.update(brk=1, ax=ax, n=max(1, round(L / 2.4)))
 
 LAYOUT = dict(UP=UP, solids=S, blockers=B, doors=DOORS, pool=POOL, locker=LOCKER, crack=CRACK, stairs=STAIRS, courtyard=COURTYARD, exit=EXIT, tatami=TATAMI,
-              genkan=GENKAN, entrance=ENTRANCE, office=OFFICE, box=BOX, items=ITEMS, washb=WASHB, puddles=PUDDLES)
+              genkan=GENKAN, entrance=ENTRANCE, office=OFFICE, box=BOX, items=ITEMS, washb=WASHB, puddles=PUDDLES, laundry=LAUNDRY, towel=TOWEL, carts=CARTS)
 
 if __name__ == '__main__':
+    import hashlib
+    glb = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../public/assets/models/bathhouse_kit.glb')
+    if os.path.exists(glb): LAYOUT['v'] = hashlib.md5(open(glb, 'rb').read()).hexdigest()[:10]
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../public/js/bath-layout.js')
     with open(out, 'w') as fh:
         fh.write("'use strict';\n// generated by tools/blender/bathhouse_layout.py (the bathhouse floor plan, shared with the Blender kit)\nS.BathLayout = " + json.dumps(LAYOUT, separators=(',', ':')) + ';\n')

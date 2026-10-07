@@ -291,6 +291,8 @@ def build_floors():
     m.gbox(-12, 12, -47, -27, -0.06, 0.0, 'board')                        # changing room: wooden boards
     for k in range(40): m.gbox(-12, 12, -47 + k * 0.5 + 0.235, -47 + k * 0.5 + 0.265, 0.0, 0.004, 'board2')
     m.gbox(-12, 12, -53, -47, -0.06, 0.0, 'concrete')                     # staff corridor
+    La = LY.LAUNDRY; checker(La['x0'], La['x1'], La['z0'], La['z1'], 0.0, 0.8, 'tile2', 'tile_dk')      # laundry room
+    for gx in (La['x0'] + 2.5, La['x1'] - 2.5): m.gcyl(gx, (La['z0'] + La['z1']) / 2 + 3.0, 0.0, 0.18, 0.012, 'chrome_dk', seg=14)   # floor drains
     # bath: tub floor and walls (tiled, a blue band), the water is its own root
     P = LY.POOL
     m.gbox(P['x0'], P['x1'], P['z0'], P['z1'], -0.75, -0.7, 'tile_blue')
@@ -359,11 +361,12 @@ def build_floors():
     z = 6.0
     while z > -108:
         d = R2.uniform(5, 8)
-        house(-24, -16.5, z - d + 0.6, z, R2.uniform(1.8, 2.5), False); house(16.5, 24, z - d + 0.6, z, R2.uniform(1.8, 2.5), False); z -= d
+        ex = 16.5 if not (-64 < z and z - d < -42) else 24.5
+        house(-24, -16.5, z - d + 0.6, z, R2.uniform(1.8, 2.5), False); house(ex, ex + 7.5, z - d + 0.6, z, R2.uniform(1.8, 2.5), False); z -= d
     x = -24.0
     while x < 24:
         w_ = R2.uniform(5, 8); house(x, x + w_ - 0.6, -104, -96.5, R2.uniform(1.6, 2.2), True); x += w_
-    for x, z in [(-15, -20), (-15, -40), (15, -10), (15, -45), (-15, 0), (15, -80), (-15.5, -84)]:
+    for x, z in [(-15, -20), (-15, -40), (15, -10), (15, -36), (-15, 0), (15, -80), (-15.5, -84)]:
         m.gico(x, z, 0.6, 0.9, 'leaf', sq=(1, 1, 0.8), jit=0.12); m.gico(x + 0.4, z - 0.3, 1.1, 0.6, 'leaf_lt', jit=0.1)
     return obj_from(m, 'FLOORS', 'ENV_STAGE')
 
@@ -468,7 +471,7 @@ def w_lockers(m, s, y):
     m.gbox(x0 - 0.03, x1 + 0.03, z0 - 0.03, z1 + 0.03, y + h - 0.02, y + h + 0.06, 'wood_dk', bev=0.03)
     m.gbox(x0 + 0.03, x1 - 0.03, z0 - 0.01, z1 + 0.01, y, y + 0.08, 'wood_dd')
     n = round((x1 - x0) / 0.6); pitch = (x1 - x0) / n
-    mine = LY.LOCKER; bank_is_mine = abs(s['x0'] - 4) < 1e-6 and abs(s['z0'] + 36.7) < 1e-6
+    mine = LY.LOCKER; bank_is_mine = abs(s['x0'] - mine['bx0']) < 1e-6 and abs(s['z0'] - mine['bz0']) < 1e-6
     for sd, zf in ((1, z1), (-1, z0)):
         for i in range(n):
             xc = x0 + (i + 0.5) * pitch
@@ -688,6 +691,18 @@ def w_shoes(m, s, y):
 
 def w_washer(m, s, y):
     x0, x1, z0, z1, h = s['x0'], s['x1'], s['z0'], s['z1'], s['h']; n = 2
+    if s.get('big'):   # the laundry room: a back-to-back row of big front-loaders and dryers, round doors on both sides
+        n = max(1, round((x1 - x0) / 1.0)); zc = (z0 + z1) / 2
+        for i in range(n):
+            xa = x0 + i * (x1 - x0) / n + 0.03; xb = x0 + (i + 1) * (x1 - x0) / n - 0.03; xc = (xa + xb) / 2; dry = i % 3 == 2
+            m.gbox(xa, xb, z0, z1, y, y + h, 'chrome' if not dry else 'offwhite', bev=0.05)
+            m.gbox(xa + 0.06, xb - 0.06, z0 - 0.01, z1 + 0.01, y + h - 0.22, y + h - 0.06, 'dark' if not dry else 'chrome_dk', bev=0.01)
+            for sd in (-1, 1):
+                f = zc + sd * ((z1 - z0) / 2 + 0.005)
+                m.cyl(xc, -f, y + 0.62, 0.32, 0.05, 'chrome_dk', seg=22, axis='Y'); m.cyl(xc, -(f + sd * 0.02), y + 0.62, 0.25, 0.03, 'glass_lt' if not dry else 'dark', seg=22, axis='Y')
+                if not dry and (i + (sd > 0)) % 2: m.cyl(xc, -(f + sd * 0.025), y + 0.56, 0.17, 0.02, ['towel', 'towel_pk', 'cushion2'][i % 3], seg=16, axis='Y')   # laundry tumbling
+                m.gbox(xb - 0.22, xb - 0.1, f - 0.02 if sd > 0 else f, f if sd > 0 else f + 0.02, y + h - 0.2, y + h - 0.08, 'green' if i % 2 else 'red')
+        return
     for i in range(n):
         xa = x0 + i * (x1 - x0) / n; xb = xa + (x1 - x0) / n - 0.06; xc = (xa + xb) / 2
         m.gbox(xa, xb, z0, z1, y, y + h, 'offwhite', bev=0.05)
@@ -697,6 +712,28 @@ def w_crates(m, s, y):
     x0, x1, z0, z1, h = s['x0'], s['x1'], s['z0'], s['z1'], s['h']
     m.gbox(x0, x1, z0, z1, y, y + 0.4, 'wood_lt', bev=0.03); m.gbox(x0 + 0.1, x1 - 0.2, z0 + 0.1, z1 - 0.2, y + 0.4, y + 0.8, 'hinoki_dk', bev=0.03)
     for yy in (0.15, 0.3): m.gbox(x0 - 0.01, x1 + 0.01, z1 - 0.01, z1 + 0.01, y + yy - 0.02, y + yy + 0.02, 'wood_dk')
+def w_foldtable(m, s, y):
+    x0, x1, z0, z1, h = s['x0'], s['x1'], s['z0'], s['z1'], s['h']
+    m.gbox(x0, x1, z0, z1, y + h - 0.06, y + h, 'offwhite', bev=0.03)
+    for xx in (x0 + 0.1, x1 - 0.1):
+        for zz in (z0 + 0.1, z1 - 0.1): m.gbox(xx - 0.04, xx + 0.04, zz - 0.04, zz + 0.04, y, y + h - 0.06, 'chrome_dk')
+    m.gbox(x0 + 0.05, x1 - 0.05, z0 + 0.1, z1 - 0.1, y + 0.18, y + 0.22, 'chrome_dk')
+    for i, c in enumerate(['towel', 'towel_pk', 'cushion2', 'towel', 'teal']):
+        xx = x0 + 0.35 + i * 0.62; n = 2 + i % 3
+        for k in range(n): m.gbox(xx - 0.25, xx + 0.25, z0 + 0.2, z1 - 0.2, y + h + k * 0.08, y + h + 0.08 + k * 0.08, c, bev=0.03)
+    m.gbox(x1 - 0.9, x1 - 0.2, z1 + 0.1, z1 + 0.7, y, y + 0.45, 'rattan', bev=0.08); m.gico(x1 - 0.55, z1 + 0.4, y + 0.45, 0.32, 'towel', sq=(1.1, 1, 0.4))
+def w_towelshelf(m, s, y):
+    """the towel shelf: rows of folded towels... all of them hand-towel size."""
+    x0, x1, z0, z1, h = s['x0'], s['x1'], s['z0'], s['z1'], s['h']
+    m.gbox(x0, x1, z0, z0 + 0.06, y, y + h, 'wood_dk')
+    for xx in (x0 + 0.03, x1 - 0.03): m.gbox(xx - 0.03, xx + 0.03, z0, z1, y, y + h, 'wood_dk')
+    for r in range(4):
+        yy = y + 0.05 + r * 0.4; m.gbox(x0, x1, z0, z1, yy, yy + 0.03, 'wood', bev=0.01)
+        xx = x0 + 0.1; i = 0
+        while xx < x1 - 0.25:
+            c = ['towel', 'towel_pk', 'cushion2', 'teal', 'towel', 'mustard'][(i + r * 2) % 6]
+            for k in range(3): m.gbox(xx, xx + 0.2, z0 + 0.12, z1 - 0.06, yy + 0.03 + k * 0.07, yy + 0.09 + k * 0.07, c, bev=0.02)
+            xx += 0.26; i += 1
 def w_exitpost(m, s, y):
     m.gbox(s['x0'], s['x1'], s['z0'], s['z1'], y, y + s['h'], 'green', bev=0.03)
 
@@ -743,7 +780,12 @@ def build_solids():
 def build_details():
     m = GB()
     for d in LY.DOORS:
-        y = ylev(d['f']); z = d['z']
+        y = ylev(d['f'])
+        if d['kind'] == 'zframe':   # a doorway in a wall running along z: posts either side, a threshold
+            x = d['x']
+            for z in (d['z0'] - 0.14, d['z1'] + 0.14): m.gbox(x - 0.28, x + 0.28, z - 0.15, z + 0.15, y, y + 1.4, 'wood_dk', bev=0.03)
+            m.gbox(x - 0.3, x + 0.3, d['z0'], d['z1'], y, y + 0.025, 'wood_dk'); continue
+        z = d['z']
         if d['kind'] == 'slide':     # frosted sliding doors, one slid open
             m.gbox(d['x0'], (d['x0'] + d['x1']) / 2 + 0.1, z - 0.24, z - 0.14, y, y + 1.15, 'wood', bev=0.02)
             m.gbox(d['x0'] + 0.08, (d['x0'] + d['x1']) / 2 + 0.02, z - 0.23, z - 0.15, y + 0.1, y + 1.05, 'glass_lt')
@@ -896,6 +938,15 @@ def build_items():
         vs = [bm.verts.new((x, -z, H)) for x in (-W / 2, W / 2)] + [bm.verts.new((x, -(z + sd * 0.34), H + 0.2)) for x in (W / 2, -W / 2)]
         bm.faces.new(vs if sd > 0 else vs[::-1]); m._end(b, 'cardboard', smooth=False)
     obj_from(m, 'BOX', 'ENV_PROTO')
+    m = GB()   # laundry cart: canvas tub on a chrome frame, four castors, heaped with towels (1.3 x 0.9, 0.85 high)
+    for sx in (-0.55, 0.55):
+        for sz in (-0.36, 0.36): m.gcyl(sx, sz, 0.0, 0.07, 0.1, 'dark', seg=10); m.gcyl(sx, sz, 0.1, 0.025, 0.12, 'chrome', seg=8)
+    m.gbox(-0.65, 0.65, -0.45, 0.45, 0.2, 0.26, 'chrome_dk', bev=0.02)
+    m.gbox(-0.62, 0.62, -0.42, 0.42, 0.26, 0.85, 'board2', bev=0.08, seg=3)
+    m.gbox(-0.56, 0.56, -0.36, 0.36, 0.8, 0.86, 'cardboard_dk', bev=0.02)
+    for dx, dz, r, c in [(-0.25, 0.05, 0.3, 'towel'), (0.2, -0.08, 0.32, 'towel_pk'), (0.05, 0.16, 0.24, 'cushion2'), (-0.32, -0.15, 0.2, 'teal')]: m.gico(dx, dz, 0.86, r, c, sq=(1.2, 1, 0.45), jit=0.1)
+    m.gbox(-0.7, -0.62, -0.3, 0.3, 0.8, 0.95, 'chrome', bev=0.02)   # the push handle
+    obj_from(m, 'ITEM_CART', 'ENV_PROTO')
     for nm_, col, shp in [('CLOTH_SHIRT', 'pink', 'shirt'), ('CLOTH_SHORTS', 'blue', 'shorts')]:
         m = GB()
         pts = [(-0.09, -0.13), (0.09, -0.13), (0.09, 0.05), (0.16, 0.02), (0.19, 0.08), (0.1, 0.14), (-0.1, 0.14), (-0.19, 0.08), (-0.16, 0.02), (-0.09, 0.05)] if shp == 'shirt' else \
@@ -916,6 +967,8 @@ for it in LY.ITEMS:
     o = bpy.data.objects.new(nm('R_' + it['k']), bpy.data.objects['ITEM_' + it['k'].upper()].data); CN['RENDER_ONLY'].objects.link(o)
     o.location = (it['x'], -it['z'], ylev(it.get('f', 0))); o.rotation_euler.z = RNG.uniform(0, 6)
 o = bpy.data.objects.new('R_washb', bpy.data.objects['ITEM_WASHB'].data); CN['RENDER_ONLY'].objects.link(o); o.location = (LY.WASHB['x'], -LY.WASHB['z'], 0)
+for c_ in LY.CARTS:
+    o = bpy.data.objects.new(nm('R_cart'), bpy.data.objects['ITEM_CART'].data); CN['RENDER_ONLY'].objects.link(o); o.location = (c_['x'], -c_['z'], 0); o.rotation_euler.z = c_['r']
 o = bpy.data.objects.new('R_box', bpy.data.objects['BOX'].data); CN['RENDER_ONLY'].objects.link(o); o.location = (LY.BOX['x'], -LY.BOX['z'], UP); o.rotation_euler.z = LY.BOX['ry']
 for o in CN['ENV_PROTO'].objects: o.hide_render = True
 
@@ -942,7 +995,7 @@ L(lp.outputs['Is Camera Ray'], ms.inputs['Fac']); L(ms.outputs[0], out.inputs['S
 cd = bpy.data.cameras.new('GameCam'); cd.sensor_fit = 'VERTICAL'; cd.angle_y = math.radians(38); cd.clip_start = 0.1; cd.clip_end = 200
 cam = bpy.data.objects.new('CAM_Game', cd); CN['CAMERAS'].objects.link(cam); scn.camera = cam
 def game_cam(px, pz, py):
-    cx = max(-10, min(10, px * 0.8)); cz = pz - 2.6
+    cx = max(-10, min(18, px * 0.8)); cz = pz - 2.6
     pos = Vector((cx, -(cz + 11.55), py + 9.6)); tgt = Vector((cx, -cz, py + 0.6))
     cam.location = pos; cam.rotation_euler = (tgt - pos).to_track_quat('-Z', 'Y').to_euler()
     sun.location = tgt + SUN_DIR * 20
@@ -972,7 +1025,7 @@ for m in (M_KIT, M_GW):
     N = m.node_tree.nodes; m.node_tree.links.new(N['VaryMix'].outputs['Result'], N['Principled BSDF'].inputs['Base Color'])
 print('OBJECTS', len(env))
 bpy.ops.wm.save_as_mainfile(filepath=OUT + '/bathhouse_kit.blend')
-VIEWS = {'bath': (1.2, -6.2, 0), 'wash': (0, -21, 0), 'changing': (5, -34, 0), 'corridor': (2, -50, 0), 'stairs': (9, -57, 1.5),
+VIEWS = {'laundry': (17.5, -52.5, 0), 'laundry2': (16.5, -58, 0), 'lockerback': (-7.5, -39.5, 0), 'bath': (1.2, -6.2, 0), 'wash': (0, -21, 0), 'changing': (5, -34, 0), 'corridor': (2, -50, 0), 'stairs': (9, -57, 1.5),
          'lounge': (1, -67, UP), 'hall': (3, -79, UP), 'south': (2, -88, UP)}
 want = [a.split('=')[1].split(',') for a in sys.argv if a.startswith('views=')]
 want = want[0] if want else list(VIEWS)
