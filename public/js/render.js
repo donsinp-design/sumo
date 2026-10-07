@@ -780,7 +780,10 @@
       const q = w.squash;
       const heave = bk * Math.max(0, Math.sin(bph)) * 0.045;
       this.body.scale.set(1 + 0.08 * q + heave, 1 - 0.12 * q, 1 + 0.08 * q + heave * 1.4);
-      if (w.sweat > 0 && this.fx && Math.random() < dt * 4 * w.sweat) { const a = Math.random() * 6.28; (this.fx.sweat ? this.fx.sweat.bind(this.fx) : this.fx.salt.bind(this.fx))(w.x + Math.cos(a) * 0.45 * s, 1.5 * s, w.z + Math.sin(a) * 0.45 * s, Math.cos(a) * 1.2, Math.sin(a) * 1.2); } // sweat flicking off
+      if (w.sweat > 0 && this.fx && this.fx.sweat && Math.random() < dt * 3 * w.sweat) { // sweat: blue teardrops flicking off his head
+        const hp = this.head.getWorldPosition(this.v4), sd = Math.random() < 0.5 ? -1 : 1, rx = w.fz * sd, rz = -w.fx * sd;
+        this.fx.sweat(hp.x + rx * 0.2 * s, hp.y + 0.12 * s, hp.z + rz * 0.2 * s, rx * 1.4, rz * 1.4);
+      }
       this.head.rotation.x = ps.hp;
       // sagari swing
       const lvf = w.vx * w.fx + w.vz * w.fz;
@@ -1074,15 +1077,20 @@
         const n = this.swN = 60, g = new THREE.BufferGeometry();
         this.swPos = new Float32Array(n * 3); this.swVel = new Float32Array(n * 3); this.swLife = new Float32Array(n).fill(9);
         g.setAttribute('position', new THREE.BufferAttribute(this.swPos, 3));
-        const tex = canvasTex(32, 32, (c) => { const gr = c.createRadialGradient(16, 13, 1, 16, 16, 14); gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.45, 'rgba(170,215,245,0.85)'); gr.addColorStop(1, 'rgba(170,215,245,0)'); c.fillStyle = gr; c.beginPath(); c.arc(16, 16, 14, 0, 7); c.fill(); });
-        this.swPts = new THREE.Points(g, new THREE.PointsMaterial({ map: tex, color: 0xffffff, size: 0.09, transparent: true, opacity: 0.85, depthWrite: false }));
+        // a cartoon teardrop: blue, pointed at the top, a white glint
+        const tex = canvasTex(64, 64, (c) => {
+          c.fillStyle = '#4f9df0'; c.strokeStyle = '#2f6fc8'; c.lineWidth = 3;
+          c.beginPath(); c.moveTo(32, 6); c.bezierCurveTo(36, 18, 50, 30, 50, 42); c.arc(32, 42, 18, 0, Math.PI); c.bezierCurveTo(14, 30, 28, 18, 32, 6); c.closePath(); c.fill(); c.stroke();
+          c.fillStyle = 'rgba(255,255,255,0.9)'; c.beginPath(); c.ellipse(25, 40, 4, 7, -0.3, 0, 7); c.fill();
+        });
+        this.swPts = new THREE.Points(g, new THREE.PointsMaterial({ map: tex, color: 0xffffff, size: 0.5, transparent: true, alphaTest: 0.3, depthWrite: false }));
         this.swPts.frustumCulled = false; this.swPts.renderOrder = 4; this.scene.add(this.swPts); this.swI = 0;
         for (let i = 0; i < n; i++) this.swPos[i * 3 + 1] = -50;
       }
-      for (let k = 0; k < 2; k++) {
+      for (let k = 0; k < 1; k++) {
         const i = this.swI; this.swI = (this.swI + 1) % this.swN;
         this.swPos[i * 3] = x; this.swPos[i * 3 + 1] = y; this.swPos[i * 3 + 2] = z;
-        this.swVel[i * 3] = dx * (0.5 + Math.random() * 0.6); this.swVel[i * 3 + 1] = 0.6 + Math.random() * 0.8; this.swVel[i * 3 + 2] = dz * (0.5 + Math.random() * 0.6);
+        this.swVel[i * 3] = dx * (0.35 + Math.random() * 0.3); this.swVel[i * 3 + 1] = 1.2 + Math.random() * 0.6; this.swVel[i * 3 + 2] = dz * (0.35 + Math.random() * 0.3);
         this.swLife[i] = 0;
       }
     }
