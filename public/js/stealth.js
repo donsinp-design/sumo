@@ -422,9 +422,13 @@
         }
       }
       if (tx !== null) { let dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
-        const P = this.P;   // a box on the floor in the way: they walk round it (a little detour, never into it)
+        const P = this.P;   // a box on the floor in the way: they put their shoulder to it and shove it along (sweating); stuck fast, they turn back
         if (P.boxHide) { const bx = P.x - a.x, bz = P.z - a.z, bd = Math.hypot(bx, bz);
-          if (bd < 2.4 && (bx * dx + bz * dz) / (bd || 1) > 0.2 && Math.hypot(tx - P.x, tz - P.z) > 0.9) { const sd = (bx * dz - bz * dx) > 0 ? 1 : -1, k = Math.min(1.6, (2.4 - bd) * 1.4); const ox = dx; dx += sd * dz * k; dz += -sd * ox * k; const n2 = Math.hypot(dx, dz) || 1; dx /= n2; dz /= n2; } }
+          if (bd < 1.45 && (bx * dx + bz * dz) / (bd || 1) > 0.3) {
+            const q = { x: P.x + dx * sp * 0.55 * dt, z: P.z + dz * sp * 0.55 * dt }; this.collide(q, P.r);
+            if (Math.hypot(q.x - P.x, q.z - P.z) > sp * 0.2 * dt) { P.x = q.x; P.z = q.z; sp *= 0.55; n.boxT = 0; if ((n.sweatT = (n.sweatT || 0) - dt) <= 0) { n.sweatT = 1.6; this.popAt(a, ['ふんっ…!', '重っ…!', '💦'][(this.t * 3 | 0) % 3], 1.0); } }
+            else if ((n.boxT = (n.boxT || 0) + dt) > 0.8) { n.boxT = 0; n.i = (n.i + n.route.length - 1) % n.route.length; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); this.popAt(a, 'もう…', 1.0); }
+          } }
         a.vx = dx * sp; a.vz = dz * sp; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 7); }
       else { a.vx *= 0.8; a.vz *= 0.8; }
       const ox = a.x, oz = a.z; a.x += a.vx * dt; a.z += a.vz * dt;
@@ -523,7 +527,7 @@
           if (d < 0.12 && !cc.ret && ((ex - P.x) * mx + (ez - P.z) * mz) / (Math.hypot(ex - P.x, ez - P.z) || 1) > 0.5) { walkIn = true; break; } }
       if ((iPress || walkIn) && !this.hideCd && P.st === 'free' && !wet && !P.held) {   // I next to a cart (walking or not): climb in
         let near = null, nd = 0.3; for (const cc of this.carts) { const w = cc.w, d = Math.hypot(P.x - clamp(P.x, w.x0, w.x1), P.z - clamp(P.z, w.z0, w.z1)) - P.r; if (d < nd && !cc.ret && this.clear(P.x, P.z, cc.x, cc.z)) { nd = d; near = cc; } }   // (right up against it; never one through a wall)
-        if (near) { if (P.cart) P.cart = null; P.hidden = near; P.hideT = 0; near.off = true; this.cartBox(near); P.x = near.x; P.z = near.z; P.vx = P.vz = 0; this.view.root.visible = false; P.tip = 0; this.dropShorts(true);
+        if (near) { this.markWitness(); if (P.cart) P.cart = null; P.hidden = near; P.hideT = 0; near.off = true; this.cartBox(near); P.x = near.x; P.z = near.z; P.vx = P.vz = 0; this.view.root.visible = false; P.tip = 0; this.dropShorts(true);
           if (!this.saidCart) { this.saidCart = true; this.think('...just a cart of towels. Nothing to see.', 2.0); } return; }
       }
       // I: TIPTOE. Silent, slow, and tiring: about six seconds on his toes, then the heels come down with a thud
@@ -542,7 +546,7 @@
       if (P.st === 'free' && c.dash.held && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
       let spd = 0;
       if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 2.6 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
-      if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur; }
+      if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur; if (P.t > 0.85) P.t = P.dur + 0.01; }   // (never longer than 0.85 s)
       if (P.st === 'wind' && mag > 0.3) { P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * 8); P.f = P.cdir; }
       const power = P.st === 'charge' && P.run > 1.0;   // it needs a run-up: from right next to something he just bumps it
       const dir = P.st === 'charge' || mag > 0.3;
@@ -564,7 +568,7 @@
         for (const B of this.breakables) {
           if (B.done) continue; const sd = B.s; if (Math.abs((sd.f ? UP : 0) - P.y) > 1.2) continue;
           // his own locker (the mission one) never shatters: it only dents and bursts open, three charges (hitLocker)
-          if (sd.k === 'lockers' && this.locker.x > sd.x0 - 0.2 && this.locker.x < sd.x1 + 0.2 && this.locker.z > sd.z0 - 1.2 && this.locker.z < sd.z1 + 1.2) continue;
+          if (sd.k === 'lockers' && Math.abs((sd.z0 + sd.z1) / 2 - (LY.locker.bz0 + 0.35)) < 0.6 && sd.x1 > LY.locker.bx0 - 0.1 && sd.x0 < LY.locker.bx0 + 8.1) continue;   // (the whole bank)
           const cx = clamp(P.x, sd.x0, sd.x1), cz = clamp(P.z, sd.z0, sd.z1), d = Math.hypot(P.x - cx, P.z - cz); if (d < bd) { bd = d; best = B; }
         }
         if (best) { this.breakThing(best); P.brkCd = 0.3; }
@@ -632,8 +636,9 @@
       const BD = LY.backdoor;
       if (this.stage === 'escape' && P.x < BD.x - 0.3 && P.z < BD.z1 && P.z > BD.z0) { this.win(); return; }
       // in the box, hold I standing still: he squats right down inside it. Just a box
-      P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet;
+      P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet && !(this.noDuck > 0); this.noDuck = Math.max(0, (this.noDuck || 0) - dt);
       if (!this.boxW) { this.boxW = { x0: 1e4, x1: 1e4, z0: 1e4, z1: 1e4, tall: false, box: true }; this.walls.push(this.boxW); }
+      if (P.boxHide && !this.wasBoxHide) this.markWitness(); this.wasBoxHide = P.boxHide;
       if (P.boxHide) { const W = this.boxW; W.x0 = P.x - 0.85; W.x1 = P.x + 0.85; W.z0 = P.z - 0.85; W.z1 = P.z + 0.85; }   /* (flaps and all) */ else this.boxW.x0 = this.boxW.x1 = this.boxW.z0 = this.boxW.z1 = 1e4;
       this.ratStep(dt);
       if (this.stage === 'escape') for (const t of this.traps) if (t.armed && Math.hypot(t.x - P.x, t.z - P.z) < 0.5 && (P.st === 'free' || P.st === 'charge')) {
@@ -708,12 +713,26 @@
       for (const m of this.npcs) if (m !== n && m.mode !== 'chase' && !m.ko && m.a.st === 'free' && !m.busy && Math.abs(m.a.y - n.a.y) < 1.5 && Math.hypot(m.a.x - n.a.x, m.a.z - n.a.z) < 9) {
         m.mode = 'chase'; m.path = null; m.alarm = 0; m.lostT = 0; m.rp = 0.2; m.last = [P.x, P.z]; m.raid = false; this.popAt(m.a, '!', 1.0); }
     }
+    // anyone who watched him climb in knows exactly where he is
+    markWitness() {
+      const P = this.P;
+      for (const n of this.npcs) if (!n.ko && ((n.mode === 'chase' && n.lostT < 0.6) || (n.a.st === 'free' && !n.busy && Math.abs(n.a.y - P.y) < 1.5 && roomAt(n.a.x, n.a.z) === roomAt(P.x, P.z) && this.sees(n, P.x, P.z, this.range(n))))) {
+        n.pullOut = true; if (n.mode !== 'chase') this.startChase(n); }
+    }
+    pullOut(n) {   // dragged out of his hiding place
+      const P = this.P, a = n.a; this.popAt(a, '見つけた!', 1.2, true);
+      if (P.hidden) { const hc = P.hidden; P.hidden = null; this.view.root.visible = true; hc.off = false; this.cartBox(hc); const ang = Math.atan2(a.z - hc.z, a.x - hc.x) + 0.6; P.x = hc.x + Math.cos(ang) * 1.5; P.z = hc.z + Math.sin(ang) * 1.5; this.collide(P, P.r); this.shoulderShorts(); }
+      if (P.boxHide) { this.noDuck = 1.5; }
+      for (const m of this.npcs) m.pullOut = false;
+    }
     chaseStep(n, dt) {
       const a = n.a, P = this.P;
       if (a.st === 'act' && a.t >= a.dur) a.st = 'free';
       const d = Math.hypot(P.x - a.x, P.z - a.z);
       if (SAFE[roomAt(P.x, P.z)] && !this.wearing) { n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); if (!this.saidBathSafe) { this.saidBathSafe = true; this.popAt(a, '…風呂か。', 1.4); } return; }   // back in the bath: they give up
-      const seen = !P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.freeze && Math.abs(P.y - a.y) < 1.5 && d < 12 && this.clear(a.x, a.z, P.x, P.z);
+      const seenHide = n.pullOut && (P.hidden || P.boxHide);
+      const seen = seenHide || (!P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.freeze && Math.abs(P.y - a.y) < 1.5 && d < 12 && this.clear(a.x, a.z, P.x, P.z));
+      if (seenHide && d < 1.6 && a.st === 'free') { this.pullOut(n); a.st = 'act'; a.atk = 'grab'; a.t = 0; a.dur = 0.5; return; }
       if (seen) { n.lostT = 0; n.last = [P.x, P.z]; } else n.lostT += dt;
       if (n.lostT > 2.5) {   // lost him: off to where he was last seen, and a good look round
         n.mode = 'goto'; n.inv = false; n.noiseAt = n.last; this.goTo(n, n.last[0], n.last[1]); n.mode = 'goto'; this.popAt(a, ['どこだ…?', '消えた…?'][(this.t * 2 | 0) % 2], 1.4); return;
@@ -724,7 +743,7 @@
       const w = n.path && n.path[n.pi]; let tx = w ? w[0] : n.last[0], tz = w ? w[1] : n.last[1];
       if (w && Math.hypot(tx - a.x, tz - a.z) < 0.3 && n.pi < n.path.length - 1) n.pi++;
       const dx = tx - a.x, dz = tz - a.z, dd = Math.hypot(dx, dz);
-      if (!seen && P.boxHide && d < 1.9) { a.vx = a.vz = 0; a.f = lerpA(a.f, Math.atan2(P.z - a.z, P.x - a.x), dt * 4); return; }   // (stops short of the box he ducked into)
+      if (!seen && !n.pullOut && P.boxHide && d < 1.9) { a.vx = a.vz = 0; a.f = lerpA(a.f, Math.atan2(P.z - a.z, P.x - a.x), dt * 4); return; }   // (stops short of the box he ducked into)
       if (a.st === 'free' && dd > 0.2) { const sp = 3.2; a.vx = dx / dd * sp; a.vz = dz / dd * sp; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 9); } else { a.vx *= 0.8; a.vz *= 0.8; }
       a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4); a.y = floorY(a.x, a.z);
       if (seen && d < 1.3 && !(this.hitCd > 0) && a.st === 'free' && P.st !== 'charge') this.hitBy(n);
@@ -737,7 +756,9 @@
       this.flash = 0.35; if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6);
       if (this.hits >= 3) {   // out cold: one clean card, no pile of speech bubbles
         this.catcher = n; this.freeze = 2.2; this.P.vx = this.P.vz = 0; this.clearPops(); this.el('.st-think').classList.remove('on'); this.thinkT = 0;
-        const k = this.el('.st-ko'); k.innerHTML = '<b>KNOCKED OUT</b><i>ノックアウト</i>'; k.classList.add('on'); setTimeout(() => k.classList.remove('on'), 2100);
+        const k = this.el('.st-ko'); k.textContent = 'KNOCKED OUT';
+        k.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;z-index:60;pointer-events:none;font:400 72px "Dela Gothic One",sans-serif;letter-spacing:3px;text-shadow:0 5px 0 rgba(40,30,50,.4);opacity:1;transition:none';
+        setTimeout(() => { k.style.display = 'none'; }, 2100);
       } else this.popAt(a, ['バシッ!', 'ドン!', 'パーン!'][this.hits % 3], 0.8);
     }
     sepNpcs() {   // people don't walk through each other: nudge apart anyone overlapping
@@ -798,7 +819,8 @@
         this.objective('CHARGE into your locker (hold L + direction). It will take a few hits: hide when they come running'); return;
       }
       if (this.stage === 'onigiri' && near(LY.onigiri.x, LY.onigiri.z, 1.7) && this.oni.n > 0) {
-        P.st = 'busy'; P.t = 0; P.dur = 0.6; this.oni.n--; this.oni.eaten++; this.oniDraw(); P.f = Math.atan2(LY.onigiri.z - P.z, LY.onigiri.x - P.x);
+        P.st = 'busy'; P.t = 0; P.dur = 0.65; this.oni.n--; this.oni.eaten++; this.oniDraw(); P.f = Math.atan2(LY.onigiri.z - P.z, LY.onigiri.x - P.x);
+        if (this.proto && this.proto.ITEM_ONIGIRI) { const m = this.proto.ITEM_ONIGIRI.clone(); m.visible = true; m.scale.setScalar(1.3); this.G.add(m); this.eatAnim = { t: 0, m, sx: LY.onigiri.x, sz: LY.onigiri.z, sy: LY.onigiri.y + 0.05 }; }
         this.think(['Nom!', '*munch munch*', 'Mmm!', 'So good...'][this.oni.eaten % 4], 0.9); this.noise(P.x, P.z, 2.2, '?', true);
         if (this.oni.eaten >= LY.onigiri.need) { this.stage = 'toilet'; this.spOni.visible = false; this.el('.st-oni').style.display = 'none';
           this.later(1.2, () => { this.think('...oh no. Oh NO. My stomach... TOILET!', 2.6); this.objective('Get to the TOILETS (through the door in the changing room\'s west wall), into a stall'); this.spStall.visible = true; }); }
@@ -917,7 +939,7 @@
         this.later(5.6, () => { if (this.stage === 'paper') this.think('...and now I STINK. They\'ll smell me coming, tiptoe or not.', 2.8); });
         this.later(4.6, () => { P.inStall = false; if (D) D.rotation.y = -1.4; this.stage = 'paper'; this.spTP.visible = true; this.objective('Get TOILET PAPER from the STORAGE room (upstairs, behind the front desk)'); });
       } else {
-        this.think('*rustle rustle*... ahh. Much better.', 2.2);
+        this.think('*rustle rustle*... ahh. Much better.', 2.2); this.stinky = false;   // (wiped: no more stink, no more flies)
         this.later(1.8, () => { this.think('*FLUSHHH*', 1.0); if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.6); });
         this.later(3.2, () => { P.inStall = false; if (D) D.rotation.y = -1.4; this.escapeStage(); });
       }
@@ -930,6 +952,7 @@
       this.objective('Escape by the KITCHEN\'s back door. The chefs are angry... and watch out for MOUSETRAPS');
     }
     hitLocker() {
+      if (this.t - (this.lockHitAt || -9) < 1.0) return; this.lockHitAt = this.t;   // (one charge, one hit)
       this.lockerHits = (this.lockerHits || 0) + 1; const k = this.lockerHits, D = this.lkDoors || [];
       if (k >= 3) { this.smashLocker(); return; }
       if (D[0]) { D[0].position.z -= k === 1 ? 0.05 : 0.09; D[0].rotation.set(-0.12 * k, 0.04 * k, 0.05 * k); if (k === 2) D[0].scale.y = 0.93; }
@@ -1041,7 +1064,7 @@
       if (this.tatDone || !v.soft || !v.soft.mats) return;
       const skin = v.soft.mats.find((m) => /skin/i.test(m.name || '')); if (!skin) return;
       this.tatDone = true;
-      const c = document.createElement('canvas'); c.width = 256; c.height = 256; const tex = new THREE.CanvasTexture(c);
+      const c = document.createElement('canvas'); c.width = 256; c.height = 256; const tex = new THREE.CanvasTexture(c); tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter;
       const draw = () => { const x = c.getContext('2d'); x.clearRect(0, 0, 256, 256); x.fillStyle = '#000'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '400 104px "Dela Gothic One", serif'; x.fillText('半額', 128, 68); x.fillText('豆腐', 128, 190); tex.needsUpdate = true; };
       draw(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
       const T = S.Stealth.tat || { x: 0, y: 1.3, w: 0.6, h: 0.6 };   // (rest-pose metres: his upper back)
@@ -1105,7 +1128,7 @@
       const P = this.P; this.dropShorts(true); P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.y = floorY(P.x, P.z); P.vx = P.vz = 0; P.st = 'free';
       if (P.held) { const b = P.held; P.held = null; b.state = 'floor'; b.m.position.set(b.x0, b.base, b.z0); b.m.rotation.set(0, 0, 0); }
       // the staff are where they were: nobody resets. Whoever caught him looks round for a moment
-      for (const n of this.npcs) { n.alarm = 0; if (n.mode === 'chase') { n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); } if (n === this.catcher) { n.mode = 'search'; n.wait = 3.0; n.path = null; } if (n.a.st === 'act') n.a.st = 'free'; }
+      for (const n of this.npcs) { n.alarm = 0; n.pullOut = false; if (n.mode === 'chase' || (n === this.catcher && this.hits >= 3)) { const r = n.route[n.i]; n.a.x = r[0]; n.a.z = r[1]; n.a.y = floorY(r[0], r[1]); n.mode = 'route'; n.wait = r[2] || 1; n.path = null; n.a.vx = n.a.vz = 0; continue; }   /* (back at their posts: no spawn-camping) */ if (n === this.catcher) { n.mode = 'search'; n.wait = 3.0; n.path = null; } if (n.a.st === 'act') n.a.st = 'free'; }
       this.hits = 0; this.shove = null; this.hitCd = 0;
       if (P.cart) { P.cart.off = false; this.cartBox(P.cart); P.cart = null; }
       if (P.hidden) { P.hidden.off = false; this.cartBox(P.hidden); P.hidden = null; this.view.root.visible = true; }
@@ -1114,7 +1137,7 @@
         for (const n of this.npcs) if (n.raid) { n.raid = false; n.looked = false; n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); }
         this.raid = { t: 0, phase: 'wait', wait: 6, k: 0 };
       }
-      this.grace = 2.0;
+      this.grace = 3.0;
       this.think(this.wearing ? ['Back in the storage room... try again.', 'Out of sight, then move.', 'Tiptoe (I) past them... but not for long.'][this.spotted % 3]
         : ['...ow. Woke up back here. Sneakier this time.', 'Wait for them to look away.', 'Stay behind cover, then move.', 'Tiptoe (I) past them... but not for long.'][this.spotted % 4], 2.2);
     }
@@ -1131,7 +1154,12 @@
       if (S.SoftSumo && S.SoftSumo.loaded && !v.soft) S.SoftSumo.attach(v, { noBlob: true });
       if (v.soft && !v.pantsOff) { v.pantsOff = true; for (const m of v.soft.mats) if (/mawashi/i.test(m.name || '')) m.visible = false; }
       w.x = P.x; w.z = P.z; w.y = 0; w.f = P.f; w.fx = Math.cos(P.f); w.fz = Math.sin(P.f); w.vx = P.vx; w.vz = P.vz; w.spd = Math.hypot(P.vx, P.vz);
-      const nst = P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
+      if (this.eatAnim) {   // sucked in like the gacha inhale
+        const E = this.eatAnim; E.t += dt; const k = Math.min(1, E.t / 0.45), hy = P.y + 1.75 * v.s, fx = Math.cos(P.f), fz = Math.sin(P.f);
+        E.m.position.set(E.sx + (P.x + fx * 0.35 * v.s - E.sx) * k * k, E.sy + (hy - E.sy) * k, E.sz + (P.z + fz * 0.35 * v.s - E.sz) * k * k); E.m.rotation.y += dt * 14; E.m.visible = k < 1;
+        if (E.t > 0.6) { this.G.remove(E.m); this.eatAnim = null; }
+      }
+      const nst = this.eatAnim && this.eatAnim.t < 0.5 ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.t > 0.3 && P.t < 1.0; } else w.down = false;
       w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0); w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : null;
@@ -1205,7 +1233,7 @@
       const h = this.hud = document.createElement('div'); h.id = 'stealthHud';
       h.innerHTML = '<style>#stealthHud{position:fixed;inset:0;pointer-events:none;z-index:6;font-family:"Barlow Condensed",sans-serif;color:#3a3440}' +
         '#stealthHud .st-obj{position:absolute;left:24px;top:20px;background:rgba(255,250,240,.9);padding:8px 14px;border-radius:10px;font-weight:700;font-size:20px;letter-spacing:.02em;max-width:60vw}' +
-        '#stealthHud .st-ko{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.72);color:#fffaf0;opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
+        '#stealthHud .st-ko{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;text-shadow:0 4px 0 rgba(40,30,50,.35);opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
         '#stealthHud .st-hp{position:absolute;left:24px;top:76px;font-size:28px;letter-spacing:4px;color:#cf3a3a;text-shadow:0 2px 0 #fffaf0;display:none}#stealthHud .st-hp.chase{animation:hpPulse .5s ease-in-out infinite alternate}@keyframes hpPulse{to{transform:scale(1.12)}}' +
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
         '#stealthHud .st-think{position:absolute;transform:translate(-50%,-100%);background:#fffaf0;border-radius:18px;padding:8px 16px;font-weight:700;font-size:20px;max-width:360px;text-align:center;box-shadow:0 3px 0 rgba(60,50,70,.15);opacity:0;transition:opacity .2s}' +
