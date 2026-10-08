@@ -1447,6 +1447,11 @@
           aR: [0.12, 0, -0.22], aL: [0.18, 0, 0.26], eR: -0.25, eL: -0.4, kL: 0.35 + Math.sin(T * 4.6) * 0.14, kR: 0.35 - Math.sin(T * 4.6) * 0.14 });
         stiff = 0.6;
       } else if (st === 'hurt') { set({ lean: -0.18, hx: -0.25, y: 0.84, aR: [-0.2, 0, -0.5], eR: -1.3, aL: [-0.3, 0, 0.55], eL: -1.4 }); stiff = 0.9; }
+      // shoving something heavy: knees well bent, staggered feet, back straight and leaning in, head up
+      if (a.push && st === 'free') { const st2 = Math.sin(T * 3.2 + this.ph) * 0.06;
+        set({ y: 0.64 + st2 * 0.2, lean: 0.62, roll: 0, hy: 0.08, tw: 0, hx: -0.45, hz: 0, lL: -0.95 + st2, kL: 1.35, lR: 0.35 - st2, kR: 0.85 }); stiff = 0.8; }
+      // startled: jerks back upright, hands flung up, head back
+      if (a.shock > 0) { set({ y: 0.92, lean: -0.38, roll: 0, hy: 0, tw: 0, hx: -0.5, hz: 0, aR: [-2.3, 0, -0.7], eR: -1.2, aL: [-2.3, 0, 0.7], eL: -1.2, lL: 0.25, kL: 0.3, lR: -0.15, kR: 0.2 }); stiff = 2.2; }
       if (a.frozen > 0) stiff = 99;
       return { P, stiff };
     }

@@ -190,7 +190,11 @@
       for (const n of ['ITEM_STOOL', 'ITEM_OKE', 'ITEM_BUCKET', 'ITEM_WASHB', 'BOX', 'CLOTH_SHIRT', 'CLOTH_SHORTS']) { const o = get(n); if (o) { o.visible = false; proto[n] = o; } }
       this.proto = proto;
       const clone = (n) => { const o = proto[n].clone(); o.visible = true; o.position.set(0, 0, 0); o.rotation.set(0, 0, 0); o.traverse((q) => { if (q.isMesh) q.castShadow = true; }); return o; };
-      for (const b of this.buckets) if (proto['ITEM_' + b.kind.toUpperCase()]) b.m.add(clone('ITEM_' + b.kind.toUpperCase()));
+      for (const b of this.buckets) if (proto['ITEM_' + b.kind.toUpperCase()]) { const o = clone('ITEM_' + b.kind.toUpperCase()); b.m.add(o);
+        if (b.kind === 'oke' && !b.base) {   // the wash tubs in the wash area are full of water (thrown or smashed: a puddle)
+          const bb = new THREE.Box3().setFromObject(o), sz = bb.getSize(new THREE.Vector3()), r = Math.min(sz.x, sz.z) * 0.42;
+          const w = new THREE.Mesh(new THREE.CircleGeometry(r, 20), new THREE.MeshBasicMaterial({ color: 0x8fcdf0, transparent: true, opacity: 0.85 })); w.rotation.x = -Math.PI / 2; w.position.y = bb.max.y - b.m.position.y - sz.y * 0.22; w.userData.flatDone = true;
+          o.add(w); b.waterM = w; b.water = true; } }
       if (proto.ITEM_WASHB) this.washB.add(clone('ITEM_WASHB'));
       if (proto.BOX) this.pantsBox.add(clone('BOX'));
       if (proto.ITEM_ONIGIRI || get('ITEM_ONIGIRI')) { const op = get('ITEM_ONIGIRI'); op.visible = false; proto.ITEM_ONIGIRI = op;
@@ -415,6 +419,12 @@
         if (this.stage === 'onigiri' && (n.mode === 'route' || n.mode === 'cook') && !(n.ckAway > 0)) { if (this.cook(n, dt)) return; }
         else if (n.mode === 'cook') { n.mode = 'route'; this.cookStop(n); }
         if (this.stage !== 'onigiri' && n.busy) this.cookStop(n);
+      }
+      if (n.shock > 0) {   // startled: a hop backwards, frozen a beat staring at him, then they come for him
+        n.shock -= dt; const k = Math.max(0, n.shock - 0.75) / 0.35; a.vx = n.shockV[0] * k; a.vz = n.shockV[1] * k;
+        a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4); a.f = lerpA(a.f, Math.atan2(this.P.z - a.z, this.P.x - a.x), dt * 8);
+        if (n.shock <= 0) { a.shock = 0; a.vx = a.vz = 0; if (!this.P.hidden && !this.P.boxHide) this.startChase(n); else { n.mode = 'search'; n.wait = 2; } }
+        return;
       }
       if (a.st === 'act' && a.t >= a.dur) a.st = 'free';   // (a punch or a grab finishes: never left gliding about in a fighting pose)
       if (n.mode === 'chase') { this.chaseStep(n, dt); return; }
@@ -682,7 +692,11 @@
       // in the box, hold I standing still: he squats right down inside it. Just a box
       P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet && !(this.noDuck > 0); this.noDuck = Math.max(0, (this.noDuck || 0) - dt);
       if (!this.boxW) { this.boxW = { x0: 1e4, x1: 1e4, z0: 1e4, z1: 1e4, tall: false, box: true }; this.walls.push(this.boxW); }
-      if (P.boxHide && !this.wasBoxHide) this.markWitness(); this.wasBoxHide = P.boxHide;
+      if (P.boxHide && !this.wasBoxHide) this.markWitness();
+      if (!P.boxHide && this.wasBoxHide) for (const n of this.npcs) if (n.pushing2 && !n.ko && Math.hypot(n.a.x - P.x, n.a.z - P.z) < 2.2) {   // the box they were shoving stands up: they leap back
+        const d = Math.hypot(n.a.x - P.x, n.a.z - P.z) || 1; n.shock = 1.1; n.a.shock = 1; n.shockV = [(n.a.x - P.x) / d * 2.6, (n.a.z - P.z) / d * 2.6];
+        n.pushing2 = false; n.tug = 0; n.path = null; n.a.push = false; this.popAt(n.a, ['うわぁっ!?', 'ひぃっ!?', 'えっ!?'][(this.t * 3 | 0) % 3], 1.1, true); }
+      this.wasBoxHide = P.boxHide;
       if (P.boxHide) { const W = this.boxW; W.x0 = P.x - 0.85; W.x1 = P.x + 0.85; W.z0 = P.z - 0.85; W.z1 = P.z + 0.85; }   /* (flaps and all) */ else this.boxW.x0 = this.boxW.x1 = this.boxW.z0 = this.boxW.z1 = 1e4;
       this.ratStep(dt);
       if (this.stage === 'escape') for (const t of this.traps) if (t.armed && Math.hypot(t.x - P.x, t.z - P.z) < 0.5 && (P.st === 'free' || P.st === 'charge')) {
@@ -693,15 +707,23 @@
       // J: a slap. Rats go flying; things get knocked about; hitting a person is NOT allowed
       if (c.push.pressed && P.st === 'free' && !P.held && !P.cart) this.slap();
       // K: use (locker, wash bucket, pick up / throw, put on the box)
-      if (c.grab.pressed && P.st === 'free') this.use();
+      // (holding something: tap K to throw it, hold K to smash it down at your feet)
+      if (c.grab.pressed && P.st === 'free') { if (P.held) this.kArm = true; else this.use(); }
+      if (this.kArm) { if (!P.held || P.st !== 'free') this.kArm = false; else if (c.grab.held && c.grab.t > 0.32) { this.kArm = false; this.smashHeld(); } else if (!c.grab.held) { this.kArm = false; this.use(); } }
       // a charge is loud: heavy running footsteps carry round the room
       // footsteps: walking is heard by anyone close by (they come and look), the charge further; tiptoe is silent
       const proom = roomAt(P.x, P.z), loud = (SAFE[proom] ? 0 : P.st === 'charge' ? 5 : P.st === 'free' && P.tip < 0.5 && Math.hypot(P.vx, P.vz) > 1.2 ? 2.8 : 0) * (proom === 'laundry' ? 0.45 : 1);   // (the machines drown footsteps out)
       if (loud) { this.stompT = (this.stompT || 0) - dt; if (this.stompT <= 0) { this.stompT = P.st === 'charge' ? 0.35 : 0.5; this.noise(P.x, P.z, loud, '?', true); } } else this.stompT = 0;
       for (const b of this.buckets) if (b.state === 'fly') {
-        b.t += dt; const k = Math.min(1, b.t / b.dur); b.x = b.sx + (b.tx - b.sx) * k; b.z = b.sz + (b.tz - b.sz) * k; b.y = b.sy + (b.ty - b.sy) * k + Math.sin(Math.PI * k) * 1.6;
+        b.t += dt; const k = Math.min(1, b.t / b.dur); b.x = b.sx + (b.tx - b.sx) * k; b.z = b.sz + (b.tz - b.sz) * k; b.y = b.sy + (b.ty - b.sy) * k + Math.sin(Math.PI * k) * (b.arc === undefined ? 1.6 : b.arc);
         b.m.position.set(b.x, b.y, b.z); b.m.rotation.x += dt * 9;
-        if (k >= 1) { b.state = 'floor';
+        // coming down on someone's head: out cold, and it drops at their feet
+        if (k > 0.45 && k < 1 && !b.wet) { const hit = this.npcs.find((n) => !n.ko && n.a.st !== 'down' && Math.hypot(n.a.x - b.x, n.a.z - b.z) < 0.6 && b.y < n.a.y + 2.0 && b.y > n.a.y + 0.15);
+          if (hit) { const fx = b.tx - b.sx, fz = b.tz - b.sz, fl = Math.hypot(fx, fz) || 1; hit.shock = 0; hit.a.shock = 0; hit.pushing2 = false; if (hit.mode === 'chase') hit.mode = 'route';
+            if (b.water) { b.water = false; this.spill(hit.a.x, hit.a.z, hit.a.y); }
+            this.knockOut(hit, fx / fl, fz / fl, ['ゴンッ!', 'ガツン!', 'ボコッ!'][(this.t * 5 | 0) % 3], 1.2);
+            b.tx = b.x + fx / fl * 0.5; b.tz = b.z + fz / fl * 0.5; b.ty = floorY(b.tx, b.tz); b.sx = b.x; b.sz = b.z; b.sy = b.y; b.t = 0; b.dur = 0.25; b.arc = 0.15; } }
+        if (k >= 1) { b.state = 'floor'; b.arc = undefined; if (b.water) { b.water = false; if (!b.wet) this.spill(b.tx, b.tz, b.ty); }
           const pud = this.puddles.some((q) => ((b.x - q.x) / q.rx) ** 2 + ((b.z - q.z) / q.rz) ** 2 < 1.4);
           if (b.wet) { this.fx.water && (this.fx.water(b.x, b.z, 2.4, POOL.water), this.fx.water(b.x + 0.2, b.z - 0.1, 1.4, POOL.water)); b.m.rotation.set(0.3, 0.4, 0.2); b.m.position.y = b.ty; }
           else { if (pud && this.fx.water) this.fx.water(b.x, b.z, 1.4, b.ty); b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + 0.3; } if (!SAFE[roomAt(b.x, b.z)]) this.noise(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think(b.wet ? '*SPLOOSH*' : '*CLATTER*', 1); }
@@ -843,7 +865,7 @@
     use() {
       const P = this.P, near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
       if (P.held) { // throw it where you face
-        const b = P.held; P.held = null; b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y;
+        const b = P.held; this.waterOff(b); P.held = null; b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y;
         const L = Math.max(1, this.reach(P.x, P.z, P.f, 8) - 0.6); b.tx = P.x + Math.cos(P.f) * L; b.tz = P.z + Math.sin(P.f) * L;
         b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz);   // into the bath: it floats
         b.dur = 0.35 + L * 0.05; P.st = 'busy'; P.t = 0; P.dur = 0.3; this.w.hand = 1; return;
@@ -922,9 +944,27 @@
       }
       for (const b of this.buckets) if (b.state === 'floor' && Math.abs(b.m.position.y - P.y) < 1 && inFront(b.m.position.x, b.m.position.z, 1.4)) {
         const L = clamp(this.reach(b.m.position.x, b.m.position.z, P.f, 3) - 0.4, 0.5, 2.5);
-        b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y; b.tx = b.sx + fx * L; b.tz = b.sz + fz * L; b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz); b.dur = 0.3 + L * 0.05;
+        this.waterOff(b); b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y; b.tx = b.sx + fx * L; b.tz = b.sz + fz * L; b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz); b.dur = 0.3 + L * 0.05;
       }
       for (const cc of this.carts) if (cc !== P.cart && inFront(cc.x, cc.z, 1.9)) { cc.vx = fx * 3; cc.vz = fz * 3; cc.spin = 0; }
+    }
+    // hold K with something in hand: he slams it down on the floor in front of him (loud; water goes everywhere)
+    smashHeld() {
+      const P = this.P, b = P.held; if (!b) return; P.held = null; this.waterOff(b);
+      const fx = Math.cos(P.f), fz = Math.sin(P.f), L = Math.max(0.3, Math.min(0.75, this.reach(P.x, P.z, P.f, 2) - 0.4));
+      b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y; b.tx = P.x + fx * L; b.tz = P.z + fz * L;
+      b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz); b.dur = 0.16; b.arc = 0.05;
+      P.st = 'busy'; P.t = 0; P.dur = 0.45; this.w.hand = 1; this.flash = 0.15;
+      if (this.g.audio && this.g.audio.thump) this.g.audio.thump(8);
+    }
+    // the water in a tub shows only while it's carried upright / standing; a spill leaves a puddle that staff can slip on
+    waterOff(b) { if (b.waterM) b.waterM.visible = false; }
+    spill(x, z, y) {
+      if (this.fx.water) { this.fx.water(x, z, 2.2, y + 0.05); this.fx.water(x + 0.25, z - 0.15, 1.4, y + 0.05); }
+      const rx = 0.75 + Math.random() * 0.2, rz = 0.5 + Math.random() * 0.15;
+      const m = new THREE.Mesh(new THREE.CircleGeometry(1, 24), new THREE.MeshBasicMaterial({ color: 0x8cc6ec, transparent: true, opacity: 0.75, depthWrite: false }));
+      m.rotation.set(-Math.PI / 2, 0, Math.random() * 3); m.scale.set(rx, rz, 1); m.position.set(x, floorY(x, z) + 0.012, z); m.userData.flatDone = true; m.renderOrder = 1; this.G.add(m);
+      this.puddles.push({ x, z, rx, rz, m });
     }
     // out cold (a slap, or bowled over by a charge before they'd made him out): ten seconds, or till a colleague wakes them
     knockOut(n, fx, fz, sfx, pow) {
@@ -1241,7 +1281,7 @@
         else { v.handWorld(1, ha); v.handWorld(-1, hb); ha.add(hb).multiplyScalar(0.5); b.m.position.set(ha.x, ha.y - H * 0.5, ha.z); }   // gripped by its sides
         b.m.rotation.set(0, -P.f, 0);
       }
-      for (const n of this.npcs) { n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else if (n.pushing2) { this.knead(n, T, true); this.sweat(n, dt); } this.drawCone(n); }
+      for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else if (n.pushing2) { this.knead(n, T, true); this.sweat(n, dt); } this.drawCone(n); }
       this.sweatStep(dt);
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
       const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden;
