@@ -1,6 +1,6 @@
 'use strict';
 // WHERE'S MY MAWASHI: the kumitegame fork's front end.
-//   boot     the logo on white: fades in, holds 3 s, fades out
+//   boot     straight onto the menu
 //   title    white, the menu on the left; food rains down behind it (onigiri, nigiri, dango..., in the game's flat look)
 //   PLAY     the screen goes white, the bathhouse fades in: the sumo asleep in the bath
 //            (zzz); any key wakes him and the level starts (see Stealth intro)
@@ -102,21 +102,9 @@
     if (W.busy) return; W.busy = true;
     fade(1, 0.45); setTimeout(() => { cb(); setTimeout(() => fade(0, 1.0), 120); W.busy = false; }, 500);
   };
-  // boot: the logo on white, fade in, three seconds, fade out
+  // boot: straight onto the menu (no logo screen); the white cover only hides the page while the game is loading
   W.splash = function (done) {
-    const bc = document.getElementById('wmmBoot') || document.getElementById('bootcover'); if (bc) setTimeout(() => bc.remove(), 50);
-    const d = document.createElement('div'); d.id = 'wmmSplash';
-    d.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:46;display:flex;align-items:center;justify-content:center;transition:opacity .5s ease';
-    const img = new Image(); img.src = 'assets/wmm_logo.webp'; img.alt = "Where's my Mawashi";
-    img.style.cssText = 'width:min(900px,78vw);height:auto;opacity:0;transition:opacity .8s ease';
-    d.appendChild(img); document.body.appendChild(d);
-    const go = () => {
-      requestAnimationFrame(() => { img.style.opacity = 1; });
-      setTimeout(() => { img.style.opacity = 0; }, 800 + 3000);
-      setTimeout(() => { done && done(); d.style.opacity = 0; setTimeout(() => d.remove(), 520); }, 800 + 3000 + 800);
-    };
-    let went = false; const go1 = () => { if (!went) { went = true; go(); } };
-    if (img.decode) img.decode().then(go1, go1); else img.onload = go1;
-    setTimeout(go1, 2500);   // (never a blank white wait on a slow connection)
+    const bc = document.getElementById('wmmBoot') || document.getElementById('bootcover');
+    done && done(); if (bc) requestAnimationFrame(() => bc.remove());
   };
 })();
