@@ -103,8 +103,12 @@
     fade(1, 0.45); setTimeout(() => { cb(); setTimeout(() => fade(0, 1.0), 120); W.busy = false; }, 500);
   };
   // boot: straight onto the menu (no logo screen); the white cover only hides the page while the game is loading
+  // the banners sweep in over the white cover; once they've covered the screen the menu is put up beneath them, and they slide away
   W.splash = function (done) {
     const bc = document.getElementById('wmmBoot') || document.getElementById('bootcover');
-    done && done(); if (bc) requestAnimationFrame(() => bc.remove());
+    let went = false; const go = () => { if (went) return; went = true; done && done(); if (bc) bc.remove(); };
+    if (S.Banners && S.Banners.flood && S.Banners.whenReady) S.Banners.whenReady(() => S.Banners.flood({ hold: 0.12, speed: 1.3, onCovered: go }), 3000);
+    else go();
+    setTimeout(go, 6000);   // (never stuck on the white cover)
   };
 })();

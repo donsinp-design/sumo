@@ -193,7 +193,8 @@
       // online keeps real time even when the browser ticks slowly, so the two players don't drift apart
       const dt = Math.min(this.kind === 'online' ? 0.25 : 0.05, (now - this.last) / 1000); if (!bg && !document.hidden) this.R.perf((now - this.last) / 1000); this.last = now;
       if (this.camp) { this.pollPad(); this.camp.frame(dt); this.ui.draw(dt); return; } // CAMPAIGN: its own engine and scene
-      if (S.WMM && (this.ui.name === 'title' || S.WMM.busy)) { this.pollPad(); S.WMM.frame(dt, this.R); this.ui.draw(dt); return; } // WHERE'S MY MAWASHI: the ninja title
+      const wmmTitle = S.WMM && (this.ui.name === 'title' || S.WMM.busy); if (S.WMM) document.body.classList.toggle('wmm-title', !!wmmTitle);
+      if (wmmTitle) { this.pollPad(); S.WMM.frame(dt, this.R); this.ui.draw(dt); return; } // WHERE'S MY MAWASHI: the ninja title
       this.pollPad();
       let animDt = 0;
       if (this.frozen) { this.R.update(this, 1e-4, 1e-4); this.R.render(); this.ui.draw(0); return; }
