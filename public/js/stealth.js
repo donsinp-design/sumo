@@ -312,11 +312,14 @@
         if (d.position.y < d.userData.fy + 0.02) d.visible = false; }
     }
     // the onigiri chef's hands: forearms out over the counter, hands meeting in front, pressing the rice in turn
-    knead(n, T, push) {
+    knead(n, T, push, w) {
+      if (w === undefined) w = 1; n.armT = n.armSeen === this.drawN - 1 ? 1 : 0; n.armSeen = this.drawN;
       const B = n.v.body; if (!B || !B.bones || !B.bones.RightArm) return;
       const V = THREE.Vector3, Q = THREE.Quaternion, f = n.a.f, fw = new V(Math.cos(f), 0, Math.sin(f)), rt = new V(-Math.sin(f), 0, Math.cos(f)), dn = new V(0, -1, 0);
-      const aim = (b, c, dir) => { b.updateMatrixWorld(true); const bp = new V().setFromMatrixPosition(b.matrixWorld), cp = new V().setFromMatrixPosition(c.matrixWorld);
-        const q = new Q().setFromUnitVectors(cp.sub(bp).normalize(), dir.normalize()), wq = b.getWorldQuaternion(new Q()); b.quaternion.copy(b.parent.getWorldQuaternion(new Q()).invert().multiply(q.multiply(wq))); b.updateMatrixWorld(true); };
+      const aim = (b, c, dir) => { const q00 = b.quaternion.clone(); b.quaternion.identity(); b.updateMatrixWorld(true);   // (always from the same start pose: the walk swing can't flip the twist about frame to frame)
+        const bp = new V().setFromMatrixPosition(b.matrixWorld), cp = new V().setFromMatrixPosition(c.matrixWorld);
+        const q = new Q().setFromUnitVectors(cp.sub(bp).normalize(), dir.normalize()), wq = b.getWorldQuaternion(new Q()); const q0 = q00; b.quaternion.copy(b.parent.getWorldQuaternion(new Q()).invert().multiply(q.multiply(wq))); if (w < 1) b.quaternion.copy(q0.slerp(b.quaternion, w));
+        const sm = n.armQ || (n.armQ = {}), pq = sm[b.name]; if (pq && n.armT > 0) b.quaternion.copy(pq.slerp(b.quaternion, Math.min(1, (this.kdt || 0.016) * 14))); sm[b.name] = b.quaternion.clone(); b.updateMatrixWorld(true); };   // (eased frame to frame: never a snap)
       const press = Math.sin(T * 7.5);
       for (const [sd, up, lo, hd, k] of [[1, 'RightArm', 'RightForeArm', 'RightHand', 1], [-1, 'LeftArm', 'LeftForeArm', 'LeftHand', -1]]) {
         const bu = B.bones[up], bl = B.bones[lo], bh = B.bones[hd]; if (!bu || !bl || !bh) continue;
@@ -462,12 +465,12 @@
         const P = this.P;   // a box on the floor in the way: they put their shoulder to it and shove it along (sweating); stuck fast, they turn back
         if (!P.boxHide) { n.pushing2 = false; n.tug = 0; }
         if (P.boxHide) { const bx = P.x - a.x, bz = P.z - a.z, bd = Math.hypot(bx, bz);
-          if (bd < 1.5 && (bx * dx + bz * dz) / (bd || 1) > 0.3 || n.tug > 0) {
+          if (bd < 1.5 && (bx * dx + bz * dz) / (bd || 1) > 0.3 || n.tug > 0 || (n.pushing2 && bd < 1.9 && (bx * dx + bz * dz) / (bd || 1) > 0)) {   // (once they're on it they stay on it: no flickering in and out)
             n.pushing2 = true; const PS = 0.55;   // a heavy box: slow and steady
             if (n.tug > 0) {   // won't go forward: they get hold of it and drag it back towards themselves, walking backwards
               n.tug -= dt; const q = { x: P.x - dx * PS * dt, z: P.z - dz * PS * dt, boxProbe: true }; this.collide(q, P.r); P.x = q.x; P.z = q.z;
               a.x -= dx * PS * dt; a.z -= dz * PS * dt; this.collide(a, 0.4); a.vx = -dx * PS; a.vz = -dz * PS; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 6);
-              if (n.tug <= 0) { n.i = (n.i + n.route.length - 1) % n.route.length; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); this.popAt(a, 'もう…', 1.0); }
+              if (n.tug <= 0) { n.pushing2 = false; n.i = (n.i + n.route.length - 1) % n.route.length; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); this.popAt(a, 'もう…', 1.0); }
               return;
             }
             const q = { x: P.x + dx * PS * dt, z: P.z + dz * PS * dt, boxProbe: true }; this.collide(q, P.r);
@@ -1281,7 +1284,8 @@
         else { v.handWorld(1, ha); v.handWorld(-1, hb); ha.add(hb).multiplyScalar(0.5); b.m.position.set(ha.x, ha.y - H * 0.5, ha.z); }   // gripped by its sides
         b.m.rotation.set(0, -P.f, 0);
       }
-      for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else if (n.pushing2) { this.knead(n, T, true); this.sweat(n, dt); } this.drawCone(n); }
+      this.kdt = Math.min(0.05, dt); this.drawN = (this.drawN || 0) + 1;
+      for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } this.drawCone(n); }
       this.sweatStep(dt);
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
       const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden;
