@@ -288,6 +288,25 @@
       }
       return true;
     }
+    // straining: drops of sweat fly off their forehead/temples and fall to the floor
+    sweat(n, dt) {
+      if ((n.dropT = (n.dropT || 0) - dt) > 0) return; n.dropT = 0.07 + Math.random() * 0.08;
+      if (!this.drops) { this.drops = []; this.dropGeo = new THREE.SphereGeometry(0.045, 8, 6); this.dropGeo.scale(1, 1.5, 1);
+        this.dropMat = new THREE.MeshBasicMaterial({ color: 0x4fb0ff }); }
+      const B = n.v.body, h = B && B.bones && B.bones.Head, a = n.a, p = new THREE.Vector3(a.x, a.y + 1.62, a.z);
+      if (h) { h.updateMatrixWorld(true); p.setFromMatrixPosition(h.matrixWorld); p.y += 0.12; }
+      const sd = Math.random() < 0.5 ? -1 : 1, rx = -Math.sin(a.f) * sd, rz = Math.cos(a.f) * sd;   // off one temple or the other
+      let d = this.drops.find((q) => !q.visible);
+      if (!d) { if (this.drops.length > 40) return; d = new THREE.Mesh(this.dropGeo, this.dropMat); d.userData.flatDone = true; this.G.add(d); this.drops.push(d); }
+      d.visible = true; d.position.set(p.x + rx * 0.09, p.y, p.z + rz * 0.09); d.scale.setScalar(0.8 + Math.random() * 0.5);
+      d.userData.v = [rx * (0.7 + Math.random() * 0.6) - Math.cos(a.f) * 0.3, 1.0 + Math.random() * 0.7, rz * (0.7 + Math.random() * 0.6) - Math.sin(a.f) * 0.3]; d.userData.fy = a.y;
+    }
+    sweatStep(dt) {
+      if (!this.drops) return;
+      for (const d of this.drops) if (d.visible) { const v = d.userData.v; v[1] -= 9 * dt;
+        d.position.x += v[0] * dt; d.position.y += v[1] * dt; d.position.z += v[2] * dt;
+        if (d.position.y < d.userData.fy + 0.02) d.visible = false; }
+    }
     // the onigiri chef's hands: forearms out over the counter, hands meeting in front, pressing the rice in turn
     knead(n, T, push) {
       const B = n.v.body; if (!B || !B.bones || !B.bones.RightArm) return;
@@ -446,7 +465,7 @@
             else if ((n.boxT = (n.boxT || 0) + dt) > 0.7) { n.boxT = 0; n.tug = 1.2; this.popAt(a, 'ぐぬぬ…!', 1.0); }
             // they stay right up against it, leaning in, at the box's pace
             const st = 0.85 + 0.42, ek = Math.min(1, dt * 8); a.x += (P.x - dx * st - a.x) * ek; a.z += (P.z - dz * st - a.z) * ek; this.collide(a, 0.4); a.vx = dx * PS; a.vz = dz * PS; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 6);
-            if ((n.sweatT = (n.sweatT || 0) - dt) <= 0) { n.sweatT = 1.4; this.popAt(a, ['ふんっ…!', '重っ…!', '💦'][(this.t * 3 | 0) % 3], 1.0); }
+            if ((n.sweatT = (n.sweatT || 0) - dt) <= 0) { n.sweatT = 1.4; this.popAt(a, ['ふんっ…!', '重っ…!'][(this.t * 2 | 0) % 2], 1.0); }
             return;
           } else n.pushing2 = false; }
         a.vx = dx * sp; a.vz = dz * sp; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 7); }
@@ -1222,7 +1241,8 @@
         else { v.handWorld(1, ha); v.handWorld(-1, hb); ha.add(hb).multiplyScalar(0.5); b.m.position.set(ha.x, ha.y - H * 0.5, ha.z); }   // gripped by its sides
         b.m.rotation.set(0, -P.f, 0);
       }
-      for (const n of this.npcs) { n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else if (n.pushing2) this.knead(n, T, true); this.drawCone(n); }
+      for (const n of this.npcs) { n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else if (n.pushing2) { this.knead(n, T, true); this.sweat(n, dt); } this.drawCone(n); }
+      this.sweatStep(dt);
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
       const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden;
       if (m.s.visible) {
