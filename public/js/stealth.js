@@ -1035,26 +1035,29 @@
       g.lines.forEach((l, i) => { const h = (T * 0.55 + i / 3) % 1, a = i * 2.1 + 0.4; l.position.set(Math.cos(a) * 0.42 * s, (1.3 + h * 0.9) * s, Math.sin(a) * 0.42 * s); l.rotation.y = -a; l.material.opacity = Math.sin(h * Math.PI) * 0.85; });
       g.flies.forEach((f, i) => { f.position.set(Math.cos(T * 7 + i * 2.1) * 0.5 * s, (2.05 + Math.sin(T * 11 + i) * 0.12) * s, Math.sin(T * 6 + i * 2.1) * 0.5 * s); });
     }
-    // his chest tattoo. He asked for 無敵, "INVINCIBLE". The parlour gave him 半額豆腐: "HALF-PRICE TOFU"
+    // his tattoo, across his BACK. He asked for 無敵, "INVINCIBLE". The parlour gave him 半額豆腐: "HALF-PRICE TOFU".
+    // Painted into his skin itself (the shader reads the rest-pose body position, so it moves with every fold and step)
     tattooStep(v) {
-      const B = v.soft && v.soft.B && v.soft.B.chest; if (!B) return;
-      if (!this.tattoo) {
-        const c = document.createElement('canvas'); c.width = c.height = 256; const tex = new THREE.CanvasTexture(c);
-        const draw = () => { const x = c.getContext('2d'); x.clearRect(0, 0, 256, 256); x.fillStyle = '#26315c'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '400 104px "Dela Gothic One", serif'; x.fillText('半額', 128, 70); x.fillText('豆腐', 128, 190); tex.needsUpdate = true; };
-        draw(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
-        this.tattoo = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, opacity: 0.85 }));
-        this.tattoo.userData.flatDone = true; this.tattoo.renderOrder = 2; this.G.add(this.tattoo);
-      }
-      const P = this.P, t = this.tattoo;
-      // inked onto him: placed on his chest once while he's standing still and upright, then carried by the chest bone
-      if (!t.onBody) {
-        t.visible = false;
-        if (this.asleep || P.st !== 'free' || P.tip > 0.05 || Math.hypot(P.vx, P.vz) > 0.05 || (this.ballK || 0) > 0.01 || P.held || P.cart || P.hidden) return;
-        const p = B.getWorldPosition(new THREE.Vector3()), fx = Math.cos(P.f), fz = Math.sin(P.f), R = (S.Stealth.tatR || 0.52) * v.s, Y = (S.Stealth.tatY || 0.16) * v.s;
-        this.G.remove(t); this.scene.add(t); t.position.set(p.x + fx * R, p.y + Y, p.z + fz * R); t.lookAt(t.position.x + fx, t.position.y + 0.55, t.position.z + fz); t.scale.setScalar(v.s);
-        t.updateMatrixWorld(true); B.attach(t); t.onBody = true;
-      }
-      t.visible = v.root.visible && !this.boxDown && (this.ballK || 0) < 0.3;
+      if (this.tatDone || !v.soft || !v.soft.mats) return;
+      const skin = v.soft.mats.find((m) => /skin/i.test(m.name || '')); if (!skin) return;
+      this.tatDone = true;
+      const c = document.createElement('canvas'); c.width = 256; c.height = 256; const tex = new THREE.CanvasTexture(c);
+      const draw = () => { const x = c.getContext('2d'); x.clearRect(0, 0, 256, 256); x.fillStyle = '#000'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '400 104px "Dela Gothic One", serif'; x.fillText('半額', 128, 68); x.fillText('豆腐', 128, 190); tex.needsUpdate = true; };
+      draw(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+      const T = S.Stealth.tat || { x: 0, y: 1.3, w: 0.6, h: 0.6 };   // (rest-pose metres: his upper back)
+      const prev = skin.onBeforeCompile;
+      skin.onBeforeCompile = (sh, r) => {
+        if (prev) prev.call(skin, sh, r);
+        sh.uniforms.tatMap = { value: tex };
+        sh.vertexShader = 'varying vec3 vTat;\nvarying vec3 vTatN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTat = position; vTatN = normal;');
+        const ink = `{ vec2 tu = vec2((vTat.x - ${T.x.toFixed(3)}) / ${T.w.toFixed(3)} + 0.5, (vTat.y - ${T.y.toFixed(3)}) / ${T.h.toFixed(3)} + 0.5);
+          if (vTatN.z < -0.15 && tu.x > 0.0 && tu.x < 1.0 && tu.y > 0.0 && tu.y < 1.0) { float a = texture2D(tatMap, vec2(1.0 - tu.x, tu.y)).a; diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.2, 0.38), a * 0.88); } }`;
+        let f = 'uniform sampler2D tatMap;\nvarying vec3 vTat;\nvarying vec3 vTatN;\n' + sh.fragmentShader;
+        f = f.includes('#include <map_fragment>') ? f.replace('#include <map_fragment>', '#include <map_fragment>\n' + ink) : f.replace('vec4 diffuseColor = vec4( diffuse, opacity );', 'vec4 diffuseColor = vec4( diffuse, opacity );\n' + ink);
+        sh.fragmentShader = f; this.tatOk = f.includes('tatMap, vec2');
+      };
+      const ck = skin.customProgramCacheKey ? skin.customProgramCacheKey.bind(skin) : () => '';
+      skin.customProgramCacheKey = () => ck() + '|tattoo'; skin.needsUpdate = true;
     }
     // out of the towel cart: somebody's shorts draped over his shoulder. Three steps and they slide off onto the floor
     shoulderShorts() {
