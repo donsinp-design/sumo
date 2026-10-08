@@ -870,7 +870,7 @@
       this.fx.dust && this.fx.dust(this.locker.x, 1.0, this.locker.z, 6, 0.3, 0.4, 0.3); this.flash = 0.35;
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(7);
       this.noise(this.locker.x, this.locker.z, 14, '?!');
-      this.think(k === 1 ? 'BONK. ...just a dent. Again!' : 'CRUNCH! Nearly... once more!', 1.8);
+      this.think(k === 1 ? 'BONK! ...just a dent. One more!' : 'CRUNCH! Nearly... once more!', 1.8);
       this.objective('CHARGE your locker again (' + (3 - k) + ' more). Hide when they come to look');
     }
     smashLocker() {
