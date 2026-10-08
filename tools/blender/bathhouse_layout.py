@@ -77,7 +77,7 @@ for x0, x1, z0, z1 in [(12.4, 19.4, -52.2, -51.2), (15.4, 22.4, -55.4, -54.4), (
 solid('foldtable', 15.0, 18.2, -47.6, -46.6, 0.85, tall=False)
 solid('towelshelf', 12.6, 16.2, -60.6, -59.9, 1.6)
 TOWEL = dict(x=14.4, z=-59.2)
-CARTS = [dict(x=-2.4, z=-45.9, r=0.2), dict(x=0.4, z=-48.4, r=0.0), dict(x=20.6, z=-47.4, r=1.3), dict(x=13.6, z=-56.0, r=0.4)]
+CARTS = [dict(x=-2.4, z=-45.9, r=0.2), dict(x=0.4, z=-48.4, r=0.0), dict(x=20.6, z=-47.4, r=1.3), dict(x=12.95, z=-56.0, r=1.5708)]
 # ---- back stairs
 wall(6.4, 6.6, -61, -53.0, col='plaster_dk', h=UP + 1.0); wall(11.4, 11.6, -61, -53.0, col='plaster_dk', h=UP + 1.0); wall(11.6, 12.4, -53.4, -53, col='plaster_dk')
 STAIRS = dict(x0=6.6, x1=11.4, z0=-61, z1=-53, steps=16)

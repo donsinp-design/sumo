@@ -250,8 +250,9 @@
         mk('staff', [[-2.6, -77.4, 2.2, U], [9.6, -77.4, 2.2, U]], { room: 'up', speed: 1.1 }),
         mk('staff', [[-6.2, -88.8, 999, U]], { room: 'up', pick: 2, sway: 0.7, range: 6.0 }),
         // LAUNDRY ROOM. Two working the aisles between the machines, one folding at the table by the door
-        mk('fighter', [[13.4, -53.3, 2.6, 0], [21.4, -53.3, 2.6, P]], { room: 'laundry', pick: 2, speed: 0.95, range: 4.4, half: 0.5 }),
-        mk('grappler', [[15.8, -56.4, 2.8, 0], [21.6, -56.4, 3.0, P]], { room: 'laundry', pick: 3, fat: true, speed: 0.8, range: 4.0, half: 0.5 }),
+        // (they're loading the machines, faces to the washers; every so often they carry a basket along and look down the aisle)
+        mk('fighter', [[17.0, -52.62, 5.5, U], [17.0, -52.9, 1.6, 0]], { room: 'laundry', pick: 2, speed: 0.9, range: 4.0, half: 0.48, sway: 0.15 }),
+        mk('grappler', [[17.6, -56.88, 5.5, -U], [17.6, -56.6, 1.6, P]], { room: 'laundry', pick: 3, fat: true, speed: 0.8, range: 3.8, half: 0.48, sway: 0.15 }),
         mk('staff', [[17.8, -48.2, 5.0, U], [17.8, -48.2, 2.0, 0.2]], { room: 'laundry', pick: 4, sway: 0.25, range: 3.8, half: 0.5 }),   // folding, back to the door
         // KITCHEN. The onigiri chef goes between his counter (making a few each time) and the stove; one at the stove; one at prep and the pantry
         mk('chef', [[LY.onigiri.chef[0], LY.onigiri.chef[1], 3.0, U], [-3.2, -59.3, 4.5, -U]], { room: 'kitchen', range: 5.6, onigiri: true }),
@@ -265,7 +266,7 @@
     sees(n, x, z, range) {
       const a = n.a, dx = x - a.x, dz = z - a.z, d = Math.hypot(dx, dz);
       if (d > range) return false;
-      if (d > 0.9 && Math.abs(ang(Math.atan2(dz, dx) - a.f)) > n.half) return false;
+      if (d > 0.6 && Math.abs(ang(Math.atan2(dz, dx) - a.f)) > n.half) return false;   // (right up against them, they feel you there)
       return this.clear(a.x, a.z, x, z);
     }
     clear(x0, z0, x1, z1) {
@@ -332,7 +333,7 @@
       if (!soft) { this.ringAt(x, z, radius * 0.4, 0.6); this.ringAt(x, z, radius * 0.7, 0.9); }
       const room = roomAt(x, z); let rank = 0;
       for (const n of this.npcs) {
-        if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius || n.a.st !== 'free' || n.hold > 0) continue;
+        if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius || n.a.st !== 'free' || n.hold > 0 || (n.raid && n.mode === 'raid')) continue;
         // several coming to look: each stops at their own spot round it (not all on the same tile)
         const ra = rank ? 1.0 : 0, aa = rank * 2.3 + Math.atan2(n.a.z - z, n.a.x - x), q = { x: x + Math.cos(aa) * ra, z: z + Math.sin(aa) * ra }; if (rank) this.collide(q, 0.4); rank++;
         const path = this.navPath(n.a.x, n.a.z, q.x, q.z) || this.navPath(n.a.x, n.a.z, x, z); if (!path) continue;
@@ -354,18 +355,19 @@
       }
       let tx = null, tz = null, sp = n.speed;
       if (n.mode === 'search') {
-        n.wait -= dt; a.f += Math.sin(a.t * 1.7) * dt * 1.8;
-        if (n.wait <= 0) { n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); }
+        n.wait -= dt; a.f += Math.sin(a.t * 1.7) * dt * (n.raid ? 1.0 : 1.8);
+        if (n.wait <= 0) { if (n.raid) { n.raid = false; n.looked = false; } n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); }
       } else if (n.mode === 'route' && n.wait > 0) {
         const p = n.route[n.i]; n.wait -= dt; a.f = lerpA(a.f, p[3] + Math.sin(a.t * 0.8) * n.sway, dt * 2.5);
         if (n.wait <= 0) { n.i = (n.i + 1) % n.route.length; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); }
       } else {
         if (!n.path) this.goTo(n, n.route[n.i][0], n.route[n.i][1]);
         const p = n.path[n.pi];
-        if (p) { tx = p[0]; tz = p[1]; sp = n.mode === 'goto' ? (n.inv ? 1.9 : 2.5) : n.mode === 'return' ? 1.4 : n.speed; if (Math.hypot(tx - a.x, tz - a.z) < 0.25) { n.pi++; if (!n.path[n.pi]) tx = null; } }
+        if (p) { tx = p[0]; tz = p[1]; sp = n.mode === 'goto' ? (n.inv ? 1.9 : 2.5) : n.mode === 'raid' ? 2.3 : n.mode === 'return' ? 1.4 : n.speed; if (Math.hypot(tx - a.x, tz - a.z) < 0.25) { n.pi++; if (!n.path[n.pi]) tx = null; } }
         if (!n.path[n.pi]) { // arrived
           n.path = null;
           if (n.mode === 'goto') { n.mode = 'search'; n.wait = 4.2; if (n.noiseAt) a.f = Math.atan2(n.noiseAt[1] - a.z, n.noiseAt[0] - a.x); }
+          else if (n.mode === 'raid') { n.mode = 'search'; n.wait = 3.5; a.f = Math.PI / 2; n.looked = true; this.popAt(a, ['Where did he go...?', 'Anyone in here?'][this.raid && this.raid.k++ % 2 || 0], 1.6); }
           else { n.mode = 'route'; n.wait = n.route[n.i][2] || 0.01; if (n.onigiri && n.i === 0) this.chefMakes(); }
         }
       }
@@ -434,26 +436,30 @@
       // hidden in a cart: still as a heap of towels. Any move (or I) and he climbs out
       if (P.hidden) {
         P.vx = P.vz = 0;
-        if (mag > 0.5 || (iPress && P.hideT > 0.3)) { const hc = P.hidden; P.hidden = null; this.view.root.visible = true; hc.off = false; this.cartBox(hc);
-          const a = mag > 0.5 ? Math.atan2(mz, mx) : hc.f + Math.PI; P.x = hc.x + Math.cos(a) * 1.3; P.z = hc.z + Math.sin(a) * 1.3; this.collide(P, P.r); P.f = a;
+        if (mag > 0.5 && P.hideT > 0.25) { const hc = P.hidden; P.hidden = null; this.view.root.visible = true; hc.off = false; this.cartBox(hc);
+          // out the side he pushes towards (the nearest free side to it, if that one's against a wall)
+          const a0 = Math.atan2(mz, mx); let a = a0;
+          for (const da of [0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6]) { const q = { x: hc.x + Math.cos(a0 + da) * 1.3, z: hc.z + Math.sin(a0 + da) * 1.3 }, ox = q.x, oz = q.z; this.collide(q, P.r); if (Math.hypot(q.x - ox, q.z - oz) < 0.1 && this.clear(hc.x, hc.z, q.x, q.z)) { a = a0 + da; break; } }
+          P.x = hc.x + Math.cos(a) * 1.3; P.z = hc.z + Math.sin(a) * 1.3; this.collide(P, P.r); P.f = a0;
           // out with I held: straight onto his toes, silent. And a pair of towel-cart shorts over his shoulder (falls off after a few steps)
           P.tip = this.keys.KeyI && !P.tired ? 1 : 0; this.hideCd = 0.6; this.shoulderShorts(); }
         else { P.hideT = (P.hideT || 0) + dt; this.cartStep(dt); this.grace = Math.max(this.grace, 0); this.npcsOnly(dt); return; }
       }
       this.hideCd = Math.max(0, (this.hideCd || 0) - dt);
       if (iPress && !this.hideCd && P.st === 'free' && !wet && !P.held) {   // I next to a cart (walking or not): climb in
-        let near = null, nd = 2.5; for (const cc of this.carts) { const d = Math.hypot(cc.x - P.x, cc.z - P.z); if (d < nd && !cc.ret) { nd = d; near = cc; } }
+        let near = null, nd = 2.5; for (const cc of this.carts) { const d = Math.hypot(cc.x - P.x, cc.z - P.z); if (d < nd && !cc.ret && this.clear(P.x, P.z, cc.x, cc.z)) { nd = d; near = cc; } }   // (never one through a wall)
         if (near) { if (P.cart) P.cart = null; P.hidden = near; P.hideT = 0; near.off = true; this.cartBox(near); P.x = near.x; P.z = near.z; P.vx = P.vz = 0; this.view.root.visible = false; P.tip = 0; this.dropShorts(true);
           if (!this.saidCart) { this.saidCart = true; this.think('...just a cart of towels. Nothing to see.', 2.0); } return; }
       }
       // I: TIPTOE. Silent, slow, and tiring: about six seconds on his toes, then the heels come down with a thud
       const tipOn = !!this.keys.KeyI && P.st === 'free' && !wet && !P.tired && !P.cart;
       // in the bath, I: duck right under (just bubbles on the water)
-      P.sub = wet && !!this.keys.KeyI && P.st === 'free';
+      P.sub = wet && !!this.keys.KeyI && P.st === 'free' && !P.tired;
+      if (P.sub) { P.stam -= dt / 7; if (P.stam <= 0) { P.stam = 0; P.tired = true; P.sub = false; this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'PWAH!', 1.2); this.fx.water && this.fx.water(P.x, P.z, 3, POOL.water); this.noise(P.x, P.z, 9, '!?'); this.think('*gasp* ...can\'t hold my breath that long!', 1.8); } }
       if (P.sub) { this.bubT = (this.bubT || 0) - dt; if (this.bubT <= 0) { this.bubT = 0.45; this.fx.water && this.fx.water(P.x + (Math.random() - 0.5) * 0.4, P.z + (Math.random() - 0.5) * 0.4, 0.15, POOL.water); }
         if (!this.saidSub) { this.saidSub = true; this.think('Blub... blub...', 1.4); } }
       P.tip += ((tipOn ? 1 : 0) - P.tip) * Math.min(1, dt * 10);
-      if (tipOn) { P.stam -= dt * (Math.hypot(P.vx, P.vz) > 0.4 ? 1 / 6.4 : 1 / 10); if (P.stam <= 0) { P.stam = 0; P.tired = true; this.heelsDown(); } }
+      if (P.sub) { /* holding his breath (above) */ } else if (tipOn) { P.stam -= dt * (Math.hypot(P.vx, P.vz) > 0.4 ? 1 / 6.4 : 1 / 10); if (P.stam <= 0) { P.stam = 0; P.tired = true; this.heelsDown(); } }
       else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
       if (P.st === 'free' && c.dash.held && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
@@ -557,7 +563,7 @@
       if (c.grab.pressed && P.st === 'free') this.use();
       // a charge is loud: heavy running footsteps carry round the room
       // footsteps: walking is heard by anyone close by (they come and look), the charge further; tiptoe is silent
-      const loud = SAFE[roomAt(P.x, P.z)] ? 0 : P.st === 'charge' ? 5 : P.st === 'free' && P.tip < 0.5 && Math.hypot(P.vx, P.vz) > 1.2 ? 2.8 : 0;
+      const proom = roomAt(P.x, P.z), loud = (SAFE[proom] ? 0 : P.st === 'charge' ? 5 : P.st === 'free' && P.tip < 0.5 && Math.hypot(P.vx, P.vz) > 1.2 ? 2.8 : 0) * (proom === 'laundry' ? 0.45 : 1);   // (the machines drown footsteps out)
       if (loud) { this.stompT = (this.stompT || 0) - dt; if (this.stompT <= 0) { this.stompT = P.st === 'charge' ? 0.35 : 0.5; this.noise(P.x, P.z, loud, '?', true); } } else this.stompT = 0;
       for (const b of this.buckets) if (b.state === 'fly') {
         b.t += dt; const k = Math.min(1, b.t / b.dur); b.x = b.sx + (b.tx - b.sx) * k; b.z = b.sz + (b.tz - b.sz) * k; b.y = b.sy + (b.ty - b.sy) * k + Math.sin(Math.PI * k) * 1.6;
@@ -577,11 +583,11 @@
       const pr = roomAt(P.x, P.z);
       for (const n of this.npcs) {
         this.npcStep(n, dt);
-        if (SAFE[pr] || this.grace > 0 || n.a.st !== 'free' || P.hidden || P.boxHide || P.inStall) { n.alarm = Math.max(0, n.alarm - dt); continue; }
+        if ((SAFE[pr] && !n.raid) || this.grace > 0 || n.a.st !== 'free' || P.hidden || P.boxHide || P.inStall || P.sub) { n.alarm = Math.max(0, n.alarm - dt); continue; }
         const range = this.range(n), d = Math.hypot(P.x - n.a.x, P.z - n.a.z), same = roomAt(n.a.x, n.a.z) === pr;
         // right next to someone they hear you, whichever way they face; on tiptoe you can get much closer
         // (the receptionist, at her desk, still catches a tiptoe that comes right up behind her)
-        const ear = P.tip > 0.5 ? (n.ear ? 1.2 : 0.6) : (n.ear || 1.7);
+        const ear = (P.tip > 0.5 ? (n.ear ? 1.2 : 0.6) : (n.ear || 1.7)) * (pr === 'laundry' ? 0.5 : 1);
         let noticed = false;
         if (d < ear && same && this.clear(n.a.x, n.a.z, P.x, P.z)) { noticed = true; n.alarm += dt * 2.4; if (n.mode === 'route' && n.wait > 0) n.a.f = lerpA(n.a.f, Math.atan2(P.z - n.a.z, P.x - n.a.x), dt * 5); }
         else if (same && this.sees(n, P.x, P.z, range)) { noticed = true; n.alarm += dt * (1.0 + 2.2 * (1 - d / range)) * 1.15 * (P.st === 'charge' ? 2 : 1); if (d < 1.8) n.alarm = 1; }
@@ -593,7 +599,7 @@
         }
         if (n.alarm >= 1) { this.caught(n); break; }
       }
-      this.sepNpcs();
+      this.sepNpcs(); this.raidStep(dt);
     }
     npcsOnly(dt) { this.grace = Math.max(0, this.grace - dt); for (const n of this.npcs) { this.npcStep(n, dt); n.alarm = Math.max(0, n.alarm - dt); } this.sepNpcs(); }
     sepNpcs() {   // people don't walk through each other: nudge apart anyone overlapping
@@ -797,10 +803,29 @@
       this.noise(this.locker.x, this.locker.z, 26, '!?');
       if (this.g.audio) { this.g.audio.thump && this.g.audio.thump(9); this.later(0.15, () => this.g.audio.thump && this.g.audio.thump(5)); }
       this.think('...EMPTY?! Someone took my clothes!', 2.2);
-      this.stage = 'towel'; this.objective('They heard that! Get away from the lockers and HIDE');
-      this.later(2.3, () => { if (this.stage === 'towel') this.think('And everyone else\'s are TINY. Nothing here fits me...', 2.6); });
-      this.later(5.0, () => { if (this.stage === 'towel') { this.think('A towel, at least! The LAUNDRY room, at the end of the back corridor.', 3.4); this.objective('Get a TOWEL from the LAUNDRY room (through the staff door, along the back corridor)'); this.spTowel.visible = true; } });
+      // they heard that: back to the bath, quick, and duck under when they come looking
+      this.stage = 'bathhide'; this.objective('They heard that! Run back to the BATH and duck under (hold I) when they come looking');
+      this.later(2.3, () => { if (this.stage === 'bathhide') this.think('Back in the bath! Nobody looks twice at a man in the bath...', 2.4); });
+      this.raid = { t: 0, phase: 'wait', wait: 9, k: 0 };
       this.cp = CP.lockN;
+    }
+    // the raid: two of the changing-room staff come through to the bath and look over the water. Under it (I) when they
+    // look and they see nothing; but he can only hold his breath for five seconds or so
+    raidStep(dt) {
+      const R = this.raid; if (!R || this.stage !== 'bathhide') return; R.t += dt;
+      if (R.phase === 'wait' && R.t >= R.wait) {
+        const P = this.P, cand = this.npcs.filter((n) => n.room === 'lock' && !n.ko && n.a.st === 'free' && n.a.y < 1).sort((a, b) => Math.hypot(a.a.x - this.locker.x, a.a.z - this.locker.z) - Math.hypot(b.a.x - this.locker.x, b.a.z - this.locker.z)).slice(0, 2);
+        const spots = [[POOL.x0 + 2.4, POOL.z1 - 0.9], [POOL.x1 - 2.6, POOL.z1 - 0.9]];
+        cand.forEach((n, k) => { n.raid = true; n.looked = false; this.goTo(n, spots[k][0], POOL.z0 - 0.9); n.mode = 'raid'; n.alarm = 0; });
+        R.who = cand; R.phase = 'come'; R.t = 0;
+        this.later(0.1, () => { if (this.stage === 'bathhide' && roomAt(P.x, P.z) === 'bath') this.think('Footsteps... they\'re coming! Wait till they look, then under! (hold I)', 2.6); });
+      }
+      if (R.phase === 'come' && R.who && R.who.every((n) => !n.raid || n.ko)) {   // both have looked and gone: in the clear
+        R.phase = 'done'; this.raid = null; this.stage = 'towel';
+        this.think('...phew. They\'ve gone.', 1.6);
+        this.later(1.8, () => { if (this.stage === 'towel') this.think('And everyone else\'s clothes are TINY. Nothing here fits me...', 2.6); });
+        this.later(4.6, () => { if (this.stage === 'towel') { this.think('A towel, at least! The LAUNDRY room, at the end of the back corridor.', 3.4); this.objective('Get a TOWEL from the LAUNDRY room (through the staff door, along the back corridor)'); this.spTowel.visible = true; } });
+      }
     }
     smashCrack() {
       this.crackDone = true; this.spCrack.visible = false;
@@ -836,17 +861,16 @@
     // out of the towel cart: somebody's shorts draped over his shoulder. Three steps and they slide off onto the floor
     shoulderShorts() {
       this.dropShorts(true);
-      // borrowed trunks, folded over his right shoulder: a flap down his chest, a flap down his back
+      // borrowed trunks, folded over his right shoulder: the front half down his chest, the back half down his back
       const g = new THREE.Group(), m = new THREE.Group(); g.add(m); this.G.add(g);
-      const M = S.Flat.mat(0x5a8fd0), W = S.Flat.mat(0xf2efe6), fl = [];
-      for (const sd of [1, -1]) {
-        const f = new THREE.Group(); f.position.x = sd * 0.05; m.add(f);
-        const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.36, 0.3), M); cloth.position.y = -0.18; f.add(cloth);
-        const band = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.31), W); band.position.y = -0.34; f.add(band);
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.12, 0.012), W); leg.position.set(0, -0.12, 0); f.add(leg);
-        f.rotation.z = sd * -0.5; fl.push(f);
-      }
-      const fold = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 10).rotateX(Math.PI / 2), M); m.add(fold);
+      const M = S.Flat.mat(0x86aede), W = S.Flat.mat(0xf4f1ea), fl = [];
+      const sh = new THREE.Shape(); sh.moveTo(-0.17, 0); sh.lineTo(0.17, 0); sh.lineTo(0.2, -0.27); sh.lineTo(0.035, -0.29); sh.lineTo(0, -0.14); sh.lineTo(-0.035, -0.29); sh.lineTo(-0.2, -0.27); sh.closePath();
+      // laid over the top of the shoulder: waistband by his neck, the two legs flopping down over his arm (reads from above)
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.02, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.006, bevelSegments: 2 }).rotateX(-Math.PI / 2);
+      const f = new THREE.Group(); f.position.z = -0.1; m.add(f); fl.push(f);
+      f.add(new THREE.Mesh(geo, M));
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.035, 0.045), W); band.position.set(0, 0.012, 0.0); f.add(band);
+      f.rotation.x = 0.55;
       g.traverse((q) => { if (q.isMesh) { q.castShadow = true; q.userData.flatDone = true; } });
       this.shorts = { g, m, fl, d: 0, on: true };
       if (!this.saidShorts) { this.saidShorts = true; this.think('...someone\'s shorts came with me.', 1.8); }
@@ -863,16 +887,16 @@
         // on his right shoulder (the soft sumo's own shoulder joint)
         const A = v.arms && v.arms.find((q) => q.sd < 0), w = this._shw || (this._shw = new THREE.Vector3());
         if (A && A.sh && v.body) { w.copy(A.sh); v.body.localToWorld(w); } else w.set(P.x, P.y + 1.5 * v.s, P.z);
-        g.position.set(w.x - Math.sin(P.f) * 0.06 * v.s, w.y + 0.2 * v.s, w.z + Math.cos(P.f) * 0.06 * v.s); g.rotation.set(0, -P.f, 0); g.scale.setScalar(1.7 * v.s);
+        g.position.set(w.x - Math.sin(P.f) * 0.04 * v.s, w.y + 0.16 * v.s, w.z + Math.cos(P.f) * 0.04 * v.s); g.rotation.set(0, -P.f, 0); g.scale.setScalar(1.45 * v.s);
         g.visible = v.root.visible;
         if (s.d > 1.5) this.dropShorts();   // about three steps
         return;
       }
       if (s.vy !== null) {
         g.position.x += s.vx * dt; g.position.z += s.vz * dt; g.position.y += s.vy * dt; s.vy -= 9.8 * dt;
-        for (const f of s.fl) f.rotation.z += (Math.sign(f.rotation.z) * Math.PI / 2 - f.rotation.z) * Math.min(1, dt * 6);   // flaps open out as it falls
+        for (const f of s.fl) f.rotation.x *= Math.max(0, 1 - dt * 6);   // flattens out as it falls
         const fy = floorY(g.position.x, g.position.z) + 0.03;
-        if (g.position.y <= fy) { g.position.y = fy; s.vy = null; for (const f of s.fl) f.rotation.z = Math.sign(f.rotation.z) * Math.PI / 2; if (this.fx.dust) this.fx.dust(g.position.x, fy + 0.05, g.position.z, 3, 0.2, 0.3, 0.2); }
+        if (g.position.y <= fy) { g.position.y = fy; s.vy = null; for (const f of s.fl) f.rotation.x = 0; if (this.fx.dust) this.fx.dust(g.position.x, fy + 0.05, g.position.z, 3, 0.2, 0.3, 0.2); }
       }
       if ((s.life -= dt) <= 0) this.dropShorts(true);
     }
@@ -883,6 +907,11 @@
       for (const n of this.npcs) { n.alarm = 0; if (n === this.catcher) { n.mode = 'search'; n.wait = 3.0; n.path = null; } }
       if (P.cart) { P.cart.off = false; this.cartBox(P.cart); P.cart = null; }
       if (P.hidden) { P.hidden.off = false; this.cartBox(P.hidden); P.hidden = null; this.view.root.visible = true; }
+      if (this.stage === 'bathhide') {   // back in the bath; the two go back to their posts, then come looking again
+        P.x = (POOL.x0 + POOL.x1) / 2; P.z = (POOL.z0 + POOL.z1) / 2; P.y = floorY(P.x, P.z); P.f = -Math.PI / 2; P.stam = 1; P.tired = false;
+        for (const n of this.npcs) if (n.raid) { n.raid = false; n.looked = false; n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); }
+        this.raid = { t: 0, phase: 'wait', wait: 6, k: 0 };
+      }
       this.grace = 2.0;
       this.think(this.wearing ? ['Back in the storage room... try again.', 'Out of sight, then move.', 'Tiptoe (I) past them... but not for long.'][this.spotted % 3]
         : ['Too close... try again.', 'Wait for them to look away.', 'Stay behind cover, then move.', 'Tiptoe (I) past them... but not for long.'][this.spotted % 4], 2.2);
@@ -947,7 +976,7 @@
       this.drawHud(dt);
     }
     drawCone(n) {
-      const a = n.a, N = 22, P = this.P, hide = SAFE[roomAt(P.x, P.z)] || Math.abs(a.y - P.y) > 1.6 || a.st !== 'free';
+      const a = n.a, N = 22, P = this.P, hide = (SAFE[roomAt(P.x, P.z)] && !n.raid) || Math.abs(a.y - P.y) > 1.6 || a.st !== 'free';
       n.cone.visible = !hide; if (hide) return;
       const range = this.range(n), pos = new Float32Array((N + 2) * 3), y = a.y + 0.03; pos[0] = a.x; pos[1] = y; pos[2] = a.z;
       for (let i = 0; i <= N; i++) { const t = a.f - n.half + (2 * n.half) * i / N, L = this.reach(a.x, a.z, t, range); pos[(i + 1) * 3] = a.x + Math.cos(t) * L; pos[(i + 1) * 3 + 1] = y; pos[(i + 1) * 3 + 2] = a.z + Math.sin(t) * L; }
@@ -979,7 +1008,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + move: climb out silently) · J knock out (loud) · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
+        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
@@ -996,7 +1025,9 @@
       const sb = this.el('.st-stam');
       if (P.stam < 0.999 && !this.over) { const q = this.project(P.x, P.y + 2.55 * s, P.z); sb.style.display = 'block'; sb.style.left = q.x + 'px'; sb.style.top = q.y + 'px'; sb.firstChild.style.width = (P.stam * 100) + '%'; sb.classList.toggle('tired', P.tired); }
       else sb.style.display = 'none';
-      this.el('.st-safe').style.display = SAFE[roomAt(P.x, P.z)] && !this.over ? 'block' : 'none';
+      const sf = this.el('.st-safe'), hunt = this.stage === 'bathhide';
+      sf.style.display = SAFE[roomAt(P.x, P.z)] && !this.over ? 'block' : 'none';
+      if (sf._hunt !== hunt) { sf._hunt = hunt; sf.textContent = hunt ? 'NOT SAFE: they\'re looking for whoever did that' : 'SAFE: everyone\'s naked here'; sf.style.background = hunt ? '#f2c4b6' : ''; sf.style.color = hunt ? '#7a2e22' : ''; }
       if (this.thinkT > 0) { this.thinkT -= dt; const p = this.project(P.x, P.y + 2.9 * s, P.z), e = this.el('.st-think'); e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; if (this.thinkT <= 0) e.classList.remove('on'); }
       this.pops = this.pops.filter((q) => { q.t -= dt; const p = this.project(q.a.x, (q.a.y || 0) + 2.6 + (1.4 - q.t) * 0.3, q.a.z); q.d.style.left = p.x + 'px'; q.d.style.top = p.y + 'px'; if (q.t <= 0) { q.d.remove(); return false; } return true; });
       if (!this.qs) this.qs = this.npcs.map(() => { const d = document.createElement('div'); d.className = 'st-q'; this.el('.st-pops').appendChild(d); return d; });
