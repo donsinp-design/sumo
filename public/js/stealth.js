@@ -324,8 +324,8 @@
       for (const [sd, up, lo, hd, k] of [[1, 'RightArm', 'RightForeArm', 'RightHand', 1], [-1, 'LeftArm', 'LeftForeArm', 'LeftHand', -1]]) {
         const bu = B.bones[up], bl = B.bones[lo], bh = B.bones[hd]; if (!bu || !bl || !bh) continue;
         if (push) {   // both arms straight out, palms on the box, leaning into it
-          aim(bu, bl, fw.clone().multiplyScalar(0.9).add(dn.clone().multiplyScalar(0.35)).add(rt.clone().multiplyScalar(sd * 0.18)));
-          aim(bl, bh, fw.clone().multiplyScalar(1).add(dn.clone().multiplyScalar(0.12 + 0.05 * press * k)).add(rt.clone().multiplyScalar(sd * 0.08)));
+          aim(bu, bl, fw.clone().multiplyScalar(0.9).add(dn.clone().multiplyScalar(0.6)).add(rt.clone().multiplyScalar(sd * 0.18)));
+          aim(bl, bh, fw.clone().multiplyScalar(1).add(dn.clone().multiplyScalar(0.3 + 0.05 * press * k)).add(rt.clone().multiplyScalar(sd * 0.08)));
           continue;
         }
         aim(bu, bl, fw.clone().multiplyScalar(0.55).add(dn.clone().multiplyScalar(0.8)).add(rt.clone().multiplyScalar(sd * 0.12)));
@@ -466,6 +466,9 @@
         if (!P.boxHide) { n.pushing2 = false; n.tug = 0; }
         if (P.boxHide) { const bx = P.x - a.x, bz = P.z - a.z, bd = Math.hypot(bx, bz);
           if (bd < 1.5 && (bx * dx + bz * dz) / (bd || 1) > 0.3 || n.tug > 0 || (n.pushing2 && bd < 1.9 && (bx * dx + bz * dz) / (bd || 1) > 0)) {   // (once they're on it they stay on it: no flickering in and out)
+            if (!n.pushing2) n.pd = Math.atan2(bz, bx);   // one steady heading: from them through the box, turning only slowly toward where they're going
+            else n.pd += clamp(ang(Math.atan2(dz, dx) - n.pd), -0.45 * dt, 0.45 * dt);
+            dx = Math.cos(n.pd); dz = Math.sin(n.pd); this.boxYaw = n.pd;
             n.pushing2 = true; const PS = 0.55;   // a heavy box: slow and steady
             if (n.tug > 0) {   // won't go forward: they get hold of it and drag it back towards themselves, walking backwards
               n.tug -= dt; const q = { x: P.x - dx * PS * dt, z: P.z - dz * PS * dt, boxProbe: true }; this.collide(q, P.r); P.x = q.x; P.z = q.z;
@@ -1271,7 +1274,8 @@
         if (duck && !this.boxDown) { this.boxDown = true; this.scene.attach(bw);   // let go of it where it is: it stays standing on the floor, its own size, level
           const e = new THREE.Euler().setFromQuaternion(bw.quaternion, 'YXZ'); bw.rotation.set(0, e.y, 0); bw.scale.setScalar(0.95 * v.s); bw.position.y = P.y; }
         else if (!duck && this.boxDown) { this.boxDown = false; v.body.attach(bw); bw.position.set(0, -0.62 * v.s, 0.02 * v.s); bw.rotation.set(0, 0, 0); bw.scale.setScalar(0.95); }
-        if (this.boxDown) { bw.position.x = P.x; bw.position.z = P.z; }
+        if (this.boxDown) { bw.position.x = P.x; bw.position.z = P.z;
+          if (this.boxYaw !== undefined && this.npcs.some((n) => n.pushing2)) { const q = Math.PI / 2, want = -this.boxYaw, d = ((want - bw.rotation.y) % q + q * 1.5) % q - q / 2; bw.rotation.y += d * Math.min(1, dt * 2.5); } }   // (shoved square-on: the box swings round flat to them)
         if (bw.setOpen) bw.setOpen(this.boxDown ? Math.max(0, 1 - (this.ballK || 0) * 1.3) : 1);   // the flaps fold shut over him
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)
       }

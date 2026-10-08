@@ -1604,6 +1604,19 @@
       else M.atk = aw > 0 ? M.atk : null;
       M.atkW += (aw - M.atkW) * Math.min(1, dt * (aw > M.atkW ? 14 : 6));
       if (M.atk && M.atkW > 0.001) { A.sample(M.atk, M.atkT, tmp); for (let i = 0; i < N; i++) out[i].lerp(tmp[i], M.atkW); }
+      // shoving something heavy: hips dropped, knees bent over the feet, back straight but leaning well into it
+      M.push = (M.push || 0) + (((a.push && st === 'free') ? 1 : 0) - (M.push || 0)) * Math.min(1, dt * 6);
+      if (M.push > 0.01) {
+        const w = M.push, pv = out[0].clone(), drop = 0.22 * w, lean = 0.6 * w, c = Math.cos(lean), s2 = Math.sin(lean);
+        const L = [[9, 10, 11], [12, 13, 14]].map(([h, k, f]) => [out[k].distanceTo(out[h]), out[f].distanceTo(out[k])]);
+        for (let i = 1; i <= 8; i++) { const r = out[i].clone().sub(pv); out[i].set(pv.x + r.x, pv.y + r.y * c - r.z * s2, pv.z + r.z * c + r.y * s2); }   // lean the trunk forward about the pelvis
+        for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12]) { out[i].y -= drop; out[i].z -= 0.12 * w; }   // sit the hips down and back
+        [[9, 10, 11], [12, 13, 14]].forEach(([h, k, f], j) => {   // two-bone IK: the knees fold forward over the planted feet
+          const [L1, L2] = L[j], H = out[h], F = out[f], u = F.clone().sub(H); let d = u.length(); d = Math.min(d, L1 + L2 - 1e-3); u.normalize();
+          const x = (L1 * L1 - L2 * L2 + d * d) / (2 * d), y = Math.sqrt(Math.max(0, L1 * L1 - x * x)), fw = new THREE.Vector3(0, 0, 1);
+          fw.addScaledVector(u, -fw.dot(u)).normalize(); out[k].copy(H).addScaledVector(u, x).addScaledVector(fw, y);
+        });
+      }
       // holding someone: arms forward, braced
       // held up by the collar: hanging upright, legs kicking, hands clawing at the holder's wrists
       if (st === 'held' || st === 'clawed') {
