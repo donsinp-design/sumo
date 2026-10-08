@@ -392,7 +392,7 @@
         if (!n.path[n.pi]) { // arrived
           n.path = null;
           if (n.mode === 'goto') { n.mode = 'search'; n.wait = 4.2; if (n.noiseAt) a.f = Math.atan2(n.noiseAt[1] - a.z, n.noiseAt[0] - a.x); }
-          else if (n.mode === 'raid') { n.mode = 'search'; n.wait = 3.5; a.f = Math.PI / 2; n.looked = true; this.popAt(a, ['どこ行った…?', '誰かいるのか?'][this.raid && this.raid.k++ % 2 || 0], 1.6); }
+          else if (n.mode === 'raid') { n.mode = 'search'; n.wait = 3.5; a.f = Math.atan2((POOL.z0 + POOL.z1) / 2 - a.z, (POOL.x0 + POOL.x1) / 2 - a.x); n.looked = true; this.popAt(a, ['どこ行った…?', '誰かいるのか?'][this.raid && this.raid.k++ % 2 || 0], 1.6); }
           else { n.mode = 'route'; n.wait = n.route[n.i][2] || 0.01; if (n.onigiri && n.i === 0) this.chefMakes(); }
         }
       }
@@ -591,7 +591,7 @@
       // in the box, hold I standing still: he squats right down inside it. Just a box
       P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet;
       if (!this.boxW) { this.boxW = { x0: 1e4, x1: 1e4, z0: 1e4, z1: 1e4, tall: false, box: true }; this.walls.push(this.boxW); }
-      if (P.boxHide) { const W = this.boxW; W.x0 = P.x - 0.62; W.x1 = P.x + 0.62; W.z0 = P.z - 0.62; W.z1 = P.z + 0.62; } else this.boxW.x0 = this.boxW.x1 = this.boxW.z0 = this.boxW.z1 = 1e4;
+      if (P.boxHide) { const W = this.boxW; W.x0 = P.x - 0.85; W.x1 = P.x + 0.85; W.z0 = P.z - 0.85; W.z1 = P.z + 0.85; }   /* (flaps and all) */ else this.boxW.x0 = this.boxW.x1 = this.boxW.z0 = this.boxW.z1 = 1e4;
       this.ratStep(dt);
       if (this.stage === 'escape') for (const t of this.traps) if (t.armed && Math.hypot(t.x - P.x, t.z - P.z) < 0.5 && (P.st === 'free' || P.st === 'charge')) {
         t.armed = false; if (t.mesh) t.mesh.rotation.z = 0.5; P.st = 'busy'; P.t = 0; P.dur = 1.2; P.vx = P.vz = 0;
@@ -634,7 +634,7 @@
         else if (same && this.sees(n, P.x, P.z, range)) { noticed = true; n.alarm += dt * (1.0 + 2.2 * (1 - d / range)) * 1.15 * (P.st === 'charge' ? 2 : 1); if (d < 1.8) n.alarm = 1; }
         else n.alarm = Math.max(0, n.alarm - dt * 0.6);
         // "?": something's there. They walk over to where they saw it (following it while it stays in view), then look round
-        if (noticed && n.alarm > 0.3 && n.alarm < 1) {
+        if (noticed && n.alarm > 0.3 && n.alarm < 1 && !n.raid) {   // (the bath searchers just keep looking at the water)
           if (n.mode !== 'goto' || !n.inv) { const path = this.navPath(n.a.x, n.a.z, P.x, P.z); if (path) { n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.inv = true; n.noiseAt = [P.x, P.z]; n.invT = 0.5; this.popAt(n.a, '?', 1.2); } }
           else if ((n.invT -= dt) <= 0) { n.invT = 0.5; n.noiseAt = [P.x, P.z]; this.goTo(n, P.x, P.z); }
         }
@@ -651,7 +651,7 @@
         if (d < 0.8 && d > 1e-4) { const k = (0.8 - d) / 2 / d; a.x -= dx * k; a.z -= dz * k; b.x += dx * k; b.z += dz * k; this.collide(a, 0.4); this.collide(b, 0.4); }
       }
     }
-    range(n) { return n.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }
+    range(n) { if (n.raid) return 10; return n.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }   // (the bath searchers look right across the water)
     breakThing(B) {
       const P = this.P, sd = B.s; B.done = true; B.o.visible = false;
       if (B.w) this.walls.splice(this.walls.indexOf(B.w), 1); if (B.bl) this.blockers.splice(this.blockers.indexOf(B.bl), 1);
@@ -677,9 +677,7 @@
     }
     heelsDown() {   // out of puff on tiptoe: the heels come down, THUD
       const P = this.P; this.think(['Hff... too heavy...', 'Ugh, my calves...', 'Can\'t... stay up...'][(this.t * 2 | 0) % 3], 1.4);
-      if (this.g.audio && this.g.audio.thump) this.g.audio.thump(4);
-      if (!SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, 4.5, '?', true);
-    }
+    }   // (no thud, nobody hears it: he just has to come down off his toes)
     use() {
       const P = this.P, near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
       if (P.held) { // throw it where you face
@@ -872,7 +870,7 @@
       if (R.phase === 'wait' && R.t >= R.wait) {
         const P = this.P, cand = this.npcs.filter((n) => n.room === 'lock' && !n.ko && n.a.st === 'free' && n.a.y < 1).sort((a, b) => Math.hypot(a.a.x - this.locker.x, a.a.z - this.locker.z) - Math.hypot(b.a.x - this.locker.x, b.a.z - this.locker.z)).slice(0, 2);
         const spots = [[POOL.x0 + 2.4, POOL.z1 - 0.9], [POOL.x1 - 2.6, POOL.z1 - 0.9]];
-        cand.forEach((n, k) => { n.raid = true; n.looked = false; this.goTo(n, spots[k][0], POOL.z0 - 0.9); n.mode = 'raid'; n.alarm = 0; });
+        cand.forEach((n, k) => { n.raid = true; n.looked = false; this.goTo(n, spots[k][0], POOL.z0 - 0.75); n.mode = 'raid'; n.alarm = 0; });
         R.who = cand; R.phase = 'come'; R.t = 0;
         this.later(0.1, () => { if (this.stage === 'bathhide' && roomAt(P.x, P.z) === 'bath') this.think('Footsteps... they\'re coming! Wait till they look, then under! (hold I)', 2.6); });
       }
@@ -995,7 +993,10 @@
       const ball = P.boxHide || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
       this.ballK = (this.ballK || 0) + ((ball ? 1 : 0) - (this.ballK || 0)) * Math.min(1, dt * 10);
       if (this.ballK > 0.01) { const k = this.ballK; v.root.position.y -= (P.boxHide ? 0.62 : 0.06) * v.s * k; v.root.scale.set(v.s * (1 - 0.1 * k), v.s * (1 - 0.32 * k), v.s * (1 - 0.1 * k)); } else v.root.scale.setScalar(v.s);
-      if (this.squatBox) { this.squatBox.visible = !!P.boxHide; if (P.boxHide) { this.squatBox.position.set(P.x, P.y, P.z); this.squatBox.rotation.y = -P.f; } }
+      // ducking in the box: the same box stays where it stood on the floor and he sinks down into it (no second box)
+      const duck = !!P.boxHide && (this.ballK || 0) > 0.05;
+      if (this.boxWorn) this.boxWorn.visible = !duck;
+      if (this.squatBox) { this.squatBox.visible = duck; if (duck) { this.squatBox.position.set(P.x, P.y, P.z); this.squatBox.rotation.y = -P.f; this.squatBox.scale.setScalar(0.95 * v.s); } }
       v.root.rotation.z = P.tip > 0.05 ? Math.sin(T * 13) * 0.05 * P.tip * (1.3 - P.stam) : 0;   // (set, not added: it must never build up into a lean)
       v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       this.shortsStep(dt);
