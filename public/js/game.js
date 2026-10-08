@@ -55,7 +55,8 @@
       const logo = new Image(); logo.src = 'assets/logo.webp?v=2';
       const logoReady = new Promise((res) => { (logo.decode ? logo.decode() : Promise.reject()).then(res, () => { logo.onload = res; logo.onerror = res; if (logo.complete) res(); }); setTimeout(res, 3000); });
       const showTitle = () => logoReady.then(() => this.ui.show('title'));
-      if (S.Banners && S.Banners.whenReady) S.Banners.whenReady(showTitle, 3000); else showTitle();
+      if (S.WMM) S.WMM.splash(() => this.ui.show('title'));
+      else if (S.Banners && S.Banners.whenReady) S.Banners.whenReady(showTitle, 3000); else showTitle();
       // background ticker: browsers pause hidden windows, which would freeze an online opponent
       try {
         const tk = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 16)'], { type: 'text/javascript' })));
@@ -192,6 +193,7 @@
       // online keeps real time even when the browser ticks slowly, so the two players don't drift apart
       const dt = Math.min(this.kind === 'online' ? 0.25 : 0.05, (now - this.last) / 1000); if (!bg && !document.hidden) this.R.perf((now - this.last) / 1000); this.last = now;
       if (this.camp) { this.pollPad(); this.camp.frame(dt); this.ui.draw(dt); return; } // CAMPAIGN: its own engine and scene
+      if (S.WMM && (this.ui.name === 'title' || S.WMM.busy)) { this.pollPad(); S.WMM.frame(dt, this.R); this.ui.draw(dt); return; } // WHERE'S MY MAWASHI: the ninja title
       this.pollPad();
       let animDt = 0;
       if (this.frozen) { this.R.update(this, 1e-4, 1e-4); this.R.render(); this.ui.draw(0); return; }
@@ -944,10 +946,10 @@
       this.camp = new S.Campaign(this); this.camp.start();
     }
     // TEST level: the bathhouse stealth level (stealth.js), run through the same hooks as the campaign
-    startStealth() {
+    startStealth(intro) {
       this.startAttract(); this.ui.hide(); this.ui.showHud(false); this.ui.hint('');
       this.mode = 'campaign'; document.body.classList.add('playing', 'campaign');
-      this.camp = new S.Stealth(this); this.camp.start();
+      this.camp = new S.Stealth(this); this.camp.start(intro);
     }
     endCampaign() {
       // cover the screen first, tear down underneath, then reveal the title: never a glimpse of the versus stage
@@ -1466,6 +1468,7 @@
         case 'learn': this.startTutorial(); break;
         case 'campaign': this.startCampaign(); break;
         case 'test': this.startStealth(); break;
+        case 'wmmPlay': this.ui.hide(); S.WMM.play(() => this.startStealth(true)); break;
         case 'training': this.sel.c1 = this.sel.c1 || 0; ui.show('trainsel', { c1: this.sel.c1 }); break;
         case 'play': ui.show('play'); break;
         case 'locker': this.openLocker(); break;

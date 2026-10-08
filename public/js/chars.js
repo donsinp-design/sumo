@@ -121,15 +121,18 @@
       this.inner.add(root);
       root.scale.set(BASE * BIG * (fat ? 1.3 : 1), BASE * BIG, BASE * BIG * (fat ? 1.22 : 1));
       this.meshes = []; this.mats = []; this.face = null;
-      const shirt = K.shirt, pants = kind === 'commander' ? 0x1a1a22 : 0x2a2e44;
+      const shirt = K.shirt, pants = kind === 'commander' || kind === 'ninja' ? 0x1a1a22 : 0x2a2e44;
       root.traverse((o) => {
         if (!o.isSkinnedMesh) return;
         o.frustumCulled = false;
         if (SOFT && S.Flat) { // flat colours per material, the role's colours on shirt, trousers and boots
           const nm = o.material.name || '', base = o.material.color ? o.material.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1);
-          const col = /Tops/.test(nm) ? new THREE.Color(kind === 'commander' ? 0xc8231d : shirt) : /Bottoms/.test(nm) ? new THREE.Color(pants === 0x2a2e44 ? 0x4a5068 : 0x34343e)
+          let col = /Tops/.test(nm) ? new THREE.Color(kind === 'commander' ? 0xc8231d : shirt) : /Bottoms/.test(nm) ? new THREE.Color(pants === 0x2a2e44 ? 0x4a5068 : 0x34343e)
             : /Shoes/.test(nm) ? new THREE.Color(pick % 2 ? 0xf2f2ec : 0x2e3440) : base;
-          const m = S.Flat.mat(S.Flat.pastel(col, 0.35)); m.emissive = new THREE.Color(0, 0, 0);
+          // the ninja (the title screen): one dark indigo suit, hood and face cloth (only the eyes show), a red headband
+          const NJ = kind === 'ninja' ? { Skin: 0x30344f, Hair: 0x23263c, Apron: 0x262a44, Band: 0xd8262e, Tops: 0x2d3150, Bottoms: 0x262a44, Shoes: 0x1e2030 } : null;
+          if (NJ) for (const k in NJ) if (nm.indexOf(k) >= 0) col = new THREE.Color(NJ[k]);
+          const m = S.Flat.mat(S.Flat.pastel(col, kind === 'ninja' ? 0.05 : 0.35)); m.emissive = new THREE.Color(0, 0, 0);
           o.material = m; o.castShadow = true; o.receiveShadow = true; this.mats.push(m); this.meshes.push(o); return;
         }
         const om = o.material, name = om.name || '', mode = om.transparent ? 'BLEND' : om.alphaTest > 0 ? 'MASK' : 'OPAQUE';

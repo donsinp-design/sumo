@@ -47,7 +47,7 @@
     constructor(game) { this.g = game; }
 
     // ============================================================== setup / teardown
-    start() {
+    start(intro) {
       const g = this.g;
       this.R = g.R; this.t = 0; this.acc = 0; this.paused = false; this.over = null; this.spotted = 0;
       this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xd9e6e9);
@@ -60,7 +60,7 @@
       this.build(); this.buildNav();
       this.ctrl = new S.Controller(new S.KeySource(S.MAPS.solo, 0));
       this.keys = {};
-      this.kd = (e) => { this.keys[e.code] = true; if (e.code === 'KeyI' && !e.repeat) this.iPress = true; }; this.ku = (e) => { this.keys[e.code] = false; };
+      this.kd = (e) => { if (this.asleep) { if (!e.repeat) this.wake(); return; } this.keys[e.code] = true; if (e.code === 'KeyI' && !e.repeat) this.iPress = true; }; this.ku = (e) => { this.keys[e.code] = false; };
       addEventListener('keydown', this.kd); addEventListener('keyup', this.ku);
       // the player: the soft sumo, no mawashi, up to his chest in the bath
       const arch = S.ARCH[g.sel && g.sel.c1 !== undefined ? g.sel.c1 : 0];
@@ -75,8 +75,10 @@
       this.buildHud();
       this.resize = () => { this.cam.aspect = innerWidth / innerHeight; this.cam.updateProjectionMatrix(); if (this.fx.pmat) this.fx.pmat.uniforms.uScale.value = innerHeight * r.getPixelRatio() / (2 * Math.tan(this.cam.fov * Math.PI / 360)); };
       addEventListener('resize', this.resize); this.resize();
-      this.objective('Get out of the BATH (the steps, towards you)');
-      this.think('Zzz... mm? I fell asleep in the bath again...', 3.0);
+      // straight from the title (the ninja's smoke): he's fast asleep in the bath until a key is pressed
+      this.asleep = !!intro;
+      if (this.asleep) { this.el('.st-obj').style.display = 'none'; this.el('.st-wake').style.display = 'block'; this.el('.st-zzz').style.display = 'block'; }
+      else this.wake();
       if (g.audio && g.audio.swell) g.audio.swell(0.3, 1.2);
     }
     stop() {
@@ -85,6 +87,11 @@
       this.R.r.shadowMap.enabled = !!this.R.flat;
       const vg = document.getElementById('vignette'); if (vg) vg.style.display = this.R.flat ? 'none' : '';
       this.scene = null;
+    }
+    wake() {
+      this.asleep = false; this.el('.st-obj').style.display = ''; this.el('.st-wake').style.display = 'none'; this.el('.st-zzz').style.display = 'none';
+      this.objective('Get out of the BATH (the steps, towards you)');
+      this.think('Zzz... mm? I fell asleep in the bath again...', 3.0);
     }
     later(sec, fn) { (this.timers || (this.timers = [])).push({ t: sec, fn }); }
 
@@ -399,6 +406,7 @@
       const P = this.P, c = this.ctrl;
       P.t += dt; P.cd = Math.max(0, P.cd - dt);
       let mx = c.mx, mz = c.mz; const mag = Math.hypot(mx, mz); if (mag > 1) { mx /= mag; mz /= mag; }
+      if (this.asleep) { this.npcsOnly(dt); return; }
       const wet = inPool(P.x, P.z), iPress = this.iPress; this.iPress = false;
       // hidden in a cart: still as a heap of towels. Any move (or I) and he climbs out
       if (P.hidden) {
@@ -422,20 +430,22 @@
       if (tipOn) { P.stam -= dt * (Math.hypot(P.vx, P.vz) > 0.4 ? 1 / 6.4 : 1 / 10); if (P.stam <= 0) { P.stam = 0; P.tired = true; this.heelsDown(); } }
       else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
-      if (P.st === 'free' && c.dash.held && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { P.st = 'charge'; P.t = 0; P.dur = 0.85; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }
+      if (P.st === 'free' && c.dash.held && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
       let spd = 0;
       if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 2.6 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
-      if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; if (!c.dash.held && P.t > 0.25) P.t = P.dur; }
+      if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur; }
+      if (P.st === 'wind' && mag > 0.3) { P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * 8); P.f = P.cdir; }
+      const power = P.st === 'charge' && P.run > 1.0;   // it needs a run-up: from right next to something he just bumps it
       const dir = P.st === 'charge' || mag > 0.3;
       P.vx += ((dir ? mx : 0) * spd - P.vx) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10)); P.vz += ((dir ? mz : 0) * spd - P.vz) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10));
-      if (P.st === 'slip' || P.st === 'busy' || P.st === 'wear') { P.vx *= 0.9; P.vz *= 0.9; }
+      if (P.st === 'slip' || P.st === 'busy' || P.st === 'wear' || P.st === 'wind') { P.vx *= 0.85; P.vz *= 0.85; }
       if (mag > 0.3 && P.st === 'free') P.f = lerpA(P.f, Math.atan2(mz, mx), dt * (P.cart ? 4 : 12));
       P.x += P.vx * dt; P.z += P.vz * dt;
       // the cracked wall gives way to a charge
       const CK = LY.crack;
-      if (P.st === 'charge' && !this.crackDone && P.z < CK.z1 + P.r + 0.25 && P.z > CK.z0 - 0.2 && P.x > CK.x0 && P.x < CK.x1) this.smashCrack();
+      if (power && !this.crackDone && P.z < CK.z1 + P.r + 0.25 && P.z > CK.z0 - 0.2 && P.x > CK.x0 && P.x < CK.x1) this.smashCrack();
       P.brkCd = Math.max(0, (P.brkCd || 0) - dt);
-      if (P.st === 'charge' && this.breakables && !P.brkCd) {   // one piece at a time: the nearest one he hits
+      if (power && this.breakables && !P.brkCd) {   // one piece at a time: the nearest one he hits
         let best = null, bd = P.r + 0.15;
         for (const B of this.breakables) {
           if (B.done) continue; const sd = B.s; if (Math.abs((sd.f ? UP : 0) - P.y) > 1.2) continue;
@@ -443,12 +453,12 @@
         }
         if (best) { this.breakThing(best); P.brkCd = 0.3; }
       }
-      if (P.st === 'charge') for (const cc of this.carts) {
+      if (power) for (const cc of this.carts) {
         if (cc === P.cart || cc === P.hidden || Math.hypot(cc.x - P.x, cc.z - P.z) > P.r + 0.75 || (Math.abs(cc.vx) + Math.abs(cc.vz)) > 1) continue;
         cc.vx = Math.cos(P.cdir) * 6; cc.vz = Math.sin(P.cdir) * 6; cc.spin = (Math.random() - 0.5) * 4; this.noise(cc.x, cc.z, 8, '?!');
         if (this.g.audio && this.g.audio.thump) this.g.audio.thump(5);
       }
-      if (P.st === 'charge') for (const b of this.buckets) {
+      if (power) for (const b of this.buckets) {
         if (b.state !== 'floor' || Math.abs(b.m.position.y - P.y) > 1.2 || Math.hypot(b.m.position.x - P.x, b.m.position.z - P.z) > P.r + 0.35) continue;
         const dx = b.m.position.x - P.x, dz = b.m.position.z - P.z, dl = Math.hypot(dx, dz) || 1, a = Math.atan2(0.5 * dz / dl + Math.sin(P.cdir), 0.5 * dx / dl + Math.cos(P.cdir));
         const L = clamp(this.reach(b.m.position.x, b.m.position.z, a, 6) - 0.5, 0.8, 5.5);
@@ -469,10 +479,10 @@
       else this.splT = 0;
       if (wet !== this.wasWet) { if (this.wasWet !== undefined) this.fx.water && this.fx.water(P.x, P.z, 1.6, POOL.water); this.wasWet = wet; }
       if (P.st === 'charge') {
-        if (this.stage === 'smash' && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.25) { this.hitLocker(); P.st = 'busy'; P.t = 0; P.dur = 0.5; }
+        if (power && this.stage === 'smash' && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.25) { this.hitLocker(); P.st = 'busy'; P.t = 0; P.dur = 0.5; }
         else if (hit) { P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.fx.dust && this.fx.dust(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (!SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, 5, '?'); }
       }
-      if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = 'free'; P.t = 0; if (was === 'charge') P.cd = 0.5; if (was === 'wear') this.putOnBox(); }
+      if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = was === 'wind' ? 'charge' : 'free'; P.t = 0; if (was === 'wind') { P.dur = 0.85; P.run = 0; } if (was === 'charge') P.cd = 0.5; if (was === 'wear') this.putOnBox(); }
       // puddles: walking over them is fine; RUNNING (the charge) over one, you slip
       if (P.st === 'charge') for (const q of this.puddles) if (((P.x - q.x) / q.rx) ** 2 + ((P.z - q.z) / q.rz) ** 2 < 1) {
         P.st = 'slip'; P.t = 0; P.dur = 1.3; P.fall = Math.atan2(P.vz, P.vx); P.vx *= 0.6; P.vz *= 0.6;
@@ -804,10 +814,10 @@
       if (S.SoftSumo && S.SoftSumo.loaded && !v.soft) S.SoftSumo.attach(v, { noBlob: true });
       if (v.soft && !v.pantsOff) { v.pantsOff = true; for (const m of v.soft.mats) if (/mawashi/i.test(m.name || '')) m.visible = false; }
       w.x = P.x; w.z = P.z; w.y = 0; w.f = P.f; w.fx = Math.cos(P.f); w.fz = Math.sin(P.f); w.vx = P.vx; w.vz = P.vz; w.spd = Math.hypot(P.vx, P.vz);
-      const nst = P.st === 'charge' ? 'charge' : P.st === 'slip' ? 'fall' : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
+      const nst = P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.t > 0.3 && P.t < 1.0; } else w.down = false;
-      w.hand = 1; w.hunch = 0.55 * P.tip; w.tiptoe = P.tip; w.relaxed = true; w.fxs = {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : null;
+      w.hand = 1; w.hunch = 0.55 * P.tip; w.tiptoe = P.tip; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : null;
       if (this.freeze) w.fxs.dizzy = 1;
       v.update(w, Math.max(dt, 1e-4), T);
       v.root.position.y += P.y + 0.04 * v.s * P.tip; v.root.visible = !P.hidden && !P.boxHide;
@@ -870,6 +880,11 @@
         '#stealthHud .st-pop{position:absolute;transform:translate(-50%,-100%);font:400 26px "Dela Gothic One",sans-serif;color:#cf3a3a;white-space:nowrap}' +
         '#stealthHud .st-q{position:absolute;transform:translate(-50%,-100%);font:400 24px "Dela Gothic One",sans-serif;color:#e2a13a}' +
         '#stealthHud .st-stam{position:absolute;width:64px;height:9px;border-radius:6px;background:rgba(255,250,240,.85);transform:translate(-50%,-100%);display:none;padding:2px}#stealthHud .st-stam i{display:block;height:100%;border-radius:4px;background:#84b5ad}#stealthHud .st-stam.tired i{background:#e59d86}' +
+        '#stealthHud .st-zzz{position:absolute;display:none;transform:translate(-50%,-100%);font:400 30px "Dela Gothic One",sans-serif;color:#6f8fc8}#stealthHud .st-zzz i{font-style:normal;position:absolute;opacity:0;animation:stz 2.4s linear infinite}' +
+        '#stealthHud .st-zzz i:nth-child(2){animation-delay:.8s;font-size:24px}#stealthHud .st-zzz i:nth-child(3){animation-delay:1.6s;font-size:36px}' +
+        '@keyframes stz{0%{opacity:0;transform:translate(0,0)}15%{opacity:1}100%{opacity:0;transform:translate(40px,-90px)}}' +
+        '#stealthHud .st-wake{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);display:none;font:400 26px "Dela Gothic One",sans-serif;color:#2f2a38;background:rgba(255,250,240,.85);padding:8px 22px;border-radius:14px;animation:stw 1.6s ease-in-out infinite}' +
+        '@keyframes stw{0%,100%{opacity:.55}50%{opacity:1}}' +
         '#stealthHud .st-oni{position:absolute;right:24px;top:64px;background:#fffaf0;color:#3a3440;padding:6px 14px;border-radius:12px;font:400 24px "Dela Gothic One",sans-serif;display:none}' +
         '#stealthHud .st-help{position:absolute;left:24px;bottom:18px;font-size:16px;opacity:.8;background:rgba(255,250,240,.75);padding:4px 10px;border-radius:8px}' +
         '#stealthHud .st-pause,#stealthHud .st-over{position:absolute;left:0;top:0;bottom:0;width:min(520px,92vw);display:none;pointer-events:auto;background:linear-gradient(90deg,rgba(30,24,36,.92),rgba(30,24,36,.6) 80%,transparent);padding:80px 60px;color:#f4efe6}' +
@@ -877,7 +892,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
+        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
@@ -890,6 +905,7 @@
     project(x, y, z) { const v = new THREE.Vector3(x, y, z).project(this.cam); return { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight }; }
     drawHud(dt) {
       const P = this.P, s = this.view.s;
+      if (this.asleep) { const q = this.project(P.x + 0.4, P.y + 2.2 * s, P.z), z = this.el('.st-zzz'); z.style.left = q.x + 'px'; z.style.top = q.y + 'px'; }
       const sb = this.el('.st-stam');
       if (P.stam < 0.999 && !this.over) { const q = this.project(P.x, P.y + 2.55 * s, P.z); sb.style.display = 'block'; sb.style.left = q.x + 'px'; sb.style.top = q.y + 'px'; sb.firstChild.style.width = (P.stam * 100) + '%'; sb.classList.toggle('tired', P.tired); }
       else sb.style.display = 'none';

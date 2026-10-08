@@ -246,7 +246,7 @@
       this.name = name; this.data = data || {}; this.focus = 0;
       this.render();
       const yen = $('yen'); this.setYen();
-      yen.style.display = ['title', 'select', 'result', 'tutdone'].includes(name) ? 'block' : 'none';
+      yen.style.display = ['title', 'select', 'result', 'tutdone'].includes(name) && !(S.WMM && name === 'title') ? 'block' : 'none';
     }
     hide() { this.pending = null; this.name = null; this.screen.className = ''; this.screen.innerHTML = ''; $('yen').style.display = 'none'; }
 
@@ -262,7 +262,10 @@
       };
       const P = S.profile;
       const foot = (t) => '<div class="foot">' + t + '</div>';
-      if (n === 'title') {
+      if (n === 'title' && S.WMM) {   // Where's my Mawashi: white, the menu on the left, the ninja on the right
+        h = '<div class="wmm-wrap"><div class="menu">' + btn('PLAY', 'wmmPlay') + btn('SUMO BATTLES', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') +
+          (S.APP === 'desktop' ? btn('QUIT', 'quitApp') : '') + '</div></div>';
+      } else if (n === 'title') {
         h = '<div class="title-wrap"><img class="logo-img" src="assets/logo.webp?v=2" alt="Kumite"><div class="menu">' +
           btn('PLAY', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') + (S.APP === 'desktop' ? btn('QUIT', 'quitApp') : '') +
           '</div></div>';
