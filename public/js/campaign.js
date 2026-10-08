@@ -36,6 +36,7 @@
   // ---------------------------------------------------------------- enemies (the roster from the design brief)
   const KINDS = {
     fighter:   { hp: 45,  spd: 3.1, r: 0.42, mass: 1,   name: 'FIGHTER',   shirt: 0x2f6fd0, apron: 0xf6f6f0, band: 0xf6f6f0 },
+    chef:      { hp: 40,  spd: 3.0, r: 0.42, mass: 1,   name: 'CHEF',      shirt: 0xf2efe6, apron: 0xf2efe6, band: 0xf2efe6 },
     rusher:    { hp: 38,  spd: 4.3, r: 0.4,  mass: 0.9, name: 'RUSHER',    shirt: 0xe2322b, apron: 0x2a2a30, band: 0xe2322b },
     technical: { hp: 50,  spd: 3.3, r: 0.42, mass: 1,   name: 'TECHNICAL', shirt: 0x1a2a5a, apron: 0x1a2a5a, band: 0x101010, glasses: true },
     grappler:  { hp: 65,  spd: 2.6, r: 0.48, mass: 1.6, name: 'GRAPPLER',  shirt: 0x2e9e6a, apron: 0x3a2a20, band: 0xf2c14e },

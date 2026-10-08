@@ -34,7 +34,9 @@ def zdoor(z0, z1, x, f=0): DOORS.append(dict(z0=z0, z1=z1, x=x, f=f, kind='zfram
 
 # ================================================================ GROUND
 # outer shell
-wall(-12.4, -12, -53.4, 4.4, col='tile'); wall(12, 12.4, -48.4, 4.4, col='tile'); wall(12, 12.4, -53.4, -50.6, col='tile'); zdoor(-50.6, -48.4, 12.2); wall(-12.4, 12.4, 4.4, 4.8, col='tile')
+wall(-12.4, -12, -37.0, 4.4, col='tile'); wall(-12.4, -12, -53.4, -38.8, col='tile'); zdoor(-38.8, -37.0, -12.2);   # the door to the toilets
+wall(-12.4, -12, -58.4, -53.4, col='tile'); wall(-12.4, -12, -61, -60.2, col='tile'); zdoor(-60.2, -58.4, -12.2);          # the kitchen's back door
+wall(12, 12.4, -48.4, 4.4, col='tile'); wall(12, 12.4, -53.4, -50.6, col='tile'); zdoor(-50.6, -48.4, 12.2); wall(-12.4, 12.4, 4.4, 4.8, col='tile')
 # ---- bath hall: the bath (rim pieces; the gap x 0..2 on the near side has the steps)
 for x0, x1, z0, z1 in [(-3.2, 0, -2.3, -1.8), (2, 9.2, -2.3, -1.8), (-3.2, 9.2, -12.2, -11.7), (-3.2, -2.7, -11.7, -2.3), (8.7, 9.2, -11.7, -2.3)]:
     solid('rim', x0, x1, z0, z1, 0.55, tall=False)
@@ -59,7 +61,7 @@ solid('baskets', -12, -11.3, -35.5, -32.0, 1.4)                    # rattan bask
 LOCKER = dict(x=-12 + 2.5 * 8 / 13, z=-40.25, face=-40.98, bank=4, bx0=-12, bz0=-41.7)
 wall(-12, -11.6, -47.2, -46.8); wall(-8.4, 12, -47.2, -46.8); door(-11.6, -8.4, -47)   # the staff door
 # ---- staff corridor
-wall(-12, 6.4, -53.4, -53, col='plaster_dk')
+wall(-12, 3.4, -53.4, -53, col='plaster_dk'); wall(5.4, 6.4, -53.4, -53, col='plaster_dk'); door(3.4, 5.4, -53.2)   # into the kitchen
 solid('boiler', -5.0, -0.6, -53, -51.9, 1.6)
 solid('firewood', 0.2, 2.6, -53, -52.2, 0.9, tall=False)
 solid('towels', -9.6, -6.8, -53, -52.3, 1.5)
@@ -75,11 +77,36 @@ for x0, x1, z0, z1 in [(12.4, 19.4, -52.2, -51.2), (15.4, 22.4, -55.4, -54.4), (
 solid('foldtable', 15.0, 18.2, -47.6, -46.6, 0.85, tall=False)
 solid('towelshelf', 12.6, 16.2, -60.6, -59.9, 1.6)
 TOWEL = dict(x=14.4, z=-59.2)
-CARTS = [dict(x=-2.4, z=-45.9, r=0.2), dict(x=3.8, z=-52.3, r=0.0), dict(x=20.6, z=-47.4, r=1.3), dict(x=13.6, z=-56.0, r=0.4)]
+CARTS = [dict(x=-2.4, z=-45.9, r=0.2), dict(x=0.4, z=-48.4, r=0.0), dict(x=20.6, z=-47.4, r=1.3), dict(x=13.6, z=-56.0, r=0.4)]
 # ---- back stairs
 wall(6.4, 6.6, -61, -53.0, col='plaster_dk', h=UP + 1.0); wall(11.4, 11.6, -61, -53.0, col='plaster_dk', h=UP + 1.0); wall(11.6, 12.4, -53.4, -53, col='plaster_dk')
 STAIRS = dict(x0=6.6, x1=11.4, z0=-61, z1=-53, steps=16)
-COURTYARD = dict(x0=-12.4, x1=6.4, z0=-61, z1=-53.4)
+COURTYARD = dict(x0=-12.4, x1=6.4, z0=-61, z1=-53.4)   # (now the kitchen)
+# ---- KITCHEN (behind the corridor, under the upper floor's edge): stove line and sinks along the back, the prep island,
+# the pantry, and in the corner the onigiri counter. Rat holes in the walls. The back door to the alley in the west wall
+KITCHEN = dict(x0=-12, x1=6.4, z0=-61, z1=-53.4)
+wall(-12.4, 6.4, -61.4, -61, col='tile')
+solid('stove', -7.0, 0.0, -61, -60.0, 0.95, tall=False)
+solid('ksink', 1.0, 5.4, -61, -60.2, 0.9, tall=False)
+solid('prep', -6.0, 1.0, -57.8, -56.6, 0.9, tall=False)
+solid('pantry', 4.8, 6.4, -58.6, -54.4, 1.8)
+solid('oncounter', -12, -8.6, -54.4, -53.4, 0.95, tall=False); solid('oncounter', -12, -11.0, -56.6, -54.4, 0.95, tall=False)
+solid('kfridge', -12, -10.8, -58.2, -57.0, 1.9)
+ONIGIRI = dict(x=-9.9, z=-53.9, y=0.95, need=10, chef=[-9.9, -55.3])     # the plate on the counter; where the chef stands to make them
+RATHOLES = [dict(x=-4.2, z=-60.95), dict(x=-12.0 + 0.05, z=-56.9 + 0.01), dict(x=6.35, z=-59.4)]
+TRAPS = [dict(x=-3.0, z=-55.6), dict(x=-8.0, z=-58.9), dict(x=2.6, z=-58.9), dict(x=-0.6, z=-59.3), dict(x=-10.2, z=-59.6), dict(x=3.6, z=-55.2), dict(x=-7.2, z=-55.0)]
+BACKDOOR = dict(x=-12.2, z0=-60.2, z1=-58.4)
+KDOOR = dict(x=4.4, z=-53.2)
+# ---- TOILETS (behind a door in the changing room's west wall): five stalls down the far wall, urinals, sinks
+TOILETS = dict(x0=-20.4, x1=-12.4, z0=-45, z1=-31)
+wall(-20.8, -12.4, -31, -30.6, col='tile'); wall(-20.8, -12.4, -45.4, -45, col='tile'); wall(-20.8, -20.4, -45.4, -30.6, col='tile')
+STALL_Z = [-32.0, -34.4, -36.8, -39.2, -41.6, -44.0]
+for z in STALL_Z: solid('stallwall', -20.4, -18.2, z - 0.05, z + 0.05, 1.6)
+STALLS = [dict(x=-19.3, z=(a + b) / 2) for a, b in zip(STALL_Z, STALL_Z[1:])]
+STALL_USE = 2
+solid('urinals', -16.4, -13.0, -31.6, -31.0, 1.1, tall=False)
+solid('tsinks', -18.0, -13.4, -45.0, -44.4, 0.9, tall=False)
+TP = dict(x=10.0, z=-89.6)        # toilet paper, on the storage shelf
 
 # ================================================================ UPPER
 F = 1
@@ -127,21 +154,22 @@ for sd in (-1, 1):
     for z in (-18.6, -21.2, -23.8): ITEMS += [dict(k='stool', x=sd * 10.5, z=z), dict(k='oke', x=sd * 10.2, z=z - 0.65)]
 for z in (-19.7, -23.5):
     for x in (-7.6, -4.4, 4.4, 7.6): ITEMS += [dict(k='stool', x=x, z=z)]
-ITEMS += [dict(k='bucket', x=21.4, z=-58.8), dict(k='bucket', x=-4.4, z=-45.4), dict(k='bucket', x=0.6, z=-38.6), dict(k='oke', x=-3.2, z=-64.2, f=F), dict(k='bucket', x=5.6, z=-70.4, f=F), dict(k='stool', x=-5.4, z=-84.4, f=F)]
+ITEMS += [dict(k='bucket', x=21.4, z=-58.8), dict(k='bucket', x=1.4, z=-54.2), dict(k='bucket', x=-13.6, z=-43.2), dict(k='bucket', x=-4.4, z=-45.4), dict(k='bucket', x=0.6, z=-38.6), dict(k='oke', x=-3.2, z=-64.2, f=F), dict(k='bucket', x=5.6, z=-70.4, f=F), dict(k='stool', x=-5.4, z=-84.4, f=F)]
 WASHB = dict(x=3.6, z=-1.0)                                         # his yellow wash bucket by the steps
-PUDDLES = [dict(x=-1.2, z=-29.2, rx=1.0, rz=0.6), dict(x=6.2, z=-44.4, rx=1.2, rz=0.7), dict(x=-9.6, z=-44.4, rx=0.9, rz=0.55), dict(x=9.8, z=-33.6, rx=0.8, rz=0.55),
+PUDDLES = [dict(x=3.0, z=-59.5, rx=0.9, rz=0.5), dict(x=-15.0, z=-39.0, rx=0.9, rz=0.55), dict(x=-1.2, z=-29.2, rx=1.0, rz=0.6), dict(x=6.2, z=-44.4, rx=1.2, rz=0.7), dict(x=-9.6, z=-44.4, rx=0.9, rz=0.55), dict(x=9.8, z=-33.6, rx=0.8, rz=0.55),
            dict(x=-5.6, z=-48.6, rx=0.9, rz=0.5), dict(x=9.4, z=-66.4, rx=0.7, rz=0.45, f=F, milk=True)]
 
 # everything but the walls breaks under a charge; long pieces in segments of about 2.4 m (only the one you hit goes)
 BREAKABLE = {'lockers', 'bench', 'washrow', 'washisland', 'vanity', 'baskets', 'boiler', 'firewood', 'towels', 'cart', 'washer', 'crates',
-             'lowtable', 'massage', 'fridge', 'vending', 'manga', 'sofa', 'desk', 'cabinet', 'shoes', 'shelf', 'foldtable'}
+             'lowtable', 'massage', 'fridge', 'vending', 'manga', 'sofa', 'desk', 'cabinet', 'shoes', 'shelf', 'foldtable', 'prep', 'pantry', 'kfridge', 'tsinks'}
 for s_ in S:
     if s_['k'] in BREAKABLE:
         ax = 'x' if s_['x1'] - s_['x0'] >= s_['z1'] - s_['z0'] else 'z'; L = (s_['x1'] - s_['x0']) if ax == 'x' else (s_['z1'] - s_['z0'])
         s_.update(brk=1, ax=ax, n=max(1, round(L / 2.4)))
 
 LAYOUT = dict(UP=UP, solids=S, blockers=B, doors=DOORS, pool=POOL, locker=LOCKER, crack=CRACK, stairs=STAIRS, courtyard=COURTYARD, exit=EXIT, tatami=TATAMI,
-              genkan=GENKAN, entrance=ENTRANCE, office=OFFICE, box=BOX, items=ITEMS, washb=WASHB, puddles=PUDDLES, laundry=LAUNDRY, towel=TOWEL, carts=CARTS)
+              genkan=GENKAN, entrance=ENTRANCE, office=OFFICE, box=BOX, items=ITEMS, washb=WASHB, puddles=PUDDLES, laundry=LAUNDRY, towel=TOWEL, carts=CARTS,
+              kitchen=KITCHEN, onigiri=ONIGIRI, ratholes=RATHOLES, traps=TRAPS, backdoor=BACKDOOR, kdoor=KDOOR, toilets=TOILETS, stalls=STALLS, stall_use=STALL_USE, tp=TP)
 
 if __name__ == '__main__':
     import hashlib

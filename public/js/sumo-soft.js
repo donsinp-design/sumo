@@ -114,6 +114,15 @@
       aim('forearm' + sd, 'upperarm' + sd, el, hd);
       keep('hand' + sd, 'forearm' + sd);
     }
+    // tiptoeing: T-rex hands. Palms turned down, wrists drooping forward
+    if (w.tiptoe > 0.05) for (const A of view.arms) {
+      const sd = A.sd > 0 ? 'l' : 'r'; if (!A.el || !wq['forearm' + sd] || !wq['hand' + sd]) continue;
+      const el = S_.v.copy(A.el).applyMatrix4(body.matrix), hd = S_.b.copy(A.hand.position).applyMatrix4(body.matrix);
+      const dir = hd.sub(el).normalize(), side = S_.c.set(0, 1, 0).cross(dir).normalize(), kk = w.tiptoe;
+      const tw = (S.SoftSumo.trexTw !== undefined ? S.SoftSumo.trexTw : -1.2) * (A.sd > 0 ? 1 : -1) * kk, dr = (S.SoftSumo.trexDr !== undefined ? S.SoftSumo.trexDr : 0.9) * kk;
+      const qd = new THREE.Quaternion().setFromAxisAngle(side, dr).multiply(new THREE.Quaternion().setFromAxisAngle(dir, tw));
+      set('hand' + sd, qd.multiply(wq['hand' + sd]), wq['forearm' + sd]);
+    }
     // standing and walking: the arms take the approved stance pose (relaxed, a little forward, palms down) and swing
     // gently against the steps; fighting moves blend back to the view's IK arms
     const now = performance.now() / 1000, dtr = Math.min(0.1, now - (S_.tPrev || now)); S_.tPrev = now;

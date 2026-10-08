@@ -23,15 +23,16 @@
   // restart points nobody is looking at
   const CP = { lockN: { x: 5.8, z: -25.6, f: -Math.PI / 2 }, lockS: { x: -11.0, z: -45.9, f: Math.PI / 2 }, corr: { x: -10.2, z: -48.4, f: -Math.PI / 2 },
     stair: { x: 9, z: -56.5, f: -Math.PI / 2 },
-    store: { x: 9.8, z: -89.4, f: Math.PI / 2 }, laundry: { x: 10.9, z: -49.5, f: 0 } };
+    store: { x: 9.8, z: -89.4, f: Math.PI / 2 }, laundry: { x: 10.9, z: -49.5, f: 0 }, kitchen: { x: 4.4, z: -51.2, f: -Math.PI / 2 }, toilet: { x: -13.4, z: -37.9, f: Math.PI } };
   const CENSOR = { w: 0.8, h: 0.5, y: -0.55 };   // the pixel block, at hip height below the body centre (the box-pants sit at -0.62)
   const POOL = S.BathLayout.pool;
   const LY = S.BathLayout, EXIT = LY.exit;
   // which room a point is in (noise carries round its own room only; walls muffle it)
   function roomAt(x, z) {
     if (x > 12.4 && z < -43.6 && z > -61) return 'laundry';
+    if (x < -12.4 && z < -30.6 && z > -45.4) return 'toilet';
     if (z > -16) return 'bath'; if (z > -27) return 'shower'; if (z > -47) return 'lock';
-    if (z > -53.2) return 'corr'; if (z > -61) return 'stair';
+    if (z > -53.2) return 'corr'; if (z > -61) return x < 6.4 ? 'kitchen' : 'stair';
     if (z > -86) return 'up'; return x > 4 ? 'store' : 'up';
   }
   const SAFE = { bath: 1, shower: 1 };
@@ -120,12 +121,21 @@
         const ar = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.arrowTex(), transparent: true, depthWrite: false, depthTest: false })); ar.scale.set(0.62, 0.62, 1); ar.position.y = 2.3; ar.renderOrder = 7; g.add(ar);
         g.userData = { ring, ar }; return g; };
       this.spOut = sp(1, -0.9); this.spLocker = sp(this.locker.x, this.locker.z + 0.6); this.spKey = sp(this.washSpot.x, this.washSpot.z); this.spCrack = sp(LY.crack.x, LY.crack.z1 + 0.9);
-      this.spBox = sp(this.boxSpot.x, this.boxSpot.z); this.spTowel = sp(LY.towel.x, LY.towel.z); this.spExit = sp(-11.4, (EXIT.z0 + EXIT.z1) / 2);
-      this.marks = [this.spOut, this.spLocker, this.spKey, this.spCrack, this.spBox, this.spExit, this.spTowel];
+      this.spBox = sp(this.boxSpot.x, this.boxSpot.z); this.spTowel = sp(LY.towel.x, LY.towel.z); this.spExit = sp((LY.entrance.x0 + LY.entrance.x1) / 2, LY.entrance.z + 1.2);
+      const ST = LY.stalls[LY.stall_use]; this.spKitchen = sp(LY.kdoor.x, LY.kdoor.z + 0.9); this.spOni = sp(LY.onigiri.x, LY.onigiri.z - 1.3); this.spStall = sp(ST.x + 1.6, ST.z);
+      this.spTP = sp(LY.tp.x, LY.tp.z); this.spBack = sp(LY.backdoor.x + 0.8, (LY.backdoor.z0 + LY.backdoor.z1) / 2);
+      // the onigiri plate (the chef fills it), the rats that raid it, the mousetraps (set out once the food has gone missing)
+      const O = LY.onigiri; this.oni = { n: 0, eaten: 0, g: holder(O.x, O.y, O.z), pieces: [] };
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.04, 24), S.Flat.mat(0xf2ede4)); plate.position.y = 0.02; plate.castShadow = true; plate.userData.flatDone = true; this.oni.g.add(plate);
+      this.rats = LY.ratholes.map((h, i) => ({ hx: h.x, hz: h.z, x: h.x, z: h.z, st: 'home', t: 4 + i * 2.5, m: holder(h.x, 0, h.z), carry: false }));
+      for (const r of this.rats) r.m.visible = false;
+      this.traps = LY.traps.map((q) => ({ x: q.x, z: q.z, armed: true, m: holder(q.x, 0, q.z) }));
+      for (const t of this.traps) { t.m.visible = false; t.m.rotation.y = (t.x * 3) % 6.28; }
+      this.marks = [this.spOut, this.spLocker, this.spKey, this.spCrack, this.spBox, this.spExit, this.spTowel, this.spKitchen, this.spOni, this.spStall, this.spTP, this.spBack];
       this.spOut.visible = true;
       // laundry carts: push them about (K), hide inside (I, standing still next to one)
       this.carts = (LY.carts || []).map((q) => { const c = { x: q.x, z: q.z, f: q.r || 0, vx: 0, vz: 0, m: holder(q.x, 0, q.z), w: add(0, 0, 0, 0, false) }; this.cartBox(c); return c; });
-      new THREE.GLTFLoader().load('assets/models/bathhouse_kit.glb' + (LY.v ? '?v=' + LY.v : ''), (gl) => { if (this.scene) this.dress(S.Flat.kit(gl.scene)); });
+      S.loadBathKit().then((root) => { if (this.scene && root) this.dress(root.clone(true)); });   // (fetched in the background at start-up; each play gets its own copy)
     }
     // the cart's collider: the box round it, turned (1.3 long, 0.9 wide)
     cartBox(c) {
@@ -160,6 +170,13 @@
       for (const b of this.buckets) if (proto['ITEM_' + b.kind.toUpperCase()]) b.m.add(clone('ITEM_' + b.kind.toUpperCase()));
       if (proto.ITEM_WASHB) this.washB.add(clone('ITEM_WASHB'));
       if (proto.BOX) this.pantsBox.add(clone('BOX'));
+      if (proto.ITEM_ONIGIRI || get('ITEM_ONIGIRI')) { const op = get('ITEM_ONIGIRI'); op.visible = false; proto.ITEM_ONIGIRI = op;
+        for (let k = 0; k < 4; k++) { const o = op.clone(); o.visible = false; o.position.set((k % 2 - 0.5) * 0.24, 0.04, (Math.floor(k / 2) - 0.5) * 0.2); o.rotation.y = k * 0.7; this.oni.g.add(o); this.oni.pieces.push(o); }
+        this.oniDraw(); }
+      const ratP = get('ITEM_RAT'); if (ratP) { ratP.visible = false; for (const r of this.rats) { const o = ratP.clone(); o.visible = true; o.position.set(0, 0, 0); r.m.add(o); } }
+      const trapP = get('ITEM_TRAP'); if (trapP) { trapP.visible = false; for (const t of this.traps) { const o = trapP.clone(); o.visible = true; o.position.set(0, 0, 0); t.m.add(o); t.mesh = o; } }
+      this.stallDoors = LY.stalls.map((q, k) => get('STALLDOOR_' + k)).filter(Boolean);
+      if (proto.BOX) { this.squatBox = clone('BOX'); this.squatBox.visible = false; this.scene.add(this.squatBox); }
       const cartP = get('ITEM_CART'); if (cartP) { cartP.visible = false; for (const c of this.carts) { const o = cartP.clone(); o.visible = true; o.position.set(0, 0, 0); c.m.add(o); c.mesh = o; } }
       this.water = get('WATER'); this.crackM = get('CRACK_WALL'); this.rubble = get('CRACK_RUBBLE'); this.holes = get('LKHOLES');
       if (this.rubble) this.rubble.visible = false; if (this.holes) this.holes.visible = false;
@@ -198,7 +215,7 @@
         const v = new S.WorkerView(this.scene, kind, !!o.fat, o.pick); v.walls = this.walls;
         const cone = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0xffcf3a, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide }));
         cone.renderOrder = 2; this.scene.add(cone);
-        return { a, v, route, i: 0, wait: route[0][2], mode: 'route', alarm: 0, cone, range: o.range || 6.4, half: o.half || 0.62, room: o.room, speed: o.speed || 1.35, sway: o.sway || 0.6, ear: o.ear || 0, path: null, pi: 0 };
+        return { a, v, route, i: 0, wait: route[0][2], mode: 'route', alarm: 0, cone, onigiri: !!o.onigiri, range: o.range || 6.4, half: o.half || 0.62, room: o.room, speed: o.speed || 1.35, sway: o.sway || 0.6, ear: o.ear || 0, path: null, pi: 0 };
       };
       const P = Math.PI, U = P / 2;
       return [
@@ -221,6 +238,13 @@
         mk('fighter', [[13.4, -53.3, 2.0, 0], [21.4, -53.3, 2.0, P]], { room: 'laundry', pick: 2, speed: 1.1, range: 5.8 }),
         mk('grappler', [[15.8, -56.4, 2.2, 0], [21.6, -56.4, 2.4, P]], { room: 'laundry', pick: 3, fat: true, speed: 0.9, range: 5.2 }),
         mk('staff', [[16.6, -48.4, 4.0, U], [16.6, -48.4, 2.2, -U + 0.5]], { room: 'laundry', pick: 4, sway: 0.4, range: 5.6 }),
+        // KITCHEN. The onigiri chef goes between his counter (making a few each time) and the stove; one at the stove; one at prep and the pantry
+        mk('chef', [[LY.onigiri.chef[0], LY.onigiri.chef[1], 3.0, U], [-3.2, -59.3, 4.5, -U]], { room: 'kitchen', range: 5.6, onigiri: true }),
+        mk('chef', [[-6.0, -59.3, 3.0, -U], [0.4, -59.3, 3.0, -U]], { room: 'kitchen', pick: 1, speed: 1.0, range: 5.2 }),
+        mk('chef', [[3.4, -55.4, 2.5, P], [3.6, -58.4, 2.5, 0]], { room: 'kitchen', pick: 3, fat: true, range: 5.0 }),
+        // TOILETS. A man at the urinals (facing the wall), the cleaner mopping by the sinks
+        mk('rusher', [[-14.8, -32.2, 999, U]], { room: 'toilet', pick: 0, range: 4.0, sway: 0.1 }),
+        mk('thrower', [[-17.4, -42.6, 2.2, P], [-13.6, -42.6, 2.2, 0]], { room: 'toilet', pick: 2, speed: 0.8, range: 4.8 }),
       ];
     }
     sees(n, x, z, range) {
@@ -323,7 +347,7 @@
         if (!n.path[n.pi]) { // arrived
           n.path = null;
           if (n.mode === 'goto') { n.mode = 'search'; n.wait = 4.2; if (n.noiseAt) a.f = Math.atan2(n.noiseAt[1] - a.z, n.noiseAt[0] - a.x); }
-          else { n.mode = 'route'; n.wait = n.route[n.i][2] || 0.01; }
+          else { n.mode = 'route'; n.wait = n.route[n.i][2] || 0.01; if (n.onigiri && n.i === 0) this.chefMakes(); }
         }
       }
       if (tx !== null) { const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz) || 1; a.vx = dx / d * sp; a.vz = dz / d * sp; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 7); }
@@ -468,12 +492,29 @@
         if (room === 'up' && from === 'stair' && !this.saidUp) { this.saidUp = true; this.think('The lounge... and the front desk is past it. The storage must be behind the desk.', 3.4); }
         if (room === 'store') this.cp = CP.store;
         if (SAFE[room]) this.cp = { x: P.x, z: P.z, f: P.f };
+        if (room === 'kitchen' || (room === 'corr' && from === 'kitchen')) this.cp = CP.kitchen;
+        if (room === 'toilet' || (room === 'lock' && from === 'toilet')) this.cp = CP.toilet;
+        if (room === 'kitchen' && this.stage === 'kitchen') this.hungry();
         if (room === 'store' && this.stage === 'storage') { this.stage = 'box'; this.spBox.visible = true; this.think('A cardboard box... it\'ll have to do!', 2.8); this.objective('Put on the BOX (K next to it)'); }
       }
       if (!this.crackDone && !this.saidCrack && room === 'corr' && P.x > 4) { this.saidCrack = true; this.spCrack.visible = true;
         this.think('The stairs! ...buried under a heap of delivery boxes. One good charge (hold L) should clear them.', 3.4); }
       // fire exit
-      if (this.stage === 'exit' && P.x < EXIT.x && P.z < EXIT.z1 && P.z > EXIT.z0) { this.win(); return; }
+      if (P.x < EXIT.x + 0.4 && P.z < EXIT.z1 && P.z > EXIT.z0 && !this.saidChain) { this.saidChain = true; this.think('The fire exit... chained shut?!', 2.0); }
+      const En = LY.entrance;
+      if (this.stage === 'exit' && P.z < En.z + 1.9 && P.x > En.x0 - 0.2 && P.x < En.x1 + 0.2 && P.y > UP - 0.5) this.frontDoor();
+      const BD = LY.backdoor;
+      if (this.stage === 'escape' && P.x < BD.x - 0.3 && P.z < BD.z1 && P.z > BD.z0) { this.win(); return; }
+      // in the box, hold I standing still: he squats right down inside it. Just a box
+      P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet;
+      this.ratStep(dt);
+      if (this.stage === 'escape') for (const t of this.traps) if (t.armed && Math.hypot(t.x - P.x, t.z - P.z) < 0.5 && (P.st === 'free' || P.st === 'charge')) {
+        t.armed = false; if (t.mesh) t.mesh.rotation.z = 0.5; P.st = 'busy'; P.t = 0; P.dur = 1.2; P.vx = P.vz = 0;
+        this.think(['SNAP! OW OW OW!!', 'YEOWCH! A mousetrap!', '...my toe!!'][(this.t * 3 | 0) % 3], 1.6); this.noise(P.x, P.z, 9, '?!'); this.flash = 0.4;
+        if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6);
+      }
+      // J: a slap. Rats go flying; things get knocked about; hitting a person is NOT allowed
+      if (c.push.pressed && P.st === 'free' && !P.held && !P.cart) this.slap();
       // K: use (locker, wash bucket, pick up / throw, put on the box)
       if (c.grab.pressed && P.st === 'free') this.use();
       // a charge is loud: heavy running footsteps carry round the room
@@ -498,7 +539,7 @@
       const pr = roomAt(P.x, P.z);
       for (const n of this.npcs) {
         this.npcStep(n, dt);
-        if (SAFE[pr] || this.grace > 0 || n.a.st !== 'free' || P.hidden) { n.alarm = Math.max(0, n.alarm - dt); continue; }
+        if (SAFE[pr] || this.grace > 0 || n.a.st !== 'free' || P.hidden || P.boxHide || P.inStall) { n.alarm = Math.max(0, n.alarm - dt); continue; }
         const range = this.range(n), d = Math.hypot(P.x - n.a.x, P.z - n.a.z), same = roomAt(n.a.x, n.a.z) === pr;
         // right next to someone they hear you, whichever way they face; on tiptoe you can get much closer
         // (the receptionist, at her desk, still catches a tiptoe that comes right up behind her)
@@ -566,6 +607,19 @@
         this.think('Empty?! No key... Forget it. I\'ll just smash the locker open!', 3.2);
         this.objective('CHARGE into your locker (hold L + direction). It will take a few hits: hide when they come running'); return;
       }
+      if (this.stage === 'onigiri' && near(LY.onigiri.x, LY.onigiri.z, 1.7) && this.oni.n > 0) {
+        P.st = 'busy'; P.t = 0; P.dur = 0.6; this.oni.n--; this.oni.eaten++; this.oniDraw(); P.f = Math.atan2(LY.onigiri.z - P.z, LY.onigiri.x - P.x);
+        this.think(['Nom!', '*munch munch*', 'Mmm!', 'So good...'][this.oni.eaten % 4], 0.9); this.noise(P.x, P.z, 2.2, '?', true);
+        if (this.oni.eaten >= LY.onigiri.need) { this.stage = 'toilet'; this.spOni.visible = false; this.el('.st-oni').style.display = 'none';
+          this.later(1.2, () => { this.think('...oh no. Oh NO. My stomach... TOILET!', 2.6); this.objective('Get to the TOILETS (through the door in the changing room\'s west wall), into a stall'); this.spStall.visible = true; }); }
+        return;
+      }
+      const ST = LY.stalls[LY.stall_use];
+      if ((this.stage === 'toilet' || this.stage === 'toilet2') && Math.abs(P.z - ST.z) < 1.1 && P.x < ST.x + 2.2) { this.stall(this.stage === 'toilet2'); return; }
+      if (this.stage === 'paper' && near(LY.tp.x, LY.tp.z, 1.8)) {
+        P.st = 'busy'; P.t = 0; P.dur = 0.6; this.stage = 'toilet2'; this.spTP.visible = false; this.spStall.visible = true;
+        this.think('PAPER! ...now, back to that stall. Quickly.', 2.2); this.objective('Back to the TOILET stall (with the paper)'); return;
+      }
       if (this.stage === 'towel' && near(LY.towel.x, LY.towel.z, 1.8)) {
         P.st = 'busy'; P.t = 0; P.dur = 1.0; this.stage = 'storage'; this.spTowel.visible = false; P.f = -Math.PI / 2;
         this.think('A towel! ...it wouldn\'t even cover one cheek.', 2.6);
@@ -591,6 +645,78 @@
       this.objective('Find your LOCKER (through the wash area)');
     }
     // his locker takes three charges: a dent, a bad dent, then the doors burst. Each one is heard across the room
+    slap() {
+      const P = this.P, fx = Math.cos(P.f), fz = Math.sin(P.f); P.st = 'busy'; P.t = 0; P.dur = 0.35; this.w.hand = 1;
+      const inFront = (x, z, r) => { const dx = x - P.x, dz = z - P.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.3; };
+      for (const n of this.npcs) if (n.a.st === 'free' && Math.abs(n.a.y - P.y) < 1 && inFront(n.a.x, n.a.z, 1.7)) {
+        this.popAt(n.a, 'OW!! HEY!', 1.4, true); this.think('...you can\'t slap the staff!', 2.0); this.caught(n); return;
+      }
+      for (const r of this.rats) if (r.st !== 'home' && r.st !== 'fly' && inFront(r.x, r.z, 1.6)) {
+        if (r.carry) { r.carry = false; this.oni.n = Math.min(4, this.oni.n + 1); this.oniDraw(); }
+        r.st = 'fly'; r.t = 0.6; r.vx = (r.x - P.x) * 4; r.vz = (r.z - P.z) * 4; this.popAt({ x: r.x, z: r.z, y: 0 }, 'SQUEAK!', 1.0);
+        if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3);
+      }
+      for (const b of this.buckets) if (b.state === 'floor' && Math.abs(b.m.position.y - P.y) < 1 && inFront(b.m.position.x, b.m.position.z, 1.4)) {
+        const L = clamp(this.reach(b.m.position.x, b.m.position.z, P.f, 3) - 0.4, 0.5, 2.5);
+        b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y; b.tx = b.sx + fx * L; b.tz = b.sz + fz * L; b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz); b.dur = 0.3 + L * 0.05;
+      }
+      for (const cc of this.carts) if (cc !== P.cart && inFront(cc.x, cc.z, 1.9)) { cc.vx = fx * 3; cc.vz = fz * 3; cc.spin = 0; }
+    }
+    oniDraw() { if (!this.oni) return; this.oni.pieces.forEach((o, k) => { o.visible = k < this.oni.n; }); const e = this.el && this.hud && this.el('.st-oni'); if (e) e.textContent = 'ONIGIRI ' + this.oni.eaten + ' / ' + LY.onigiri.need; }
+    chefMakes() {   // the chef is at his counter: a few onigiri, one by one
+      if (this.stage !== 'onigiri') return;
+      for (let k = 0; k < 3; k++) this.later(0.7 + k * 0.8, () => { if (this.stage === 'onigiri' && this.oni.n < 4) { this.oni.n++; this.oniDraw(); } });
+    }
+    ratStep(dt) {
+      const O = LY.onigiri, tx = O.x + 0.2, tz = O.z - 0.75;
+      for (const r of this.rats) {
+        if (r.st === 'home') { r.m.visible = false; if (this.stage === 'onigiri' && this.oni.n > 0 && (r.t -= dt) <= 0) { r.st = 'run'; r.x = r.hx; r.z = r.hz; } continue; }
+        r.m.visible = true; let gx = tx, gz = tz, sp = 2.3;
+        if (r.st === 'fly') { r.t -= dt; r.x += r.vx * dt; r.z += r.vz * dt; r.vx *= 0.92; r.vz *= 0.92; this.collide(r, 0.15); r.m.rotation.x += dt * 14; if (r.t <= 0) { r.st = 'flee'; r.m.rotation.x = 0; } r.m.position.set(r.x, 0.1 + Math.max(0, r.t) * 0.6, r.z); continue; }
+        if (r.st === 'flee') { gx = r.hx; gz = r.hz; sp = 2.8; }
+        const dx = gx - r.x, dz = gz - r.z, d = Math.hypot(dx, dz);
+        if (d < 0.25) {
+          if (r.st === 'run') { if (this.oni.n > 0) { this.oni.n--; r.carry = true; this.oniDraw(); this.popAt({ x: r.x, z: r.z, y: 0.6 }, 'squeak', 0.8); } r.st = 'flee'; }
+          else { r.st = 'home'; r.carry = false; r.t = 4 + Math.random() * 4; }
+          continue;
+        }
+        r.x += dx / d * sp * dt; r.z += dz / d * sp * dt; r.m.position.set(r.x, 0, r.z); r.m.rotation.set(0, -Math.atan2(dz, dx), 0);
+        r.m.position.y = Math.abs(Math.sin(this.t * 20 + r.hx)) * 0.03;
+      }
+    }
+    frontDoor() {   // the front doors are stuck: rattling them is loud
+      this.stage = 'kitchen'; this.spExit.visible = false; const En = LY.entrance;
+      this.noise((En.x0 + En.x1) / 2, En.z + 0.6, 14, '?!'); this.flash = 0.3; if (this.g.audio && this.g.audio.thump) { this.g.audio.thump(5); this.later(0.2, () => this.g.audio.thump(5)); }
+      this.think('Stuck?! *RATTLE RATTLE*', 1.8);
+      this.later(2.0, () => { this.think('...that was loud. The back way out, then: through the KITCHEN, downstairs.', 3.2); this.objective('Leave by the back door: the KITCHEN (downstairs, off the back corridor)'); this.spKitchen.visible = true; });
+    }
+    hungry() {
+      this.stage = 'onigiri'; this.spKitchen.visible = false; this.spOni.visible = true; this.el('.st-oni').style.display = 'block'; this.oniDraw();
+      this.think('*GRRRUMBLE*... my stomach. I can\'t run on empty... those ONIGIRI!', 3.2);
+      this.objective('Eat 10 ONIGIRI from the counter. Wait for the chef to make them, and beat the rats to them (J slap)');
+    }
+    stall(second) {   // into the stall: the door shuts behind him
+      const P = this.P, ST = LY.stalls[LY.stall_use], D = this.stallDoors && this.stallDoors[LY.stall_use];
+      P.x = ST.x + 0.2; P.z = ST.z; P.f = 0; P.vx = P.vz = 0; P.st = 'busy'; P.t = 0; P.dur = second ? 3.2 : 4.6; P.inStall = true; this.spStall.visible = false;
+      if (D) D.rotation.y = 0;
+      if (!second) {
+        this.think('Nnnnnnngh...!!', 2.0); this.flash = 0.25;
+        this.later(2.4, () => { this.think('*FLUSHHH*', 1.2); if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.6); });
+        this.later(3.8, () => { this.think('...there\'s no PAPER?!', 2.4); });
+        this.later(4.6, () => { P.inStall = false; if (D) D.rotation.y = -1.4; this.stage = 'paper'; this.spTP.visible = true; this.objective('Get TOILET PAPER from the STORAGE room (upstairs, behind the front desk)'); });
+      } else {
+        this.think('*rustle rustle*... ahh. Much better.', 2.2);
+        this.later(1.8, () => { this.think('*FLUSHHH*', 1.0); if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.6); });
+        this.later(3.2, () => { P.inStall = false; if (D) D.rotation.y = -1.4; this.escapeStage(); });
+      }
+    }
+    escapeStage() {
+      this.stage = 'escape'; this.spBack.visible = true; this.cp = CP.toilet;
+      for (const t of this.traps) t.m.visible = true;
+      for (const n of this.npcs) if (n.room === 'kitchen') { n.range *= 1.25; n.speed *= 1.4; n.sway = 0.9; n.onigiri = false; }
+      this.think('Now OUT. The kitchen\'s back door... the chefs will be furious about those onigiri.', 3.4);
+      this.objective('Escape by the KITCHEN\'s back door. The chefs are angry... and watch out for MOUSETRAPS');
+    }
     hitLocker() {
       this.lockerHits = (this.lockerHits || 0) + 1; const k = this.lockerHits, D = this.lkDoors || [];
       if (k >= 3) { this.smashLocker(); return; }
@@ -643,8 +769,8 @@
     putOnBox() {
       this.wearing = true; this.pantsBox.visible = false; this.spBox.visible = false; this.spExit.visible = true; this.wearBox();
       this.stage = 'exit'; this.cp = CP.store;
-      this.think('Perfect fit. Now out by the FIRE EXIT... without anyone seeing a walking box.', 3.2);
-      this.objective('Escape by the FIRE EXIT (the green door in the lounge), unseen');
+      this.think('Perfect fit. Now, out the FRONT DOOR... without anyone seeing a walking box. (Hold I to squat inside it)', 3.6);
+      this.objective('Out through the FRONT DOOR (the entrance, past the shoe lockers). Unseen: hold I to squat in the box');
       if (this.g.audio && this.g.audio.swell) this.g.audio.swell(0.4, 1.0);
     }
     caught(n) {
@@ -669,7 +795,7 @@
       this.over = 'win'; this.spExit.visible = false; this.P.vx = this.P.vz = 0;
       this.think('Freedom. Nobody will ever know.', 3);
       if (this.g.audio && this.g.audio.swell) this.g.audio.swell(0.6, 1.4);
-      setTimeout(() => { if (!this.scene) return; const e = this.el('.st-over'); e.innerHTML = '<h2 data-jp="脱出">ESCAPED IN A BOX</h2><p>Time ' + fmtT(this.t) + ' · Spotted ' + this.spotted + ' time' + (this.spotted === 1 ? '' : 's') + '</p><button data-c="retry">PLAY AGAIN</button><button data-c="quit">QUIT TO TITLE</button><p class="k">Enter / J play again · Esc quit</p>'; e.classList.add('on'); this.overI = 0; this.markMenu('.st-over', 0); }, 1800);
+      setTimeout(() => { if (!this.scene) return; const e = this.el('.st-over'); e.innerHTML = '<h2 data-jp="脱出">ESCAPED (WELL FED)</h2><p>Time ' + fmtT(this.t) + ' · Spotted ' + this.spotted + ' time' + (this.spotted === 1 ? '' : 's') + '</p><button data-c="retry">PLAY AGAIN</button><button data-c="quit">QUIT TO TITLE</button><p class="k">Enter / J play again · Esc quit</p>'; e.classList.add('on'); this.overI = 0; this.markMenu('.st-over', 0); }, 1800);
     }
 
     // ============================================================== drawing
@@ -684,7 +810,8 @@
       w.hand = 1; w.hunch = 0.55 * P.tip; w.tiptoe = P.tip; w.relaxed = true; w.fxs = {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : null;
       if (this.freeze) w.fxs.dizzy = 1;
       v.update(w, Math.max(dt, 1e-4), T);
-      v.root.position.y += P.y + 0.04 * v.s * P.tip; v.root.visible = !P.hidden;
+      v.root.position.y += P.y + 0.04 * v.s * P.tip; v.root.visible = !P.hidden && !P.boxHide;
+      if (this.squatBox) { this.squatBox.visible = !!P.boxHide; if (P.boxHide) { this.squatBox.position.set(P.x, P.y, P.z); this.squatBox.rotation.y = -P.f; } }
       v.root.rotation.z = P.tip > 0.05 ? Math.sin(T * 13) * 0.05 * P.tip * (1.3 - P.stam) : 0;   // (set, not added: it must never build up into a lean)
       v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       if (P.held && P.held.state === 'held') {
@@ -712,7 +839,7 @@
       for (const b of this.buckets) if (b.wet && b.state === 'floor') { b.m.position.y = b.ty + Math.sin(T * 1.6 + b.x) * 0.03; b.m.rotation.z = 0.2 + Math.sin(T * 1.1 + b.z) * 0.08; }
       this.fx.update(dt); this.fx.updateWater && this.fx.updateWater(dt);
       // camera: high, behind, following (as in the campaign), up the stairs with him; closer for the ending
-      this.camT.lerp(new THREE.Vector3(this.over ? P.x + 2.2 : clamp(P.x * 0.8, -10, 18), Math.max(0, P.y), P.z - (this.over ? 0.6 : 2.6)), 1 - Math.exp(-dt * 4));
+      this.camT.lerp(new THREE.Vector3(this.over ? P.x + 2.2 : clamp(P.x * 0.8, -18, 18), Math.max(0, P.y), P.z - (this.over ? 0.6 : 2.6)), 1 - Math.exp(-dt * 4));
       const dist = this.over ? 9 : 15, sh = this.flash ? this.flash * 0.25 : 0; this.flash = Math.max(0, (this.flash || 0) - dt * 2);
       this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh, this.camT.y + dist * 0.64, this.camT.z + dist * 0.77);
       this.cam.lookAt(this.camT.x, this.camT.y + 0.6, this.camT.z); this.cam.updateMatrixWorld();
@@ -740,16 +867,17 @@
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
         '#stealthHud .st-think{position:absolute;transform:translate(-50%,-100%);background:#fffaf0;border-radius:18px;padding:8px 16px;font-weight:700;font-size:20px;max-width:360px;text-align:center;box-shadow:0 3px 0 rgba(60,50,70,.15);opacity:0;transition:opacity .2s}' +
         '#stealthHud .st-think.on{opacity:1}#stealthHud .st-think:after{content:"";position:absolute;left:50%;bottom:-12px;width:14px;height:14px;border-radius:50%;background:#fffaf0;transform:translateX(-50%)}' +
-        '#stealthHud .st-pop{position:absolute;transform:translate(-50%,-100%);font:400 26px "Dela Gothic One",sans-serif;color:#cf3a3a;text-shadow:0 2px 0 #fff;white-space:nowrap}' +
-        '#stealthHud .st-q{position:absolute;transform:translate(-50%,-100%);font:400 24px "Dela Gothic One",sans-serif;color:#e2a13a;text-shadow:0 2px 0 #fff}' +
+        '#stealthHud .st-pop{position:absolute;transform:translate(-50%,-100%);font:400 26px "Dela Gothic One",sans-serif;color:#cf3a3a;white-space:nowrap}' +
+        '#stealthHud .st-q{position:absolute;transform:translate(-50%,-100%);font:400 24px "Dela Gothic One",sans-serif;color:#e2a13a}' +
         '#stealthHud .st-stam{position:absolute;width:64px;height:9px;border-radius:6px;background:rgba(255,250,240,.85);transform:translate(-50%,-100%);display:none;padding:2px}#stealthHud .st-stam i{display:block;height:100%;border-radius:4px;background:#84b5ad}#stealthHud .st-stam.tired i{background:#e59d86}' +
+        '#stealthHud .st-oni{position:absolute;right:24px;top:64px;background:#fffaf0;color:#3a3440;padding:6px 14px;border-radius:12px;font:400 24px "Dela Gothic One",sans-serif;display:none}' +
         '#stealthHud .st-help{position:absolute;left:24px;bottom:18px;font-size:16px;opacity:.8;background:rgba(255,250,240,.75);padding:4px 10px;border-radius:8px}' +
         '#stealthHud .st-pause,#stealthHud .st-over{position:absolute;left:0;top:0;bottom:0;width:min(520px,92vw);display:none;pointer-events:auto;background:linear-gradient(90deg,rgba(30,24,36,.92),rgba(30,24,36,.6) 80%,transparent);padding:80px 60px;color:#f4efe6}' +
         '#stealthHud .st-over{left:auto;right:0;text-align:right;background:linear-gradient(270deg,rgba(30,24,36,.92),rgba(30,24,36,.6) 80%,transparent)}#stealthHud .st-over button{margin-left:auto}' +
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-obj"></div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
+        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
@@ -810,4 +938,8 @@
   const fmtT = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
 
   S.Stealth = Stealth;
+  // the bathhouse kit, fetched once (in the background soon after start-up, so the test level opens at once)
+  let bathP = null;
+  S.loadBathKit = () => bathP || (bathP = new Promise((res) => new THREE.GLTFLoader().load('assets/models/bathhouse_kit.glb' + (LY.v ? '?v=' + LY.v : ''), (gl) => res(S.Flat.kit(gl.scene)), undefined, () => { bathP = null; res(null); })));
+  addEventListener('load', () => setTimeout(() => { if (window.KUMITE_STYLE === 'anime' && S.preloadKits) S.preloadKits(); S.loadBathKit(); }, 2000));
 })();

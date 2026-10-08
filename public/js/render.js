@@ -697,7 +697,7 @@
       if (w.tiptoe > 0 && !w.carry && w.st !== 'fall' && !w.lifted) {
         const k = w.tiptoe, ph = this.gaitPh || 0, sw = Math.sin(ph) * 0.06 * (this.gaitW || 0);
         this.clipArms = 0;
-        Rh = lerpA(Rh, [0.44, 0.74 + sw, 0.5], k); Lh = lerpA(Lh, [-0.44, 0.74 - sw, 0.5], k);   // crouched, creeping: hands up in front, ready
+        Rh = lerpA(Rh, [0.3, 0.62 + sw, 0.46], k); Lh = lerpA(Lh, [-0.3, 0.62 - sw, 0.46], k);   // crouched, creeping: T-rex arms, elbows tucked, hands out front
         p += 0.06 * k; hp -= 0.22 * k; rate = Math.max(rate, 12);
       }
       return { c, p, r, tw, hp, Rh, Lh, rate, drop };
@@ -2403,6 +2403,14 @@
   };
   const KIT_STAGES = { pizza: 'assets/models/pizza_kit.glb', sushi: 'assets/models/sushi_kit.glb', lily: 'assets/models/lily_kit.glb', cake: 'assets/models/cake_kit.glb', vinyl: 'assets/models/vinyl_kit.glb', vacuum: 'assets/models/vacuum_kit.glb', heli: 'assets/models/heli_kit.glb', watch: 'assets/models/clock_kit.glb', earth: 'assets/models/earth_kit.glb', taiko: 'assets/models/taiko_kit.glb' },
     KIT_BG = { pizza: 0xf3d6cc, sushi: 0xe9dcc4, lily: 0xa9cbe6, cake: 0xd8eedf, vinyl: 0xb4e2d4, vacuum: 0xe9d3a8, heli: 0xd9d2c8, watch: 0xf6dfc0, earth: 0x6a63a4, taiko: 0xf1e3c6 }, KIT_CACHE = {};
+  // fetch every stage kit quietly, one after another, once the game is up: switching maps then never waits on a download
+  S.preloadKits = () => {
+    const ids = Object.keys(KIT_STAGES); let k = 0;
+    const next = () => { if (k >= ids.length) return; const id = ids[k++];
+      KIT_CACHE[id] = KIT_CACHE[id] || new Promise((res) => new THREE.GLTFLoader().load(KIT_STAGES[id], (gl) => res(S.Flat.kit(gl.scene)), undefined, () => res(null)));
+      KIT_CACHE[id].then(() => setTimeout(next, 150)); };
+    next();
+  };
   // a little life in the kit stages: the sushi plates rumble on the belt
   const lilyFloat = (k) => KIT_TICK.lilyFloat(k);
   const KIT_TICK = {
