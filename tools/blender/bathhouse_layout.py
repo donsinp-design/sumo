@@ -93,7 +93,8 @@ solid('pantry', 4.8, 6.4, -58.6, -54.4, 1.8)
 solid('oncounter', -12, -8.6, -54.4, -53.4, 0.95, tall=False); solid('oncounter', -12, -11.0, -56.6, -54.4, 0.95, tall=False)
 solid('kfridge', -12, -10.8, -58.2, -57.0, 1.9)
 ONIGIRI = dict(x=-9.9, z=-53.9, y=0.95, need=10, chef=[-9.9, -55.3])     # the plate on the counter; where the chef stands to make them
-RATHOLES = [dict(x=-4.2, z=-60.95), dict(x=-12.0 + 0.05, z=-56.9 + 0.01), dict(x=6.35, z=-59.4)]
+RATHOLES = [dict(x=0.5, z=-60.95)]   # one mouse hole, in the back wall between the stoves and the sinks
+RATPATH = [[0.5, -59.75], [-8.4, -59.75]]   # the rats' run: out along the back wall, behind the prep island, up to the counter
 TRAPS = [dict(x=-3.0, z=-55.6), dict(x=-8.0, z=-58.9), dict(x=2.6, z=-58.9), dict(x=-0.6, z=-59.3), dict(x=-10.2, z=-59.6), dict(x=3.6, z=-55.2), dict(x=-7.2, z=-55.0)]
 BACKDOOR = dict(x=-12.2, z0=-60.2, z1=-58.4)
 KDOOR = dict(x=4.4, z=-53.2)
@@ -170,7 +171,7 @@ for s_ in S:
 
 LAYOUT = dict(UP=UP, solids=S, blockers=B, doors=DOORS, pool=POOL, locker=LOCKER, crack=CRACK, stairs=STAIRS, courtyard=COURTYARD, exit=EXIT, tatami=TATAMI,
               genkan=GENKAN, entrance=ENTRANCE, office=OFFICE, box=BOX, items=ITEMS, washb=WASHB, puddles=PUDDLES, laundry=LAUNDRY, towel=TOWEL, carts=CARTS,
-              kitchen=KITCHEN, onigiri=ONIGIRI, ratholes=RATHOLES, traps=TRAPS, backdoor=BACKDOOR, kdoor=KDOOR, toilets=TOILETS, stalls=STALLS, stall_use=STALL_USE, tp=TP)
+              kitchen=KITCHEN, onigiri=ONIGIRI, ratholes=RATHOLES, ratpath=RATPATH, traps=TRAPS, backdoor=BACKDOOR, kdoor=KDOOR, toilets=TOILETS, stalls=STALLS, stall_use=STALL_USE, tp=TP)
 
 if __name__ == '__main__':
     import hashlib

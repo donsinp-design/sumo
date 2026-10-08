@@ -115,6 +115,8 @@
       setTimeout(() => { img.style.opacity = 0; }, 800 + 3000);
       setTimeout(() => { done && done(); d.style.opacity = 0; setTimeout(() => d.remove(), 520); }, 800 + 3000 + 800);
     };
-    if (img.decode) img.decode().then(go, go); else img.onload = go;
+    let went = false; const go1 = () => { if (!went) { went = true; go(); } };
+    if (img.decode) img.decode().then(go1, go1); else img.onload = go1;
+    setTimeout(go1, 2500);   // (never a blank white wait on a slow connection)
   };
 })();

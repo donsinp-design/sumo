@@ -10,5 +10,13 @@ let h = fs.readFileSync(ix, 'utf8');
 h = h.replace(/<div id="bootcover"[^>]*><\/div>\s*<script>setTimeout\(function\(\)\{var c=document.getElementById\("bootcover"\)[^<]*<\/script>/, '<div id="wmmBoot" style="position:fixed;inset:0;background:#fff;z-index:47"></div>');
 h = h.replace('<title>Kumite</title>', "<title>Where's my Mawashi</title>");
 h = h.replace('<script src="js/platform.js"></script>', `<script>window.KUMITE_STYLE = 'anime'; window.KUMITE_FORK = 'kumitegame';</script>\n<script src="js/platform.js"></script>`);
+// cache-busting: every local script, stylesheet and the logo carry this build's hash, so a new deploy is never
+// served from a browser's old copies (a mix of old and new files breaks the game)
+const crypto = require('crypto'), hsh = crypto.createHash('md5');
+const walk = (d) => { for (const f of fs.readdirSync(d).sort()) { const q = path.join(d, f); if (fs.statSync(q).isDirectory()) walk(q); else if (/\.(js|css|html|webp|glb)$/.test(f)) hsh.update(fs.readFileSync(q)); } };
+walk(out); const V = hsh.digest('hex').slice(0, 10);
+h = h.replace(/(<script src="(?:js|vendor)\/[^"?]+)"/g, `$1?v=${V}"`).replace(/(<link rel="stylesheet" href="css\/[^"?]+)"/g, `$1?v=${V}"`);
+h = h.replace('</head>', `<link rel="preload" as="image" href="assets/wmm_logo.webp?v=${V}">\n</head>`);
+const tw = path.join(out, 'js', 'title-wmm.js'); fs.writeFileSync(tw, fs.readFileSync(tw, 'utf8').replace("'assets/wmm_logo.webp'", `'assets/wmm_logo.webp?v=${V}'`));
 fs.writeFileSync(ix, h);
-console.log('built', out);
+console.log('built', out, V);

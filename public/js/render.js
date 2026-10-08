@@ -691,6 +691,7 @@
         this.clipArms = 0;
         const sw = this.gaitW ? Math.sin(this.gaitPh || 0) * 0.08 * this.gaitW : 0;
         if (w.carry.small) Rh = [this.soft ? 0.9 : 0.66, 0.22, 0.3 + sw];
+        else if (w.carry.cart) { Rh = [0.34, 0.42, 0.98]; Lh = mir(Rh); p += 0.18; }   // pushing a cart: arms out, both hands on the handle, leaning in
         else { Rh = [0.4, 0.3, 0.66]; Lh = mir(Rh); }
       }
       // tiptoeing (the bathhouse): drawn up tall, chin up, hands lifted in front, wrists limp, each little step dabbing

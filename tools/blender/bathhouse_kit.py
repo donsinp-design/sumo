@@ -859,7 +859,11 @@ def build_details():
         x, z = -19.9, st['z']
         m.gbox(-20.4, -20.0, z - 0.32, z + 0.32, 0.0, 0.9, 'snow', bev=0.08); m.gbox(-20.05, -19.3, z - 0.24, z + 0.24, 0.0, 0.42, 'snow', bev=0.12)
         m.gbox(-20.0, -19.25, z - 0.26, z + 0.26, 0.42, 0.47, 'offwhite', bev=0.04); m.gcyl(-20.2, z + 0.5, 0.75, 0.06, 0.03, 'chrome', seg=10, axis='Z')
-    for k in range(6): m.gcyl(11.1, -90.2 + k * 0.3, UP + 1.42, 0.12, 0.22, 'snow', seg=14)    # toilet paper on the top storage shelf
+    for k in range(6):   # toilet paper on the top storage shelf: rolls with their cardboard cores, in a printed wrapper
+        z = -90.2 + k * 0.3
+        m.gcyl(11.1, z, UP + 1.42, 0.12, 0.22, 'snow', seg=16)
+        m.gcyl(11.1, z, UP + 1.64, 0.045, 0.006, 'cardboard_dk', seg=12)
+        m.gcyl(11.1, z, UP + 1.5, 0.125, 0.07, 'sky', seg=16)
     # the cleaner's trolley, parked against the east wall of the toilets: a chrome frame on castors, a yellow mop
     # bucket with its wringer, a grey bin bag, spray bottles and cloths on the top shelf, the mop leaning in it
     tx0, tx1, tz0, tz1 = -13.35, -12.62, -35.9, -34.3
