@@ -346,18 +346,20 @@
       const id = (i, j) => j * N.nx + i, goal = id(s1[0], s1[1]), start = id(s0[0], s0[1]), W = (k) => [N.x0 + (k % N.nx + 0.5) * cs, N.z0 + (Math.floor(k / N.nx) + 0.5) * cs];
       const end = this.walkable(x1, z1) ? [x1, z1] : W(goal);
       if (start === goal || this.lineWalk(x0, z0, end[0], end[1])) return [end];
-      const g = new Float32Array(N.nx * N.nz).fill(1e9), from = new Int32Array(N.nx * N.nz).fill(-1), shut = new Uint8Array(N.nx * N.nz);
+      const M = N.nx * N.nz; if (!N.g) { N.g = new Float32Array(M); N.from = new Int32Array(M); N.seen = new Uint32Array(M); N.shut = new Uint32Array(M); N.gen = 0; }
+      const gen = ++N.gen, G = N.g, from = N.from, seen = N.seen, shutA = N.shut, gq = (q) => (seen[q] === gen ? G[q] : 1e9);
+      const shut = { get: (k) => shutA[k] === gen, set: (k) => { shutA[k] = gen; } };
       const h = (k) => { const dx = Math.abs(k % N.nx - s1[0]), dz = Math.abs(Math.floor(k / N.nx) - s1[1]); return Math.max(dx, dz) + 0.414 * Math.min(dx, dz); };
       const heap = [], push = (k, f) => { heap.push([f, k]); let c = heap.length - 1; while (c) { const p = (c - 1) >> 1; if (heap[p][0] <= heap[c][0]) break; [heap[p], heap[c]] = [heap[c], heap[p]]; c = p; } };
       const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let c = 0; for (;;) { const l = 2 * c + 1, r = l + 1; let m = c; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === c) break; [heap[m], heap[c]] = [heap[c], heap[m]]; c = m; } } return top; };
-      g[start] = 0; push(start, h(start)); let found = false;
+      G[start] = 0; seen[start] = gen; from[start] = -1; push(start, h(start)); let found = false;
       while (heap.length) {
-        const [, k] = pop(); if (shut[k]) continue; shut[k] = 1; if (k === goal) { found = true; break; }
+        const [, k] = pop(); if (shut.get(k)) continue; shut.set(k); if (k === goal) { found = true; break; }
         const i = k % N.nx, j = Math.floor(k / N.nx);
         for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
           if (!di && !dj) continue; const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= N.nx || b >= N.nz) continue;
-          const q = id(a, b); if (!N.free[q] || shut[q]) continue; if (di && dj && (!N.free[id(i + di, j)] || !N.free[id(i, j + dj)])) continue;
-          const ng = g[k] + (di && dj ? 1.414 : 1); if (ng < g[q]) { g[q] = ng; from[q] = k; push(q, ng + h(q)); }
+          const q = id(a, b); if (!N.free[q] || shut.get(q)) continue; if (di && dj && (!N.free[id(i + di, j)] || !N.free[id(i, j + dj)])) continue;
+          const ng = G[k] + (di && dj ? 1.414 : 1); if (ng < gq(q)) { G[q] = ng; seen[q] = gen; from[q] = k; push(q, ng + h(q)); }
         }
       }
       if (!found) return null;
@@ -692,12 +694,17 @@
     // back to the checkpoint). Break their line of sight and hide (cart, box, stall, under the bath water) and they lose
     // him, search where he was last seen, and go back to work. Nothing gets done with them on his tail.
     chasing() { return this.npcs.some((n) => n.mode === 'chase'); }
+    chaseGoal() {   // while they're after him, the goal line says what matters (then puts the real goal back)
+      const ch = this.chasing(), e = this.el('.st-obj'); if (!e) return;
+      if (ch && !this.chaseObj) { this.chaseObj = e.innerHTML; e.innerHTML = '<b>RUN!</b> HIDE (cart · box · stall) ' + (this.wearing ? '' : 'or get back to the BATH!'); e.classList.add('chase'); }
+      else if (!ch && this.chaseObj) { e.innerHTML = this.chaseObj; this.chaseObj = null; e.classList.remove('chase'); }
+    }
     startChase(n) {
       if (n.mode === 'chase' || n.ko) return;
       const first = !this.chasing(), P = this.P;
       n.mode = 'chase'; n.path = null; n.alarm = 0; n.lostT = 0; n.rp = 0; n.last = [P.x, P.z]; n.raid = false;
       this.popAt(n.a, this.wearing ? ['箱が…動いてる!?', 'おい!その箱!', '歩く箱!?'][this.spotted % 3] : ['イレズミ!?', '変態!', '刺青だ!', 'おい!待て!'][this.spotted % 4], 1.5, true);
-      if (first) { this.spotted++; this.think(this.wearing ? 'They\'ve seen the box move! RUN... then hide!' : 'They saw my TATTOO! Run... and hide!', 1.8); if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4); this.flash = 0.5; }
+      if (first) { this.spotted++; if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4); this.flash = 0.5; }
       for (const m of this.npcs) if (m !== n && m.mode !== 'chase' && !m.ko && m.a.st === 'free' && !m.busy && Math.abs(m.a.y - n.a.y) < 1.5 && Math.hypot(m.a.x - n.a.x, m.a.z - n.a.z) < 9) {
         m.mode = 'chase'; m.path = null; m.alarm = 0; m.lostT = 0; m.rp = 0.2; m.last = [P.x, P.z]; m.raid = false; this.popAt(m.a, '!', 1.0); }
     }
@@ -705,13 +712,15 @@
       const a = n.a, P = this.P;
       if (a.st === 'act' && a.t >= a.dur) a.st = 'free';
       const d = Math.hypot(P.x - a.x, P.z - a.z);
+      if (SAFE[roomAt(P.x, P.z)] && !this.wearing) { n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); if (!this.saidBathSafe) { this.saidBathSafe = true; this.popAt(a, '…風呂か。', 1.4); } return; }   // back in the bath: they give up
       const seen = !P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.freeze && Math.abs(P.y - a.y) < 1.5 && d < 12 && this.clear(a.x, a.z, P.x, P.z);
       if (seen) { n.lostT = 0; n.last = [P.x, P.z]; } else n.lostT += dt;
       if (n.lostT > 2.5) {   // lost him: off to where he was last seen, and a good look round
         n.mode = 'goto'; n.inv = false; n.noiseAt = n.last; this.goTo(n, n.last[0], n.last[1]); n.mode = 'goto'; this.popAt(a, ['どこだ…?', '消えた…?'][(this.t * 2 | 0) % 2], 1.4); return;
       }
       // run at him, aiming a little ahead (to cut him off), round the walls
-      if ((n.rp -= dt) <= 0) { n.rp = 0.35; const tx = n.last[0] + (seen ? P.vx * 0.45 : 0), tz = n.last[1] + (seen ? P.vz * 0.45 : 0); n.path = this.navPath(a.x, a.z, tx, tz) || [[tx, tz]]; n.pi = 0; }
+      if ((n.rp -= dt) <= 0) { const tx = n.last[0] + (seen ? P.vx * 0.45 : 0), tz = n.last[1] + (seen ? P.vz * 0.45 : 0);
+        if (this.lineWalk(a.x, a.z, tx, tz)) { n.path = [[tx, tz]]; n.rp = 0.2; } else { n.path = this.navPath(a.x, a.z, tx, tz) || [[tx, tz]]; n.rp = 0.8 + Math.random() * 0.3; } n.pi = 0; }
       const w = n.path && n.path[n.pi]; let tx = w ? w[0] : n.last[0], tz = w ? w[1] : n.last[1];
       if (w && Math.hypot(tx - a.x, tz - a.z) < 0.3 && n.pi < n.path.length - 1) n.pi++;
       const dx = tx - a.x, dz = tz - a.z, dd = Math.hypot(dx, dz);
@@ -725,9 +734,11 @@
       a.st = 'act'; a.atk = 'jab'; a.t = 0; a.dur = 0.45; a.f = Math.atan2(P.z - a.z, P.x - a.x);
       const dx = P.x - a.x, dz = P.z - a.z, d = Math.hypot(dx, dz) || 1;
       this.shove = { x: dx / d * 5.5, z: dz / d * 5.5, t: 0.3 }; P.st = 'busy'; P.t = 0; P.dur = 0.45; P.vx = P.vz = 0;
-      this.popAt(a, ['バシッ!', 'ドン!', 'パーン!'][this.hits % 3], 1.0); this.flash = 0.35; if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6);
-      if (this.hits >= 3) { this.later(0.4, () => { this.think('...ugh. Lights out.', 1.6); }); this.catcher = n; this.freeze = 1.8; this.P.vx = this.P.vz = 0; this.popAt(a, '出て行け!', 1.6, true); }
-      else this.think(['OOF!', 'OW! Okay, okay!'][this.hits - 1], 1.0);
+      this.flash = 0.35; if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6);
+      if (this.hits >= 3) {   // out cold: one clean card, no pile of speech bubbles
+        this.catcher = n; this.freeze = 2.2; this.P.vx = this.P.vz = 0; this.clearPops(); this.el('.st-think').classList.remove('on'); this.thinkT = 0;
+        const k = this.el('.st-ko'); k.innerHTML = '<b>KNOCKED OUT</b><i>ノックアウト</i>'; k.classList.add('on'); setTimeout(() => k.classList.remove('on'), 2100);
+      } else this.popAt(a, ['バシッ!', 'ドン!', 'パーン!'][this.hits % 3], 0.8);
     }
     sepNpcs() {   // people don't walk through each other: nudge apart anyone overlapping
       const N = this.npcs;
@@ -945,10 +956,9 @@
       this.noise(this.locker.x, this.locker.z, 26, '!?');
       if (this.g.audio) { this.g.audio.thump && this.g.audio.thump(9); this.later(0.15, () => this.g.audio.thump && this.g.audio.thump(5)); }
       this.think('...EMPTY?! Someone took my clothes!', 2.2);
-      // they heard that: back to the bath, quick, and duck under when they come looking
-      this.stage = 'bathhide'; this.objective('They heard that! Run back to the BATH and duck under (hold I) when they come looking');
-      this.later(2.3, () => { if (this.stage === 'bathhide') this.think('Back in the bath! Nobody looks twice at a man in the bath...', 2.4); });
-      this.raid = { t: 0, phase: 'wait', wait: 9, k: 0 };
+      this.stage = 'towel'; this.objective('They heard that! Get away from the lockers and HIDE');
+      this.later(2.3, () => { if (this.stage === 'towel') this.think('And everyone else\'s clothes are TINY. Nothing here fits me...', 2.6); });
+      this.later(5.0, () => { if (this.stage === 'towel') { this.think('A towel, at least! The LAUNDRY room, at the end of the back corridor.', 3.4); this.objective('Get a TOWEL from the LAUNDRY room (through the staff door, along the back corridor)'); this.spTowel.visible = true; } });
       this.cp = CP.lockN;
     }
     // the raid: two of the changing-room staff come through to the bath and look over the water. Under it (I) when they
@@ -1192,6 +1202,7 @@
       const h = this.hud = document.createElement('div'); h.id = 'stealthHud';
       h.innerHTML = '<style>#stealthHud{position:fixed;inset:0;pointer-events:none;z-index:6;font-family:"Barlow Condensed",sans-serif;color:#3a3440}' +
         '#stealthHud .st-obj{position:absolute;left:24px;top:20px;background:rgba(255,250,240,.9);padding:8px 14px;border-radius:10px;font-weight:700;font-size:20px;letter-spacing:.02em;max-width:60vw}' +
+        '#stealthHud .st-ko{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.72);color:#fffaf0;opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
         '#stealthHud .st-hp{position:absolute;left:24px;top:76px;font-size:28px;letter-spacing:4px;color:#cf3a3a;text-shadow:0 2px 0 #fffaf0;display:none}#stealthHud .st-hp.chase{animation:hpPulse .5s ease-in-out infinite alternate}@keyframes hpPulse{to{transform:scale(1.12)}}' +
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
         '#stealthHud .st-think{position:absolute;transform:translate(-50%,-100%);background:#fffaf0;border-radius:18px;padding:8px 16px;font-weight:700;font-size:20px;max-width:360px;text-align:center;box-shadow:0 3px 0 rgba(60,50,70,.15);opacity:0;transition:opacity .2s}' +
@@ -1211,14 +1222,14 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
+        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
       this.pops = [];
     }
     el(q) { return this.hud.querySelector(q); }
-    objective(t) { this.el('.st-obj').innerHTML = 'GOAL: <b>' + t + '</b>'; }
+    objective(t) { const h = 'GOAL: <b>' + t + '</b>'; if (this.chaseObj) this.chaseObj = h; else this.el('.st-obj').innerHTML = h; }   // (mid-chase: shown once he's lost them)
     think(t, dur) {
       const e = this.el('.st-think');
       // quick exclamations (*CRASH*, slips...) never churn the bubble: they don't replace one that has only just appeared
@@ -1226,7 +1237,12 @@
       if (e.textContent === t && this.thinkT > 0) { this.thinkT = Math.max(this.thinkT, dur || 2.5); return; }
       this.thinkT = dur || 2.5; this.thinkAt = this.t; e.textContent = t; e.classList.add('on');
     }
-    popAt(a, txt, dur, big) { const d = document.createElement('div'); d.className = 'st-pop'; d.textContent = txt; if (!big) d.style.fontSize = '22px'; this.el('.st-pops').appendChild(d); this.pops.push({ d, a, t: dur || 1.4 }); }
+    popAt(a, txt, dur, big) {
+      // (a fresh shout on someone already shouting replaces it; never a stack of overlapping bubbles over one head)
+      for (let i = this.pops.length - 1; i >= 0; i--) { const o = this.pops[i]; if (o.a === a || (o.a && a && Math.hypot((o.a.x || 0) - (a.x || 0), (o.a.z || 0) - (a.z || 0)) < 0.6)) { o.d.remove(); this.pops.splice(i, 1); } }
+      if (this.pops.length >= 4) { const o = this.pops.shift(); o.d.remove(); }
+      const d = document.createElement('div'); d.className = 'st-pop'; d.textContent = txt; if (!big) d.style.fontSize = '22px'; this.el('.st-pops').appendChild(d); this.pops.push({ d, a, t: dur || 1.4 }); }
+    clearPops() { for (const o of this.pops) o.d.remove(); this.pops.length = 0; }
     project(x, y, z) { const v = new THREE.Vector3(x, y, z).project(this.cam); return { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight }; }
     drawHud(dt) {
       const P = this.P, s = this.view.s;
@@ -1234,7 +1250,7 @@
       const sb = this.el('.st-stam');
       if (P.stam < 0.999 && !this.over) { const q = this.project(P.x, P.y + 2.55 * s, P.z); sb.style.display = 'block'; sb.style.left = q.x + 'px'; sb.style.top = q.y + 'px'; sb.firstChild.style.width = (P.stam * 100) + '%'; sb.classList.toggle('tired', P.tired); }
       else sb.style.display = 'none';
-      const hp = this.el('.st-hp'), ch = this.chasing(), hits = this.hits || 0;   // three hits and he's out: ♥♥♥
+      this.chaseGoal(); const hp = this.el('.st-hp'), ch = this.chasing(), hits = this.hits || 0;   // three hits and he's out: ♥♥♥
       hp.style.display = (ch || hits) && !this.over ? 'block' : 'none'; hp.textContent = '♥'.repeat(3 - Math.min(3, hits)) + '♡'.repeat(Math.min(3, hits)); hp.classList.toggle('chase', ch);
       const sf = this.el('.st-safe'), hunt = this.stage === 'bathhide';
       sf.style.display = SAFE[roomAt(P.x, P.z)] && !this.over ? 'block' : 'none';
