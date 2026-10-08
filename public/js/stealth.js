@@ -1035,9 +1035,15 @@
         this.tattoo = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, opacity: 0.85 }));
         this.tattoo.userData.flatDone = true; this.tattoo.renderOrder = 2; this.G.add(this.tattoo);
       }
-      const P = this.P, t = this.tattoo, p = B.getWorldPosition(this._tp || (this._tp = new THREE.Vector3())), fx = Math.cos(P.f), fz = Math.sin(P.f);
-      const R = (S.Stealth.tatR || 0.52) * v.s, Y = (S.Stealth.tatY || 0.16) * v.s;
-      t.position.set(p.x + fx * R, p.y + Y, p.z + fz * R); t.lookAt(t.position.x + fx, t.position.y + 0.55, t.position.z + fz); t.scale.setScalar(v.s);
+      const P = this.P, t = this.tattoo;
+      // inked onto him: placed on his chest once while he's standing still and upright, then carried by the chest bone
+      if (!t.onBody) {
+        t.visible = false;
+        if (this.asleep || P.st !== 'free' || P.tip > 0.05 || Math.hypot(P.vx, P.vz) > 0.05 || (this.ballK || 0) > 0.01 || P.held || P.cart || P.hidden) return;
+        const p = B.getWorldPosition(new THREE.Vector3()), fx = Math.cos(P.f), fz = Math.sin(P.f), R = (S.Stealth.tatR || 0.52) * v.s, Y = (S.Stealth.tatY || 0.16) * v.s;
+        this.G.remove(t); this.scene.add(t); t.position.set(p.x + fx * R, p.y + Y, p.z + fz * R); t.lookAt(t.position.x + fx, t.position.y + 0.55, t.position.z + fz); t.scale.setScalar(v.s);
+        t.updateMatrixWorld(true); B.attach(t); t.onBody = true;
+      }
       t.visible = v.root.visible && !this.boxDown && (this.ballK || 0) < 0.3;
     }
     // out of the towel cart: somebody's shorts draped over his shoulder. Three steps and they slide off onto the floor
