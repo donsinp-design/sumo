@@ -570,6 +570,7 @@ def w_shelf(m, s, y):
     for r in range(4):
         yy = y + 0.05 + r * 0.45; m.gbox(x0, x1, z0, z1, yy, yy + 0.04, 'wood', bev=0.01)
         n = int((z1 - z0) / 0.7)
+        if s.get('tp') and r == 3: continue   # (the top row is kept for the toilet paper)
         for i in range(n):
             zc = z0 + (i + 0.5) * (z1 - z0) / n; c = ['cardboard', 'towel', 'cardboard_dk', 'towel_pk', 'teal'][(i * 3 + r) % 5]
             m.gbox(x0 + 0.1, x1 - 0.1, zc - 0.28, zc + 0.28, yy + 0.04, yy + 0.04 + (0.32 if c.startswith('card') else 0.2), c, bev=0.03)
@@ -859,11 +860,11 @@ def build_details():
         x, z = -19.9, st['z']
         m.gbox(-20.4, -20.0, z - 0.32, z + 0.32, 0.0, 0.9, 'snow', bev=0.08); m.gbox(-20.05, -19.3, z - 0.24, z + 0.24, 0.0, 0.42, 'snow', bev=0.12)
         m.gbox(-20.0, -19.25, z - 0.26, z + 0.26, 0.42, 0.47, 'offwhite', bev=0.04); m.gcyl(-20.2, z + 0.5, 0.75, 0.06, 0.03, 'chrome', seg=10, axis='Z')
-    for k in range(6):   # toilet paper on top of the storage shelf (clear of the towels): rolls with their cardboard cores, in a printed wrapper
+    for k in range(6):   # toilet paper: the storage shelf's top row (nothing else on it): rolls with their cardboard cores, in a printed wrapper
         z = -90.2 + k * 0.3
-        m.gcyl(11.3, z, UP + 1.81, 0.12, 0.22, 'snow', seg=16)
-        m.gcyl(11.3, z, UP + 2.03, 0.045, 0.006, 'cardboard_dk', seg=12)
-        m.gcyl(11.3, z, UP + 1.89, 0.125, 0.07, 'sky', seg=16)
+        m.gcyl(11.3, z, UP + 1.44, 0.12, 0.22, 'snow', seg=16)
+        m.gcyl(11.3, z, UP + 1.66, 0.045, 0.006, 'cardboard_dk', seg=12)
+        m.gcyl(11.3, z, UP + 1.52, 0.125, 0.07, 'sky', seg=16)
     # the cleaner's trolley, parked against the east wall of the toilets: a chrome frame on castors, a yellow mop
     # bucket with its wringer, a grey bin bag, spray bottles and cloths on the top shelf, the mop leaning in it
     tx0, tx1, tz0, tz1 = -13.35, -12.62, -35.9, -34.3

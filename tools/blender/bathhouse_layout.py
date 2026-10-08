@@ -141,7 +141,7 @@ ENTRANCE = dict(x0=-10.4, x1=-7.2, z=-92)
 # ---- south row: staff office (walled off) and storage
 wall(-4.4, -4, -92, -86.2, F, col='wood'); wall(3.6, 4, -92, -86.2, F, col='wood')
 OFFICE = dict(x0=-4, x1=3.6, z0=-92, z1=-86.2)
-for x0, x1, z0, z1 in [(4.4, 5.6, -91.6, -87.4), (10.8, 11.8, -91.6, -88.4)]: solid('shelf', x0, x1, z0, z1, 1.8, F)
+solid('shelf', 4.4, 5.6, -91.6, -87.4, 1.8, F); solid('shelf', 10.8, 11.8, -91.6, -88.4, 1.8, F, tp=True)   # (the top row of this one: toilet paper only)
 BOX = dict(x=8.2, z=-90.2, ry=0.4)
 
 # round blockers
