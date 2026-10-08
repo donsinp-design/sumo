@@ -199,6 +199,7 @@
       const ratP = get('ITEM_RAT'); if (ratP) { ratP.visible = false; for (const r of this.rats) { const o = ratP.clone(); o.visible = true; o.position.set(0, 0, 0); r.m.add(o); } }
       const trapP = get('ITEM_TRAP'); if (trapP) { trapP.visible = false; for (const t of this.traps) { const o = trapP.clone(); o.visible = true; o.position.set(0, 0, 0); t.m.add(o); t.mesh = o; } }
       this.stallDoors = LY.stalls.map((q, k) => get('STALLDOOR_' + k)).filter(Boolean);
+      if (proto.BOX) { this.testBox = clone('BOX'); this.testBox.position.set(-1.5, 0, -24.6); this.testBox.rotation.y = 0.3; this.scene.add(this.testBox); this.testBoxAt = { x: -1.5, z: -24.6 }; }   // (a box by the wash area: to try the box out, any time)
       if (proto.BOX) { this.squatBox = clone('BOX'); this.squatBox.visible = false; this.scene.add(this.squatBox); }
       const cartP = get('ITEM_CART'); if (cartP) { cartP.visible = false; for (const c of this.carts) { const o = cartP.clone(); o.visible = true; o.position.set(0, 0, 0); c.m.add(o); c.mesh = o; } }
       this.water = get('WATER'); this.crackM = get('CRACK_WALL'); this.rubble = get('CRACK_RUBBLE'); this.holes = get('LKHOLES');
@@ -435,16 +436,16 @@
           if (bd < 1.5 && (bx * dx + bz * dz) / (bd || 1) > 0.3 || n.tug > 0) {
             n.pushing2 = true; const PS = 0.55;   // a heavy box: slow and steady
             if (n.tug > 0) {   // won't go forward: they get hold of it and drag it back towards themselves, walking backwards
-              n.tug -= dt; const q = { x: P.x - dx * PS * dt, z: P.z - dz * PS * dt }; this.collide(q, P.r); P.x = q.x; P.z = q.z;
+              n.tug -= dt; const q = { x: P.x - dx * PS * dt, z: P.z - dz * PS * dt, boxProbe: true }; this.collide(q, P.r); P.x = q.x; P.z = q.z;
               a.x -= dx * PS * dt; a.z -= dz * PS * dt; this.collide(a, 0.4); a.vx = -dx * PS; a.vz = -dz * PS; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 6);
               if (n.tug <= 0) { n.i = (n.i + n.route.length - 1) % n.route.length; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); this.popAt(a, 'もう…', 1.0); }
               return;
             }
-            const q = { x: P.x + dx * PS * dt, z: P.z + dz * PS * dt }; this.collide(q, P.r);
-            if (Math.hypot(q.x - P.x, q.z - P.z) > PS * 0.4 * dt) { P.x = q.x; P.z = q.z; n.boxT = 0; }
+            const q = { x: P.x + dx * PS * dt, z: P.z + dz * PS * dt, boxProbe: true }; this.collide(q, P.r);
+            if (Math.hypot(q.x - P.x, q.z - P.z) > PS * 0.4 * dt && Math.hypot(q.x - P.x, q.z - P.z) < PS * 3 * dt) { P.x = q.x; P.z = q.z; n.boxT = 0; }
             else if ((n.boxT = (n.boxT || 0) + dt) > 0.7) { n.boxT = 0; n.tug = 1.2; this.popAt(a, 'ぐぬぬ…!', 1.0); }
             // they stay right up against it, leaning in, at the box's pace
-            const st = 0.85 + 0.42; a.x = P.x - dx * st; a.z = P.z - dz * st; this.collide(a, 0.4); a.vx = dx * PS; a.vz = dz * PS; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 6);
+            const st = 0.85 + 0.42, ek = Math.min(1, dt * 8); a.x += (P.x - dx * st - a.x) * ek; a.z += (P.z - dz * st - a.z) * ek; this.collide(a, 0.4); a.vx = dx * PS; a.vz = dz * PS; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 6);
             if ((n.sweatT = (n.sweatT || 0) - dt) <= 0) { n.sweatT = 1.4; this.popAt(a, ['ふんっ…!', '重っ…!', '💦'][(this.t * 3 | 0) % 3], 1.0); }
             return;
           } else n.pushing2 = false; }
@@ -486,7 +487,7 @@
       for (let pass = 0; pass < 3; pass++) {
         let moved = false;
         for (const w of this.walls) {
-          if (w.box && p === this.P) continue;   // (his own box)
+          if (w.box && (p === this.P || p.boxProbe)) continue;   // (his own box: never collide the box with itself)
           const cx = clamp(p.x, w.x0, w.x1), cz = clamp(p.z, w.z0, w.z1), dx = p.x - cx, dz = p.z - cz, d = Math.hypot(dx, dz);
           if (d >= r) continue;
           if (d > 1e-6) { p.x = cx + dx / d * r; p.z = cz + dz / d * r; }
@@ -868,6 +869,9 @@
       if (P.cart) { P.cart.off = false; this.cartBox(P.cart); P.cart = null; return; }   // let go of the cart
       if (!P.held) { const cc = this.carts.find((q) => Math.hypot(q.x - P.x, q.z - P.z) < 2.0 && (Math.abs(q.vx) + Math.abs(q.vz)) < 0.3);
         if (cc) { P.cart = cc; P.f = Math.atan2(cc.z - P.z, cc.x - P.x); if (!this.saidPush) { this.saidPush = true; this.think('Rolling... (K let go · I hop inside and hide)', 2.4); } return; } }
+      // the test box: K next to it puts it on (the story doesn't move); K again (wearing it, away from anything else) puts it back down
+      if (this.testBox && !this.wearing && this.testBox.visible && near(this.testBoxAt.x, this.testBoxAt.z, 1.9)) { this.testBox.visible = false; this.wearing = true; this.testWear = true; this.wearBox(); P.st = 'busy'; P.t = 0; P.dur = 0.5; this.think('A box! (just to try it out: K to take it off)', 1.8); return; }
+      if (this.testWear && this.wearing && this.stage !== 'box' && this.stage !== 'exit') { this.wearing = false; this.testWear = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.boxDown = false; this.testBoxAt = { x: P.x + Math.cos(P.f) * 1.4, z: P.z + Math.sin(P.f) * 1.4 }; this.testBox.position.set(this.testBoxAt.x, P.y, this.testBoxAt.z); this.testBox.visible = true; P.st = 'busy'; P.t = 0; P.dur = 0.4; return; }
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { P.st = 'wear'; P.t = 0; P.dur = 0.9; return; }
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
         b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0);
@@ -1265,7 +1269,7 @@
         '#stealthHud .st-ko{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;text-shadow:0 4px 0 rgba(40,30,50,.35);opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
         '#stealthHud .st-hp{position:absolute;left:24px;top:76px;font-size:28px;letter-spacing:4px;color:#cf3a3a;text-shadow:0 2px 0 #fffaf0;display:none}#stealthHud .st-hp.chase{animation:hpPulse .5s ease-in-out infinite alternate}@keyframes hpPulse{to{transform:scale(1.12)}}' +
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
-        '#stealthHud .st-think{position:absolute;transform:translate(-50%,-100%);background:#fffaf0;border-radius:18px;padding:8px 16px;font-weight:700;font-size:20px;max-width:360px;text-align:center;box-shadow:0 3px 0 rgba(60,50,70,.15);opacity:0;transition:opacity .2s}' +
+        '#stealthHud .st-think{position:absolute;left:0;top:0;width:max-content;transform:translate(-50%,-100%);background:#fffaf0;border-radius:18px;padding:8px 16px;font-weight:700;font-size:20px;max-width:360px;text-align:center;box-shadow:0 3px 0 rgba(60,50,70,.15);opacity:0;transition:opacity .2s}' +
         '#stealthHud .st-think.on{opacity:1}#stealthHud .st-think:after{content:"";position:absolute;left:50%;bottom:-12px;width:14px;height:14px;border-radius:50%;background:#fffaf0;transform:translateX(-50%)}' +
         '#stealthHud .st-pop{position:absolute;transform:translate(-50%,-100%);font:400 26px "Dela Gothic One",sans-serif;color:#cf3a3a;white-space:nowrap}' +
         '#stealthHud .st-q{position:absolute;transform:translate(-50%,-100%);font:400 24px "Dela Gothic One",sans-serif;color:#e2a13a}' +
@@ -1315,7 +1319,10 @@
       const sf = this.el('.st-safe'), hunt = this.stage === 'bathhide';
       sf.style.display = SAFE[roomAt(P.x, P.z)] && !this.over ? 'block' : 'none';
       if (sf._hunt !== hunt) { sf._hunt = hunt; sf.textContent = hunt ? 'NOT SAFE: they\'re looking for whoever did that' : 'SAFE: everyone\'s naked here'; sf.style.background = hunt ? '#f2c4b6' : ''; sf.style.color = hunt ? '#7a2e22' : ''; }
-      if (this.thinkT > 0) { this.thinkT -= dt; const p = this.project(P.x, P.y + 2.9 * s, P.z), e = this.el('.st-think'); e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; if (this.thinkT <= 0) e.classList.remove('on'); }
+      if (this.thinkT > 0) { this.thinkT -= dt; const p = this.project(P.x, P.y + 2.9 * s, P.z), e = this.el('.st-think');
+        const tp = this.thinkPos || (this.thinkPos = { x: p.x, y: p.y }), k = Math.min(1, dt * 14); tp.x += (p.x - tp.x) * k; tp.y += (p.y - tp.y) * k;
+        e.style.left = Math.round(tp.x) + 'px'; e.style.top = Math.round(tp.y) + 'px'; if (this.thinkT <= 0) e.classList.remove('on'); }
+      else this.thinkPos = null;
       this.pops = this.pops.filter((q) => { q.t -= dt; const p = this.project(q.a.x, (q.a.y || 0) + 2.6 + (1.4 - q.t) * 0.3, q.a.z); q.d.style.left = p.x + 'px'; q.d.style.top = p.y + 'px'; if (q.t <= 0) { q.d.remove(); return false; } return true; });
       if (!this.qs) this.qs = this.npcs.map(() => { const d = document.createElement('div'); d.className = 'st-q'; this.el('.st-pops').appendChild(d); return d; });
       this.npcs.forEach((n, i) => { const d = this.qs[i]; if (n.alarm > 0.08 && !this.freeze) { const p = this.project(n.a.x, n.a.y + 2.4, n.a.z); d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.textContent = n.alarm > 0.6 ? '?!' : '?'; d.style.display = ''; d.style.transform = 'translate(-50%,-100%) scale(' + (0.8 + n.alarm * 0.6) + ')'; } else d.style.display = 'none'; });
