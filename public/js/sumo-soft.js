@@ -119,7 +119,7 @@
       const sd = A.sd > 0 ? 'l' : 'r'; if (!A.el || !wq['forearm' + sd] || !wq['hand' + sd]) continue;
       const el = S_.v.copy(A.el).applyMatrix4(body.matrix), hd = S_.b.copy(A.hand.position).applyMatrix4(body.matrix);
       const dir = hd.sub(el).normalize(), side = S_.c.set(0, 1, 0).cross(dir).normalize(), kk = w.tiptoe;
-      const tw = (S.SoftSumo.trexTw !== undefined ? S.SoftSumo.trexTw : -1.2) * (A.sd > 0 ? 1 : -1) * kk, dr = (S.SoftSumo.trexDr !== undefined ? S.SoftSumo.trexDr : 0.9) * kk;
+      const tw = (S.SoftSumo.trexTw !== undefined ? S.SoftSumo.trexTw : 0) * (A.sd > 0 ? 1 : -1) * kk, dr = (S.SoftSumo.trexDr !== undefined ? S.SoftSumo.trexDr : 1.4) * kk;
       const qd = new THREE.Quaternion().setFromAxisAngle(side, dr).multiply(new THREE.Quaternion().setFromAxisAngle(dir, tw));
       set('hand' + sd, qd.multiply(wq['hand' + sd]), wq['forearm' + sd]);
     }

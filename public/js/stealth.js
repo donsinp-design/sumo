@@ -141,7 +141,7 @@
       this.marks = [this.spOut, this.spLocker, this.spKey, this.spCrack, this.spBox, this.spExit, this.spTowel, this.spKitchen, this.spOni, this.spStall, this.spTP, this.spBack];
       this.spOut.visible = true;
       // laundry carts: push them about (K), hide inside (I, standing still next to one)
-      this.carts = (LY.carts || []).map((q) => { const c = { x: q.x, z: q.z, f: q.r || 0, vx: 0, vz: 0, m: holder(q.x, 0, q.z), w: add(0, 0, 0, 0, false) }; this.cartBox(c); return c; });
+      this.carts = (LY.carts || []).map((q) => { const c = { x: q.x, z: q.z, f: q.r || 0, hx: q.x, hz: q.z, hf: q.r || 0, vx: 0, vz: 0, m: holder(q.x, 0, q.z), w: add(0, 0, 0, 0, false) }; this.cartBox(c); return c; });
       S.loadBathKit().then((root) => { if (this.scene && root) this.dress(root.clone(true)); });   // (fetched in the background at start-up; each play gets its own copy)
     }
     // the cart's collider: the box round it, turned (1.3 long, 0.9 wide)
@@ -154,7 +154,15 @@
     cartStep(dt) {
       const P = this.P;
       for (const c of this.carts) {
-        if (c === P.cart) continue;
+        if (c === P.cart) { c.ret = null; continue; }
+        if (c.ret) {   // a worker wheels it back where it belongs (with him inside, if he's hiding in it)
+          const r = c.ret; r.t += dt; const k = Math.min(1, r.t / 1.6), e = k * k * (3 - 2 * k);
+          c.off = true; this.cartBox(c); c.x = r.x0 + (c.hx - r.x0) * e; c.z = r.z0 + (c.hz - r.z0) * e; c.f = r.f0 + ang(c.hf - r.f0) * e;
+          if (r.n) { const n = r.n.a, a2 = Math.atan2(c.z - n.z, c.x - n.x); n.x = c.x - Math.cos(a2) * 1.15; n.z = c.z - Math.sin(a2) * 1.15; n.f = a2; }
+          c.off = false; this.cartBox(c); if (P.hidden === c) { P.x = c.x; P.z = c.z; }
+          if (k >= 1) { c.ret = null; if (r.n) r.n.hold = 0; }
+          continue;
+        }
         if (Math.abs(c.vx) + Math.abs(c.vz) > 0.05) {   // sent rolling by a charge
           c.off = true; this.cartBox(c); c.x += c.vx * dt; c.z += c.vz * dt; c.vx *= 0.96; c.vz *= 0.96; c.f += (c.spin || 0) * dt;
           const q = { x: c.x, z: c.z }; if (this.collide(q, 0.55)) { c.vx *= -0.4; c.vz *= -0.4; } c.x = q.x; c.z = q.z; c.off = false; this.cartBox(c);
@@ -219,7 +227,7 @@
       const mk = (kind, route, o) => {
         o = o || {};
         const a = { kind, x: route[0][0], z: route[0][1], y: floorY(route[0][0], route[0][1]), f: route[0][3] || 0, vx: 0, vz: 0, st: 'free', t: 0, hp: 1, maxHp: 1, dead: false, engage: false };
-        const v = new S.WorkerView(this.scene, kind, !!o.fat, o.pick); v.walls = this.walls;
+        const v = new S.WorkerView(this.scene, kind, !!o.fat, o.pick); v.walls = this.walls; if (v.pole && v.pole.parent) v.pole.parent.remove(v.pole);   // (the market staff's hook-pole: not in a bathhouse)
         const cone = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0xffcf3a, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide }));
         cone.renderOrder = 2; this.scene.add(cone);
         return { a, v, route, i: 0, wait: route[0][2], mode: 'route', alarm: 0, cone, onigiri: !!o.onigiri, range: o.range || 6.4, half: o.half || 0.62, room: o.room, speed: o.speed || 1.35, sway: o.sway || 0.6, ear: o.ear || 0, path: null, pi: 0 };
@@ -242,9 +250,9 @@
         mk('staff', [[-2.6, -77.4, 2.2, U], [9.6, -77.4, 2.2, U]], { room: 'up', speed: 1.1 }),
         mk('staff', [[-6.2, -88.8, 999, U]], { room: 'up', pick: 2, sway: 0.7, range: 6.0 }),
         // LAUNDRY ROOM. Two working the aisles between the machines, one folding at the table by the door
-        mk('fighter', [[13.4, -53.3, 2.0, 0], [21.4, -53.3, 2.0, P]], { room: 'laundry', pick: 2, speed: 1.1, range: 5.8 }),
-        mk('grappler', [[15.8, -56.4, 2.2, 0], [21.6, -56.4, 2.4, P]], { room: 'laundry', pick: 3, fat: true, speed: 0.9, range: 5.2 }),
-        mk('staff', [[16.6, -48.4, 4.0, U], [16.6, -48.4, 2.2, -U + 0.5]], { room: 'laundry', pick: 4, sway: 0.4, range: 5.6 }),
+        mk('fighter', [[13.4, -53.3, 2.6, 0], [21.4, -53.3, 2.6, P]], { room: 'laundry', pick: 2, speed: 0.95, range: 4.4, half: 0.5 }),
+        mk('grappler', [[15.8, -56.4, 2.8, 0], [21.6, -56.4, 3.0, P]], { room: 'laundry', pick: 3, fat: true, speed: 0.8, range: 4.0, half: 0.5 }),
+        mk('staff', [[17.8, -48.2, 5.0, U], [17.8, -48.2, 2.0, 0.2]], { room: 'laundry', pick: 4, sway: 0.25, range: 3.8, half: 0.5 }),   // folding, back to the door
         // KITCHEN. The onigiri chef goes between his counter (making a few each time) and the stove; one at the stove; one at prep and the pantry
         mk('chef', [[LY.onigiri.chef[0], LY.onigiri.chef[1], 3.0, U], [-3.2, -59.3, 4.5, -U]], { room: 'kitchen', range: 5.6, onigiri: true }),
         mk('chef', [[-6.0, -59.3, 3.0, -U], [0.4, -59.3, 3.0, -U]], { room: 'kitchen', pick: 1, speed: 1.0, range: 5.2 }),
@@ -322,10 +330,12 @@
     // a noise: anyone in earshot (in that room) walks over the shortest way to look, searches, goes back
     noise(x, z, radius, msg, soft) {   // soft: footsteps (no ripples on the floor; they walk over to look)
       if (!soft) { this.ringAt(x, z, radius * 0.4, 0.6); this.ringAt(x, z, radius * 0.7, 0.9); }
-      const room = roomAt(x, z);
+      const room = roomAt(x, z); let rank = 0;
       for (const n of this.npcs) {
-        if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius || n.a.st !== 'free') continue;
-        const path = this.navPath(n.a.x, n.a.z, x, z); if (!path) continue;
+        if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius || n.a.st !== 'free' || n.hold > 0) continue;
+        // several coming to look: each stops at their own spot round it (not all on the same tile)
+        const ra = rank ? 1.0 : 0, aa = rank * 2.3 + Math.atan2(n.a.z - z, n.a.x - x), q = { x: x + Math.cos(aa) * ra, z: z + Math.sin(aa) * ra }; if (rank) this.collide(q, 0.4); rank++;
+        const path = this.navPath(n.a.x, n.a.z, q.x, q.z) || this.navPath(n.a.x, n.a.z, x, z); if (!path) continue;
         if (n.mode !== 'goto') this.popAt(n.a, msg || '?!', 1.6);
         n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.noiseAt = [x, z]; n.inv = !!soft;
       }
@@ -333,10 +343,12 @@
     ringAt(x, z, size, dur) { this.fx.ring(x, z, size, dur); const r = (this.fx.rings || []).find((o) => o.t === 0 && o.m.position.x === x && o.m.position.z === z); if (r) r.m.position.y = floorY(x, z) + 0.04; }
     npcStep(n, dt) {
       const a = n.a; a.t += dt; n.slipCd = Math.max(0, (n.slipCd || 0) - dt);
+      if (n.hold > 0) { n.hold -= dt; a.vx = a.vz = 0; a.y = floorY(a.x, a.z); if (n.hold <= 0 && n.path) { const e = n.path[n.path.length - 1]; this.goTo(n, e[0], e[1]); } return; }   // wheeling a cart back
       // down on a puddle: slide to a stop, lie there a moment, get up, carry on (and see nothing meanwhile)
       if (a.st === 'down' || a.st === 'getup') {
         a.vx *= 0.9; a.vz *= 0.9; a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4);
         if (a.st === 'down' && a.t >= a.dur) { a.st = 'getup'; a.t = 0; a.dur = 1.2; }
+        else if (a.st === 'getup' && a.t >= a.dur && n.ko) { n.ko = false; n.mode = 'search'; n.wait = 4; n.path = null; this.popAt(a, 'Wh... who hit me?!', 1.6); }
         else if (a.st === 'getup' && a.t >= a.dur) { a.st = 'free'; a.t = 0; a.slipFall = false; }
         return;
       }
@@ -369,7 +381,18 @@
         if (this.g.audio && this.g.audio.thump) this.g.audio.thump(5);
         break;
       }
-      if (tx !== null) { n.stuckT = Math.hypot(a.x - ox, a.z - oz) < sp * dt * 0.3 ? (n.stuckT || 0) + dt : 0; if (n.stuckT > 0.8 && n.path) { const e = n.path[n.path.length - 1]; this.goTo(n, e[0], e[1]); } }
+      // a colleague out cold: anyone who sees them goes over; whoever gets there shakes them awake
+      if ((n.kChk = (n.kChk || 0) - dt) <= 0) { n.kChk = 0.3;
+        for (const m of this.npcs) if (m !== n && m.ko && m.a.st === 'down' && Math.abs(m.a.y - a.y) < 1) {
+          const d = Math.hypot(m.a.x - a.x, m.a.z - a.z);
+          if (d < 1.5) { m.a.t = m.a.dur; n.mode = 'search'; n.wait = 3; n.path = null; this.popAt(a, ['Hey! Wake up!', 'Are you OK?!', 'Oi! Up you get!'][(this.t * 3 | 0) % 3], 1.5); break; }
+          if (n.mode !== 'goto' && d < 9 && this.sees(n, m.a.x, m.a.z, 9)) { this.goTo(n, m.a.x, m.a.z); n.mode = 'goto'; n.inv = false; n.noiseAt = [m.a.x, m.a.z]; this.popAt(a, '!?', 1.2); break; }
+        } }
+      if (tx !== null) { n.stuckT = Math.hypot(a.x - ox, a.z - oz) < sp * dt * 0.3 ? (n.stuckT || 0) + dt : 0;
+        // blocked by a cart someone moved: "tsk", and they wheel it back where it belongs
+        if (n.stuckT > 0.5 || ((n.mode === 'route' || n.mode === 'return') && (n.cChk = (n.cChk || 0) - dt) <= 0 && (n.cChk = 0.25))) { const c = this.carts.find((cc) => !cc.ret && cc !== this.P.cart && Math.hypot(cc.x - a.x, cc.z - a.z) < (n.stuckT > 0.5 ? 1.9 : 1.45) && Math.hypot(cc.x - cc.hx, cc.z - cc.hz) > 0.6);
+          if (c) { c.ret = { t: 0, x0: c.x, z0: c.z, f0: c.f, n }; n.hold = 1.7; n.stuckT = 0; this.popAt(a, ['Tsk... who left this here?', 'This goes over there.', 'Honestly...'][(this.t * 7 | 0) % 3], 1.6); return; } }
+        if (n.stuckT > 0.8 && n.path) { const e = n.path[n.path.length - 1]; this.goTo(n, e[0], e[1]); } }
     }
     // push a circle out of every wall and blocker it overlaps (a few passes, so corners can't squeeze it through)
     collide(p, r) {
@@ -411,13 +434,16 @@
       // hidden in a cart: still as a heap of towels. Any move (or I) and he climbs out
       if (P.hidden) {
         P.vx = P.vz = 0;
-        if (iPress || mag > 0.5) { const hc = P.hidden; P.hidden = null; this.view.root.visible = true; hc.off = false; this.cartBox(hc);
-          const a = mag > 0.5 ? Math.atan2(mz, mx) : hc.f + Math.PI; P.x = hc.x + Math.cos(a) * 1.3; P.z = hc.z + Math.sin(a) * 1.3; this.collide(P, P.r); P.f = a; }
-        else { this.cartStep(dt); this.grace = Math.max(this.grace, 0); this.npcsOnly(dt); return; }
+        if (mag > 0.5 || (iPress && P.hideT > 0.3)) { const hc = P.hidden; P.hidden = null; this.view.root.visible = true; hc.off = false; this.cartBox(hc);
+          const a = mag > 0.5 ? Math.atan2(mz, mx) : hc.f + Math.PI; P.x = hc.x + Math.cos(a) * 1.3; P.z = hc.z + Math.sin(a) * 1.3; this.collide(P, P.r); P.f = a;
+          // out with I held: straight onto his toes, silent. And a pair of towel-cart shorts over his shoulder (falls off after a few steps)
+          P.tip = this.keys.KeyI && !P.tired ? 1 : 0; this.hideCd = 0.6; this.shoulderShorts(); }
+        else { P.hideT = (P.hideT || 0) + dt; this.cartStep(dt); this.grace = Math.max(this.grace, 0); this.npcsOnly(dt); return; }
       }
-      if (iPress && P.st === 'free' && !wet && !P.held) {   // I next to a cart, standing still: climb in
-        const near = this.carts.find((cc) => Math.hypot(cc.x - P.x, cc.z - P.z) < 2.0);
-        if (near && (mag < 0.3 || P.cart)) { if (P.cart) P.cart = null; P.hidden = near; near.off = true; this.cartBox(near); P.x = near.x; P.z = near.z; this.view.root.visible = false; P.tip = 0;
+      this.hideCd = Math.max(0, (this.hideCd || 0) - dt);
+      if (iPress && !this.hideCd && P.st === 'free' && !wet && !P.held) {   // I next to a cart (walking or not): climb in
+        let near = null, nd = 2.5; for (const cc of this.carts) { const d = Math.hypot(cc.x - P.x, cc.z - P.z); if (d < nd && !cc.ret) { nd = d; near = cc; } }
+        if (near) { if (P.cart) P.cart = null; P.hidden = near; P.hideT = 0; near.off = true; this.cartBox(near); P.x = near.x; P.z = near.z; P.vx = P.vz = 0; this.view.root.visible = false; P.tip = 0; this.dropShorts(true);
           if (!this.saidCart) { this.saidCart = true; this.think('...just a cart of towels. Nothing to see.', 2.0); } return; }
       }
       // I: TIPTOE. Silent, slow, and tiring: about six seconds on his toes, then the heels come down with a thud
@@ -449,6 +475,8 @@
         let best = null, bd = P.r + 0.15;
         for (const B of this.breakables) {
           if (B.done) continue; const sd = B.s; if (Math.abs((sd.f ? UP : 0) - P.y) > 1.2) continue;
+          // his own locker (the mission one) never shatters: it only dents and bursts open, three charges (hitLocker)
+          if (sd.k === 'lockers' && this.locker.x > sd.x0 - 0.2 && this.locker.x < sd.x1 + 0.2 && this.locker.z > sd.z0 - 1.2 && this.locker.z < sd.z1 + 1.2) continue;
           const cx = clamp(P.x, sd.x0, sd.x1), cz = clamp(P.z, sd.z0, sd.z1), d = Math.hypot(P.x - cx, P.z - cz); if (d < bd) { bd = d; best = B; }
         }
         if (best) { this.breakThing(best); P.brkCd = 0.3; }
@@ -565,8 +593,17 @@
         }
         if (n.alarm >= 1) { this.caught(n); break; }
       }
+      this.sepNpcs();
     }
-    npcsOnly(dt) { this.grace = Math.max(0, this.grace - dt); for (const n of this.npcs) { this.npcStep(n, dt); n.alarm = Math.max(0, n.alarm - dt); } }
+    npcsOnly(dt) { this.grace = Math.max(0, this.grace - dt); for (const n of this.npcs) { this.npcStep(n, dt); n.alarm = Math.max(0, n.alarm - dt); } this.sepNpcs(); }
+    sepNpcs() {   // people don't walk through each other: nudge apart anyone overlapping
+      const N = this.npcs;
+      for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) {
+        const a = N[i].a, b = N[j].a; if (Math.abs(a.y - b.y) > 1) continue;
+        const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
+        if (d < 0.8 && d > 1e-4) { const k = (0.8 - d) / 2 / d; a.x -= dx * k; a.z -= dz * k; b.x += dx * k; b.z += dz * k; this.collide(a, 0.4); this.collide(b, 0.4); }
+      }
+    }
     range(n) { return n.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }
     breakThing(B) {
       const P = this.P, sd = B.s; B.done = true; B.o.visible = false;
@@ -659,7 +696,13 @@
       const P = this.P, fx = Math.cos(P.f), fz = Math.sin(P.f); P.st = 'busy'; P.t = 0; P.dur = 0.35; this.w.hand = 1;
       const inFront = (x, z, r) => { const dx = x - P.x, dz = z - P.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.3; };
       for (const n of this.npcs) if (n.a.st === 'free' && Math.abs(n.a.y - P.y) < 1 && inFront(n.a.x, n.a.z, 1.7)) {
-        this.popAt(n.a, 'OW!! HEY!', 1.4, true); this.think('...you can\'t slap the staff!', 2.0); this.caught(n); return;
+        // J: a slap that knocks them out cold. Out for ten seconds, or until someone comes and shakes them awake.
+        // The thud is heard: anyone near comes running to look
+        const a = n.a; a.st = 'down'; a.t = 0; a.dur = 10; a.slipFall = true; a.fallX = fx; a.fallZ = fz; a.vx = fx * 2.2; a.vz = fz * 2.2; n.ko = true; n.alarm = 0; n.path = null; n.hold = 0;
+        this.popAt(a, ['SLAP!', 'BONK!', 'WHAP!'][(this.t * 5 | 0) % 3], 1.0); this.later(0.6, () => { if (n.ko) this.popAt(n.a, '@_@', 1.6); });
+        if (this.g.audio) { this.g.audio.thump && this.g.audio.thump(7); this.g.audio.whoosh && this.g.audio.whoosh(0.3); }
+        if (!this.saidKO) { this.saidKO = true; this.think('Sorry! ...quick, before someone finds them.', 2.2); }
+        this.noise(a.x, a.z, 9, '!?'); return;
       }
       for (const r of this.rats) if (r.st !== 'home' && r.st !== 'fly' && inFront(r.x, r.z, 1.6)) {
         if (r.carry) { r.carry = false; this.oni.n = Math.min(4, this.oni.n + 1); this.oniDraw(); }
@@ -703,7 +746,7 @@
     hungry() {
       this.stage = 'onigiri'; this.spKitchen.visible = false; this.spOni.visible = true; this.el('.st-oni').style.display = 'block'; this.oniDraw();
       this.think('*GRRRUMBLE*... my stomach. I can\'t run on empty... those ONIGIRI!', 3.2);
-      this.objective('Eat 10 ONIGIRI from the counter. Wait for the chef to make them, and beat the rats to them (J slap)');
+      this.objective('Eat 10 ONIGIRI from the counter. Wait for the chef to make them, and beat the rats to them (J slap them away)');
     }
     stall(second) {   // into the stall: the door shuts behind him
       const P = this.P, ST = LY.stalls[LY.stall_use], D = this.stallDoors && this.stallDoors[LY.stall_use];
@@ -790,8 +833,51 @@
       if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4);
       this.flash = 1;
     }
+    // out of the towel cart: somebody's shorts draped over his shoulder. Three steps and they slide off onto the floor
+    shoulderShorts() {
+      this.dropShorts(true);
+      // borrowed trunks, folded over his right shoulder: a flap down his chest, a flap down his back
+      const g = new THREE.Group(), m = new THREE.Group(); g.add(m); this.G.add(g);
+      const M = S.Flat.mat(0x5a8fd0), W = S.Flat.mat(0xf2efe6), fl = [];
+      for (const sd of [1, -1]) {
+        const f = new THREE.Group(); f.position.x = sd * 0.05; m.add(f);
+        const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.36, 0.3), M); cloth.position.y = -0.18; f.add(cloth);
+        const band = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.31), W); band.position.y = -0.34; f.add(band);
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.12, 0.012), W); leg.position.set(0, -0.12, 0); f.add(leg);
+        f.rotation.z = sd * -0.5; fl.push(f);
+      }
+      const fold = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 10).rotateX(Math.PI / 2), M); m.add(fold);
+      g.traverse((q) => { if (q.isMesh) { q.castShadow = true; q.userData.flatDone = true; } });
+      this.shorts = { g, m, fl, d: 0, on: true };
+      if (!this.saidShorts) { this.saidShorts = true; this.think('...someone\'s shorts came with me.', 1.8); }
+    }
+    dropShorts(now) {
+      const s = this.shorts; if (!s) return;
+      if (now) { this.G.remove(s.g); this.shorts = null; return; }
+      if (!s.on) return; const P = this.P; s.on = false; s.vy = 0.6; s.vx = -Math.cos(P.f) * 0.9; s.vz = -Math.sin(P.f) * 0.9; s.life = 12;
+    }
+    shortsStep(dt) {
+      const s = this.shorts; if (!s) return; const P = this.P, v = this.view, g = s.g;
+      if (s.on) {
+        s.d += Math.hypot(P.vx, P.vz) * dt;
+        // on his right shoulder (the soft sumo's own shoulder joint)
+        const A = v.arms && v.arms.find((q) => q.sd < 0), w = this._shw || (this._shw = new THREE.Vector3());
+        if (A && A.sh && v.body) { w.copy(A.sh); v.body.localToWorld(w); } else w.set(P.x, P.y + 1.5 * v.s, P.z);
+        g.position.set(w.x - Math.sin(P.f) * 0.06 * v.s, w.y + 0.2 * v.s, w.z + Math.cos(P.f) * 0.06 * v.s); g.rotation.set(0, -P.f, 0); g.scale.setScalar(1.7 * v.s);
+        g.visible = v.root.visible;
+        if (s.d > 1.5) this.dropShorts();   // about three steps
+        return;
+      }
+      if (s.vy !== null) {
+        g.position.x += s.vx * dt; g.position.z += s.vz * dt; g.position.y += s.vy * dt; s.vy -= 9.8 * dt;
+        for (const f of s.fl) f.rotation.z += (Math.sign(f.rotation.z) * Math.PI / 2 - f.rotation.z) * Math.min(1, dt * 6);   // flaps open out as it falls
+        const fy = floorY(g.position.x, g.position.z) + 0.03;
+        if (g.position.y <= fy) { g.position.y = fy; s.vy = null; for (const f of s.fl) f.rotation.z = Math.sign(f.rotation.z) * Math.PI / 2; if (this.fx.dust) this.fx.dust(g.position.x, fy + 0.05, g.position.z, 3, 0.2, 0.3, 0.2); }
+      }
+      if ((s.life -= dt) <= 0) this.dropShorts(true);
+    }
     respawn() {
-      const P = this.P; P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.y = floorY(P.x, P.z); P.vx = P.vz = 0; P.st = 'free';
+      const P = this.P; this.dropShorts(true); P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.y = floorY(P.x, P.z); P.vx = P.vz = 0; P.st = 'free';
       if (P.held) { const b = P.held; P.held = null; b.state = 'floor'; b.m.position.set(b.x0, b.base, b.z0); b.m.rotation.set(0, 0, 0); }
       // the staff are where they were: nobody resets. Whoever caught him looks round for a moment
       for (const n of this.npcs) { n.alarm = 0; if (n === this.catcher) { n.mode = 'search'; n.wait = 3.0; n.path = null; } }
@@ -824,6 +910,7 @@
       if (this.squatBox) { this.squatBox.visible = !!P.boxHide; if (P.boxHide) { this.squatBox.position.set(P.x, P.y, P.z); this.squatBox.rotation.y = -P.f; } }
       v.root.rotation.z = P.tip > 0.05 ? Math.sin(T * 13) * 0.05 * P.tip * (1.3 - P.stam) : 0;   // (set, not added: it must never build up into a lean)
       v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
+      this.shortsStep(dt);
       if (P.held && P.held.state === 'held') {
         const b = P.held, ha = this._ha || (this._ha = new THREE.Vector3()), hb = this._hb || (this._hb = new THREE.Vector3()), H = { stool: 0.34, oke: 0.26, bucket: 0.42 }[b.kind] || 0.4;
         if (b.kind === 'oke') { v.handWorld(1, ha); b.m.position.set(ha.x, ha.y - H * 0.75, ha.z); }   // by its rim, in one fist
@@ -892,7 +979,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
+        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + move: climb out silently) · J knock out (loud) · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });

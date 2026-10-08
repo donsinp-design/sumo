@@ -697,7 +697,7 @@
       if (w.tiptoe > 0 && !w.carry && w.st !== 'fall' && !w.lifted) {
         const k = w.tiptoe, ph = this.gaitPh || 0, sw = Math.sin(ph) * 0.06 * (this.gaitW || 0);
         this.clipArms = 0;
-        Rh = lerpA(Rh, [0.3, 0.62 + sw, 0.46], k); Lh = lerpA(Lh, [-0.3, 0.62 - sw, 0.46], k);   // crouched, creeping: T-rex arms, elbows tucked, hands out front
+        Rh = lerpA(Rh, [0.34, 0.5 + sw, 0.64], k); Lh = lerpA(Lh, [-0.34, 0.5 - sw, 0.64], k);   // crouched, creeping: T-rex arms, elbows tucked, hands out front
         p += 0.06 * k; hp -= 0.22 * k; rate = Math.max(rate, 12);
       }
       return { c, p, r, tw, hp, Rh, Lh, rate, drop };

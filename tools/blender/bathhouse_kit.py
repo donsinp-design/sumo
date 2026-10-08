@@ -860,8 +860,23 @@ def build_details():
         m.gbox(-20.4, -20.0, z - 0.32, z + 0.32, 0.0, 0.9, 'snow', bev=0.08); m.gbox(-20.05, -19.3, z - 0.24, z + 0.24, 0.0, 0.42, 'snow', bev=0.12)
         m.gbox(-20.0, -19.25, z - 0.26, z + 0.26, 0.42, 0.47, 'offwhite', bev=0.04); m.gcyl(-20.2, z + 0.5, 0.75, 0.06, 0.03, 'chrome', seg=10, axis='Z')
     for k in range(6): m.gcyl(11.1, -90.2 + k * 0.3, UP + 1.42, 0.12, 0.22, 'snow', seg=14)    # toilet paper on the top storage shelf
-    m.gbox(-16.4 + 0.4, -15.6, -36.6, -36.0, 0.0, 0.85, 'teal', bev=0.06)                   # a cleaning trolley in the toilets
-    m.gcyl(-16.0, -36.3, 0.85, 0.12, 0.3, 'pink', seg=10)
+    # the cleaner's trolley, parked against the east wall of the toilets: a chrome frame on castors, a yellow mop
+    # bucket with its wringer, a grey bin bag, spray bottles and cloths on the top shelf, the mop leaning in it
+    tx0, tx1, tz0, tz1 = -13.35, -12.62, -35.9, -34.3
+    for x in (tx0 + 0.05, tx1 - 0.05):
+        for z in (tz0 + 0.05, tz1 - 0.05):
+            m.gbox(x - 0.02, x + 0.02, z - 0.02, z + 0.02, 0.08, 0.95, 'chrome')
+            m.gcyl(x, z, 0.0, 0.045, 0.08, 'ink', seg=10)
+    m.gbox(tx0, tx1, tz0, tz1, 0.12, 0.16, 'chrome_dk')                                     # bottom shelf
+    m.gbox(tx0, tx1, tz0 + 0.55, tz1, 0.92, 0.96, 'chrome_dk')                              # top shelf (back half)
+    m.gbox(tx0 + 0.06, tx1 - 0.06, tz0 + 0.06, tz0 + 0.62, 0.16, 0.52, 'yellow', bev=0.05)  # mop bucket
+    m.gbox(tx0 + 0.1, tx1 - 0.1, tz0 + 0.12, tz0 + 0.56, 0.50, 0.53, 'water')
+    m.gbox(tx0 + 0.16, tx1 - 0.16, tz0 + 0.42, tz0 + 0.6, 0.52, 0.72, 'ink', bev=0.03)     # wringer
+    m.gbox(tx0 + 0.04, tx1 - 0.04, tz0 + 0.72, tz1 - 0.04, 0.16, 0.86, 'chrome_dk', bev=0.12)  # bin bag
+    m.gcyl(tx0 + 0.2, tz0 + 0.75, 0.96, 0.05, 0.22, 'blue', seg=10); m.gcyl(tx0 + 0.2, tz0 + 0.75, 1.18, 0.02, 0.05, 'ink', seg=8)
+    m.gcyl(tx0 + 0.45, tz0 + 0.8, 0.96, 0.05, 0.2, 'green', seg=10); m.gcyl(tx0 + 0.45, tz0 + 0.8, 1.16, 0.02, 0.05, 'ink', seg=8)
+    m.gbox(tx0 + 0.08, tx1 - 0.08, tz1 - 0.42, tz1 - 0.1, 0.96, 1.04, 'pink', bev=0.02)     # folded cloths
+    m.gcyl(tx0 + 0.36, tz0 + 0.3, 0.5, 0.025, 1.0, 'wood_lt', seg=8)                        # the mop handle, standing in the bucket
     for d in LY.DOORS:
         y = ylev(d['f'])
         if d['kind'] == 'zframe':   # a doorway in a wall running along z: posts either side, a threshold

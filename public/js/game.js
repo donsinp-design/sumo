@@ -55,7 +55,7 @@
       const logo = new Image(); logo.src = 'assets/logo.webp?v=2';
       const logoReady = new Promise((res) => { (logo.decode ? logo.decode() : Promise.reject()).then(res, () => { logo.onload = res; logo.onerror = res; if (logo.complete) res(); }); setTimeout(res, 3000); });
       const showTitle = () => logoReady.then(() => this.ui.show('title'));
-      if (S.WMM) S.WMM.splash(() => this.ui.showNow('title')); // straight onto the white title (no banner wipe: it flashed the versus arena)
+      if (S.WMM) S.WMM.splash(() => { if (!this.camp) this.ui.showNow('title'); }); // straight onto the white title (no banner wipe: it flashed the versus arena)
       else if (S.Banners && S.Banners.whenReady) S.Banners.whenReady(showTitle, 3000); else showTitle();
       // background ticker: browsers pause hidden windows, which would freeze an online opponent
       try {

@@ -1359,7 +1359,7 @@
         if (kind === 'staff') { // a market hook-pole, 1.5 m, gripped a third of the way up in the striking hand
           const pole = new THREE.Group(), shaft = S.R3.mesh(new THREE.CylinderGeometry(0.028, 0.032, 1.5, 8), S.toon(0xc8a070, { shade: 0x6a4a2a }), 0.01); shaft.position.y = 0.45; pole.add(shaft);
           const hook = S.R3.mesh(new THREE.TorusGeometry(0.07, 0.014, 6, 12, Math.PI * 1.2), S.toon(0x4a4e56, { shade: 0x16181c, spec: 0.5 }), 0.008); hook.position.y = 1.22; hook.rotation.z = Math.PI / 2; pole.add(hook);
-          this.body.attach(pole, 'R');
+          this.body.attach(pole, 'R'); this.pole = pole;
         }
         this.J = {}; for (const k in this.rd.joints) this.J[k] = new THREE.Vector3();
       }

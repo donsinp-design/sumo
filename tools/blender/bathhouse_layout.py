@@ -106,6 +106,7 @@ STALLS = [dict(x=-19.3, z=(a + b) / 2) for a, b in zip(STALL_Z, STALL_Z[1:])]
 STALL_USE = 2
 solid('urinals', -16.4, -13.0, -31.6, -31.0, 1.1, tall=False)
 solid('tsinks', -18.0, -13.4, -45.0, -44.4, 0.9, tall=False)
+blocker('trolley', -12.98, -35.1, 0.75)   # the cleaner's trolley against the east wall
 TP = dict(x=10.0, z=-89.6)        # toilet paper, on the storage shelf
 
 # ================================================================ UPPER
