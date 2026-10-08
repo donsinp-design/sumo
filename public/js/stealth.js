@@ -963,8 +963,8 @@
       for (const n of this.npcs) { n.alarm = 0; if (n === this.catcher) { n.mode = 'search'; n.wait = 3.0; n.path = null; } }
       if (P.cart) { P.cart.off = false; this.cartBox(P.cart); P.cart = null; }
       if (P.hidden) { P.hidden.off = false; this.cartBox(P.hidden); P.hidden = null; this.view.root.visible = true; }
-      if (this.stage === 'bathhide') {   // back in the bath; the two go back to their posts, then come looking again
-        P.x = (POOL.x0 + POOL.x1) / 2; P.z = (POOL.z0 + POOL.z1) / 2; P.y = floorY(P.x, P.z); P.f = -Math.PI / 2; P.stam = 1; P.tired = false;
+      if (this.stage === 'bathhide') {   // (the usual checkpoint, by the wash area door) the two go back to their posts, then come looking again
+        P.stam = 1; P.tired = false;
         for (const n of this.npcs) if (n.raid) { n.raid = false; n.looked = false; n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); }
         this.raid = { t: 0, phase: 'wait', wait: 6, k: 0 };
       }
