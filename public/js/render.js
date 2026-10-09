@@ -1703,7 +1703,7 @@
       const sc = (w.a && w.a.scale || 1) * (w.szCur || 1);
       if (!G.mos) {
         const cv = document.createElement('canvas'); cv.width = 8; cv.height = 5; const tex = new THREE.CanvasTexture(cv); tex.magFilter = tex.minFilter = THREE.NearestFilter;
-        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); s.renderOrder = 5; this.scene.add(s); G.mos = s; G.cv = cv;
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false })); s.renderOrder = 50; this.scene.add(s); G.mos = s; G.cv = cv;
       }
       if (G.box && !G.boxM && G.makeBox) { G.boxM = G.makeBox(); G.boxM.visible = true; this.scene.add(G.boxM); }
       if (G.boxM) { G.boxM.position.set(w.x, 0.5 * sc, w.z); G.boxM.rotation.y = -w.f + Math.PI / 2; G.boxM.scale.setScalar(1.05 * sc); }
@@ -1716,10 +1716,10 @@
       for (const c of G.bits) { const u = c.userData; u.t += dt; u.vy -= 14 * dt; c.position.x += u.vx * dt; c.position.y = Math.max(0.02, c.position.y + u.vy * dt); c.position.z += u.vz * dt; c.rotation.x += 6 * dt; c.rotation.z += 5 * dt; if (u.t > 2.5) c.visible = false; }
       const s = G.mos; s.visible = !G.boxM;
       if (s.visible) {   // a jittering pixel block on his hips, towards the camera
-        G.t -= dt; if (G.t <= 0) { G.t = 0.1; const g = G.cv.getContext('2d'), sk = ['#e9b894', '#d9a07c', '#f0c8a8', '#c98a6a', '#e0ac88']; g.clearRect(0, 0, 8, 5);
+        G.t -= dt; if (G.t <= 0) { G.t = 0.1; const g = G.cv.getContext('2d'), sk = ['#f6e2d2', '#8a6454', '#e9b894', '#5e4438', '#fff2e6', '#b88468']; g.clearRect(0, 0, 8, 5);
           for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { if ((x === 0 || x === 7) && Math.random() < 0.6) continue; g.fillStyle = sk[(Math.random() * sk.length) | 0]; g.fillRect(x, y, 1, 1); } s.material.map.needsUpdate = true; }
         const cp = this.cam.position, dx = cp.x - w.x, dz = cp.z - w.z, d = Math.hypot(dx, dz) || 1;
-        s.position.set(w.x + dx / d * 0.35 * sc, 0.62 * sc, w.z + dz / d * 0.35 * sc); s.scale.set(0.5 * sc, 0.31 * sc, 1);
+        s.position.set(w.x + dx / d * 0.45 * sc, 0.7 * sc, w.z + dz / d * 0.45 * sc); s.scale.set(0.85 * sc, 0.53 * sc, 1);
       }
     }
 

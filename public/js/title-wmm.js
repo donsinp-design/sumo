@@ -1,7 +1,7 @@
 'use strict';
 // WHERE'S MY MAWASHI: the kumitegame fork's front end.
 //   boot     straight onto the menu
-//   title    white, the menu on the left; food rains down behind it (onigiri, nigiri, dango..., in the game's flat look)
+//   title    white, the menu on the left; food rains down behind it (onigiri, dango..., in the game's flat look)
 //   PLAY     the screen goes white, the bathhouse fades in: the sumo asleep in the bath
 //            (zzz); any key wakes him and the level starts (see Stealth intro)
 // The original Kumite build is untouched (this only runs when window.KUMITE_FORK === 'kumitegame').
@@ -20,7 +20,7 @@
     addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
     cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
   }
-  // the food: the same flat look as the bathhouse props (onigiri, nigiri, dango, fish cake, tempura, manju)
+  // the food: the same flat look as the bathhouse props (onigiri, dango, fish cake, manju)
   const M = (c) => { const m = S.Flat.mat(c); return m; };
   function done(g) { g.traverse((o) => { if (o.isMesh) o.userData.flatDone = true; }); return g; }
   const FOOD = [
@@ -30,13 +30,6 @@
       const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.22, bevelEnabled: true, bevelSize: 0.08, bevelThickness: 0.1, bevelSegments: 4, curveSegments: 24 }); geo.center();
       g.add(new THREE.Mesh(geo, M(0xf7f4ec)));
       const nori = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.4, 0.46), M(0x26332c)); nori.position.y = -0.3; g.add(nori);
-      return done(g);
-    },
-    function nigiri() {
-      const g = new THREE.Group();
-      const rice = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.42, 6, 14).rotateZ(Math.PI / 2), M(0xf7f4ec)); rice.scale.set(1, 0.9, 1.1); g.add(rice);
-      const fish = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.5, 6, 14).rotateZ(Math.PI / 2), M(0xf4895f)); fish.scale.set(1.05, 0.42, 1.15); fish.position.y = 0.2; g.add(fish);
-      for (let k = -1; k <= 1; k++) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.03, 0.5), M(0xffd2bd)); st.position.set(k * 0.2, 0.29, 0); st.rotation.y = 0.4; g.add(st); }
       return done(g);
     },
     function dango() {
@@ -49,12 +42,6 @@
       const g = new THREE.Group();
       const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.14, 12).rotateX(Math.PI / 2), M(0xf8f4ec)); g.add(disc);
       for (const z of [0.072, -0.072]) { const sw = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.04, 6, 24, Math.PI * 1.6), M(0xef7f9e)); sw.position.z = z; g.add(sw); const dot = new THREE.Mesh(new THREE.CircleGeometry(0.05, 12), M(0xef7f9e)); dot.position.z = z * 1.02; if (z < 0) dot.rotation.y = Math.PI; g.add(dot); }
-      return done(g);
-    },
-    function tempura() {
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.7, 6, 12), M(0xe9b24e)); body.rotation.z = 0.2; g.add(body);
-      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.26, 3), M(0xe2553c)); tail.position.set(0.1, -0.6, 0); tail.rotation.z = Math.PI + 0.2; tail.scale.z = 0.4; g.add(tail);
       return done(g);
     },
     function manju() {
