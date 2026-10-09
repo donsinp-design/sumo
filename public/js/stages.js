@@ -12,7 +12,7 @@
     { id: 'dohyo', name: 'DOHYO' }, { id: 'vacuum', name: 'ROBOT VACUUM' }, { id: 'cake', name: 'BIRTHDAY CAKE' }, { id: 'taiko', name: 'TAIKO DRUM' }, // (poker chip, soda can: removed)
     { id: 'vinyl', name: 'DJ VINYL' }, { id: 'heli', name: 'HELIPAD' }, { id: 'pizza', name: 'PIZZA' },
     { id: 'watch', name: 'CLOCK' }, { id: 'earth', name: 'FLAT EARTH' },
-    { id: 'lily', name: 'LILY PAD' }, { id: 'sushi', name: 'SUSHI TRAIN' },
+    { id: 'lily', name: 'LILY PAD' }, { id: 'sushi', name: 'SUSHI TRAIN' }, { id: 'bath', name: 'BATHHOUSE' },
     { id: 'random', name: 'RANDOM' },
   ];
   // RANDOM: a different stage every match, never the one you just played (the classic dohyo is in the pool too)
@@ -318,6 +318,42 @@
       for (let k = 0; k < 26; k++) { const a = k / 26 * TAU, d = 24 + (k % 3) * 5, h = 6 + (k * 7 % 9); const b = new THREE.Mesh(new THREE.BoxGeometry(5, 40, 5), city); b.position.set(Math.cos(a) * d, -40 + h - 20 + 20, Math.sin(a) * d); g.add(b); }
       ground(g, -45, (c, w) => { c.fillStyle = '#0a1020'; c.fillRect(0, 0, w, w); }, 300, 1);
       return (T) => { lights.forEach((l, i) => { l.visible = Math.floor(T * 2.5 + i) % 3 !== 0; }); beacon.visible = Math.floor(T * 1.5) % 2 === 0; };
+    },
+
+    // ---------------------------------------------------------------- a bathhouse: a hinoki duckboard ring on the tiled floor, the bath and the Mt Fuji mural behind
+    bath(Rn, g, spin) {
+      const H = 0.3;
+      top(spin, (c) => {
+        c.fillStyle = '#e6c996'; c.fillRect(0, 0, W, W);
+        for (let k = 0; k < 24; k++) { c.fillStyle = k % 2 ? '#dcb97f' : '#ebd0a0'; c.fillRect(0, k * W / 24, W, W / 24); c.fillStyle = 'rgba(110,76,56,0.35)'; c.fillRect(0, k * W / 24, W, 3); }
+        circ(c, RR, null, '#fffaf0', 16); circ(c, RR - 22, null, 'rgba(110,76,56,0.45)', 4);
+      });
+      side(g, null, { color: 0xc9a468, shade: 0x6e4c38, h: H });
+      edgeLine(g);
+      // the tiled floor
+      ground(g, -H, (c, w) => { const n = 16, t = w / n; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { c.fillStyle = (i + j) % 2 ? '#d9e8e6' : '#e6f0ee'; c.fillRect(i * t, j * t, t, t); } c.strokeStyle = '#c3d2d1'; c.lineWidth = 2; for (let k = 0; k <= n; k++) { c.beginPath(); c.moveTo(k * t, 0); c.lineTo(k * t, w); c.stroke(); c.beginPath(); c.moveTo(0, k * t); c.lineTo(w, k * t); c.stroke(); } }, 130, 7);
+      // the Mt Fuji mural wall, far side
+      const mu = ctex(1024, 400, (c, w, h) => {
+        c.fillStyle = '#a9d3ef'; c.fillRect(0, 0, w, h);
+        c.fillStyle = '#ffffff'; for (const [x, y, r] of [[160, 90, 50], [250, 100, 36], [800, 70, 46], [880, 85, 32]]) { c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); }
+        c.fillStyle = '#4f7fb8'; c.beginPath(); c.moveTo(150, h); c.lineTo(430, 120); c.lineTo(520, 70); c.lineTo(600, 120); c.lineTo(890, h); c.closePath(); c.fill();
+        c.fillStyle = '#faf8f2'; c.beginPath(); c.moveTo(470, 106); c.lineTo(520, 70); c.lineTo(570, 106); c.lineTo(545, 124); c.lineTo(520, 104); c.lineTo(495, 128); c.closePath(); c.fill();
+        c.fillStyle = '#4f8f6a'; for (let k = 0; k < 40; k++) { const x = 40 + k * 24, hh = 36 + (k * 13 % 22); c.beginPath(); c.moveTo(x, h); c.lineTo(x + 14, h - hh); c.lineTo(x + 28, h); c.fill(); }
+        c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 2; for (let x = 0; x < w; x += 64) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); } for (let y = 0; y < h; y += 64) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+      });
+      const mural = new THREE.Mesh(new THREE.PlaneGeometry(46, 18), new THREE.MeshBasicMaterial({ map: mu })); mural.position.set(0, 9 - H, -32); g.add(mural);
+      bx(g, 60, 0.9, 1.4, 0xb5ccca, 0, -H, -32.7, { shade: 0x6a8a88 });
+      // the bath, in front of it: a wooden rim round blue water
+      const water = new THREE.Mesh(new THREE.PlaneGeometry(30, 11).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x9cc6e8 })); water.position.set(0, -H - 0.12, -25); g.add(water);
+      for (const [sx, sz, x, z] of [[31, 0.9, 0, -19.5], [31, 0.9, 0, -30.5], [0.9, 11.9, -15.5, -25], [0.9, 11.9, 15.5, -25]]) bx(g, sx, 0.55, sz, 0xd3ab7a, x, -H - 0.1, z, { shade: 0x8c6648 });
+      // side walls of tile, with a wooden rail
+      for (const x of [-34, 34]) { bx(g, 1.2, 9, 70, 0xdcebe8, x, -H, -4, { shade: 0x8fb0ae }); bx(g, 0.5, 0.5, 70, 0xbb8b5e, x * 0.97, 2.4, -4, { shade: 0x6e4c38 }); }
+      bx(g, 70, 9, 1.2, 0xdcebe8, 0, -H, 34, { shade: 0x8fb0ae });
+      // wash stations along the side: stools and buckets, and a couple of mirrors
+      for (let k = 0; k < 6; k++) { const z = -12 + k * 6, x = -26; cy(g, 0.42, 0.46, 0.45, 0xe2b85e, x, -H, z, { shade: 0x8a6a22 }); cy(g, 0.38, 0.32, 0.36, 0xe8cb98, x + 1.3, -H, z + 1.2, { shade: 0x8c6648 }); bx(g, 0.2, 1.6, 2.2, 0xd4e7f0, -32.9, 1.2 - H, z, { shade: 0x8fb0ae }); }
+      for (let k = 0; k < 5; k++) { const z = -10 + k * 6, x = 26; cy(g, 0.42, 0.46, 0.45, 0xe2b85e, x, -H, z, { shade: 0x8a6a22 }); cy(g, 0.38, 0.32, 0.36, 0x84b5ad, x - 1.3, -H, z - 1.2, { shade: 0x4a7a72 }); }
+      // lanterns of steam... a few soft clouds over the water
+      for (let k = 0; k < 5; k++) { const m = new THREE.Mesh(new THREE.CircleGeometry(2.6 + k % 3, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false })); m.position.set(-10 + k * 5, 0.2 - H, -23 - (k % 2) * 3); g.add(m); }
     },
 
     // ---------------------------------------------------------------- pizza on a restaurant table

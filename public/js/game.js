@@ -78,7 +78,9 @@
     // ------------------------------------------------------------ setup
     setupMatch(i1, i2, kind) {
       this.awaitGacha = false; if (this.ui) { this.ui.hideGacha(); this.ui.vhs(false); }
-      const archs = [S.ARCH[i1], S.ARCH[i2]];
+      let archs = [S.ARCH[i1], S.ARCH[i2]];
+      if (kind === 'boss') { const A = S.ARCH[0]; i2 = 0; archs = [Object.assign({}, S.ARCH[i1], { name: 'YOU', kanji: 'あなた' }),   // the bathhouse owner: regular size, grey topknot, his own dark mawashi, a gentler build
+        Object.assign({}, A, { name: 'YUNOFUJI', kanji: '湯乃富士', belt: 0x3b3346, hair: 0xc9c6c0, accent: '#8a7aa8', moveForce: A.moveForce * 0.82, pushForce: A.pushForce * 0.72, power: A.power * 0.75, dashSpeed: A.dashSpeed * 0.82, grip: A.grip * 0.9, stability: A.stability * 0.92 })]; }
       this.kind = kind; this.archIdx = [i1, i2];
       const m = this.match = new S.Match(archs);
       this.ais = []; this.ctrls = []; this.dummy = null;
@@ -86,7 +88,7 @@
         let src;
         if (kind === 'online') { src = new S.NetSource(this, k); }
         else if (kind === 'attract' || ((kind === 'cpu' || kind === 'boss') && k === 1)) {
-          const ai = new S.AI(m.w[k], m, kind === 'attract' ? 'normal' : kind === 'boss' ? 'hard' : this.settings.difficulty, { noLearn: kind === 'attract' || kind === 'boss' });
+          const ai = new S.AI(m.w[k], m, kind === 'attract' ? 'normal' : kind === 'boss' ? 'boss' : this.settings.difficulty, { noLearn: kind === 'attract' || kind === 'boss' }); if (kind === 'boss') { ai.L = Object.assign({}, S.AI_LEVELS.boss); this.bossSoft = 0; }
           this.ais.push(ai); src = ai;
         } else if (kind === 'training' && k === 1) {
           this.dummy = new S.Dummy(); this.dummy.me = m.w[1];
@@ -102,12 +104,12 @@
       const P = S.profile;
       const human = (k) => kind === 'pvp' || ((kind === 'cpu' || kind === 'boss' || kind === 'tutorial' || kind === 'showcase' || kind === 'training') && k === 0);
       this.loadouts = kind === 'online' ? [0, 1].map((k) => (this.netMatch.los[k] || JSON.parse(JSON.stringify(S.DEF_EQ)))) : [0, 1].map((k) => (k === 0 && human(0) ? P.loadout() : kind === 'pvp' ? JSON.parse(JSON.stringify(S.DEF_EQ)) : P.randomLoadout()));
-      this.names = [human(0) ? P.names[0] : 'CPU', kind === 'pvp' ? P.names[1] : kind === 'boss' ? 'YUNOFUJI' : kind === 'tutorial' || kind === 'training' ? 'PARTNER' : 'CPU'];
+      this.names = [kind === 'boss' ? 'YOU' : human(0) ? P.names[0] : 'CPU', kind === 'pvp' ? P.names[1] : kind === 'boss' ? 'YUNOFUJI' : kind === 'tutorial' || kind === 'training' ? 'PARTNER' : 'CPU'];
       this.viewerIdx = kind === 'pvp' ? -1 : kind === 'attract' ? -1 : 0;
       for (let k = 0; k < 2; k++) m.w[k].extraTaunts = this.loadouts[k].taunts.map((id) => (id ? S.item(id).pose : null));
       this.R.setWrestlers(archs, this.loadouts, this.names);
       for (const v of this.R.views) v.onDerobe = (w) => { this.audio.whoosh(0.4); this.R.fx.dust(w.x, 0.05, w.z, 6, 0.3, 0.5, 0.3); this.audio.cheer(0.4, 0.8); };
-      this.ui.setFighters(archs, kind === 'cpu' ? [this.names[0], 'CPU · ' + this.settings.difficulty.toUpperCase()] : kind === 'boss' ? [this.names[0], 'YUNOFUJI'] : kind === 'pvp' ? this.names : kind === 'tutorial' ? ['YOU', 'PARTNER'] : ['CPU', 'CPU']);
+      this.ui.setFighters(archs, kind === 'cpu' ? [this.names[0], 'CPU · ' + this.settings.difficulty.toUpperCase()] : kind === 'boss' ? ['', '湯乃富士'] : kind === 'pvp' ? this.names : kind === 'tutorial' ? ['YOU', 'PARTNER'] : ['CPU', 'CPU']);
       this.ui.setSkills([null, null], [false, false], ['', '']);
       this.ui.setRecord(kind === 'cpu' || kind === 'pvp' ? this.recordText() : '');
       this.ui.setWins([0, 0], this.need);
@@ -116,7 +118,7 @@
       this.bnrGo = false; this.bnrKey = null;
       if (this.bannerKind()) S.Banners.wall({ hold: 0.15, speed: 0.95 });
       // stage: your pick (or a random one) for CPU, local versus and training; the classic dohyo everywhere else
-      const stage = ['cpu', 'pvp', 'training'].includes(kind) ? S.stageFor(S.profile.stage) : 'dohyo';
+      const stage = kind === 'boss' ? 'bath' : ['cpu', 'pvp', 'training'].includes(kind) ? S.stageFor(S.profile.stage) : 'dohyo';
       this.R.setStage(stage); m.stage = stage;
       if (kind !== 'tutorial') { m.newRound(); this.handleEvents(); this.dealSkills(); }
     }
@@ -896,6 +898,7 @@
       const m = this.match;
       const matchGoesOn = m && !this.matchEnd(m);
       if (matchGoesOn && this.kind === 'boss' && W.idx === 1) {
+        const L = this.ais[0] && this.ais[0].L; if (L) { this.bossSoft = (this.bossSoft || 0) + 1; const k = this.bossSoft; L.react += 0.14; L.think += 0.08; L.aggr = Math.max(0.1, L.aggr - 0.08 * k); L.skill = 0; L.dodge = 0; }   // (a lost round: he goes easier still)
         m.skills = [null, null]; this.refreshSkills(); this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1500;
         setTimeout(() => { if (this.match === m && this.awaitGacha) this.dealBossGacha(); }, 900);
       }

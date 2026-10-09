@@ -311,12 +311,6 @@
           if (w.t >= 0.17) { w.set('recover', 0.3); this.emit('whiff', { w, grab: true }); }
           break;
         case 'dash':
-          // keep holding L with a direction: the dash turns into a charge that runs as long as you hold it (like the campaign)
-          if (I.dash.held && I.dash.t > 0.16 && mag > 0.35 && w.stam > 0.1) {
-            w.f = Math.atan2(iz / mag, ix / mag); w.chargeHit = false; w.dodged = false; w.holdCharge = true;
-            w.cspd = w.a.maxSpeed * 1.35; w.set('charge', 0.45); w.stam = Math.max(0, w.stam - 0.1);
-            this.emit('charge', { w }); break;
-          }
           if (w.t >= w.dur) {
             // dashing straight at them commits you; sidesteps and retreats recover quickly
             const dx0 = w.opp.x - w.x, dz0 = w.opp.z - w.z, dl0 = Math.hypot(dx0, dz0) || 1, fwd = (w.ddx * dx0 + w.ddz * dz0) / dl0;

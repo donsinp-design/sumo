@@ -1095,7 +1095,7 @@
       const cv = this.el('.st-map'); if (!cv) return; if ((this.mapN = (this.mapN || 0) + 1) % 2) return;
       const x = cv.getContext('2d'), W = cv.width, R = W / 2, k = 6.2, P = this.P, fl = P.y > 1.6 ? 1 : 0, X = (wx) => R + (wx - P.x) * k, Z = (wz) => R + (wz - P.z) * k;
       x.save(); x.clearRect(0, 0, W, W); x.beginPath(); x.arc(R, R, R, 0, Math.PI * 2); x.clip();
-      x.fillStyle = '#f3ead8'; x.fillRect(0, 0, W, W);
+      const hot = this.chasing(); cv.style.boxShadow = hot ? '0 0 0 4px rgba(216,38,46,' + (0.75 + 0.25 * Math.sin(T * 8)) + '),0 4px 14px rgba(216,38,46,0.5)' : ''; x.fillStyle = hot ? '#f0c4be' : '#f3ead8'; x.fillRect(0, 0, W, W);
       if (!fl) { x.fillStyle = '#a9d3ef'; x.fillRect(X(POOL.x0), Z(POOL.z0), (POOL.x1 - POOL.x0) * k, (POOL.z1 - POOL.z0) * k); }
       for (const q of LY.solids) { if ((q.f ? 1 : 0) !== fl) continue; const near = Math.abs((q.x0 + q.x1) / 2 - P.x) < 26 && Math.abs((q.z0 + q.z1) / 2 - P.z) < 26; if (!near) continue;
         x.fillStyle = q.k === 'wall' ? '#6b5f66' : '#d6c6aa'; x.fillRect(X(q.x0), Z(q.z0), Math.max(1.5, (q.x1 - q.x0) * k), Math.max(1.5, (q.z1 - q.z0) * k)); }
@@ -1132,7 +1132,7 @@
       for (const n of this.npcs) { n.alarm = 0; n.pullOut = false; if (n.mode === 'chase' || n.mode === 'raid') { n.mode = 'route'; n.path = null; n.wait = 1; } }
       this.outOfBath = k !== 'locker' ? true : this.outOfBath; this.spOut.visible = false; this.stage = k;
       const late = ['towel', 'storage', 'box', 'exit', 'kitchen', 'onigiri', 'toilet', 'paper', 'toilet2', 'bossgo', 'fight', 'sumo', 'escape'].includes(k), upstairs = ['box', 'exit', 'kitchen'].includes(k);
-      if (late) { this.crackDone || k === 'storage' || this.smashCrack(); if (this.holes) this.holes.visible = true; this.hitsL = 3; }
+      if (late) { this.crackDone || k === 'storage' || this.smashCrack(true); if (this.holes) this.holes.visible = true; this.hitsL = 3; }
       if (['towel', 'storage', 'box', 'exit', 'kitchen', 'onigiri', 'toilet', 'paper', 'toilet2', 'bossgo', 'fight', 'sumo', 'escape'].includes(k)) this.saidOut = true;
       if (['locker', 'key', 'smash', 'towel', 'storage', 'box'].includes(k) && this.wearing) { this.wearing = false; this.boxDown = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.pantsBox.visible = true; }   // (back before the box: not wearing it)
       if (k !== 'escape') this.gotMawashi = false;
@@ -1150,8 +1150,7 @@
         case 'paper': this.stinky = true; at(CP.store.x, CP.store.z, UP, CP.store.f); this.spTP.visible = true; this.objective('Get TOILET PAPER from the STORAGE room (upstairs, behind the front desk)'); break;
         case 'toilet2': at(CP.toilet.x + 3, CP.toilet.z, 0, Math.PI); this.spStall.visible = true; this.objective('Back to the TOILET stall (with the paper)'); break;
         case 'bossgo': at(1, 1.6, 0, -Math.PI / 2); this.cp = CP.toilet; this.spOut.visible = true; this.objective('Your MAWASHI is in the BATH! Back to the bath steps, where you woke up'); this.stage = 'bossgo'; B.rise = null; B.on = false; B.done = false; B.sink = undefined; break;
-        case 'fight': at(5.6, 0.6, 0, 0); B.on = true; B.rise = { t: 9, gone: true }; this.stage = 'bossfight'; this.sfStart(); break;
-        case 'sumo': at(5.6, 0.6, 0, 0); B.on = true; B.rise = { t: 9, gone: true }; this.stage = 'bossfight'; this.g.startBossBout(this); break;
+                case 'sumo': at(1, 1.6, 0, -Math.PI / 2); B.on = true; B.x = 1.8; B.z = -4.6; B.y = -0.12; B.holdSet = true; B.hold = false; B.rise = { t: 9, gone: true }; this.stage = 'bossfight'; this.bossAsk(0); break;
         case 'escape': this.gotMawashi = true; at(CP.toilet.x + 3, CP.toilet.z, 0, Math.PI); this.escapeStage(); break;
       }
       this.cp = { x: P.x, z: P.z, f: P.f };
@@ -1170,14 +1169,15 @@
       this.say(q, () => this.choice(n === 0 ? '稽古?' : '直々に教えよう', n === 0 ? 'TRAINING?' : 'LET ME TEACH YOU', ['YES: learn to play', 'NO: just fight'], (i) => {
         if (i === 0) { this.say([{ who: '親方', jp: 'よし。ついてこい。', en: 'Good. Follow me.', t: 1.8 }], () => this.g.startBossTraining(this)); }
         else if (n === 0) this.bossAsk(1);
-        else this.say([{ who: '親方', jp: '…よかろう。かかってこい!', en: '...Very well. Come at me!', t: 2.4 }], () => this.sfStart());
+        else this.say([{ who: '親方', jp: '…よかろう。相撲で勝負だ!', en: '...Very well. Let\'s settle it in the ring!', t: 2.8 }], () => this.g.startBossBout(this));
       }));
     }
     // back from the versus screen (a sumo bout, or the training)
     resumeFromBoss(res) {
       this.keys = {}; this.over = false; this.paused = false; this.acc = 0;
       if (res === 'quit') { this.g.endCampaign(); return; }
-      if (res === 'trained') { this.say([{ who: '親方', jp: 'どうだ、わかったか。…では、いくぞ。', en: 'There. Understood? ...Then let\'s begin.', t: 3.0 }], () => this.sfStart()); return; }
+      if (res === 'trained') { this.say([{ who: '親方', jp: 'どうだ、わかったか。…では、いくぞ。', en: 'There. Understood? ...Then let\'s begin.', t: 3.0 }], () => this.g.startBossBout(this)); return; }
+      if (res === 'lost' || res === 'won') { const B = this.boss; B.on = true; B.hold = false; B.holdSet = true; B.sink = undefined; B.x = 1.8; B.z = -4.6; B.y = -0.12; B.f = Math.atan2(this.P.z - B.z, this.P.x - B.x); if (this.mawM) this.mawM.visible = false; B.w.throatT = 0; }
       if (res === 'lost') { this.say([{ who: '親方', jp: 'まだまだ青いな。もう一番!', en: 'Still green. Again!', t: 2.6 }], () => this.g.startBossBout(this)); return; }
       // won: the mawashi comes back
       this.boss.on = true; this.boss.y = -0.12; this.boss.hold = false;
@@ -1186,7 +1186,8 @@
         { who: '親方', jp: 'ところで、その背中の…「半額豆腐」とは何だ?', en: 'By the way. That thing on your back... "HALF-PRICE TOFU"?', t: 3.4 },
         { who: '', jp: '…「無敵」と頼んだんだ。', en: '...I asked for "INVINCIBLE".', t: 2.8 },
         { who: '親方', jp: 'まあいい。持っていけ。だが、その刺青を見られる前に出ていくんだぞ。', en: 'Never mind. Take it. But get out before anyone sees that tattoo.', t: 4.0 },
-      ], () => { this.gotMawashi = true; this.boss.sink = 0; this.think('My MAWASHI! ...still can\'t go out the front door like this.', 2.8); this.escapeStage(); });
+      ], () => { this.gotMawashi = true; this.boss.sink = 0; if (this.wearing) { this.wearing = false; this.boxDown = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.pantsBox.visible = false; this.spExit && (this.spExit.visible = false); }   // (he takes off the box: the mawashi is back on)
+         this.think('My MAWASHI! ...still can\'t go out the front door like this.', 2.8); this.escapeStage(); });
     }
     // ---- stage 1: a Street Fighter style bout in front of the Mt Fuji mural (best of three rounds)
     sfHide(on) {   // potted plants and the like out of the arena while they fight
@@ -1315,14 +1316,14 @@
     phoneCall(D) {
       const P = this.P, n = this.npcs.find((m) => m.room === 'toilet' && !m.ko) || this.npcs[0], a = n.a, ST = LY.stalls[LY.stall_use];
       n.hold = 14; n.path = null; a.vx = a.vz = 0; n.phone = true; a.f = Math.PI / 2 + 0.5;   // (turned towards us, so we see the phone at the ear)
-      this.popAt(a, '♪ プルルル…', 1.4);
+      this.popAt(a, '♪ プルルル…', 1.4); this.camFocus = { x: a.x, z: a.z - 2.6, y: 0 };   // (pans to them: same view)
       this.say([
         { jp: '♪ プルルル… プルルル…', en: '*ring ring... ring ring...*', t: 2.0 },
         { who: '店員', jp: '…はい、もしもし。', en: '...Hello?', t: 2.0 },
         { who: '店員', jp: 'え、親方ですか?', en: 'Oh, boss? It\'s you?', t: 2.2 },
         { who: '店員', jp: '風呂で…まわしを拾った!?', en: 'You found a MAWASHI... in the bath!?', t: 3.4 },
       ], () => {
-        n.phone = false; n.hold = 0.5; if (this.phoneM) this.phoneM.visible = false; this.camFocus = null;
+        n.phone = false; n.hold = 0.5; if (this.phoneM) this.phoneM.visible = false; this.camFocus = null; this.camFocus = null;
         P.inStall = false; if (D) D.rotation.y = -1.4; P.st = 'free';
         this.stage = 'bossgo'; this.cp = CP.toilet; this.spBack.visible = false;
         this.think('MY MAWASHI!! It\'s in the BATH... and someone\'s GOT it!', 3);
@@ -1362,7 +1363,7 @@
     bossStep(dt) {
       const B = this.boss, P = this.P; if (!B) return;
       if (this.stage === 'bossgo' && Math.hypot(P.x - 1, P.z + 0.9) < 2.2 && !B.rise && !B.done) {   // back at the bath steps, where he woke up: the water stirs
-        B.rise = { t: 0 }; B.on = true; B.x = 1.8; B.z = -4.6; B.y = -2.7; B.hold = false; this.spOut.visible = false;
+        B.rise = { t: 0 }; B.holdSet = false; B.on = true; B.x = 1.8; B.z = -4.6; B.y = -2.7; B.hold = false; this.spOut.visible = false;
         B.f = Math.atan2(P.z - B.z, P.x - B.x); P.st = 'busy'; P.t = 0; P.dur = 99; P.vx = P.vz = 0;
         P.f = Math.atan2(B.z - P.z, B.x - P.x); this.objective('...');   // (the camera eases in on the two of them)
         this.think('...hm? The water\'s... bubbling?', 1.6);
@@ -1372,7 +1373,7 @@
       if (t < 1.6) { if ((R.bub = (R.bub || 0) - dt) <= 0) { R.bub = 0.12; this.fx.water && this.fx.water(B.x + (Math.random() - 0.5) * 1.2, B.z + (Math.random() - 0.5) * 1.2, 0.8, POOL.water); } }
       else if (t < 3.0) { if (!R.splash) { R.splash = true; this.fx.water && (this.fx.water(B.x, B.z, 7, POOL.water), this.fx.water(B.x + 0.6, B.z - 0.3, 5, POOL.water)); if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.8); this.flash = 0.2; }
         const k = Math.min(1, (t - 1.6) / 0.9); B.y = -2.7 + (2.7 - 0.12) * (1 - Math.pow(1 - k, 3)); }   // (up to his belly: the water streams off him)
-      if (t > 2.4 && !B.hold && B.sink === undefined) { B.hold = true; B.holdT = 0; }
+      if (t > 2.4 && !B.holdSet && B.sink === undefined) { B.holdSet = true; B.hold = true; B.holdT = 0; }
       if (B.sink !== undefined) { B.sink += dt; B.hold = false; B.y -= dt * 1.6; if (B.sink > 0.4 && !R.gone) { R.gone = true; this.fx.water && this.fx.water(B.x, B.z, 4, POOL.water); } if (B.y < -2.8) { B.on = false; B.rise = null; B.sink = undefined; B.done = true; } }
       if (t > 3.0 && !R.talk) { R.talk = true;
         this.say([
@@ -1662,7 +1663,7 @@
         this.later(4.6, () => { if (this.stage === 'towel') { this.think('A towel, at least! The LAUNDRY room, at the end of the back corridor.', 3.4); this.objective('Get a TOWEL from the LAUNDRY room (through the staff door, along the back corridor)'); this.spTowel.visible = true; } });
       }
     }
-    smashCrack() {
+    smashCrack(quiet) {
       this.crackDone = true; this.spCrack.visible = false;
       this.walls.splice(this.walls.indexOf(this.crackW), 1); this.buildNav();
       if (this.crackM) this.crackM.visible = false; if (this.rubble) this.rubble.visible = true;
@@ -1672,6 +1673,7 @@
         this.flying.push({ m: ch, sx: x, sy: y, sz: C.z, tx: x + ((k % 3) - 1) * 0.7, ty: floorY(x, tz) + sz * 0.4, tz, h: 0.5 + (k % 3) * 0.3, t: 0, dur: 0.4 + (k % 4) * 0.08, r0: [0, 0, 0], r1: [k, k * 0.7, k * 1.3] }); }
       this.fx.dust && this.fx.dust(C.x, 0.8, C.z, 14, 0.6, 0.8, 0.6); this.flash = 0.7;
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(9);
+      if (quiet || this.stage !== 'storage') return;   // (only when he really is smashing his way upstairs, never from a jump or later on)
       this.noise(C.x, C.z1 + 0.8, 14, '?!');
       this.think('Special delivery! ...up the stairs we go.', 2.2);
     }
@@ -1801,8 +1803,10 @@
     respawn() {
       const P = this.P; this.dropShorts(true); this.noGuard = true; P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.y = floorY(P.x, P.z); P.vx = P.vz = 0; P.st = 'free';
       if (P.held) { const b = P.held; P.held = null; b.state = 'floor'; b.m.position.set(b.x0, b.base, b.z0); b.m.rotation.set(0, 0, 0); }
-      // the staff are where they were: nobody resets. Whoever caught him looks round for a moment
-      for (const n of this.npcs) { n.alarm = 0; n.pullOut = false; if (n.mode === 'chase' || (n === this.catcher && this.hits >= 3)) { const r = n.route[n.i]; n.a.x = r[0]; n.a.z = r[1]; n.a.y = floorY(r[0], r[1]); n.mode = 'route'; n.wait = r[2] || 1; n.path = null; n.a.vx = n.a.vz = 0; continue; }   /* (back at their posts: no spawn-camping) */ if (n === this.catcher) { n.mode = 'search'; n.wait = 3.0; n.path = null; } if (n.a.st === 'act') n.a.st = 'free'; }
+      // back at the checkpoint: the staff go back to where they started (standing up, calm, at their first post)
+      for (const n of this.npcs) { const a = n.a, r = n.route[0]; if (n.busy) this.cookStop(n); a.x = r[0]; a.z = r[1]; a.y = floorY(r[0], r[1]); a.f = r[3] || 0; a.vx = a.vz = 0; a.st = 'free'; a.t = 0; a.shock = 0; a.push = false;
+        n.ko = false; n.alarm = 0; n.pullOut = false; n.hold = 0; n.mode = 'route'; n.i = 0; n.wait = r[2] || 0.01; n.path = null; n.pushing2 = false; n.tug = 0; n.clr = null; n.shock = 0; n.scratch = false; n.phone = false; n.stk = 0; n.slipCd = 0; n.ckAway = 0; n.trails = null; n.noiseAt = null; }
+      this.puddles = this.puddles.filter((q) => { if (q.m && q.soda) { this.G.remove(q.m); return false; } return true; });
       this.hits = 0; this.shove = null; this.hitCd = 0;
       if (P.cart) { P.cart.off = false; this.cartBox(P.cart); P.cart = null; }
       if (P.hidden) { P.hidden.off = false; this.cartBox(P.hidden); P.hidden = null; this.view.root.visible = true; }
@@ -1869,6 +1873,7 @@
       }
       this.kdt = Math.min(0.05, dt); this.drawN = (this.drawN || 0) + 1;
       this.bossDraw(dt, T); this.bonusBar(); this.mapDraw(T);
+      if (this.drawN % 10 === 1) { const o = this.el('.st-obj'), bn = this.el('.st-bonus'), hp = this.el('.st-hp'); if (o && bn) { const y = o.offsetTop + o.offsetHeight + 8; bn.style.top = y + 'px'; if (hp) hp.style.setProperty('top', (y + 34) + 'px', 'important'); } }   // (a two-line goal pushes the badges down, never over them)
       for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }
       this.sweatStep(dt);
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
@@ -1918,6 +1923,7 @@
         '#stealthHud .st-ko{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;text-shadow:0 4px 0 rgba(40,30,50,.35);opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
         '#stealthHud .st-bonus{position:absolute;left:24px;top:64px;display:flex;gap:6px;pointer-events:none}#stealthHud .st-bonus i{font:700 13px "Barlow Condensed",sans-serif;font-style:normal;letter-spacing:0.06em;padding:3px 8px 2px;border-radius:999px;background:rgba(255,250,240,0.9);color:#2e7d4c;transition:all .3s}#stealthHud .st-bonus i.off{color:#a49c94;background:rgba(255,250,240,0.55);text-decoration:line-through}#stealthHud .st-bonus i.pop{transform:scale(1.25);color:#d8262e}#stealthHud .st-hp{top:96px!important}' +
         '#stealthHud .st-map{position:absolute;left:20px;bottom:20px;width:150px;height:150px;border-radius:50%;box-shadow:0 0 0 4px rgba(255,250,240,0.9),0 4px 12px rgba(40,30,40,0.25);pointer-events:none}' +
+        '#stealthHud.nh-guide .st-help,#stealthHud.nh-map .st-map,#stealthHud.nh-bonus .st-bonus,#stealthHud.nh-goal .st-obj,#stealthHud.nh-meter .st-stam{display:none!important}' +
         '#stealthHud.sf .st-bonus,#stealthHud.sf .st-map,#stealthHud.sf .st-obj,#stealthHud.sf .st-hp,#stealthHud.sf .st-think,#stealthHud.sf .st-help,#stealthHud.sf .st-safe,#stealthHud.sf .st-stam{display:none!important}' +
         '#stealthHud .st-sf{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;display:none;font-family:"Barlow Condensed",sans-serif}#stealthHud.sf .st-sf{display:block}' +
         '#stealthHud .st-sf .bars{position:absolute;left:3%;right:3%;top:18px;display:flex;align-items:flex-start;gap:14px}' +
@@ -1932,7 +1938,7 @@
         '#stealthHud .st-choice{position:absolute;left:50%;top:52%;transform:translateX(-50%);display:none;text-align:center;background:rgba(42,36,48,0.92);padding:18px 34px 20px;border-radius:14px;color:#fffaf0}#stealthHud .st-choice.on{display:block}' +
         '#stealthHud .st-choice h3{margin:0 0 4px;font:400 26px "Dela Gothic One",sans-serif}#stealthHud .st-choice p{margin:0 0 12px;font:600 19px "Barlow Condensed",sans-serif;opacity:0.85}' +
         '#stealthHud .st-choice button{display:block;width:100%;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:4px 0;cursor:pointer}#stealthHud .st-choice button.sel{color:#f4efe6;border-left:5px solid #d8262e;padding-left:16px}' +
-        '#stealthHud .st-sub{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);width:max-content;max-width:94vw;text-align:center;pointer-events:none;display:none}#stealthHud .st-sub .jp{display:inline-block;font:400 24px "Dela Gothic One",sans-serif;color:#fffaf0;background:rgba(34,30,40,0.72);padding:6px 14px 4px;border-radius:10px;letter-spacing:0.04em}#stealthHud .st-sub .en{display:block;margin-top:6px;font:700 19px "Barlow Condensed",sans-serif;color:#fffaf0;text-shadow:0 2px 0 rgba(0,0,0,0.55)}#stealthHud .st-sub .who{color:#f2cf4a;margin-right:8px}' +
+        '#stealthHud .st-sub{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);width:max-content;max-width:94vw;text-align:center;pointer-events:none;display:none}#stealthHud .st-sub{background:#14101a;padding:10px 26px 12px;border-radius:12px}#stealthHud .st-sub .jp{display:block;font:400 26px "Dela Gothic One",sans-serif;color:#fffaf0;letter-spacing:0.04em}#stealthHud .st-sub .en{display:block;margin-top:6px;font:700 22px "Barlow Condensed",sans-serif;color:#e9e3d8}#stealthHud .st-sub .who{color:#f2cf4a;margin-right:8px}' +
         '#stealthHud .st-hp{position:absolute;left:24px;top:76px;font-size:28px;letter-spacing:4px;color:#cf3a3a;text-shadow:0 2px 0 #fffaf0;display:none}#stealthHud .st-hp.chase{animation:hpPulse .5s ease-in-out infinite alternate}@keyframes hpPulse{to{transform:scale(1.12)}}' +
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
         '#stealthHud .st-think{position:absolute;left:0;top:0;width:max-content;transform:translate(-50%,-100%);background:#fffaf0;border-radius:18px;padding:8px 16px;font-weight:700;font-size:20px;max-width:360px;text-align:center;box-shadow:0 3px 0 rgba(60,50,70,.15);opacity:0;transition:opacity .2s}' +
@@ -1954,7 +1960,7 @@
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
         '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J punch (knocks them out) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
-        '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="fight">14 · Boss: Street Fighter bout</button><button data-j="sumo">15 · Boss: sumo bout</button><button data-j="escape">16 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
+        '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="hud:guide"></button><button data-c="hud:map"></button><button data-c="hud:bonus"></button><button data-c="hud:goal"></button><button data-c="hud:meter"></button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
       this.pops = [];
@@ -1995,8 +2001,13 @@
       this.npcs.forEach((n, i) => { const d = this.qs[i]; if (n.alarm > 0.08 && !this.freeze) { const p = this.project(n.a.x, n.a.y + 2.4, n.a.z); d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.textContent = n.alarm > 0.6 ? '?!' : '?'; d.style.display = ''; d.style.transform = 'translate(-50%,-100%) scale(' + (0.8 + n.alarm * 0.6) + ')'; } else d.style.display = 'none'; });
     }
     markMenu(q, i) { this.el(q).querySelectorAll('button').forEach((b, k) => b.classList.toggle('sel', k === i)); }
-    setPause(on) { this.paused = on; this.el('.st-pause').classList.toggle('on', on); if (on) { this.pauseI = 0; this.markMenu('.st-pause', 0); } }
+    setPause(on) { if (on) this.hudApply(); this.paused = on; this.el('.st-pause').classList.toggle('on', on); if (on) { this.pauseI = 0; this.markMenu('.st-pause', 0); } }
+    hudApply() {
+      const o = this.hudOff || (this.hudOff = (() => { try { return JSON.parse(localStorage.getItem('wmm_hudoff') || '{}'); } catch (e) { return {}; } })()), nm = { guide: 'CONTROLS GUIDE', map: 'MINIMAP', bonus: 'BONUS BADGES', goal: 'GOAL TEXT', meter: 'TIPTOE / BREATH METER' };
+      for (const k in nm) { this.hud.classList.toggle('nh-' + k, !!o[k]); const b = this.el('.st-pause button[data-c="hud:' + k + '"]'); if (b) b.textContent = nm[k] + ': ' + (o[k] ? 'HIDDEN' : 'SHOWN'); }
+    }
     command(c) {
+      if (c.startsWith('hud:')) { const k = c.slice(4); this.hudOff = Object.assign({}, this.hudOff, { [k]: !(this.hudOff || {})[k] }); try { localStorage.setItem('wmm_hudoff', JSON.stringify(this.hudOff)); } catch (e) {} this.hudApply(); return; }
       if (c === 'resume') this.setPause(false);
       else if (c === 'jump') { this.jumpOn = true; this.jumpI = 0; this.el('.st-jump').classList.add('on'); this.markMenu('.st-jump', 0); }
       else if (c === 'cp') { this.setPause(false); if (this.P.stallHide !== undefined) this.stallOut(); this.respawn(); this.grace = 2.5; }
