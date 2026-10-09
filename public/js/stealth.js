@@ -214,7 +214,6 @@
       const ratP = get('ITEM_RAT'); if (ratP) { ratP.visible = false; for (const r of this.rats) { const o = ratP.clone(); o.visible = true; o.position.set(0, 0, 0); r.m.add(o); } }
       const trapP = get('ITEM_TRAP'); if (trapP) { trapP.visible = false; for (const t of this.traps) { const o = trapP.clone(); o.visible = true; o.position.set(0, 0, 0); t.m.add(o); t.mesh = o; } }
       this.stallDoors = LY.stalls.map((q, k) => get('STALLDOOR_' + k)).filter(Boolean);
-      if (proto.BOX) { this.testBox = clone('BOX'); this.testBox.position.set(-1.5, 0, -24.6); this.testBox.rotation.y = 0.3; this.scene.add(this.testBox); this.testBoxAt = { x: -1.5, z: -24.6 }; }   // (a box by the wash area: to try the box out, any time)
       if (proto.BOX) { this.squatBox = clone('BOX'); this.squatBox.visible = false; this.scene.add(this.squatBox); }
       const cartP = get('ITEM_CART'); if (cartP) { cartP.visible = false; for (const c of this.carts) { const o = cartP.clone(); o.visible = true; o.position.set(0, 0, 0); c.m.add(o); c.mesh = o; } }
       this.water = get('WATER'); this.crackM = get('CRACK_WALL'); this.rubble = get('CRACK_RUBBLE'); this.holes = get('LKHOLES');
@@ -1011,7 +1010,7 @@
       // the test box: K next to it puts it on (the story doesn't move); K again (wearing it, away from anything else) puts it back down
       if (this.testBox && !this.wearing && this.testBox.visible && near(this.testBoxAt.x, this.testBoxAt.z, 1.9)) { this.testBox.visible = false; this.wearing = true; this.testWear = true; this.wearBox(); P.st = 'busy'; P.t = 0; P.dur = 0.5; this.think('A box! (just to try it out: K to take it off)', 1.8); return; }
       if (this.testWear && this.wearing && this.stage !== 'box' && this.stage !== 'exit' && !this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.wearing = false; this.testWear = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.boxDown = false; this.testBoxAt = { x: P.x + Math.cos(P.f) * 1.4, z: P.z + Math.sin(P.f) * 1.4 }; this.testBox.position.set(this.testBoxAt.x, P.y, this.testBoxAt.z); this.testBox.visible = true; P.st = 'busy'; P.t = 0; P.dur = 0.4; return; }
-      if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { P.st = 'wear'; P.t = 0; P.dur = 0.9; return; }
+      if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { this.putOnBox(); P.st = 'busy'; P.t = 0; P.dur = 0.35; return; }   // (on at once: no wait)
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
         b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0); if (b.kind === 'can') b.m.children[0].position.y = 0;
         if (b.water && !this.saidWater) { this.saidWater = true; this.think('Full of water... throw it (K) or smash it (hold K): a puddle. Anyone running over it goes flying!', 3); }
@@ -1882,7 +1881,7 @@
         '#stealthHud .st-obj{position:absolute;left:24px;top:20px;background:rgba(255,250,240,.9);padding:8px 14px;border-radius:10px;font-weight:700;font-size:20px;letter-spacing:.02em;max-width:60vw}' +
         '#stealthHud .st-ko{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;text-shadow:0 4px 0 rgba(40,30,50,.35);opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
         '#stealthHud .st-bonus{position:absolute;left:24px;top:64px;display:flex;gap:6px;pointer-events:none}#stealthHud .st-bonus i{font:700 13px "Barlow Condensed",sans-serif;font-style:normal;letter-spacing:0.06em;padding:3px 8px 2px;border-radius:999px;background:rgba(255,250,240,0.9);color:#2e7d4c;transition:all .3s}#stealthHud .st-bonus i.off{color:#a49c94;background:rgba(255,250,240,0.55);text-decoration:line-through}#stealthHud .st-bonus i.pop{transform:scale(1.25);color:#d8262e}#stealthHud .st-hp{top:96px!important}' +
-        '#stealthHud .st-map{position:absolute;right:24px;bottom:96px;width:150px;height:150px;border-radius:50%;box-shadow:0 0 0 4px rgba(255,250,240,0.9),0 4px 12px rgba(40,30,40,0.25);pointer-events:none}' +
+        '#stealthHud .st-map{position:absolute;right:20px;bottom:20px;width:150px;height:150px;border-radius:50%;box-shadow:0 0 0 4px rgba(255,250,240,0.9),0 4px 12px rgba(40,30,40,0.25);pointer-events:none}' +
         '#stealthHud.sf .st-bonus,#stealthHud.sf .st-map,#stealthHud.sf .st-obj,#stealthHud.sf .st-hp,#stealthHud.sf .st-think,#stealthHud.sf .st-help,#stealthHud.sf .st-safe,#stealthHud.sf .st-stam{display:none!important}' +
         '#stealthHud .st-sf{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;display:none;font-family:"Barlow Condensed",sans-serif}#stealthHud.sf .st-sf{display:block}' +
         '#stealthHud .st-sf .bars{position:absolute;left:3%;right:3%;top:18px;display:flex;align-items:flex-start;gap:14px}' +
@@ -1911,7 +1910,7 @@
         '#stealthHud .st-wake{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);display:none;font:400 26px "Dela Gothic One",sans-serif;color:#2f2a38;background:rgba(255,250,240,.85);padding:8px 22px;border-radius:14px;animation:stw 1.6s ease-in-out infinite}' +
         '@keyframes stw{0%,100%{opacity:.55}50%{opacity:1}}' +
         '#stealthHud .st-oni{position:absolute;right:24px;top:64px;background:#fffaf0;color:#3a3440;padding:6px 14px;border-radius:12px;font:400 24px "Dela Gothic One",sans-serif;display:none}' +
-        '#stealthHud .st-help{position:absolute;left:24px;bottom:18px;font-size:16px;opacity:.8;background:rgba(255,250,240,.75);padding:4px 10px;border-radius:8px}' +
+        '#stealthHud .st-help{position:absolute;left:24px;right:200px;bottom:18px;font-size:16px;opacity:.8;background:rgba(255,250,240,.75);padding:4px 10px;border-radius:8px}' +
         '#stealthHud .st-pause,#stealthHud .st-over{position:absolute;left:0;top:0;bottom:0;width:min(520px,92vw);display:none;pointer-events:auto;background:linear-gradient(90deg,rgba(30,24,36,.92),rgba(30,24,36,.6) 80%,transparent);padding:80px 60px;color:#f4efe6}' +
         '#stealthHud .st-over{left:auto;right:0;text-align:right;background:linear-gradient(270deg,rgba(30,24,36,.92),rgba(30,24,36,.6) 80%,transparent)}#stealthHud .st-over button{margin-left:auto}' +
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
