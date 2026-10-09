@@ -1165,8 +1165,8 @@
     bossAsk(n) {
       const B = this.boss; B.hold = false; if (this.mawM) this.mawM.visible = false;   // (the mawashi's tucked in his belt: the fight's for it)
       const q = n === 0 ? [{ who: '親方', jp: '…その前に。稽古をつけてやろうか?', en: '...Before that. Shall I put you through some training?', t: 3.2 }]
-        : [{ who: '親方', jp: '…ふむ。必要になると思うがな。', en: 'Hm. I think you\'ll need it.', t: 2.8 }, { who: '親方', jp: 'では、このわしが直々に教えてやろう。…どうだ?', en: 'Then I\'ll teach you myself. The champion in person. ...Well?', t: 3.4 }];
-      this.say(q, () => this.choice(n === 0 ? '稽古?' : '直々に教えよう', n === 0 ? 'TRAINING?' : 'LET ME TEACH YOU', ['YES: learn to play', 'NO: just fight'], (i) => {
+        : [{ who: '親方', jp: '…ふむ。', en: 'Hm.', t: 2.8 }, { who: '親方', jp: '本当に、稽古はいらないのか?', en: 'Are you sure you don\'t want the training?', t: 3.0 }];
+      this.say(q, () => this.choice('稽古?', 'TRAINING?', ['YES: learn to play', 'NO: just fight'], (i) => {
         if (i === 0) { this.say([{ who: '親方', jp: 'よし。ついてこい。', en: 'Good. Follow me.', t: 1.8 }], () => this.g.startBossTraining(this)); }
         else if (n === 0) this.bossAsk(1);
         else this.say([{ who: '親方', jp: '…よかろう。相撲で勝負だ!', en: '...Very well. Let\'s settle it in the ring!', t: 2.8 }], () => this.g.startBossBout(this));
