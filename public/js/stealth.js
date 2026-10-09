@@ -999,7 +999,7 @@
         this.think('PAPER! ...now, back to that stall. Quickly.', 2.2); this.objective('Back to the TOILET stall (with the paper)'); return;
       }
       if (this.stage === 'towel' && near(LY.towel.x, LY.towel.z, 1.8)) {
-        P.st = 'busy'; P.t = 0; P.dur = 1.0; this.stage = 'storage'; this.spTowel.visible = false; P.f = -Math.PI / 2;
+        P.st = 'busy'; P.t = 0; P.dur = 1.0; this.stage = 'storage'; this.spTowel.visible = false; if (!this.crackDone) this.spCrack.visible = true; P.f = -Math.PI / 2;   // (the way up is under the box heap: its ring and arrow come on now)
         this.think('A towel! ...it wouldn\'t even cover one cheek.', 2.6);
         this.later(2.8, () => { if (this.stage === 'storage') { this.think('Hand towels. ALL of them. ...The STORAGE room, upstairs behind the front desk. Up the back stairs!', 3.6); this.objective('Get UPSTAIRS (the back stairs, past the boxes), into STORAGE behind the FRONT DESK'); } });
         return;
