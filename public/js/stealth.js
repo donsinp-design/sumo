@@ -1560,7 +1560,7 @@
         else if (P.hidden) L = [['move / I', 'climb out'], ['hold I + direction', 'climb out silently']];
         else if (P.cart) L = [['K', 'let go'], ['I', 'hop inside and hide']];
         else if (P.held) L = P.held.kind === 'can' && P.held.soda ? [['J', 'drink it'], ['K', 'throw'], ['hold K', 'smash (loud)']] : [['K', 'throw'], ['hold K', 'smash (loud)'], ['J', 'put it down']];
-        else if (this.wearing) L = [['hold I', 'squat in the box and hide']];
+        else if (this.wearing) L = [['hold I (standing still)', 'squat in the box and hide'], ['hold I + move', 'tiptoe quietly']];
         else if (V && !V.broke && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) L = [['J', 'thump the machine (a drink may fall out)'], ['K', 'look']];
         else if (this.stage === 'locker' && near(this.locker.x, this.locker.z, 2.6)) L = [['K', 'open your locker']];
         else if (this.stage === 'box' && this.boxSpot && near(this.boxSpot.x, this.boxSpot.z, 2.6)) L = [['K', 'put on the box']];
@@ -1778,7 +1778,7 @@
     }
     putOnBox() {
       this.wearing = true; this.pantsBox.visible = false; this.spBox.visible = false; this.spExit.visible = true; this.wearBox();
-      this.tip(['HOLD I: HIDE IN THE BOX', 'Squat down inside it and nobody can see you.', 'A walking box is still a little suspicious. Hide when nobody is looking.']);
+      this.tip(['HOLD I: HIDE IN THE BOX', 'Stand still and hold I to squat down inside it. Nobody can see you.', '#HOLD I AND MOVE: TIPTOE', 'Tiptoeing in the box is silent, but it tires you out. Walking normally makes noise.', 'A walking box is still a little suspicious. Hide when nobody is looking.']);
       this.stage = 'exit'; this.cp = CP.store;
       this.think('Perfect fit. Now, out the FRONT DOOR... without anyone seeing a walking box. (Hold I to squat inside it)', 3.6);
       this.objective('Out through the FRONT DOOR (the entrance, past the shoe lockers). Unseen: hold I to squat in the box');
