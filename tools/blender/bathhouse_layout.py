@@ -57,6 +57,7 @@ for x0, x1, z0, z1 in [(-6, -2, -34.2, -33.6), (5, 9, -39.4, -38.8), (-9, -5, -3
     solid('bench', x0, x1, z0, z1, 0.45, tall=False)
 solid('vanity', 11.2, 12, -46.6, -42.4, 0.85, tall=False)          # mirrors and hair dryers on the east wall
 solid('baskets', -12, -11.3, -35.5, -32.0, 1.4)                    # rattan basket shelves
+solid('vending', 11.0, 12, -40.3, -38.7, 1.9)                     # a drinks machine on the east wall (no coins on him: thump it)
 # his: number 8, top row, at the far end of the bank at z -41 (deep in the room: it takes three charges to burst open)
 LOCKER = dict(x=-12 + 2.5 * 8 / 13, z=-40.25, face=-40.98, bank=4, bx0=-12, bz0=-41.7)
 wall(-12, -11.6, -47.2, -46.8); wall(-8.4, 12, -47.2, -46.8); door(-11.6, -8.4, -47)   # the staff door

@@ -1026,6 +1026,10 @@ def build_items():
     m.lathe([(0.0, 0.0), (0.22, 0.0), (0.24, 0.02), (0.3, 0.42), (0.27, 0.42), (0.21, 0.05), (0.0, 0.05)], 'teal', seg=16)
     m.gcyl(0, 0, 0.3, 0.29, 0.04, 'chrome', seg=16)
     obj_from(m, 'ITEM_BUCKET', 'ENV_PROTO')
+    for ci, col in enumerate(['blue', 'orange', 'teal']):   # drinks cans from the machine (stand 0.17 tall)
+        m = GB(); m.gcyl(0, 0, 0.0, 0.055, 0.02, 'chrome', seg=12); m.gcyl(0, 0, 0.02, 0.058, 0.13, col, seg=12)
+        m.gcyl(0, 0, 0.065, 0.059, 0.03, 'offwhite', seg=12); m.gcyl(0, 0, 0.15, 0.055, 0.02, 'chrome', seg=12)
+        obj_from(m, 'ITEM_CAN%d' % ci, 'ENV_PROTO')
     m = GB()   # his yellow plastic wash bucket, a towel folded over the rim
     m.lathe([(0.0, 0.0), (0.2, 0.0), (0.22, 0.02), (0.3, 0.34), (0.27, 0.34), (0.19, 0.05), (0.0, 0.05)], 'yellow', seg=18)
     m.gbox(-0.25, 0.25, -0.1, 0.1, 0.33, 0.38, 'towel', bev=0.02)

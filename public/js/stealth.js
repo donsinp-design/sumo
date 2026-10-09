@@ -115,7 +115,7 @@
       add(0, 8.6, -85.8, -85.2, false); add(4.45, 5.15, -87.25, -86.55, false); add(5.95, 6.85, -91.85, -90.95, false); add(10.6, 11.4, -87.4, -86.6, false);
       const C = LY.crack; this.crackW = add(C.x0, C.x1, C.z0, C.z1, true); this.crack = { x: C.x, z: C.z };
       this.blockerB = LY.blockers.map((b) => { const o = { x: b.x, z: b.z, r: b.r }; this.blockers.push(o); return o; });
-      for (const q of LY.puddles) this.puddles.push({ x: q.x, z: q.z, rx: q.rx, rz: q.rz });
+      for (const q of LY.puddles) this.puddles.push({ x: q.x, z: q.z, rx: q.rx, rz: q.rz, y: q.f ? UP : 0 });
       this.locker = { x: LY.locker.x, z: LY.locker.z };
       this.washSpot = { x: LY.washb.x, z: LY.washb.z }; this.boxSpot = { x: LY.box.x, z: LY.box.z };
       // things he can pick up and throw (the kit's prototypes are cloned in when it arrives)
@@ -187,9 +187,10 @@
     dress(root) {
       this.kit = root; this.scene.add(root);
       const get = (n) => root.getObjectByName(n), proto = {};
-      for (const n of ['ITEM_STOOL', 'ITEM_OKE', 'ITEM_BUCKET', 'ITEM_WASHB', 'BOX', 'CLOTH_SHIRT', 'CLOTH_SHORTS']) { const o = get(n); if (o) { o.visible = false; proto[n] = o; } }
+      for (const n of ['ITEM_STOOL', 'ITEM_OKE', 'ITEM_BUCKET', 'ITEM_WASHB', 'BOX', 'CLOTH_SHIRT', 'CLOTH_SHORTS', 'ITEM_CAN0', 'ITEM_CAN1', 'ITEM_CAN2']) { const o = get(n); if (o) { o.visible = false; proto[n] = o; } }
       this.proto = proto;
       const clone = (n) => { const o = proto[n].clone(); o.visible = true; o.position.set(0, 0, 0); o.rotation.set(0, 0, 0); o.traverse((q) => { if (q.isMesh) q.castShadow = true; }); return o; };
+      this.cloneP = (n) => proto[n] ? clone(n) : null;
       for (const b of this.buckets) if (proto['ITEM_' + b.kind.toUpperCase()]) { const o = clone('ITEM_' + b.kind.toUpperCase()); b.m.add(o);
         if (b.kind === 'oke' && !b.base) {   // the wash tubs in the wash area are full of water (thrown or smashed: a puddle)
           const bb = new THREE.Box3().setFromObject(o), sz = bb.getSize(new THREE.Vector3()), r = Math.min(sz.x, sz.z) * 0.42;
@@ -211,7 +212,9 @@
       this.lkDoors = [0, 1, 2, 3, 4].map((k) => get('LKDOOR_' + k)).filter(Boolean);
       // everything but the walls breaks under a charge (his own locker only dents: see the charge)
       const pad = (i) => String(i).padStart(2, '0'); this.breakables = [];
-      LY.solids.forEach((sd, i) => { if (!sd.brk) return;
+      const vi = LY.solids.findIndex((q) => q.k === 'vending' && !q.f);
+      if (vi >= 0) { const q = LY.solids[vi], o = get('SOLID_' + pad(vi) + '_0'); this.vend = { o, x0: q.x0, x1: q.x1, z0: q.z0, z1: q.z1, z: (q.z0 + q.z1) / 2, hits: 0, broke: false, shake: 0, cd: 0 }; }
+      LY.solids.forEach((sd, i) => { if (!sd.brk || i === vi) return;
         for (let k = 0; k < sd.n; k++) { const o = get('SOLID_' + pad(i) + '_' + k), w = this.solidW[i][k]; if (!o) continue;
           this.breakables.push({ o, w, s: { k: sd.k, x0: w.x0, x1: w.x1, z0: w.z0, z1: w.z1, h: sd.h, f: sd.f } }); } });
       LY.blockers.forEach((b, i) => { const o = get('PLANT_' + pad(i)); if (o) this.breakables.push({ o, bl: this.blockerB[i], s: { k: 'plant', x0: b.x - b.r * 0.6, x1: b.x + b.r * 0.6, z0: b.z - b.r * 0.6, z1: b.z + b.r * 0.6, h: 1.4 * (b.s || 1), f: b.f } }); });
@@ -647,6 +650,8 @@
         const dx = n.a.x - P.x, dz = n.a.z - P.z, d = Math.hypot(dx, dz);
         if (d < P.r + 0.55 && (dx * Math.cos(P.f) + dz * Math.sin(P.f)) / (d || 1) > 0.2) this.knockOut(n, Math.cos(P.f), Math.sin(P.f), ['ドーン!', 'ドスン!'][(this.t * 3 | 0) % 2], 4.5);
       }
+      if (this.vend) { const V = this.vend; V.cd = Math.max(0, V.cd - dt);
+        if (power && !V.broke && !V.cd && P.y < 1 && P.x > V.x0 - P.r - 0.2 && P.z > V.z0 - 0.3 && P.z < V.z1 + 0.3) { V.cd = 0.6; this.hitVend(); P.t = P.dur + 0.01; P.vx *= -0.3; P.vz *= -0.3; } }
       P.brkCd = Math.max(0, (P.brkCd || 0) - dt); this.runupCd = Math.max(0, (this.runupCd || 0) - dt);
       if (P.st === 'charge' && !power && this.breakables && !this.runupCd && this.breakables.some((B) => !B.done && Math.abs((B.s.f ? UP : 0) - P.y) < 1.2 && Math.hypot(P.x - clamp(P.x, B.s.x0, B.s.x1), P.z - clamp(P.z, B.s.z0, B.s.z1)) < P.r + 0.15)) {
         this.runupCd = 8; this.think('Too close... I need a RUN-UP to smash through that!', 2); }   // (from right up against it he only bumps it)
@@ -739,6 +744,7 @@
       }
       // J: a slap. Rats go flying; things get knocked about; hitting a person is NOT allowed
       if (c.push.pressed && P.st === 'free' && !P.held && !P.cart) this.slap();
+      else if (c.push.pressed && P.st === 'free' && P.held && P.held.kind === 'can') this.drink();
       // K: use (locker, wash bucket, pick up / throw, put on the box)
       // (holding something: tap K to throw it, hold K to smash it down at your feet)
       if (c.grab.pressed && P.st === 'free') { if (P.held) this.kArm = true; else this.use(); }
@@ -756,11 +762,12 @@
             if (b.water) { b.water = false; this.spill(hit.a.x, hit.a.z, hit.a.y); }
             this.knockOut(hit, fx / fl, fz / fl, ['ゴンッ!', 'ガツン!', 'ボコッ!'][(this.t * 5 | 0) % 3], 1.2);
             b.tx = b.x + fx / fl * 0.5; b.tz = b.z + fz / fl * 0.5; b.ty = floorY(b.tx, b.tz); b.sx = b.x; b.sz = b.z; b.sy = b.y; b.t = 0; b.dur = 0.25; b.arc = 0.15; } }
-        if (k >= 1) { b.state = 'floor'; b.arc = undefined; if (b.water) { b.water = false; if (!b.wet) this.spill(b.tx, b.tz, b.ty); }
+        if (k >= 1) { b.state = 'floor'; b.arc = undefined; if (b.water) { b.water = false; if (!b.wet) this.spill(b.tx, b.tz, b.ty); } if (b.soda) { b.soda = false; if (!b.wet) this.spill(b.tx, b.tz, b.ty, 'soda'); }
           const pud = this.puddles.some((q) => ((b.x - q.x) / q.rx) ** 2 + ((b.z - q.z) / q.rz) ** 2 < 1.4);
           if (b.wet) { this.fx.water && (this.fx.water(b.x, b.z, 2.4, POOL.water), this.fx.water(b.x + 0.2, b.z - 0.1, 1.4, POOL.water)); b.m.rotation.set(0.3, 0.4, 0.2); b.m.position.y = b.ty; }
-          else { if (pud && this.fx.water) this.fx.water(b.x, b.z, 1.4, b.ty); b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + 0.3; } if (!SAFE[roomAt(b.x, b.z)]) this.noise(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think(b.wet ? '*SPLOOSH*' : '*CLATTER*', 1); }
+          else { if (pud && this.fx.water) this.fx.water(b.x, b.z, 1.4, b.ty); b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + (b.kind === 'can' ? 0.1 : 0.3); if (b.kind === 'can') b.m.children[0].position.y = -0.085; } if (!SAFE[roomAt(b.x, b.z)]) this.noise(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think(b.wet ? '*SPLOOSH*' : '*CLATTER*', 1); }
       }
+      this.canStep(dt); this.printStep(dt);
       for (const f of this.flying) {
         if (f.t >= f.dur) continue; f.t = Math.min(f.dur, f.t + dt); const k = f.t / f.dur;
         f.m.position.set(f.sx + (f.tx - f.sx) * k, f.sy + (f.ty - f.sy) * k + Math.sin(Math.PI * k) * f.h, f.sz + (f.tz - f.sz) * k);
@@ -772,6 +779,12 @@
       for (const n of this.npcs) {
         this.npcStep(n, dt);
         if (n.mode === 'chase') continue;   // (on his tail: see npcStep)
+        // big wet footprints across the floor: whoever spots a fresh trail follows it to see where it goes
+        if (this.prints && this.prints.length && n.mode === 'route' && n.a.st === 'free' && !n.busy && !n.ko && (n.fpT = (n.fpT || 0) - dt) <= 0) { n.fpT = 0.4; n.trails = n.trails || new Set();
+          const f = this.prints.find((q) => q.t < 26 && !n.trails.has(q.trail) && Math.abs(q.y - n.a.y) < 1 && Math.hypot(q.x - n.a.x, q.z - n.a.z) < 6.5 && this.sees(n, q.x, q.z, 6.5));
+          if (f) { n.trails.add(f.trail); const tr = this.prints.filter((q) => q.trail === f.trail && q.i >= f.i).sort((u, v) => u.i - v.i), last = tr[tr.length - 1];
+            this.goTo(n, f.x, f.z); n.path = n.path.concat(tr.slice(1).map((q) => [q.x, q.z])); n.mode = 'goto'; n.inv = true; n.noiseAt = [last.x + (last.x - f.x) * 0.2, last.z + (last.z - f.z) * 0.2];
+            this.popAt(n.a, ['…足跡?', 'なんだこの足跡…', 'でかい足…!?'][(this.t * 3 | 0) % 3], 1.4); } }
         if ((SAFE[pr] && !n.raid) || this.grace > 0 || n.a.st !== 'free' || n.busy || P.hidden || P.boxHide || P.inStall || P.sub) { n.alarm = Math.max(0, n.alarm - dt); continue; }
         const range = this.range(n), d = Math.hypot(P.x - n.a.x, P.z - n.a.z), same = roomAt(n.a.x, n.a.z) === pr;
         // right next to someone they hear you, whichever way they face; on tiptoe you can get much closer
@@ -948,10 +961,13 @@
       if (this.testWear && this.wearing && this.stage !== 'box' && this.stage !== 'exit') { this.wearing = false; this.testWear = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.boxDown = false; this.testBoxAt = { x: P.x + Math.cos(P.f) * 1.4, z: P.z + Math.sin(P.f) * 1.4 }; this.testBox.position.set(this.testBoxAt.x, P.y, this.testBoxAt.z); this.testBox.visible = true; P.st = 'busy'; P.t = 0; P.dur = 0.4; return; }
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { P.st = 'wear'; P.t = 0; P.dur = 0.9; return; }
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
-        b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0);
-        if (!this.saidItem) { this.saidItem = true; this.think('If I throw this (K), whoever hears it will go and look...', 2.4); }
+        b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0); if (b.kind === 'can') b.m.children[0].position.y = 0;
+        if (b.kind === 'can') { if (!this.saidCan) { this.saidCan = true; this.think(b.soda ? 'A cold one! (J drink it · K throw · hold K smash)' : 'Empty. Still... (K throw · hold K smash)', 2.6); } }
+        else if (!this.saidItem) { this.saidItem = true; this.think('If I throw this (K), whoever hears it will go and look...', 2.4); }
         return;
       }
+      const V = this.vend; if (V && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.0 && Math.abs(P.z - V.z) < 1.3) {
+        this.think(V.broke ? 'It\'s had it.' : ['No money. Not ONE yen... I\'m naked. (J: give it a thump?)', 'Still no coins. Maybe a good THUMP... (J)'][this.vendAsk = ((this.vendAsk || 0) + 1) % 2], 2.6); return; }
     }
     leaveBath() {
       this.outOfBath = true; this.spOut.visible = false; this.mosaic.pop = 0.5;
@@ -965,6 +981,7 @@
     slap() {
       const P = this.P, fx = Math.cos(P.f), fz = Math.sin(P.f); P.st = 'busy'; P.t = 0; P.dur = 0.35; this.w.hand = 1;
       const inFront = (x, z, r) => { const dx = x - P.x, dz = z - P.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.3; };
+      const V = this.vend; if (V && !V.broke && P.y < 1 && inFront(V.x0 - 0.1, clamp(P.z, V.z0, V.z1), 1.5)) { this.hitVend(); return; }
       for (const n of this.npcs) if (n.a.st === 'free' && Math.abs(n.a.y - P.y) < 1 && inFront(n.a.x, n.a.z, 1.7)) {
         // J: a slap that knocks them out cold. Out for ten seconds, or until someone comes and shakes them awake.
         // The thud is heard: anyone near comes running to look
@@ -993,18 +1010,98 @@
         const a = Math.random() * 6.28, r = 0.4 + Math.random() * 1.0, tx = x + Math.cos(a) * r, tz = z + Math.sin(a) * r;
         this.flying.push({ m, sx: x, sy: y + 0.3, sz: z, tx, ty: floorY(tx, tz) + 0.02, tz, h: 0.25 + Math.random() * 0.4, t: 0, dur: 0.3 + Math.random() * 0.25, r0: [0, 0, 0], r1: [Math.random() * 8, Math.random() * 8, Math.random() * 8] }); }
       if (b.water && !inPool(x, z)) { b.water = false; this.spill(x, z, y); }
+      if (b.soda && !inPool(x, z)) { b.soda = false; this.spill(x, z, y, 'soda'); }
       this.think(['*CRASH!*', '*SMASH!*', '*KRAKK!*'][(this.t * 3 | 0) % 3], 1);
       if (!SAFE[roomAt(x, z)]) this.noise(x, z, 14, '?!'); else this.ringAt(x, z, 2, 0.5);
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(9);
     }
     // the water in a tub shows only while it's carried upright / standing; a spill leaves a puddle that staff can slip on
     waterOff(b) { if (b.waterM) b.waterM.visible = false; }
-    spill(x, z, y) {
-      if (this.fx.water) { this.fx.water(x, z, 2.2, y + 0.05); this.fx.water(x + 0.25, z - 0.15, 1.4, y + 0.05); }
-      const rx = 0.75 + Math.random() * 0.2, rz = 0.5 + Math.random() * 0.15;
-      const m = new THREE.Mesh(new THREE.CircleGeometry(1, 24), new THREE.MeshBasicMaterial({ color: 0x8cc6ec, transparent: true, opacity: 0.75, depthWrite: false }));
-      m.rotation.set(-Math.PI / 2, 0, Math.random() * 3); m.scale.set(rx, rz, 1); m.position.set(x, floorY(x, z) + 0.012, z); m.userData.flatDone = true; m.renderOrder = 1; this.G.add(m);
-      this.puddles.push({ x, z, rx, rz, m });
+    // a puddle the way the kit draws them: an irregular blob, pale water (or fizzy orange), a little glint on it
+    spill(x, z, y, kind) {
+      const soda = kind === 'soda', fy = floorY(x, z);
+      if (this.fx.water) { this.fx.water(x, z, 2.2, fy + 0.05); this.fx.water(x + 0.25, z - 0.15, 1.4, fy + 0.05); }
+      const rx = (soda ? 0.6 : 0.75) + Math.random() * 0.2, rz = (soda ? 0.42 : 0.5) + Math.random() * 0.15, sh = new THREE.Shape(), N = 14, ph = Math.random() * 6;
+      const rr = [...Array(N)].map((_, k) => 0.82 + 0.18 * Math.sin(k * 2.3 + ph) + 0.08 * Math.sin(k * 5.1 + ph * 2));
+      for (let k = 0; k <= N; k++) { const a = k / N * Math.PI * 2, r = rr[k % N]; k ? sh.lineTo(Math.cos(a) * r * rx, Math.sin(a) * r * rz) : sh.moveTo(Math.cos(a) * r * rx, Math.sin(a) * r * rz); }
+      const g = new THREE.Group(); g.position.set(x, fy + 0.01, z); g.rotation.y = Math.random() * 3; this.G.add(g);
+      const m = new THREE.Mesh(new THREE.ShapeGeometry(sh, 2), S.Flat ? S.Flat.mat(soda ? 0xe8b866 : 0xcfe6f5) : new THREE.MeshLambertMaterial({ color: soda ? 0xe8b866 : 0xcfe6f5 }));
+      m.rotation.x = -Math.PI / 2; m.userData.flatDone = true; m.receiveShadow = true; g.add(m);
+      const gl = new THREE.Mesh(new THREE.PlaneGeometry(rx * 0.55, rz * 0.12), S.Flat ? S.Flat.mat(0xfaf8f2) : new THREE.MeshBasicMaterial({ color: 0xfaf8f2 }));
+      gl.rotation.x = -Math.PI / 2; gl.position.set(-rx * 0.1, 0.004, -rz * 0.25); gl.userData.flatDone = true; g.add(gl);
+      this.puddles.push({ x, z, rx, rz, y: fy, m: g, soda });
+    }
+    // ---- the drinks machine: no coins on him, but a good thump drops a can; the third wrecks it
+    hitVend() {
+      const V = this.vend, P = this.P; if (!V || V.broke) return; V.hits++; V.shake = 0.45; this.flash = 0.15;
+      const fx = V.x0 - 0.25, nz = () => V.z + (Math.random() - 0.5) * 0.4;
+      if (this.g.audio && this.g.audio.thump) this.g.audio.thump(7); this.noise(V.x0 - 0.5, V.z, 11, '?!');
+      if (V.hits < 3) { this.makeCan(fx, 0.35, nz(), -1.6 - Math.random() * 0.8, (Math.random() - 0.5) * 1.2);
+        this.think(V.hits === 1 ? '*THUNK* ...oh! A free one!' : '*KA-CHUNK* Another! One more thump...', 2); return; }
+      V.broke = true; this.think('*KRRRASH!!* ...oops.', 2); this.noise(V.x0 - 0.5, V.z, 16, '?!'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(10);
+      // it pitches forward onto its face a little, the front glass bursts, and out comes everything
+      if (V.o) { const piv = new THREE.Group(); piv.position.set(V.x0, 0, V.z); this.scene.add(piv); piv.attach(V.o); V.piv = piv; V.tilt = 0; }
+      if (S.Flat) for (let k = 0; k < 8; k++) { const sh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.02, 0.12), S.Flat.mat(k % 3 ? 0xc4dde8 : 0xf2ede4)); sh.userData.flatDone = true; this.G.add(sh);
+        const a = Math.PI + (Math.random() - 0.5) * 2.2, r = 0.6 + Math.random() * 1.4, tx = V.x0 + Math.cos(a) * r, tz = V.z + Math.sin(a) * r;
+        this.flying.push({ m: sh, sx: V.x0, sy: 1.3, sz: V.z + (Math.random() - 0.5) * 0.8, tx, ty: 0.012, tz, h: 0.4, t: 0, dur: 0.4 + Math.random() * 0.3, r0: [0, 0, 0], r1: [Math.random() * 6, Math.random() * 6, 0] }); }
+      for (let k = 0; k < 10; k++) { const a = Math.PI + (k / 9 - 0.5) * 2.4, sp = 1.8 + Math.random() * 2.2;
+        const c = this.makeCan(V.x0 - 0.2, 0.3 + Math.random() * 0.9, V.z + (Math.random() - 0.5) * 0.8, Math.cos(a) * sp, Math.sin(a) * sp);
+        if (k === 4 && c) { c.state = 'jet'; c.jetT = 3.4; c.jetA = a; c.soda = false; } }   // one's split: it hisses and rockets about, spraying
+    }
+    makeCan(x, y, z, vx, vz) {
+      const ci = (this.canN = (this.canN || 0) + 1) % 3, o = this.cloneP && this.cloneP('ITEM_CAN' + ci); if (!o) return null;
+      const m = new THREE.Group(); m.add(o); m.position.set(x, y, z); m.scale.setScalar(1.7); this.G.add(m);   // (sumo-sized: big enough to read)
+      const b = { m, kind: 'can', x, z, y: 0, state: 'roll', x0: x, z0: z, base: 0, soda: true, vx, vz, vy: 0.5, roll: 0, yaw: Math.atan2(vz, vx) + Math.PI / 2 };
+      this.buckets.push(b); return b;
+    }
+    canStep(dt) {
+      const V = this.vend;
+      if (V) { if (V.shake > 0) { V.shake -= dt; if (V.o && !V.piv) V.o.position.x = Math.sin(V.shake * 70) * 0.03 * V.shake / 0.45; }
+        if (V.piv && V.tilt < 0.2) { V.tilt = Math.min(0.2, V.tilt + dt * 1.6); V.piv.rotation.z = V.tilt; } }
+      const qY = this._qY || (this._qY = new THREE.Quaternion()), qL = this._qL || (this._qL = new THREE.Quaternion()), qR = this._qR || (this._qR = new THREE.Quaternion()), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
+      for (const b of this.buckets) if (b.kind === 'can' && (b.state === 'roll' || b.state === 'jet')) {
+        const p = b.m.position;
+        if (b.state === 'jet') {   // the split can: hissing, spinning, shooting about the floor, spraying as it goes
+          b.jetT -= dt; b.jetA += (Math.sin(this.t * 7 + b.x0) * 4 + (Math.random() - 0.5) * 6) * dt; const sp = 4.2 * Math.min(1, b.jetT);
+          b.vx = Math.cos(b.jetA) * sp; b.vz = Math.sin(b.jetA) * sp; b.yaw += dt * 22;
+          if ((b.sprayT = (b.sprayT || 0) - dt) <= 0) { b.sprayT = 0.09; if (this.fx.water) this.fx.water(p.x, p.z, 0.7, 0.15); }
+          if ((b.dripT = (b.dripT || 0) - dt) <= 0) { b.dripT = 1.1; this.spill(p.x, p.z, 0, 'soda'); }
+          if (b.jetT <= 0) { b.state = 'roll'; b.vx *= 0.3; b.vz *= 0.3; }
+        }
+        b.vy -= 9 * dt; p.y = Math.max(0.1, p.y + b.vy * dt); if (p.y <= 0.1) { b.vy = Math.abs(b.vy) > 1 ? -b.vy * 0.3 : 0; }
+        const ox = p.x, oz = p.z, q = { x: p.x + b.vx * dt, z: p.z + b.vz * dt }; this.collide(q, 0.1);
+        const ex = q.x - (p.x + b.vx * dt), ez = q.z - (p.z + b.vz * dt), el = Math.hypot(ex, ez);
+        if (el > 1e-4) { const nx = ex / el, nz = ez / el, d = b.vx * nx + b.vz * nz; if (d < 0) { b.vx -= 1.6 * d * nx; b.vz -= 1.6 * d * nz; if (b.state === 'jet') b.jetA = Math.atan2(b.vz, b.vx); } }
+        p.x = q.x; p.z = q.z; if (b.state !== 'jet') { const f = Math.max(0, 1 - dt * 1.1); b.vx *= f; b.vz *= f; }
+        const spd = Math.hypot(b.vx, b.vz); if (b.state !== 'jet' && spd > 0.2) b.yaw = Math.atan2(b.vz, b.vx) + Math.PI / 2;
+        b.roll += Math.hypot(p.x - ox, p.z - oz) / 0.1;
+        // lying on its side, rolling about its own axis (across the way it's going)
+        qY.setFromAxisAngle(Y, -b.yaw); qL.setFromAxisAngle(Z, Math.PI / 2); qR.setFromAxisAngle(Y, b.roll); b.m.quaternion.copy(qY).multiply(qL).multiply(qR);
+        b.m.children[0].position.y = -0.085;
+        if (b.state === 'roll' && spd < 0.15 && p.y <= 0.101) { b.state = 'floor'; b.vx = b.vz = 0; b.x = p.x; b.z = p.z; }
+      }
+    }
+    drink() {
+      const P = this.P, b = P.held; if (!b) return;
+      if (!b.soda) { this.think('Empty.', 1); return; }
+      P.held = null; b.state = 'gone'; b.m.visible = false; P.st = 'busy'; P.t = 0; P.dur = 1.1; this.w.hand = 1;
+      this.hits = Math.max(0, (this.hits || 0) - 1); P.stam = 1; P.tired = false;
+      this.think((this.hits ? '*glug glug glug* Ahhh... that\'s better. ♥' : '*glug glug glug* AHHH. Good as new! ♥'), 2);
+    }
+    // ---- wet feet: out of a puddle he leaves a trail of big footprints for a few steps (staff who spot it follow it)
+    printStep(dt) {
+      const P = this.P; if (!this.prints) { this.prints = []; this.trailN = 0; }
+      for (let k = this.prints.length - 1; k >= 0; k--) { const f = this.prints[k]; f.t += dt; if (f.t > 30) { this.G.remove(f.m); this.prints.splice(k, 1); } else if (f.t > 24) f.m.material.opacity = f.o * (30 - f.t) / 6; }
+      if (P.hidden || P.boxHide || P.sub || P.st === 'busy' && !this.wetF) return;
+      const onP = !P.hidden && this.puddles.find((q) => Math.abs((q.y !== undefined ? q.y : (q.f ? UP : 0)) - P.y) < 0.6 && ((P.x - q.x) / q.rx) ** 2 + ((P.z - q.z) / q.rz) ** 2 < 1.1);
+      if (onP) { if (!this.wetF || this.wetF.n < 5 || this.wetF.from !== onP) this.wetF = { n: 5, trail: ++this.trailN, i: 0, acc: 0, side: 1, soda: !!onP.soda, from: onP }; this.wetF.lx = P.x; this.wetF.lz = P.z; return; }
+      const W = this.wetF; if (!W || W.n <= 0) return;
+      W.acc += Math.hypot(P.x - W.lx, P.z - W.lz); W.lx = P.x; W.lz = P.z; if (W.acc < (P.tip > 0.5 ? 0.45 : 0.62)) return; W.acc = 0;
+      const sx = -Math.sin(P.f) * 0.2 * W.side, sz = Math.cos(P.f) * 0.2 * W.side, x = P.x + sx, z = P.z + sz, o = 0.25 + 0.5 * W.n / 5;
+      if (!this.footGeo) { this.footGeo = new THREE.CircleGeometry(1, 12); }
+      const m = new THREE.Mesh(this.footGeo, new THREE.MeshBasicMaterial({ color: W.soda ? 0xd9a250 : 0x9cc6e8, transparent: true, opacity: o, depthWrite: false }));
+      m.rotation.set(-Math.PI / 2, 0, -P.f); m.scale.set(0.2, 0.12, 1); m.position.set(x, floorY(x, z) + 0.014, z); m.userData.flatDone = true; m.renderOrder = 1; this.G.add(m);
+      this.prints.push({ x, z, y: P.y, t: 0, trail: W.trail, i: W.i++, m, o }); W.n--; W.side = -W.side;
     }
     // out cold (a slap, or bowled over by a charge before they'd made him out): ten seconds, or till a colleague wakes them
     knockOut(n, fx, fz, sfx, pow) {
@@ -1317,8 +1414,8 @@
       v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       this.shortsStep(dt); this.tattooStep(v); this.stinkStep(T, v);
       if (P.held && P.held.state === 'held') {
-        const b = P.held, ha = this._ha || (this._ha = new THREE.Vector3()), hb = this._hb || (this._hb = new THREE.Vector3()), H = { stool: 0.34, oke: 0.26, bucket: 0.42 }[b.kind] || 0.4;
-        if (b.kind === 'oke') { v.handWorld(1, ha); b.m.position.set(ha.x, ha.y - H * 0.75, ha.z); }   // by its rim, in one fist
+        const b = P.held, ha = this._ha || (this._ha = new THREE.Vector3()), hb = this._hb || (this._hb = new THREE.Vector3()), H = { stool: 0.34, oke: 0.26, bucket: 0.42, can: 0.29 }[b.kind] || 0.4;
+        if (b.kind === 'oke' || b.kind === 'can') { v.handWorld(1, ha); b.m.position.set(ha.x, ha.y - H * 0.75, ha.z); }   // by its rim, in one fist
         else { v.handWorld(1, ha); v.handWorld(-1, hb); ha.add(hb).multiplyScalar(0.5); b.m.position.set(ha.x, ha.y - H * 0.5, ha.z); }   // gripped by its sides
         b.m.rotation.set(0, -P.f, 0);
       }
