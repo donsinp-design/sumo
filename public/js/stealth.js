@@ -68,6 +68,12 @@
       this.view = new S.WrestlerView(this.scene, arch, this.fx, S.DEF_EQ); this.view.viewer = 0; this.view.match = null;
       this.w = { x: 0, z: 0, y: 0, f: 0, fx: 0, fz: 1, vx: 0, vz: 0, st: 'free', t: 0, dur: 1, fxs: {}, a: arch, idx: 0, szCur: 1, squash: 0, bal: 1, tx: 0, tz: 0, power: 0, pre: null, preT: 0,
         hand: 0, windPow: 0, charges: 0, uprightT: 0, throatT: 0, lifted: false, down: false, fallX: 0, fallZ: 1, clinch: null, slideT: 0, spd: 0, crouchT: 0, lean: 0, gulpI: -1, contact: false, fwdIn: 0, ddx: 0, ddz: 0, boomT: 0, relaxed: true };
+      // THE BOSS: the bathhouse's owner, a retired yokozuna (湯乃富士). Grey topknot, his own dark mawashi; ours, he's found
+      this.bossOn = !!(S.Stealth.BOSS || /[?&]boss/.test(location.search));
+      { const ai = Math.max(0, S.ARCH.indexOf(arch)), bA = Object.assign({}, S.ARCH[(ai + 2) % S.ARCH.length], { belt: 0x3b3346 });
+        const bv = new S.WrestlerView(this.scene, bA, this.fx, S.DEF_EQ); bv.viewer = 1; bv.match = null; bv.root.visible = false;
+        const bw = Object.assign({}, this.w, { a: bA, idx: 1, fxs: {}, carry: null });
+        this.boss = { v: bv, w: bw, x: 3, z: -7, y: -2.6, f: Math.PI / 2, on: false, hold: false, st: 'free', t: 0, belt: arch.belt }; }
       this.mosaic = this.makeMosaic();
       this.npcs = this.makeNpcs();
       this.stage = 'locker'; this.cp = { x: 1.2, z: 0.2, f: Math.PI / 2 }; this.room = 'bath';
@@ -581,7 +587,7 @@
     }
     step(dt) {
       this.t += dt;
-      if (this.timers) this.timers = this.timers.filter((q) => { q.t -= dt; if (q.t <= 0) { if (this.scene) q.fn(); return false; } return true; });
+      if (this.timers && this.timers.length) { const due = []; this.timers = this.timers.filter((q) => { q.t -= dt; if (q.t <= 0) { due.push(q); return false; } return true; }); for (const q of due) if (this.scene) q.fn(); }   // (run after: a timer may set new ones)
       const P = this.P, c = this.ctrl;
       P.t += dt; P.cd = Math.max(0, P.cd - dt);
       let mx = c.mx, mz = c.mz; const mag = Math.hypot(mx, mz); if (mag > 1) { mx /= mag; mz /= mag; }
@@ -773,7 +779,7 @@
           if (b.wet) { this.fx.water && (this.fx.water(b.x, b.z, 2.4, POOL.water), this.fx.water(b.x + 0.2, b.z - 0.1, 1.4, POOL.water)); b.m.rotation.set(0.3, 0.4, 0.2); b.m.position.y = b.ty; }
           else { if (pud && this.fx.water) this.fx.water(b.x, b.z, 1.4, b.ty); b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + (b.kind === 'can' ? 0.1 : 0.3); if (b.kind === 'can') b.m.children[0].position.y = -0.085; } if (!SAFE[roomAt(b.x, b.z)]) this.noise(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think(b.wet ? '*SPLOOSH*' : '*CLATTER*', 1); }
       }
-      this.canStep(dt); this.printStep(dt);
+      this.canStep(dt); this.printStep(dt); this.bossStep(dt);
       for (const f of this.flying) {
         if (f.t >= f.dur) continue; f.t = Math.min(f.dur, f.t + dt); const k = f.t / f.dur;
         f.m.position.set(f.sx + (f.tx - f.sx) * k, f.sy + (f.ty - f.sy) * k + Math.sin(Math.PI * k) * f.h, f.sz + (f.tz - f.sz) * k);
@@ -1038,6 +1044,129 @@
       gl.rotation.x = -Math.PI / 2; gl.position.set(-rx * 0.1, 0.004, -rz * 0.25); gl.userData.flatDone = true; g.add(gl);
       this.puddles.push({ x, z, rx, rz, y: fy, m: g, soda });
     }
+    // ---- subtitles: who's speaking, the Japanese as they say it, the English underneath
+    say(lines, done) {
+      const e = this.el('.st-sub'); let t = 0;
+      lines.forEach((L) => { this.later(t, () => { if (!this.scene) return; e.innerHTML = '<span class="jp">' + (L.who ? '<span class="who">' + L.who + '</span>' : '') + L.jp + '</span><span class="en">' + L.en + '</span>'; e.style.display = 'block'; }); t += L.t || 2.6; });
+      this.later(t, () => { e.style.display = 'none'; if (done) done(); });
+      return t;
+    }
+    // ---- the phone call: he's in the stall; outside, one of the staff takes a call from the boss
+    phoneCall(D) {
+      const P = this.P, n = this.npcs.find((m) => m.room === 'toilet' && !m.ko) || this.npcs[0], a = n.a, ST = LY.stalls[LY.stall_use];
+      n.hold = 14; n.path = null; a.vx = a.vz = 0; n.phone = true; a.f = Math.atan2(ST.z - a.z, ST.x - a.x);
+      this.popAt(a, '♪ プルルル…', 1.4);
+      this.say([
+        { jp: '♪ プルルル… プルルル…', en: '*ring ring... ring ring...*', t: 2.0 },
+        { who: '店員', jp: '…はい、もしもし。', en: '...Hello?', t: 2.0 },
+        { who: '店員', jp: 'え、親方ですか?', en: 'Oh, boss? It\'s you?', t: 2.2 },
+        { who: '店員', jp: '風呂で…まわしを拾った!?', en: 'You found a MAWASHI... in the bath!?', t: 2.8 },
+        { who: '店員', jp: '…で、まだ湯船につかってるんですね。', en: '...and you\'re still soaking in the tub with it.', t: 3.0 },
+        { who: '店員', jp: 'はい、わかりました…。', en: 'Right... understood.', t: 2.0 },
+      ], () => {
+        n.phone = false; n.hold = 0.5; if (this.phoneM) this.phoneM.visible = false;
+        P.inStall = false; if (D) D.rotation.y = -1.4; P.st = 'free';
+        this.stage = 'bossgo'; this.cp = CP.toilet; this.spBack.visible = false;
+        this.think('MY MAWASHI!! It\'s in the BATH... and someone\'s GOT it!', 3);
+        this.objective('Your MAWASHI is in the BATH! Get back there (through the wash area)');
+      });
+      P.dur = 99;   // (stays put in the stall, listening)
+    }
+    // the phone to the ear: the right arm folds up so the hand's at the side of the head
+    phonePose(n) {
+      const B = n.v.body; if (!B || !B.bones || !B.bones.RightArm || !B.bones.Head) return;
+      const V = THREE.Vector3, Q = THREE.Quaternion, f = n.a.f, fw = new V(Math.cos(f), 0, Math.sin(f)), rt = new V(-Math.sin(f), 0, Math.cos(f));
+      const aim = (b, c, dir) => { b.updateMatrixWorld(true); const bp = new V().setFromMatrixPosition(b.matrixWorld), cp = new V().setFromMatrixPosition(c.matrixWorld);
+        const q = new Q().setFromUnitVectors(cp.sub(bp).normalize(), dir.normalize()), wq = b.getWorldQuaternion(new Q()); b.quaternion.copy(b.parent.getWorldQuaternion(new Q()).invert().multiply(q.multiply(wq))); b.updateMatrixWorld(true); };
+      const bu = B.bones.RightArm, bl = B.bones.RightForeArm, bh = B.bones.RightHand, hd = B.bones.Head;
+      aim(bu, bl, new V(0, -0.55, 0).add(rt.clone().multiplyScalar(0.55)).add(fw.clone().multiplyScalar(0.25)));   // elbow out and down
+      hd.updateMatrixWorld(true); bl.updateMatrixWorld(true);
+      const ear = new V().setFromMatrixPosition(hd.matrixWorld).add(rt.clone().multiplyScalar(0.11)), el = new V().setFromMatrixPosition(bl.matrixWorld);
+      aim(bl, bh, ear.sub(el));
+      if (!this.phoneM) { const g = new THREE.Group(), m = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.014), S.Flat.mat(0x3a3644)); m.userData.flatDone = true; g.add(m);
+        const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.12), new THREE.MeshBasicMaterial({ color: 0x9fd0ef })); sc.position.z = 0.008; sc.userData.flatDone = true; g.add(sc); this.G.add(g); this.phoneM = g; }
+      const pm = this.phoneM; pm.visible = true; bh.updateMatrixWorld(true); pm.position.setFromMatrixPosition(bh.matrixWorld); pm.rotation.set(0, Math.PI / 2 - f, 0.3);
+    }
+    // ---- the boss rises out of the bath
+    bossStep(dt) {
+      const B = this.boss, P = this.P; if (!B) return;
+      if (this.stage === 'bossgo' && P.z > -15.6 && !B.rise) {   // into the bath hall: the water stirs
+        B.rise = { t: 0 }; B.on = true; B.x = clamp(P.x, POOL.x0 + 1.4, POOL.x1 - 1.4); B.z = POOL.z0 + 2.4; B.y = -2.7; B.hold = false;
+        B.f = Math.atan2(P.z - B.z, P.x - B.x); P.st = 'busy'; P.t = 0; P.dur = 99; P.vx = P.vz = 0;
+        this.camFocus = { x: (B.x + P.x) / 2, z: (B.z + P.z) / 2 + 0.6, flip: true, dist: 9.5, y: 0.6 }; this.camT.set(this.camFocus.x, 0, this.camFocus.z); this.objective('...');   // (a cut: the camera behind him, looking at the bath)
+        this.think('...hm? The water\'s... bubbling?', 1.6);
+      }
+      if (!B.rise) return;
+      const R = B.rise; R.t += dt; const t = R.t;
+      if (t < 1.6) { if ((R.bub = (R.bub || 0) - dt) <= 0) { R.bub = 0.12; this.fx.water && this.fx.water(B.x + (Math.random() - 0.5) * 1.2, B.z + (Math.random() - 0.5) * 1.2, 0.8, POOL.water); } }
+      else if (t < 3.0) { if (!R.splash) { R.splash = true; this.fx.water && (this.fx.water(B.x, B.z, 7, POOL.water), this.fx.water(B.x + 0.6, B.z - 0.3, 5, POOL.water)); if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.8); this.flash = 0.2; }
+        const k = Math.min(1, (t - 1.6) / 0.9); B.y = -2.7 + (2.7 - 0.12) * (1 - Math.pow(1 - k, 3)); }   // (up to his belly: the water streams off him)
+      if (t > 2.4 && !B.hold) { B.hold = true; B.holdT = 0; }
+      if (t > 3.0 && !R.talk) { R.talk = true;
+        this.say([
+          { who: '親方', jp: '探しものは…これか?', en: 'Looking for... THIS?', t: 3.0 },
+          { who: '親方', jp: 'わしの風呂で、ずいぶん好き勝手してくれたな。', en: 'You\'ve been running riot all over MY bathhouse.', t: 3.4 },
+          { who: '親方', jp: '欲しけりゃ…力ずくで取ってみい!', en: 'Want it back? ...Then come and TAKE it!', t: 3.2 },
+        ], () => { this.think('He\'s got MY MAWASHI... and he\'s a YOKOZUNA?!', 2.6); this.stage = 'bossfight'; this.P.st = 'free'; this.P.dur = 0; this.camFocus = null; this.objective('Beat the BOSS and win back your mawashi  (the fight: coming next)'); });
+      }
+    }
+    bossDraw(dt, T) {
+      const B = this.boss; if (!B) return; const bv = B.v;
+      if (S.SoftSumo && S.SoftSumo.loaded && !bv.soft) { S.SoftSumo.attach(bv, { noBlob: true }); for (const m of bv.soft.mats) if (/hair/i.test(m.name || '')) m.color.set(0xc9c6c0); }
+      if (bv.soft && !this.shrineDone && this.kit && this.bossOn) this.makeShrine(T);   // (only with the boss story, until it's signed off)
+      if (!B.on) { bv.root.visible = false; if (this.mawM) this.mawM.visible = false; return; }
+      const w = B.w; w.x = B.x; w.z = B.z; w.y = 0; w.f = B.f; w.fx = Math.cos(B.f); w.fz = Math.sin(B.f); w.vx = w.vz = 0; w.spd = 0;
+      if (w.st !== B.st) { w.st = B.st; w.t = 0; } else w.t += dt;
+      w.carry = B.hold ? { overhead: true } : null; w.relaxed = true; w.hand = 1;
+      bv.update(w, Math.max(dt, 1e-4), T); bv.root.position.y += B.y; bv.root.visible = true;
+      // our mawashi, held up over his head in both hands (it glints)
+      if (B.hold) { if (!this.mawM) this.mawM = this.makeMawashi(B.belt); const m = this.mawM, a = this._ha || (this._ha = new THREE.Vector3()), b = this._hb || (this._hb = new THREE.Vector3());
+        bv.handWorld(1, a); bv.handWorld(-1, b); a.add(b).multiplyScalar(0.5); m.position.set(a.x, a.y + 0.12, a.z); m.rotation.set(0, Math.PI / 2 - B.f, 0); m.visible = true;
+        B.holdT = (B.holdT || 0) + dt; if ((B.glint = (B.glint || 0) - dt) <= 0) { B.glint = 0.35; this.popAt({ x: a.x + (Math.random() - 0.5) * 0.8, z: a.z, y: a.y + 0.2 + Math.random() * 0.5 }, '✦', 0.6); } }
+      else if (this.mawM) this.mawM.visible = false;
+    }
+    // a mawashi, folded into a thick bundle with a loose end hanging down
+    makeMawashi(col) {
+      const g = new THREE.Group(), M = S.Flat.mat(col === undefined ? 0x2c3d93 : col), M2 = S.Flat.mat(new THREE.Color(col === undefined ? 0x2c3d93 : col).multiplyScalar(0.8));
+      for (let k = 0; k < 4; k++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.62 - k * 0.04, 0.07, 0.24), k % 2 ? M2 : M); b.position.set((k % 2 ? 0.02 : -0.02), k * 0.068, 0); b.userData.flatDone = true; b.castShadow = true; g.add(b); }
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.42, 0.03), M); tail.position.set(0.33, -0.16, 0.06); tail.rotation.z = 0.15; tail.userData.flatDone = true; g.add(tail);
+      this.G.add(g); return g;
+    }
+    // ---- the shrine to him: framed photos (the locker room; on the counter behind reception) and his bronze statue upstairs
+    makeShrine(T) {
+      this.shrineDone = true; const B = this.boss, bv = B.v, r = this.R.r;
+      // the photo: him in his prime (black topknot), rendered once into a texture
+      const rt = new THREE.WebGLRenderTarget(256, 320); const hair = bv.soft.mats.find((m) => /hair/i.test(m.name || '')), hc = hair && hair.color.getHex();
+      if (hair) hair.color.set(0x241f2a);
+      const w = B.w, X = 300, Z = 300; Object.assign(w, { x: X, z: Z, f: Math.PI / 2, fx: 0, fz: 1, st: 'win', t: 0.7, carry: null }); bv.victory = 'flex';
+      for (let i = 0; i < 8; i++) bv.update(w, 1 / 30, T);
+      bv.root.visible = true; bv.root.position.y = 0;
+      const cam = new THREE.PerspectiveCamera(26, 256 / 320, 0.5, 40); cam.position.set(X, 1.25 * bv.s, Z + 7.2); cam.lookAt(X, 1.1 * bv.s, Z); cam.updateMatrixWorld();
+      const bg = this.scene.background; this.scene.background = new THREE.Color(0xe6d6b8);
+      r.setRenderTarget(rt); r.render(this.scene, cam); r.setRenderTarget(null); this.scene.background = bg;
+      bv.root.visible = false; if (hair) hair.color.setHex(hc); bv.victory = 'tegatana';
+      const plateTex = () => { const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');
+        x.fillStyle = '#d3ab7a'; x.fillRect(0, 0, 256, 64); x.fillStyle = '#3b2a1e'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '400 36px "Yuji Syuku", "Dela Gothic One", serif'; x.fillText('横綱 湯乃富士', 128, 34);
+        const t = new THREE.CanvasTexture(c); if (document.fonts && document.fonts.load) document.fonts.load('400 36px "Yuji Syuku"', '横綱湯乃富士').then(() => { x.fillStyle = '#d3ab7a'; x.fillRect(0, 0, 256, 64); x.fillStyle = '#3b2a1e'; x.fillText('横綱 湯乃富士', 128, 34); t.needsUpdate = true; }, () => 0); return t; };
+      const photo = (wd, ht) => { const g = new THREE.Group();
+        const fr = new THREE.Mesh(new THREE.BoxGeometry(wd + 0.1, ht + 0.1, 0.04), S.Flat.mat(0x6e4c38)); fr.castShadow = true; g.add(fr);
+        const pic = new THREE.Mesh(new THREE.PlaneGeometry(wd, ht), new THREE.MeshBasicMaterial({ map: rt.texture })); pic.position.z = 0.022; pic.userData.flatDone = true; g.add(pic);
+        const pl = new THREE.Mesh(new THREE.PlaneGeometry(wd * 0.8, wd * 0.2), new THREE.MeshBasicMaterial({ map: plateTex() })); pl.position.set(0, -ht / 2 - 0.02, 0.025); pl.userData.flatDone = true; g.add(pl);
+        fr.userData.flatDone = true; this.G.add(g); return g; };
+      // 1: the changing room, on the far wall by the staff door (facing into the room)
+      const p1 = photo(0.76, 0.92); p1.position.set(3.2, 0.6, -46.76);
+      // 2: propped up on the counter behind reception, leaning back a little
+      const p2 = photo(0.6, 0.75); p2.position.set(4.3, UP + 1.38, -85.45); p2.rotation.x = -0.14;
+      // 3: the statue, upstairs in the lounge: bronze, on a stone plinth, flexing
+      const sv = new S.WrestlerView(this.scene, B.w.a, this.fx, S.DEF_EQ); sv.viewer = 2; sv.match = null;
+      if (S.SoftSumo.attach(sv, { noBlob: true })) { const bz = S.Flat.mat(0xc39a62); sv.soft.M.traverse((q) => { if (q.isMesh) q.material = Array.isArray(q.material) ? q.material.map(() => bz) : bz; }); }
+      const sw = Object.assign({}, B.w, { x: 8, z: -64.6, f: Math.PI / 2, fx: 0, fz: 1, st: 'win', t: 0.7, carry: null }); sv.victory = 'crossed';   // (arms folded: the proud old champion)
+      for (let i = 0; i < 10; i++) sv.update(sw, 1 / 30, T);
+      sv.root.position.y += UP + 0.5; sv.root.scale.multiplyScalar(1.12); this.statue = sv;
+      const pl = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), S.Flat.mat(0xc4beb4)); pl.position.set(8, UP + 0.25, -64.6); pl.castShadow = true; pl.userData.flatDone = true; this.G.add(pl);
+      const pq = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.18), new THREE.MeshBasicMaterial({ map: plateTex() })); pq.position.set(8, UP + 0.27, -64.0 + 0.005); pq.userData.flatDone = true; this.G.add(pq);
+      this.walls.push({ x0: 7.4, x1: 8.6, z0: -65.2, z1: -64.0, tall: true }); this.buildNav();
+    }
     // ---- the drinks machine: no coins on him, but a good thump drops a can; the third wrecks it
     hitVend() {
       const V = this.vend, P = this.P; if (!V || V.broke) return; V.hits++; V.shake = 0.45; this.flash = 0.15;
@@ -1185,7 +1314,7 @@
       } else {
         this.think('*rustle rustle*... ahh. Much better.', 2.2); this.stinky = false;   // (wiped: no more stink, no more flies)
         this.later(1.8, () => { this.think('*FLUSHHH*', 1.0); if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.6); });
-        this.later(3.2, () => { P.inStall = false; if (D) D.rotation.y = -1.4; this.escapeStage(); });
+        if (this.bossOn) this.later(2.6, () => this.phoneCall(D)); else this.later(3.2, () => { P.inStall = false; if (D) D.rotation.y = -1.4; this.escapeStage(); });
       }
     }
     escapeStage() {
@@ -1309,8 +1438,8 @@
       const skin = v.soft.mats.find((m) => /skin/i.test(m.name || '')); if (!skin) return;
       this.tatDone = true;
       const c = document.createElement('canvas'); c.width = 256; c.height = 256; const tex = new THREE.CanvasTexture(c); tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter;
-      const draw = () => { const x = c.getContext('2d'); x.clearRect(0, 0, 256, 256); x.fillStyle = '#000'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '400 104px "Dela Gothic One", serif'; x.fillText('半額', 128, 68); x.fillText('豆腐', 128, 190); tex.needsUpdate = true; };
-      draw(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+      const draw = () => { const x = c.getContext('2d'); x.clearRect(0, 0, 256, 256); x.fillStyle = '#000'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '400 112px "Yuji Syuku", "Dela Gothic One", serif'; x.fillText('半額', 128, 66); x.fillText('豆腐', 128, 192); tex.needsUpdate = true; };   // (brush lettering, as a tattooist writes it)
+      draw(); if (document.fonts && document.fonts.load) document.fonts.load('400 112px "Yuji Syuku"', '半額豆腐').then(draw, () => 0); if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
       const T = S.Stealth.tat || { x: 0, y: 1.3, w: 0.6, h: 0.6 };   // (rest-pose metres: his upper back)
       const prev = skin.onBeforeCompile;
       skin.onBeforeCompile = (sh, r) => {
@@ -1437,7 +1566,8 @@
         b.m.rotation.set(0, -P.f, 0);
       }
       this.kdt = Math.min(0.05, dt); this.drawN = (this.drawN || 0) + 1;
-      for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } this.drawCone(n); }
+      this.bossDraw(dt, T);
+      for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); this.drawCone(n); }
       this.sweatStep(dt);
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
       const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden;
@@ -1457,9 +1587,9 @@
       for (const b of this.buckets) if (b.wet && b.state === 'floor') { b.m.position.y = b.ty + Math.sin(T * 1.6 + b.x) * 0.03; b.m.rotation.z = 0.2 + Math.sin(T * 1.1 + b.z) * 0.08; }
       this.fx.update(dt); this.fx.updateWater && this.fx.updateWater(dt);
       // camera: high, behind, following (as in the campaign), up the stairs with him; closer for the ending
-      this.camT.lerp(new THREE.Vector3(this.over ? P.x + 2.2 : clamp(P.x * 0.8, -18, 18), Math.max(0, P.y), P.z - (this.over ? 0.6 : 2.6)), 1 - Math.exp(-dt * 4));
-      const dist = this.over ? 9 : 15, sh = this.flash ? this.flash * 0.25 : 0; this.flash = Math.max(0, (this.flash || 0) - dt * 2);
-      this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh, this.camT.y + dist * 0.64, this.camT.z + dist * 0.77);
+      const CF = this.camFocus; this.camT.lerp(CF ? new THREE.Vector3(CF.x, CF.y || 0, CF.z) : new THREE.Vector3(this.over ? P.x + 2.2 : clamp(P.x * 0.8, -18, 18), Math.max(0, P.y), P.z - (this.over ? 0.6 : 2.6)), 1 - Math.exp(-dt * (CF ? 2.5 : 4)));
+      this.camD = (this.camD || 15) + ((CF && CF.dist ? CF.dist : this.over ? 9 : 15) - (this.camD || 15)) * Math.min(1, dt * 2); const dist = this.camD, sh = this.flash ? this.flash * 0.25 : 0; this.flash = Math.max(0, (this.flash || 0) - dt * 2);
+      this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh, this.camT.y + dist * 0.64, this.camT.z + dist * 0.77 * (CF && CF.flip ? -1 : 1));   // (a cutscene can look from the far side)
       this.cam.lookAt(this.camT.x, this.camT.y + 0.6, this.camT.z); this.cam.updateMatrixWorld();
       this.flat.lights.aim(this.camT.x, this.camT.z - 3);
       if ((this.cvN = (this.cvN || 0) + 1) % 30 === 1) S.Flat.convert(this.scene, { pastel: 0.6 });
@@ -1483,6 +1613,7 @@
       h.innerHTML = '<style>#stealthHud{position:fixed;inset:0;pointer-events:none;z-index:6;font-family:"Barlow Condensed",sans-serif;color:#3a3440}' +
         '#stealthHud .st-obj{position:absolute;left:24px;top:20px;background:rgba(255,250,240,.9);padding:8px 14px;border-radius:10px;font-weight:700;font-size:20px;letter-spacing:.02em;max-width:60vw}' +
         '#stealthHud .st-ko{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;text-shadow:0 4px 0 rgba(40,30,50,.35);opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
+        '#stealthHud .st-sub{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);width:max-content;max-width:94vw;text-align:center;pointer-events:none;display:none}#stealthHud .st-sub .jp{display:inline-block;font:400 24px "Dela Gothic One",sans-serif;color:#fffaf0;background:rgba(34,30,40,0.72);padding:6px 14px 4px;border-radius:10px;letter-spacing:0.04em}#stealthHud .st-sub .en{display:block;margin-top:6px;font:700 19px "Barlow Condensed",sans-serif;color:#fffaf0;text-shadow:0 2px 0 rgba(0,0,0,0.55)}#stealthHud .st-sub .who{color:#f2cf4a;margin-right:8px}' +
         '#stealthHud .st-hp{position:absolute;left:24px;top:76px;font-size:28px;letter-spacing:4px;color:#cf3a3a;text-shadow:0 2px 0 #fffaf0;display:none}#stealthHud .st-hp.chase{animation:hpPulse .5s ease-in-out infinite alternate}@keyframes hpPulse{to{transform:scale(1.12)}}' +
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
         '#stealthHud .st-think{position:absolute;left:0;top:0;width:max-content;transform:translate(-50%,-100%);background:#fffaf0;border-radius:18px;padding:8px 16px;font-weight:700;font-size:20px;max-width:360px;text-align:center;box-shadow:0 3px 0 rgba(60,50,70,.15);opacity:0;transition:opacity .2s}' +
@@ -1502,7 +1633,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<div class="st-sub"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
