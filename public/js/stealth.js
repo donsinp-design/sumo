@@ -99,10 +99,10 @@
       this.asleep = false; this.el('.st-obj').style.display = ''; this.el('.st-wake').style.display = 'none'; this.el('.st-zzz').style.display = 'none';
       this.objective('Get out of the BATH (the steps, towards you)');
       this.think('Zzz... mm? I fell asleep in the bath again...', 3.0);
-      this.later(3, () => { if (!this.outOfBath && this.scene && !this.tipWasd) { this.tipWasd = true; this.tip(['WASD  ·  MOVE'], { until: () => this.outOfBath });
-        this.tip(['THE MINIMAP  ·  WHERE TO GO', 'the red ring is your goal (at the edge, an arrow points the way)', 'white dots are staff'], { arrow: true });
-        this.tip(['YELLOW CONES  ·  WHAT THEY CAN SEE', 'on the minimap, the yellow cone from each person is their line of sight', 'stay out of it, or hide (I). If you stay in it they notice you'], { arrow: true });
-        this.tip(['RED RINGS  ·  NOISE', 'every noise spreads a red ring on the minimap: how far it carries', 'footsteps, charging, crashes, knocks, thrown things. Anyone inside the ring comes over to check', 'tiptoeing (hold I) makes no noise at all'], { arrow: true }); } });
+      this.later(3, () => { if (!this.outOfBath && this.scene && !this.tipWasd) { this.tipWasd = true; this.tip(['WASD: MOVE'], { until: () => this.outOfBath });
+        this.tip(['THE MINIMAP: WHERE TO GO', 'The red ring is your goal. If it is off the edge of the map, an arrow points the way.', 'White dots are the staff.'], { arrow: true });
+        this.tip(['YELLOW CONES: WHAT THEY CAN SEE', 'On the minimap, the yellow cone from each person is where they are looking.', 'Stay out of it, or hide (I). If you stay inside it, they will notice you.'], { arrow: true });
+        this.tip(['RED RINGS: NOISE', 'Every noise spreads a red ring on the minimap. It shows how far the noise carries.', 'Footsteps, charging, crashes, knocks and thrown things all make noise. Anyone inside the ring comes over to check.', 'Tiptoeing (hold I) makes no noise at all.'], { arrow: true }); } });
     }
     later(sec, fn) { (this.timers || (this.timers = [])).push({ t: sec, fn }); }
 
@@ -444,7 +444,11 @@
       while (k < pts.length) { let far = k; for (let m = pts.length - 1; m > k; m--) if (this.lineWalk(cx, cz, pts[m][0], pts[m][1])) { far = m; break; } out.push(pts[far]); cx = pts[far][0]; cz = pts[far][1]; k = far + 1; }
       return out;
     }
-    goTo(n, x, z) { n.path = this.navPath(n.a.x, n.a.z, x, z) || [[x, z]]; n.pi = 0; n.stuckT = 0; }
+    goTo(n, x, z) {   // (a target that's inside furniture or a wall: go to the nearest free spot beside it, never walk straight at it)
+      let p = this.navPath(n.a.x, n.a.z, x, z);
+      if (!p && this.nav) { const c = this.nearestFree(...this.cell(x, z)); if (c) p = this.navPath(n.a.x, n.a.z, this.nav.x0 + (c[0] + 0.5) * this.nav.cs, this.nav.z0 + (c[1] + 0.5) * this.nav.cs); }
+      n.path = p || [[x, z]]; n.pi = 0; n.stuckT = 0;
+    }
     // a noise: anyone in earshot (in that room) walks over the shortest way to look, searches, goes back
     noise(x, z, radius, msg, soft) {   // soft: footsteps (no ripples on the floor; they walk over to look)
       (this.mapRings || (this.mapRings = [])).push({ x, z, r: radius, t: 0, y: this.P.y }); if (this.mapRings.length > 12) this.mapRings.shift();
@@ -563,7 +567,7 @@
           if (d < 1.5) { m.a.t = m.a.dur; n.mode = 'search'; n.wait = 3; n.path = null; this.popAt(a, ['おい!起きろ!', '大丈夫か!?', 'しっかりしろ!'][(this.t * 3 | 0) % 3], 1.5); break; }
           if (n.mode !== 'goto' && d < 9 && this.sees(n, m.a.x, m.a.z, 9)) { this.goTo(n, m.a.x, m.a.z); n.mode = 'goto'; n.inv = false; n.noiseAt = [m.a.x, m.a.z]; this.popAt(a, '!?', 1.2); break; }
         } }
-      if (tx !== null) { n.stk = Math.hypot(a.x - ox, a.z - oz) < sp * dt * 0.2 ? (n.stk || 0) + dt : 0; if (n.stk > 3) { n.stk = 0; this.unstick(n); }
+      if (tx !== null) { n.stk = Math.hypot(a.x - ox, a.z - oz) < sp * dt * 0.2 ? (n.stk || 0) + dt : 0; if (n.stk > 2) { n.stk = 0; this.unstick(n); }
         n.stuckT = Math.hypot(a.x - ox, a.z - oz) < sp * dt * 0.3 ? (n.stuckT || 0) + dt : 0;
         // walking into a colleague: if they're standing on the very spot, this is close enough; otherwise step round them
         if (n.stuckT > 0.45) { const o = this.npcs.find((m) => m !== n && Math.hypot(m.a.x - a.x, m.a.z - a.z) < 1.05);
@@ -870,7 +874,7 @@
       const first = !this.chasing(), P = this.P;
       n.mode = 'chase'; n.path = null; n.alarm = 0; n.lostT = 0; n.rp = 0; n.last = [P.x, P.z]; n.raid = false;
       this.popAt(n.a, this.wearing ? ['箱が…動いてる!?', 'おい!その箱!', '歩く箱!?'][this.spotted % 3] : ['イレズミ!?', '変態!', '刺青だ!', 'おい!待て!'][this.spotted % 4], 1.5, true);
-      if (first) { this.spotted++; this.bonusLose('seen'); if (!this.tipSeen) { this.tipSeen = true; this.tip(['SPOTTED!', 'look at the MINIMAP: it turns RED while you\'re being chased', 'break their line of sight and hide: a cart or toilet stall (I), the box, or under the bath water', 'stay out of sight and they give up'], { arrow: true, now: true }); } if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4); this.flash = 0.5; }
+      if (first) { this.spotted++; this.bonusLose('seen'); if (!this.tipSeen) { this.tipSeen = true; this.tip(['SPOTTED!', 'Look at the MINIMAP. It turns RED while you are being chased.', 'To escape, get out of their sight first, and only then hide (a cart or a toilet stall with I, the box, or under the bath water).', 'If they SEE you hide, they will find you. Hide while they cannot see you.', 'Stay hidden and they give up.'], { arrow: true, now: true }); } if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4); this.flash = 0.5; }
       for (const m of this.npcs) if (m !== n && m.mode !== 'chase' && !m.ko && m.a.st === 'free' && !m.busy && Math.abs(m.a.y - n.a.y) < 1.5 && Math.hypot(m.a.x - n.a.x, m.a.z - n.a.z) < 9) {
         m.mode = 'chase'; m.path = null; m.alarm = 0; m.lostT = 0; m.rp = 0.2; m.last = [P.x, P.z]; m.raid = false; this.popAt(m.a, '!', 1.0); }
     }
@@ -938,7 +942,9 @@
         const crowd = this.npcs.reduce((s2, m) => s2 + (m !== n && Math.hypot(m.a.x - x, m.a.z - z) < 1 ? 1 : 0), 0), sc = crowd * 3 + r; if (sc < bd) { bd = sc; best = [x, z]; } }
       if (!best) { const c = this.nearestFree(...this.cell(a.x, a.z)); if (c) best = [N.x0 + (c[0] + 0.5) * N.cs, N.z0 + (c[1] + 0.5) * N.cs]; }
       if (best) { a.x = best[0]; a.z = best[1]; this.collide(a, 0.4); }
-      if (n.path && n.path.length && n.mode !== 'chase') { const e = n.path[n.path.length - 1]; this.goTo(n, e[0], e[1]); }
+      n.unstN = this.t - (n.unstT || -99) < 10 ? (n.unstN || 0) + 1 : 1; n.unstT = this.t;
+      if (n.unstN >= 2 && n.mode !== 'chase' && n.route) { n.mode = 'route'; n.wait = 0.3; n.path = null; n.inv = false; n.clr = null; n.tug = 0; n.pushing2 = false; n.clrCd = 4; n.i = (n.i + 1) % n.route.length; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); }   // (still stuck: give the search up and get back to the rounds)
+      else if (n.path && n.path.length && n.mode !== 'chase') { const e = n.path[n.path.length - 1]; this.goTo(n, e[0], e[1]); }
     }
     sepNpcs() {   // people don't walk through each other: nudge apart anyone overlapping
       const N = this.npcs;
@@ -1023,16 +1029,16 @@
       }
       if (P.cart) { P.cart.off = false; this.cartBox(P.cart); P.cart = null; return; }   // let go of the cart
       if (!P.held) { const cc = this.carts.find((q) => Math.hypot(q.x - P.x, q.z - P.z) < 2.0 && (Math.abs(q.vx) + Math.abs(q.vz)) < 0.3);
-        if (cc) { P.cart = cc; P.f = Math.atan2(cc.z - P.z, cc.x - P.x); if (!this.saidPush) { this.saidPush = true; this.think('Rolling... (K let go · I hop inside and hide)', 2.4); } return; } }
+        if (cc) { P.cart = cc; P.f = Math.atan2(cc.z - P.z, cc.x - P.x); if (!this.saidPush) { this.saidPush = true; this.think('Rolling... (K to let go. I to hop inside and hide.)', 2.4); } return; } }
       // the test box: K next to it puts it on (the story doesn't move); K again (wearing it, away from anything else) puts it back down
       if (this.testBox && !this.wearing && this.testBox.visible && near(this.testBoxAt.x, this.testBoxAt.z, 1.9)) { this.testBox.visible = false; this.wearing = true; this.testWear = true; this.wearBox(); P.st = 'busy'; P.t = 0; P.dur = 0.5; this.think('A box! (just to try it out: K to take it off)', 1.8); return; }
       if (this.testWear && this.wearing && this.stage !== 'box' && this.stage !== 'exit' && !this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.wearing = false; this.testWear = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.boxDown = false; this.testBoxAt = { x: P.x + Math.cos(P.f) * 1.4, z: P.z + Math.sin(P.f) * 1.4 }; this.testBox.position.set(this.testBoxAt.x, P.y, this.testBoxAt.z); this.testBox.visible = true; P.st = 'busy'; P.t = 0; P.dur = 0.4; return; }
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { this.putOnBox(); P.st = 'busy'; P.t = 0; P.dur = 0.35; return; }   // (on at once: no wait)
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
-        if (!this.tipHeld) { this.tipHeld = true; this.tip(['K again  ·  THROW IT', 'throw it AT someone and it knocks them out', 'a thrown item makes a noise when it lands: whoever hears it comes to look', 'throw a bucket of water and it leaves a PUDDLE: anyone who runs over it SLIPS', 'HOLD K  ·  SMASH IT instead (loud)', 'J  ·  PUT IT DOWN (cancel)']); }
+        if (!this.tipHeld) { this.tipHeld = true; this.tip(['K again: THROW IT', 'Throw it AT someone and it knocks them out.', 'A thrown item makes a noise when it lands. Whoever hears it comes to look.', 'A thrown bucket of water leaves a PUDDLE. Anyone who runs over it SLIPS.', '#HOLD K: SMASH IT instead. This is loud.', '#J: PUT IT DOWN. This cancels, nothing breaks.']); }
         b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0); if (b.kind === 'can') b.m.children[0].position.y = 0;
         if (b.water && !this.saidWater) { this.saidWater = true; this.think('Full of water... throw it (K) or smash it (hold K): a puddle. Anyone running over it goes flying!', 3); }
-        else if (b.kind === 'can') { if (!this.saidCan) { this.saidCan = true; this.tip(b.soda ? ['A COLD ONE!', 'J  ·  DRINK IT (heals you, refills your energy)', 'K  ·  THROW IT', 'HOLD K  ·  SMASH IT'] : ['AN EMPTY CAN', 'K  ·  THROW IT', 'HOLD K  ·  SMASH IT', 'J  ·  PUT IT DOWN']); } }
+        else if (b.kind === 'can') { if (!this.saidCan) { this.saidCan = true; this.tip(b.soda ? ['A COLD ONE!', '#J: DRINK IT. It heals you and refills your energy.', '#K: THROW IT', '#HOLD K: SMASH IT'] : ['AN EMPTY CAN', '#K: THROW IT', '#HOLD K: SMASH IT', '#J: PUT IT DOWN']); } }
         else if (!this.saidItem) { this.saidItem = true; this.think('If I throw this (K), whoever hears it will go and look...', 2.4); }
         return;
       }
@@ -1541,7 +1547,7 @@
       const q = this.tipQ, ma = this.el('.st-maparrow'), hideT = this.g.settings && this.g.settings.hudTips === false;
       if (ma) ma.style.display = q && q.length && q[0].shown && q[0].arrow && !hideT ? 'block' : 'none';
       if (!q || !q.length) { if (e.style.display !== 'none') e.style.display = 'none'; return; }
-      const c = q[0]; if (!c.shown) { c.shown = true; e.innerHTML = '<b>' + c.lines[0] + '</b>' + c.lines.slice(1).map((l) => / {2}· /.test(l) ? '<b>' + l + '</b>' : '<i>' + l + '</i>').join('') + '<u>ENTER · OK</u>'; e.style.display = 'block'; }
+      const c = q[0]; if (!c.shown) { c.shown = true; e.innerHTML = '<b>' + c.lines[0] + '</b>' + c.lines.slice(1).map((l) => l[0] === '#' ? '<b>' + l.slice(1) + '</b>' : '<i>' + l + '</i>').join('') + '<u>ENTER · OK</u>'; e.style.display = 'block'; }
       c.t += dt; if (c.t >= c.sec || (c.until && c.t > 0.4 && c.until())) q.shift();
     }
     // the bottom-of-screen prompt: what's possible right here, and how to press it (always on; the tips above are the ones that can be turned off)
@@ -1570,18 +1576,18 @@
     tipWatch() {
       const P = this.P, q = this.tipQ || [], near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
       if (this.over || this.asleep || this.sf || this.freeze) return;
-      if (!this.tipPick && this.outOfBath && !P.held && this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 2.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.tipPick = true; this.tip(['K  ·  PICK UP', 'things lying about'], { until: () => !!P.held }); }
-      if (!this.tipPrint && this.prints && this.prints.length) { this.tipPrint = true; this.tip(['WET FOOTPRINTS', 'walking through a puddle leaves big wet footprints behind you', 'staff who spot a fresh trail will follow it to see where it goes', 'they dry up after a while']); }
+      if (!this.tipPick && this.outOfBath && !P.held && this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 2.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.tipPick = true; this.tip(['K: PICK UP', 'Things lying about can be picked up.'], { until: () => !!P.held }); }
+      if (!this.tipPrint && this.prints && this.prints.length) { this.tipPrint = true; this.tip(['WET FOOTPRINTS', 'Walking through a puddle leaves big wet footprints behind you.', 'Staff who spot a fresh trail will follow it to see where it goes.', 'The footprints dry up after a while.']); }
       const room = roomAt(P.x, P.z);
-      if (!this.tipBon && (room === 'shower' || room === 'lock')) { this.tipBon = true; this.tip(['BONUS ICONS  ·  ABOVE THE MINIMAP', 'EYE  ·  UNSEEN: nobody ever spots you', 'FIST  ·  NO ONE HARMED: nobody knocked out', 'HAND  ·  UNTOUCHED: nobody lays a hand on you', 'VASE  ·  NOTHING BROKEN: nothing smashed by charging', 'lose one and its icon is crossed out']); }
-      if (!this.tipDuck && !this.outOfBath && !q.length && this.t > 8 && P.y < -0.2) { this.tipDuck = true; this.tip(['I  ·  DUCK UNDER', 'in the bath, hold I to go under the water: nobody sees you', 'but you can only hold your breath for a few seconds'], { until: () => this.outOfBath }); }
-      const V = this.vend; if (!this.tipVend && V && !V.broke && this.outOfBath && !P.held && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) { this.tipVend = true; this.tip(['J  ·  THUMP THE VENDING MACHINE', 'no money, but a good whack might shake a drink loose', 'K  ·  LOOK AT IT']); }
-      if (!this.tipCart && this.outOfBath && !P.held && !P.cart && this.carts.some((cc) => near(cc.x, cc.z, 2.6))) { this.tipCart = true; this.tip(['K  ·  PUSH THE CART', 'K again lets go', 'I next to it: hop inside and HIDE'], { until: () => !!P.cart }); }
+      if (!this.tipBon && (room === 'shower' || room === 'lock')) { this.tipBon = true; this.tip(['BONUS ICONS ABOVE THE MINIMAP', '#EYE: UNSEEN. Nobody ever spots you.', '#FIST: NO ONE HARMED. Nobody is knocked out.', '#HAND: UNTOUCHED. Nobody lays a hand on you.', '#VASE: NOTHING BROKEN. Nothing is smashed by charging.', 'Lose a bonus and its icon is crossed out.']); }
+      if (!this.tipDuck && !this.outOfBath && !q.length && this.t > 8 && P.y < -0.2) { this.tipDuck = true; this.tip(['I: DUCK UNDER', 'In the bath, hold I to go under the water. Nobody can see you.', 'You can only hold your breath for a few seconds.'], { until: () => this.outOfBath }); }
+      const V = this.vend; if (!this.tipVend && V && !V.broke && this.outOfBath && !P.held && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) { this.tipVend = true; this.tip(['J: THUMP THE VENDING MACHINE', 'You have no money, but a good whack might shake a drink loose.', '#K: LOOK AT IT']); }
+      if (!this.tipCart && this.outOfBath && !P.held && !P.cart && this.carts.some((cc) => near(cc.x, cc.z, 2.6))) { this.tipCart = true; this.tip(['K: PUSH THE CART', 'Press K again to let go.', '#I next to it: HIDE INSIDE', 'Hide while nobody can see you. If they see you climb in, they will look inside.'], { until: () => !!P.cart }); }
       if (!this.tipSneak && room === 'lock') { this.tipSneak = true;
-        this.tip(['I  ·  SNEAK', 'people hear you coming: HOLD I to move quietly', 'you\'re a big boy, so it tires you out: stand still and you recover', 'I also lets you HIDE (carts, toilet stalls...)']);
-        this.tip(['J  ·  PUNCH', 'punch a WALL to make a noise: whoever hears it comes to look, so you can lure them away', 'punch a PERSON to knock them out']); }
-      if (!this.tipLockK && this.stage === 'locker' && near(this.locker.x, this.locker.z, 3.2)) { this.tipLockK = true; this.tip(['K  ·  OPEN YOUR LOCKER'], { until: () => this.stage !== 'locker' }); }
-      if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['HOLD L + A DIRECTION  ·  CHARGE', 'charging breaks things', 'but you need room for a run-up, and you can\'t charge right away']); }
+        this.tip(['I: SNEAK', 'People can hear you coming. HOLD I to move quietly.', 'You are a big boy, so sneaking tires you out. Stand still and you recover.', '#I: HIDE', 'I also lets you hide in carts and toilet stalls. Hide while nobody can see you. If they see you hide, they will find you.']);
+        this.tip(['J: PUNCH', 'Punch a WALL to make a noise. Whoever hears it comes to look, so you can lure them away.', 'Punch a PERSON to knock them out.']); }
+      if (!this.tipLockK && this.stage === 'locker' && near(this.locker.x, this.locker.z, 3.2)) { this.tipLockK = true; this.tip(['K: OPEN YOUR LOCKER'], { until: () => this.stage !== 'locker' }); }
+      if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['HOLD L + A DIRECTION: CHARGE', 'Charging breaks things.', 'You need room for a run-up, and you cannot charge right away.']); }
     }
     drink() {
       const P = this.P, b = P.held; if (!b) return;
@@ -1772,7 +1778,7 @@
     }
     putOnBox() {
       this.wearing = true; this.pantsBox.visible = false; this.spBox.visible = false; this.spExit.visible = true; this.wearBox();
-      this.tip(['HOLD I  ·  HIDE IN THE BOX', 'squat down inside it and nobody sees you', 'but a walking box is still a little suspicious...']);
+      this.tip(['HOLD I: HIDE IN THE BOX', 'Squat down inside it and nobody can see you.', 'A walking box is still a little suspicious. Hide when nobody is looking.']);
       this.stage = 'exit'; this.cp = CP.store;
       this.think('Perfect fit. Now, out the FRONT DOOR... without anyone seeing a walking box. (Hold I to squat inside it)', 3.6);
       this.objective('Out through the FRONT DOOR (the entrance, past the shoe lockers). Unseen: hold I to squat in the box');
@@ -2043,7 +2049,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J punch (knocks them out) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD: move. They hear you when you are close. Hold I: tiptoe, which is silent but tiring. I by a cart or toilet stall: hide (hold I and a direction to climb out silently). Hide out of sight, because if they see you hide they will find you. I in the bath: duck under. J: punch, which knocks people out. J at a wall: knock, a noise that lures people over. Hold L and a direction: charge, which is loud and needs a run-up to smash things. K: use, pick up, throw, or push a cart. Hold K: smash what you hold. Esc: pause.</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
