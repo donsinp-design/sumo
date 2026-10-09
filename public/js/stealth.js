@@ -858,7 +858,7 @@
       const first = !this.chasing(), P = this.P;
       n.mode = 'chase'; n.path = null; n.alarm = 0; n.lostT = 0; n.rp = 0; n.last = [P.x, P.z]; n.raid = false;
       this.popAt(n.a, this.wearing ? ['箱が…動いてる!?', 'おい!その箱!', '歩く箱!?'][this.spotted % 3] : ['イレズミ!?', '変態!', '刺青だ!', 'おい!待て!'][this.spotted % 4], 1.5, true);
-      if (first) { this.spotted++; this.bonusLose('seen'); if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4); this.flash = 0.5; }
+      if (first) { this.spotted++; this.bonusLose('seen'); if (!this.tipSeen) { this.tipSeen = true; this.tip(['SPOTTED!', 'look at the MINIMAP: it turns RED while you\'re being chased', 'break their line of sight and hide: a cart or toilet stall (I), the box, or under the bath water', 'stay out of sight and they give up'], { arrow: true, now: true }); } if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4); this.flash = 0.5; }
       for (const m of this.npcs) if (m !== n && m.mode !== 'chase' && !m.ko && m.a.st === 'free' && !m.busy && Math.abs(m.a.y - n.a.y) < 1.5 && Math.hypot(m.a.x - n.a.x, m.a.z - n.a.z) < 9) {
         m.mode = 'chase'; m.path = null; m.alarm = 0; m.lostT = 0; m.rp = 0.2; m.last = [P.x, P.z]; m.raid = false; this.popAt(m.a, '!', 1.0); }
     }
@@ -1064,7 +1064,7 @@
     }
     // hold K with something in hand: he slams it down on the floor in front of him (loud; water goes everywhere)
     smashHeld(quiet) {   // (quiet: dropped, not slammed: a small crack, barely heard)
-      const P = this.P, b = P.held; if (!b) return; this.bonusLose('smash'); P.held = null; this.waterOff(b);
+      const P = this.P, b = P.held; if (!b) return; P.held = null; this.waterOff(b);
       const fx = Math.cos(P.f), fz = Math.sin(P.f), L = Math.max(0.3, Math.min(0.7, this.reach(P.x, P.z, P.f, 2) - 0.4)), x = P.x + fx * L, z = P.z + fz * L, y = floorY(x, z);
       P.st = 'busy'; P.t = 0; P.dur = 0.45; this.w.hand = 1; this.flash = quiet ? 0 : 0.2;
       // in pieces: the thing is gone, splinters fly out across the floor
@@ -1296,17 +1296,24 @@
     }
     // ---- bonuses: kept until you blow them. Never seen / nobody knocked out / nothing broken (that the story didn't need) / nothing thrown
     bonusLose(k) {
-      const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, smash: true, hit: true }); if (!B[k]) return; B[k] = false;
+      const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, hit: true }); if (!B[k]) return; B[k] = false;
       const e = this.el('.st-bonus i[data-k="' + k + '"]'); if (e) { e.classList.add('pop'); setTimeout(() => { e.classList.remove('pop'); e.classList.add('off'); }, 450); }
     }
     bonusBar() {
-      const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, smash: true, hit: true }), e = this.el('.st-bonus'); if (!e || e.childNodes.length) return;
-      e.innerHTML = [['seen', 'UNSEEN'], ['ko', 'NO ONE HURT'], ['broke', 'NOTHING BROKEN'], ['smash', 'NOTHING SMASHED'], ['hit', 'FLAWLESS']].map(([k, t]) => '<i data-k="' + k + '"' + (B[k] ? '' : ' class="off"') + '>' + t + '</i>').join('');
+      const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, hit: true }), e = this.el('.st-bonus'); if (!e || e.childNodes.length) return;
+      const S_ = (inner) => '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+      const ICON = {
+        seen: S_('<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/><circle cx="12" cy="12" r="10.3" stroke-width="1.6"/><path d="M4.7 19.3L19.3 4.7" stroke-width="2.2"/>'),   // an eye, struck through like a no-smoking sign: never seen
+        ko: S_('<path d="M6 11V8.5a1.6 1.6 0 013.2 0V10m0-1.5a1.6 1.6 0 013.2 0V10m0-1a1.6 1.6 0 013.2 0v1.5m0-.5a1.6 1.6 0 013.2 0V15c0 3.6-2.4 6-6 6h-1.5c-2.6 0-4.4-1.2-5.6-3.4L4.4 14c-.6-1.2.7-2.3 1.8-1.4L7.5 14"/>'),   // a fist: nobody harmed
+        hit: S_('<path d="M8 12V5.5a1.4 1.4 0 012.8 0V11m0-6.5a1.4 1.4 0 012.8 0V11m0-4.7a1.4 1.4 0 012.8 0V12m0-3.7a1.4 1.4 0 012.8 0V15.5c0 3.4-2.6 5.5-5.6 5.5h-.6c-2.2 0-3.8-.9-5-2.7L3.8 14.8c-.7-1.2.6-2.4 1.8-1.5L8 15"/>'),   // an open hand: untouched
+        broke: S_('<path d="M9 3h6M10 3.2c0 2.2-3.6 3.6-3.6 8.4 0 5 1.8 9.4 5.6 9.4s5.6-4.4 5.6-9.4c0-4.8-3.6-6.2-3.6-8.4"/><path d="M12 6.4l-1.6 3.2 2.6 1.8-2 3.4" stroke-width="1.7"/>')   // a cracked vase: nothing broken
+      };
+      e.innerHTML = [['seen', 'UNSEEN'], ['ko', 'NO ONE HARMED'], ['hit', 'UNTOUCHED'], ['broke', 'NOTHING BROKEN']].map(([k, t]) => '<i data-k="' + k + '" title="' + t + '"' + (B[k] ? '' : ' class="off"') + '>' + ICON[k] + '</i>').join('');
     }
     bonusHTML() {
-      const B = this.bonus || { seen: true, ko: true, broke: true, smash: true, hit: true }, all = B.seen && B.ko && B.broke && B.smash && B.hit;
+      const B = this.bonus || { seen: true, ko: true, broke: true, hit: true }, all = B.seen && B.ko && B.broke && B.hit;
       const row = (ok, jp, t, d) => '<div style="display:flex;gap:10px;align-items:baseline;justify-content:center;opacity:' + (ok ? 1 : 0.45) + '"><b style="font:400 20px \'Yuji Syuku\',serif;color:' + (ok ? '#d8262e' : '#8a8178') + '">' + jp + '</b><span style="font:700 18px \'Barlow Condensed\',sans-serif;letter-spacing:0.06em;' + (ok ? '' : 'text-decoration:line-through') + '">' + (ok ? '✓ ' : '') + t + '</span><span style="font:500 15px \'Barlow Condensed\',sans-serif;opacity:0.7">' + d + '</span></div>';
-      return '<div style="margin:10px 0 14px;display:flex;flex-direction:column;gap:4px">' + row(B.seen, '忍', 'GHOST', 'never spotted') + row(B.ko, '和', 'PACIFIST', 'nobody knocked out') + row(B.broke, '静', 'LIGHT TOUCH', 'nothing broken by charging') + row(B.smash, '丁寧', 'GENTLE', 'nothing smashed on the floor') + row(B.hit, '無傷', 'FLAWLESS', 'never got hit') +
+      return '<div style="margin:10px 0 14px;display:flex;flex-direction:column;gap:4px">' + row(B.seen, '忍', 'GHOST', 'never spotted') + row(B.ko, '和', 'PACIFIST', 'nobody knocked out') + row(B.broke, '静', 'LIGHT TOUCH', 'nothing broken by charging') + row(B.hit, '無傷', 'FLAWLESS', 'never got hit') +
         (all ? '<div style="font:400 26px \'Dela Gothic One\',sans-serif;color:#d8262e;margin-top:6px">完璧 · PERFECT</div>' : '') + '</div>';
     }
     // ---- subtitles: who's speaking, the Japanese as they say it, the English underneath
@@ -1515,7 +1522,7 @@
       b.state = 'floor'; b.m.position.set(x, b.base - floorY(b.x0, b.z0) + floorY(x, z), z);
     }
     // the big on-screen tips: lines of text, one tip at a time, each for its time (or until its condition is met)
-    tip(lines, o) { (this.tipQ || (this.tipQ = [])).push({ lines, sec: (o && o.sec) || 90, until: o && o.until, arrow: o && o.arrow, t: 0 }); }
+    tip(lines, o) { const q = this.tipQ || (this.tipQ = []), c = { lines, sec: (o && o.sec) || 90, until: o && o.until, arrow: o && o.arrow, t: 0 }; if (o && o.now) { q.forEach((x) => { x.shown = false; }); q.unshift(c); } else q.push(c); }
     tipOk() { const q = this.tipQ; if (q && q.length && q[0].shown) { q.shift(); return true; } return false; }   // Enter: got it
     tipStep(dt) {
       const e = this.el('.st-tip'); if (!e) return; this.tipWatch();
@@ -1554,6 +1561,7 @@
       if (!this.tipPick && this.outOfBath && !P.held && this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 2.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.tipPick = true; this.tip(['K  ·  PICK UP', 'things lying about'], { until: () => !!P.held }); }
       if (!this.tipPrint && this.prints && this.prints.length) { this.tipPrint = true; this.tip(['WET FOOTPRINTS', 'walking through a puddle leaves big wet footprints behind you', 'staff who spot a fresh trail will follow it to see where it goes', 'they dry up after a while']); }
       const room = roomAt(P.x, P.z);
+      if (!this.tipBon && (room === 'shower' || room === 'lock')) { this.tipBon = true; this.tip(['BONUS ICONS  ·  ABOVE THE MINIMAP', 'EYE  ·  UNSEEN: nobody ever spots you', 'FIST  ·  NO ONE HARMED: nobody knocked out', 'HAND  ·  UNTOUCHED: nobody lays a hand on you', 'VASE  ·  NOTHING BROKEN: nothing smashed by charging', 'lose one and its icon is crossed out']); }
       if (!this.tipDuck && !this.outOfBath && !q.length && this.t > 8 && P.y < -0.2) { this.tipDuck = true; this.tip(['I  ·  DUCK UNDER', 'in the bath, hold I to go under the water: nobody sees you', 'but you can only hold your breath for a few seconds'], { until: () => this.outOfBath }); }
       const V = this.vend; if (!this.tipVend && V && !V.broke && this.outOfBath && !P.held && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) { this.tipVend = true; this.tip(['J  ·  THUMP THE VENDING MACHINE', 'no money, but a good whack might shake a drink loose', 'K  ·  LOOK AT IT']); }
       if (!this.tipCart && this.outOfBath && !P.held && !P.cart && this.carts.some((cc) => near(cc.x, cc.z, 2.6))) { this.tipCart = true; this.tip(['K  ·  PUSH THE CART', 'K again lets go', 'I next to it: hop inside and HIDE'], { until: () => !!P.cart }); }
@@ -1933,7 +1941,7 @@
       }
       this.kdt = Math.min(0.05, dt); this.drawN = (this.drawN || 0) + 1;
       this.bossDraw(dt, T); this.bonusBar(); this.mapDraw(T);
-      if (this.drawN % 10 === 1) { this.hudApply(); const o = this.el('.st-obj'), bn = this.el('.st-bonus'), hp = this.el('.st-hp'); if (o && bn) { const y = o.offsetTop + o.offsetHeight + 8; bn.style.top = y + 'px'; if (hp) hp.style.setProperty('top', (y + 34) + 'px', 'important'); } }   // (a two-line goal pushes the badges down, never over them)
+      if (this.drawN % 10 === 1) { this.hudApply(); const o = this.el('.st-obj'), hp = this.el('.st-hp'); if (o && hp) hp.style.setProperty('top', (o.offsetTop + o.offsetHeight + 8) + 'px', 'important'); }   // (a two-line goal pushes the badges down, never over them)
       for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }
       this.sweatStep(dt);
       this.tipStep(dt); this.ctxStep();
@@ -1982,7 +1990,7 @@
       h.innerHTML = '<style>#stealthHud{position:fixed;inset:0;pointer-events:none;z-index:6;font-family:"Barlow Condensed",sans-serif;color:#3a3440}' +
         '#stealthHud .st-obj{position:absolute;left:24px;top:20px;background:rgba(255,250,240,.9);padding:8px 14px;border-radius:10px;font-weight:700;font-size:20px;letter-spacing:.02em;max-width:60vw}' +
         '#stealthHud .st-ko{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;text-shadow:0 4px 0 rgba(40,30,50,.35);opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
-        '#stealthHud .st-bonus{position:absolute;left:24px;top:64px;display:flex;gap:6px;pointer-events:none}#stealthHud .st-bonus i{font:700 13px "Barlow Condensed",sans-serif;font-style:normal;letter-spacing:0.06em;padding:3px 8px 2px;border-radius:999px;background:rgba(255,250,240,0.9);color:#2e7d4c;transition:all .3s}#stealthHud .st-bonus i.off{color:#a49c94;background:rgba(255,250,240,0.55);text-decoration:line-through}#stealthHud .st-bonus i.pop{transform:scale(1.25);color:#d8262e}#stealthHud .st-hp{top:96px!important}' +
+        '#stealthHud .st-bonus{position:absolute;left:20px;bottom:180px;display:flex;gap:8px;pointer-events:none}#stealthHud .st-bonus i{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:rgba(255,250,240,0.95);color:#2e7d4c;box-shadow:0 2px 8px rgba(40,30,40,.25);transition:all .3s}#stealthHud .st-bonus i.off{color:#a49c94;background:rgba(255,250,240,0.55);box-shadow:none;opacity:.7}#stealthHud .st-bonus i.off:after{content:"";position:absolute;width:30px;height:3px;background:#d8262e;transform:rotate(-45deg);border-radius:2px}#stealthHud .st-bonus i{position:relative}#stealthHud .st-bonus i.pop{transform:scale(1.35);color:#d8262e}#stealthHud .st-hp{top:96px!important}' +
         '#stealthHud .st-map{position:absolute;left:20px;bottom:20px;width:150px;height:150px;border-radius:50%;box-shadow:0 0 0 4px rgba(255,250,240,0.9),0 4px 12px rgba(40,30,40,0.25);pointer-events:none}' +
         '#stealthHud.nh-guide .st-help,#stealthHud.nh-map .st-map,#stealthHud.nh-bonus .st-bonus,#stealthHud.nh-goal .st-obj,#stealthHud.nh-meter .st-stam{display:none!important}' +
         '#stealthHud.sf .st-bonus,#stealthHud.sf .st-map,#stealthHud.sf .st-obj,#stealthHud.sf .st-hp,#stealthHud.sf .st-think,#stealthHud.sf .st-help,#stealthHud.sf .st-safe,#stealthHud.sf .st-stam{display:none!important}' +
