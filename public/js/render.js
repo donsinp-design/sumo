@@ -1692,6 +1692,37 @@
       this.crowdB.instanceMatrix.needsUpdate = true; this.crowdH.instanceMatrix.needsUpdate = true;
     }
 
+    // the boss bout: he's fighting bare (a censor block) and, the first time, inside the storage-room box until he loses a round
+    bossGear(on, box, makeBox) {
+      if (this.bossG) { for (const o of [this.bossG.boxM, this.bossG.mos].concat(this.bossG.bits)) if (o && o.parent) o.parent.remove(o); this.bossG = null; }
+      if (on) this.bossG = { box: !!box, makeBox, bits: [], t: 0 };
+    }
+    bossGearStep(m, dt) {
+      const G = this.bossG, v = this.views[0], w = m && m.w[0]; if (!G || !v || !w) return;
+      if (v.soft && !G.hid) { G.hid = true; for (const x of v.soft.mats) if (/mawashi/i.test(x.name || '')) x.visible = false; }
+      const sc = (w.a && w.a.scale || 1) * (w.szCur || 1);
+      if (!G.mos) {
+        const cv = document.createElement('canvas'); cv.width = 8; cv.height = 5; const tex = new THREE.CanvasTexture(cv); tex.magFilter = tex.minFilter = THREE.NearestFilter;
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); s.renderOrder = 5; this.scene.add(s); G.mos = s; G.cv = cv;
+      }
+      if (G.box && !G.boxM && G.makeBox) { G.boxM = G.makeBox(); G.boxM.visible = true; this.scene.add(G.boxM); }
+      if (G.boxM) { G.boxM.position.set(w.x, 0.5 * sc, w.z); G.boxM.rotation.y = -w.f + Math.PI / 2; G.boxM.scale.setScalar(1.05 * sc); }
+      if (!G.box && G.boxM) {   // lost a round: the box bursts
+        const p = G.boxM.position; G.boxM.parent.remove(G.boxM); G.boxM = null;
+        const M = new THREE.MeshBasicMaterial({ color: 0xd3a96e });
+        for (let k = 0; k < 14; k++) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.04, 0.3), k % 3 ? M : new THREE.MeshBasicMaterial({ color: 0xb98c52 })); c.position.set(p.x, 0.5 * sc, p.z); this.scene.add(c); const a = Math.random() * 6.28, sp = 2 + Math.random() * 3; G.bits.push(c); c.userData = { vx: Math.cos(a) * sp, vy: 3 + Math.random() * 3, vz: Math.sin(a) * sp, t: 0 }; }
+        if (this.fx.dust) this.fx.dust(p.x, 0.3, p.z, 14, 0.8, 1.0, 0.8);
+      }
+      for (const c of G.bits) { const u = c.userData; u.t += dt; u.vy -= 14 * dt; c.position.x += u.vx * dt; c.position.y = Math.max(0.02, c.position.y + u.vy * dt); c.position.z += u.vz * dt; c.rotation.x += 6 * dt; c.rotation.z += 5 * dt; if (u.t > 2.5) c.visible = false; }
+      const s = G.mos; s.visible = !G.boxM;
+      if (s.visible) {   // a jittering pixel block on his hips, towards the camera
+        G.t -= dt; if (G.t <= 0) { G.t = 0.1; const g = G.cv.getContext('2d'), sk = ['#e9b894', '#d9a07c', '#f0c8a8', '#c98a6a', '#e0ac88']; g.clearRect(0, 0, 8, 5);
+          for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { if ((x === 0 || x === 7) && Math.random() < 0.6) continue; g.fillStyle = sk[(Math.random() * sk.length) | 0]; g.fillRect(x, y, 1, 1); } s.material.map.needsUpdate = true; }
+        const cp = this.cam.position, dx = cp.x - w.x, dz = cp.z - w.z, d = Math.hypot(dx, dz) || 1;
+        s.position.set(w.x + dx / d * 0.35 * sc, 0.62 * sc, w.z + dz / d * 0.35 * sc); s.scale.set(0.5 * sc, 0.31 * sc, 1);
+      }
+    }
+
     setWrestlers(archs, loadouts, names) {
       for (const v of this.views) v.dispose(this.scene);
       this.views = archs.map((a, i) => new WrestlerView(this.scene, a, this.fx, loadouts && loadouts[i]));
@@ -2286,6 +2317,7 @@
       if (m) for (let i = 0; i < this.views.length; i++) {
         const w = m.w[i];
         this.views[i].update(w, Math.max(dt, 1e-4), this.animT);
+        if (i === 0 && this.bossG) this.bossGearStep(m, dt);
         // gathering power at the face-off: dust swirls at the feet
         if (m.phase === 'shikiri' && w.power > 0.2 && dt > 0 && Math.random() < w.power * 0.5) {
           const a = Math.random() * 6.28;

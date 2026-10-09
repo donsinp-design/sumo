@@ -1161,14 +1161,12 @@
       const e = this.el('.st-choice'); e.innerHTML = '<h3>' + jp + '</h3><p>' + en + '</p>' + opts.map((o, k) => '<button class="' + (k ? '' : 'sel') + '">' + o + '</button>').join('');
       e.classList.add('on'); this.choiceI = 0; this.choiceCb = cb; this.keys = {};
     }
-    // the training offer: asked, and if he's turned down, asked again (as him teaching you)
+    // the training offer
     bossAsk(n) {
       const B = this.boss; B.hold = false; if (this.mawM) this.mawM.visible = false;   // (the mawashi's tucked in his belt: the fight's for it)
-      const q = n === 0 ? [{ who: '親方', jp: '…その前に。稽古をつけてやろうか?', en: '...Before that. Shall I put you through some training?', t: 3.2 }]
-        : [{ who: '親方', jp: '…ふむ。', en: 'Hm.', t: 2.8 }, { who: '親方', jp: '本当に、稽古はいらないのか?', en: 'Are you sure you don\'t want the training?', t: 3.0 }];
-      this.say(q, () => this.choice('稽古?', 'TRAINING?', ['YES: learn to play', 'NO: just fight'], (i) => {
+      this.g.bossBox = true;   // (the first bout: he fights in the storage-room box, until he loses a round)
+      this.say([{ who: '親方', jp: '返してほしければ、わしに勝て。', en: 'If you want it back, beat me.', t: 2.8 }, { who: '親方', jp: '…だが、お前は相撲を知らんようだな。稽古が先か?', en: '...But you don\'t look like you know sumo. Training first?', t: 3.6 }], () => this.choice('稽古?', 'TRAINING?', ['YES: learn to play', 'NO: just fight'], (i) => {
         if (i === 0) { this.say([{ who: '親方', jp: 'よし。ついてこい。', en: 'Good. Follow me.', t: 1.8 }], () => this.g.startBossTraining(this)); }
-        else if (n === 0) this.bossAsk(1);
         else this.say([{ who: '親方', jp: '…よかろう。相撲で勝負だ!', en: '...Very well. Let\'s settle it in the ring!', t: 2.8 }], () => this.g.startBossBout(this));
       }));
     }
@@ -1379,7 +1377,6 @@
         this.say([
           { who: '親方', jp: '探しものは…これか?', en: 'Looking for... THIS?', t: 3.0 },
           { who: '親方', jp: 'わしの風呂で、ずいぶん好き勝手してくれたな。', en: 'You\'ve been running riot all over MY bathhouse.', t: 3.4 },
-          { who: '親方', jp: '欲しけりゃ…力ずくで取ってみい!', en: 'Want it back? ...Then come and TAKE it!', t: 3.2 },
         ], () => { this.think('He\'s got MY MAWASHI... and he\'s a YOKOZUNA?!', 2.2); try { localStorage.setItem('wmm_boss', '1'); } catch (e) {} this.later(1.4, () => this.bossAsk(0)); });
       }
     }

@@ -107,7 +107,7 @@
       this.names = [kind === 'boss' ? 'YOU' : human(0) ? P.names[0] : 'CPU', kind === 'pvp' ? P.names[1] : kind === 'boss' ? 'YUNOFUJI' : kind === 'tutorial' || kind === 'training' ? 'PARTNER' : 'CPU'];
       this.viewerIdx = kind === 'pvp' ? -1 : kind === 'attract' ? -1 : 0;
       for (let k = 0; k < 2; k++) m.w[k].extraTaunts = this.loadouts[k].taunts.map((id) => (id ? S.item(id).pose : null));
-      this.R.noMasks = kind === 'boss'; this.R.setWrestlers(archs, this.loadouts, this.names);
+      this.R.noMasks = kind === 'boss'; this.R.setWrestlers(archs, this.loadouts, this.names); this.R.bossGear(kind === 'boss', kind === 'boss' && this.bossBox, this.bossBoxMaker || null);
       for (const v of this.R.views) v.onDerobe = (w) => { this.audio.whoosh(0.4); this.R.fx.dust(w.x, 0.05, w.z, 6, 0.3, 0.5, 0.3); this.audio.cheer(0.4, 0.8); };
       this.ui.setFighters(archs, kind === 'cpu' ? [this.names[0], 'CPU · ' + this.settings.difficulty.toUpperCase()] : kind === 'boss' ? ['', '湯乃富士'] : kind === 'pvp' ? this.names : kind === 'tutorial' ? ['YOU', 'PARTNER'] : ['CPU', 'CPU']);
       this.ui.setSkills([null, null], [false, false], ['', '']);
@@ -138,7 +138,8 @@
       this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1200;
       this.ui.gacha(0, m.skills[0], false, this.skillKey(0), true, this.contKey(0)); this.audio.blip(true);
     }
-    enterBoss(camp) {   // park the bathhouse (it stays exactly as it is) and take over the screen
+    enterBoss(camp) {
+      if (camp && camp.makeBox) this.bossBoxMaker = () => camp.makeBox();   // park the bathhouse (it stays exactly as it is) and take over the screen
       this.campSaved = camp; this.camp = null; this.leavingBoss = false;
       if (camp.hud) camp.hud.style.display = 'none';
       document.body.classList.remove('campaign'); document.body.classList.add('playing');
@@ -898,6 +899,7 @@
       const m = this.match;
       const matchGoesOn = m && !this.matchEnd(m);
       if (matchGoesOn && this.kind === 'boss' && W.idx === 1) {
+        if (this.bossBox) { this.bossBox = false; if (this.R.bossG) this.R.bossG.box = false; }   // (the box bursts; from here on he's bare)
         const L = this.ais[0] && this.ais[0].L; if (L) { this.bossSoft = (this.bossSoft || 0) + 1; const k = this.bossSoft; L.react += 0.14; L.think += 0.08; L.aggr = Math.max(0.1, L.aggr - 0.08 * k); L.skill = 0; L.dodge = 0; }   // (a lost round: he goes easier still)
         m.skills = [null, null]; this.refreshSkills(); this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1500;
         setTimeout(() => { if (this.match === m && this.awaitGacha) this.dealBossGacha(); }, 900);
@@ -1555,7 +1557,7 @@
         case 'skip': this.paused = false; ui.hide(); if (this.tut) this.tut.skip(); break;
         case 'prevLesson': this.paused = false; ui.hide(); if (this.tut) this.tut.prev(); break;
         case 'replayLesson': this.paused = false; ui.hide(); if (this.tut) this.tut.replay(); break;
-        case 'restart': this.paused = false; if (this.tut) this.startTutorial(); else if (this.kind === 'training') this.startTraining(); else this.startGame(); break;
+        case 'restart': this.paused = false; if (this.tut) this.startTutorial(); else if (this.kind === 'training') this.startTraining(); else if (this.kind === 'boss') this.setupMatch(this.sel.c1 || 0, 0, 'boss'); else this.startGame(); break;
         case 'quit': if (this.campSaved) { this.paused = false; this.rematchT = 0; this.leaveBoss('quit'); break; } this.ui.training(null); this.paused = false; this.rematchT = 0; this.R.camOverride = null; ui.show('title'); this.startAttract(); break;
         case 'rematch': this.rematchT = 0; this.startGame(); break;
         case 'select': this.rematchT = 0; this.sel.lock1 = this.sel.lock2 = false; ui.show('select', this.sel); break;
