@@ -34,6 +34,15 @@ export default {
         return new Response(res.body, { status: res.status, headers: h });
       }
     }
+    // a deployment with its own name (SITE_TITLE): the page says so in the raw HTML too, which is what link previews and search read
+    if (env.SITE_TITLE && (res.headers.get('content-type') || '').includes('text/html')) {
+      const T = String(env.SITE_TITLE).replace(/[<>&"]/g, '');
+      return new HTMLRewriter()
+        .on('title', { element(e) { e.setInnerContent(T); } })
+        .on('meta[name="apple-mobile-web-app-title"]', { element(e) { e.setAttribute('content', T); } })
+        .on('head', { element(e) { e.append('<meta property="og:title" content="' + T + '"><meta property="og:site_name" content="' + T + '"><meta name="description" content="' + T + '">', { html: true }); } })
+        .transform(res);
+    }
     return res;
   },
 };
