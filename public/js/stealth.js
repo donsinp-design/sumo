@@ -99,7 +99,7 @@
       this.asleep = false; this.el('.st-obj').style.display = ''; this.el('.st-wake').style.display = 'none'; this.el('.st-zzz').style.display = 'none';
       this.objective('Get out of the BATH (the steps, towards you)');
       this.think('Zzz... mm? I fell asleep in the bath again...', 3.0);
-      this.tip(['WASD  ·  MOVE'], { until: () => this.outOfBath, min: 2 });
+      this.later(3, () => { if (!this.outOfBath && this.scene && !this.tipWasd) { this.tipWasd = true; this.tip(['WASD  ·  MOVE'], { until: () => this.outOfBath }); } });
     }
     later(sec, fn) { (this.timers || (this.timers = [])).push({ t: sec, fn }); }
 
@@ -972,9 +972,6 @@
       if (this.chasing() && !P.cart && !this.carts.some((cc) => near(cc.x, cc.z, 2.0)) && !this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4))) { this.think('No time! They\'re right behind me!', 1.4); return; }
       if (this.stage === 'locker' && near(this.locker.x, this.locker.z, 1.7)) {
         P.st = 'busy'; P.t = 0; P.dur = 0.8; this.stage = 'key'; this.spLocker.visible = false; this.spKey.visible = true;
-        if (!this.tipLocker) { this.tipLocker = true; this.later(1.2, () => { this.tip(['I  ·  TIPTOE', 'people hear you coming: HOLD I to move quietly', 'you\'re a big boy, so it tires you out: stand still and you recover', 'I also lets you HIDE (carts, toilet stalls...)'], { sec: 13 });
-          this.tip(['J  ·  PUNCH', 'punch a wall to make a noise and lure people away'], { sec: 8 });
-          this.tip(['HOLD L + A DIRECTION  ·  CHARGE', 'charging breaks things', 'but you need room for a run-up, and you can\'t charge right away'], { sec: 10 }); }); }
         this.think('Locked. The key... it must be in my wash bucket, by the bath!', 3.2);
         this.objective('Go back to the BATH and check your WASH BUCKET for the KEY'); return;
       }
@@ -1017,7 +1014,7 @@
       if (this.testWear && this.wearing && this.stage !== 'box' && this.stage !== 'exit' && !this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.wearing = false; this.testWear = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.boxDown = false; this.testBoxAt = { x: P.x + Math.cos(P.f) * 1.4, z: P.z + Math.sin(P.f) * 1.4 }; this.testBox.position.set(this.testBoxAt.x, P.y, this.testBoxAt.z); this.testBox.visible = true; P.st = 'busy'; P.t = 0; P.dur = 0.4; return; }
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { this.putOnBox(); P.st = 'busy'; P.t = 0; P.dur = 0.35; return; }   // (on at once: no wait)
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
-        if (!this.tipHeld) { this.tipHeld = true; this.tip(['K again  ·  THROW IT', 'hit someone and they come looking · throw a bucket of water and it leaves a PUDDLE: anyone who runs over it SLIPS', 'HOLD K  ·  SMASH IT instead', 'J  ·  DROP IT'], { sec: 16, min: 4, until: () => !this.P.held }); }
+        if (!this.tipHeld) { this.tipHeld = true; this.tip(['K again  ·  THROW IT', 'hit someone and they come looking · throw a bucket of water and it leaves a PUDDLE: anyone who runs over it SLIPS', 'HOLD K  ·  SMASH IT instead (loud)', 'J  ·  DROP IT (it breaks, quietly)']); }
         b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0); if (b.kind === 'can') b.m.children[0].position.y = 0;
         if (b.water && !this.saidWater) { this.saidWater = true; this.think('Full of water... throw it (K) or smash it (hold K): a puddle. Anyone running over it goes flying!', 3); }
         else if (b.kind === 'can') { if (!this.saidCan) { this.saidCan = true; this.think(b.soda ? 'A cold one! (J drink it · K throw · hold K smash)' : 'Empty. Still... (K throw · hold K smash)', 2.6); } }
@@ -1029,7 +1026,6 @@
     }
     leaveBath() {
       this.outOfBath = true; this.spOut.visible = false; this.mosaic.pop = 0.5;
-      if (this.stage === 'locker' && !this.tipPick) { this.tipPick = true; this.later(1.0, () => this.tip(['K  ·  PICK UP ITEMS', 'buckets, cans... anything lying about'], { sec: 12, until: () => this.tipHeld })); }
       if (this.stage !== 'locker') return;
       this.spLocker.visible = true;
       this.think('...WAIT. Where is my MAWASHI?!', 2.6);
@@ -1064,10 +1060,10 @@
         if (!this.saidKnock) { this.saidKnock = true; this.later(1.2, () => this.think('...that\'ll bring someone over to look. Then I go the other way.', 2.6)); } }
     }
     // hold K with something in hand: he slams it down on the floor in front of him (loud; water goes everywhere)
-    smashHeld() {
+    smashHeld(quiet) {   // (quiet: dropped, not slammed: a small crack, barely heard)
       const P = this.P, b = P.held; if (!b) return; this.bonusLose('smash'); P.held = null; this.waterOff(b);
       const fx = Math.cos(P.f), fz = Math.sin(P.f), L = Math.max(0.3, Math.min(0.7, this.reach(P.x, P.z, P.f, 2) - 0.4)), x = P.x + fx * L, z = P.z + fz * L, y = floorY(x, z);
-      P.st = 'busy'; P.t = 0; P.dur = 0.45; this.w.hand = 1; this.flash = 0.2;
+      P.st = 'busy'; P.t = 0; P.dur = 0.45; this.w.hand = 1; this.flash = quiet ? 0 : 0.2;
       // in pieces: the thing is gone, splinters fly out across the floor
       b.m.visible = false; b.state = 'gone';
       const col = b.col || { stool: 0xe2b85e, oke: 0xe8cb98, bucket: 0x84b5ad }[b.kind] || 0xbb8b5e, mat = S.Flat ? S.Flat.mat(col) : new THREE.MeshLambertMaterial({ color: col });
@@ -1077,9 +1073,9 @@
         this.flying.push({ m, sx: x, sy: y + 0.3, sz: z, tx, ty: floorY(tx, tz) + 0.02, tz, h: 0.25 + Math.random() * 0.4, t: 0, dur: 0.3 + Math.random() * 0.25, r0: [0, 0, 0], r1: [Math.random() * 8, Math.random() * 8, Math.random() * 8] }); }
       if (b.water && !inPool(x, z)) { b.water = false; this.spill(x, z, y); }
       if (b.soda && !inPool(x, z)) { b.soda = false; this.spill(x, z, y, 'soda'); }
-      this.think(['*CRASH!*', '*SMASH!*', '*KRAKK!*'][(this.t * 3 | 0) % 3], 1);
-      if (!SAFE[roomAt(x, z)]) this.noise(x, z, 14, '?!'); else this.ringAt(x, z, 2, 0.5);
-      if (this.g.audio && this.g.audio.thump) this.g.audio.thump(9);
+      this.think(quiet ? '*crack*' : ['*CRASH!*', '*SMASH!*', '*KRAKK!*'][(this.t * 3 | 0) % 3], 1);
+      if (!SAFE[roomAt(x, z)]) this.noise(x, z, quiet ? 3 : 14, quiet ? '?' : '?!'); else this.ringAt(x, z, quiet ? 1 : 2, 0.5);
+      if (this.g.audio && this.g.audio.thump) this.g.audio.thump(quiet ? 2 : 9);
     }
     // the water in a tub shows only while it's carried upright / standing; a spill leaves a puddle that staff can slip on
     waterOff(b) { if (b.waterM) b.waterM.visible = false; }
@@ -1508,19 +1504,31 @@
         if (b.state === 'roll' && spd < 0.15 && p.y <= 0.101) { b.state = 'floor'; b.vx = b.vz = 0; b.x = p.x; b.z = p.z; }
       }
     }
-    // J with something in hand: set it down at his feet (a gentle toss, not a throw)
-    drop() {
-      const P = this.P, b = P.held; if (!b) return; this.waterOff(b); P.held = null; b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y;
-      const L = clamp(this.reach(P.x, P.z, P.f, 1.2) - 0.4, 0.3, 0.8); b.tx = P.x + Math.cos(P.f) * L; b.tz = P.z + Math.sin(P.f) * L; b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz);
-      b.dur = 0.22; P.st = 'busy'; P.t = 0; P.dur = 0.25; this.w.hand = 1;
-    }
+    // J with something in hand: it drops from his hand and breaks, quietly (hold K is the loud slam)
+    drop() { this.smashHeld(true); }
     // the big on-screen tips: lines of text, one tip at a time, each for its time (or until its condition is met)
-    tip(lines, o) { (this.tipQ || (this.tipQ = [])).push({ lines, sec: (o && o.sec) || 6, min: (o && o.min) || 0, until: o && o.until, t: 0 }); }
+    tip(lines, o) { (this.tipQ || (this.tipQ = [])).push({ lines, sec: (o && o.sec) || 90, until: o && o.until, t: 0 }); }
+    tipOk() { const q = this.tipQ; if (q && q.length && q[0].shown) { q.shift(); return true; } return false; }   // Enter: got it
     tipStep(dt) {
-      const q = this.tipQ, e = this.el('.st-tip'); if (!e) return;
+      const e = this.el('.st-tip'); if (!e) return; this.tipWatch();
+      const q = this.tipQ;
       if (!q || !q.length) { if (e.style.display !== 'none') e.style.display = 'none'; return; }
-      const c = q[0]; if (!c.shown) { c.shown = true; e.innerHTML = '<b>' + c.lines[0] + '</b>' + c.lines.slice(1).map((l, i) => / {2}· /.test(l) ? '<b>' + l + '</b>' : '<i>' + l + '</i>').join(''); e.style.display = 'block'; }
-      c.t += dt; if (c.t >= c.sec || (c.until && c.t >= c.min && c.until())) q.shift();
+      const c = q[0]; if (!c.shown) { c.shown = true; e.innerHTML = '<b>' + c.lines[0] + '</b>' + c.lines.slice(1).map((l) => / {2}· /.test(l) ? '<b>' + l + '</b>' : '<i>' + l + '</i>').join('') + '<u>ENTER · OK</u>'; e.style.display = 'block'; }
+      c.t += dt; if (c.t >= c.sec || (c.until && c.t > 0.4 && c.until())) q.shift();
+    }
+    // the tips come when they're needed
+    tipWatch() {
+      const P = this.P, q = this.tipQ || [], near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
+      if (this.over || this.asleep || this.sf || this.freeze) return;
+      if (!this.tipPick && this.outOfBath && !P.held && this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 2.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.tipPick = true; this.tip(['K  ·  PICK UP', 'things lying about'], { until: () => !!P.held }); }
+      const room = roomAt(P.x, P.z);
+      if (!this.tipDuck && !this.outOfBath && !q.length && this.t > 8 && P.y < -0.2) { this.tipDuck = true; this.tip(['I  ·  DUCK UNDER', 'in the bath, hold I to go under the water: nobody sees you', 'but you can only hold your breath for a few seconds'], { until: () => this.outOfBath }); }
+      if (!this.tipCart && this.outOfBath && !P.held && !P.cart && this.carts.some((cc) => near(cc.x, cc.z, 2.6))) { this.tipCart = true; this.tip(['K  ·  PUSH THE CART', 'K again lets go', 'I next to it: hop inside and HIDE'], { until: () => !!P.cart }); }
+      if (!this.tipSneak && room === 'lock') { this.tipSneak = true;
+        this.tip(['I  ·  SNEAK', 'people hear you coming: HOLD I to move quietly', 'you\'re a big boy, so it tires you out: stand still and you recover', 'I also lets you HIDE (carts, toilet stalls...)']);
+        this.tip(['J  ·  PUNCH', 'punch a wall to make a noise and lure people away']); }
+      if (!this.tipLockK && this.stage === 'locker' && near(this.locker.x, this.locker.z, 3.2)) { this.tipLockK = true; this.tip(['K  ·  OPEN YOUR LOCKER'], { until: () => this.stage !== 'locker' }); }
+      if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['HOLD L + A DIRECTION  ·  CHARGE', 'charging breaks things', 'but you need room for a run-up, and you can\'t charge right away']); }
     }
     drink() {
       const P = this.P, b = P.held; if (!b) return;
@@ -1711,6 +1719,7 @@
     }
     putOnBox() {
       this.wearing = true; this.pantsBox.visible = false; this.spBox.visible = false; this.spExit.visible = true; this.wearBox();
+      this.tip(['HOLD I  ·  HIDE IN THE BOX', 'squat down inside it and nobody sees you', 'but a walking box is still a little suspicious...']);
       this.stage = 'exit'; this.cp = CP.store;
       this.think('Perfect fit. Now, out the FRONT DOOR... without anyone seeing a walking box. (Hold I to squat inside it)', 3.6);
       this.objective('Out through the FRONT DOOR (the entrance, past the shoe lockers). Unseen: hold I to squat in the box');
@@ -1957,7 +1966,7 @@
         '#stealthHud .st-choice{position:absolute;left:50%;top:52%;transform:translateX(-50%);display:none;text-align:center;background:rgba(42,36,48,0.92);padding:18px 34px 20px;border-radius:14px;color:#fffaf0}#stealthHud .st-choice.on{display:block}' +
         '#stealthHud .st-choice h3{margin:0 0 4px;font:400 26px "Dela Gothic One",sans-serif}#stealthHud .st-choice p{margin:0 0 12px;font:600 19px "Barlow Condensed",sans-serif;opacity:0.85}' +
         '#stealthHud .st-choice button{display:block;width:100%;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:4px 0;cursor:pointer}#stealthHud .st-choice button.sel{color:#f4efe6;border-left:5px solid #d8262e;padding-left:16px}' +
-        '#stealthHud .st-tip{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:max-content;max-width:min(70vw,760px);display:none;text-align:center;pointer-events:none;background:#14101a;color:#fffaf0;padding:10px 24px 12px;border-radius:12px;box-shadow:0 0 0 3px #d8262e}#stealthHud .st-tip b{display:block;font:800 26px "Barlow Condensed",sans-serif;letter-spacing:.06em;margin:2px 0}#stealthHud .st-tip i{display:block;font:600 18px "Barlow Condensed",sans-serif;font-style:normal;color:#e9e3d8;margin:3px 0}#stealthHud.nh-tips .st-tip{display:none!important}' +
+        '#stealthHud .st-tip{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:max-content;max-width:min(70vw,760px);display:none;text-align:center;pointer-events:none;background:#14101a;color:#fffaf0;padding:10px 24px 12px;border-radius:12px;box-shadow:0 0 0 3px #d8262e}#stealthHud .st-tip b{display:block;font:800 26px "Barlow Condensed",sans-serif;letter-spacing:.06em;margin:2px 0}#stealthHud .st-tip u{display:block;text-decoration:none;margin-top:8px;font:700 15px "Barlow Condensed",sans-serif;letter-spacing:.14em;color:#f2cf4a}#stealthHud .st-tip i{display:block;font:600 18px "Barlow Condensed",sans-serif;font-style:normal;color:#e9e3d8;margin:3px 0}#stealthHud.nh-tips .st-tip{display:none!important}' +
         '#stealthHud .st-sub{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);width:max-content;max-width:94vw;text-align:center;pointer-events:none;display:none}#stealthHud .st-sub{background:#14101a;padding:10px 26px 12px;border-radius:12px}#stealthHud .st-sub .jp{display:block;font:400 26px "Dela Gothic One",sans-serif;color:#fffaf0;letter-spacing:0.04em}#stealthHud .st-sub .en{display:block;margin-top:6px;font:700 22px "Barlow Condensed",sans-serif;color:#e9e3d8}#stealthHud .st-sub .who{color:#f2cf4a;margin-right:8px}' +
         '#stealthHud .st-hp{position:absolute;left:24px;top:76px;font-size:28px;letter-spacing:4px;color:#cf3a3a;text-shadow:0 2px 0 #fffaf0;display:none}#stealthHud .st-hp.chase{animation:hpPulse .5s ease-in-out infinite alternate}@keyframes hpPulse{to{transform:scale(1.12)}}' +
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
@@ -2057,6 +2066,7 @@
         else if (e.code === 'Escape') { if (this.paused) this.setPause(false); else this.command('quit'); }
         return true;
       }
+      if ((e.code === 'Enter' || e.code === 'NumpadEnter') && this.tipOk()) return true;
       if (e.code === 'Escape' || e.code === 'KeyP') { if (!this.over) this.setPause(true); return true; }
       return false;
     }
