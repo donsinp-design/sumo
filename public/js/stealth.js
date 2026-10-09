@@ -452,6 +452,8 @@
         n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.noiseAt = [x, z]; n.inv = !!soft;
       }
     }
+    // noise that staff only react to outside the bath (everyone's naked in there), but the minimap shows it everywhere
+    noiseS(x, z, radius, msg, soft) { if (SAFE[roomAt(x, z)]) { (this.mapRings || (this.mapRings = [])).push({ x, z, r: radius, t: 0, y: this.P.y }); if (this.mapRings.length > 12) this.mapRings.shift(); } else this.noise(x, z, radius, msg, soft); }
     ringAt(x, z, size, dur) { this.fx.ring(x, z, size, dur); const r = (this.fx.rings || []).find((o) => o.t === 0 && o.m.position.x === x && o.m.position.z === z); if (r) r.m.position.y = floorY(x, z) + 0.04; }
     npcStep(n, dt) {
       const a = n.a; a.t += dt; n.slipCd = Math.max(0, (n.slipCd || 0) - dt);
@@ -728,14 +730,14 @@
       if (wet !== this.wasWet) { if (this.wasWet !== undefined) this.fx.water && this.fx.water(P.x, P.z, 1.6, POOL.water); this.wasWet = wet; }
       if (P.st === 'charge') {
         if (power && this.stage === 'smash' && !this.chasing() && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.25) { this.hitLocker(); P.st = 'busy'; P.t = 0; P.dur = 0.5; }
-        else if (hit) { P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.fx.dust && this.fx.dust(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (!SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, 5, '?'); }
+        else if (hit) { P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.fx.dust && this.fx.dust(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (true) this.noiseS(P.x, P.z, 5, '?'); }
       }
       if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = was === 'wind' ? 'charge' : 'free'; P.t = 0; if (was === 'wind') { P.dur = 0.85; P.run = 0; } if (was === 'charge') P.cd = 0.5; if (was === 'wear') this.putOnBox(); }
       // puddles: walking over them is fine; RUNNING (the charge) over one, you slip
       if (P.st === 'charge') for (const q of this.puddles) if (((P.x - q.x) / q.rx) ** 2 + ((P.z - q.z) / q.rz) ** 2 < 1) {
         P.st = 'slip'; P.t = 0; P.dur = 1.3; P.fall = Math.atan2(P.vz, P.vx); P.vx *= 0.6; P.vz *= 0.6;
         this.think(['WHOA—!', 'Waaah!', 'Slippery!!'][(this.t * 3 | 0) % 3], 1.2); this.fx.water && this.fx.water(P.x, P.z, 5);
-        if (!SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, 7, '?!');
+        if (true) this.noiseS(P.x, P.z, 7, '?!');
         break;
       }
       // the room you're in: checkpoints at each doorway
@@ -789,6 +791,7 @@
       // a charge is loud: heavy running footsteps carry round the room
       // footsteps: walking is heard by anyone close by (they come and look), the charge further; tiptoe is silent
       const proom = roomAt(P.x, P.z), loud = (SAFE[proom] ? 0 : P.st === 'charge' ? 5 : P.st === 'free' && P.tip < 0.5 && Math.hypot(P.vx, P.vz) > 1.2 ? 2.8 : 0) * (proom === 'laundry' ? 0.45 : 1);   // (the machines drown footsteps out)
+      if (SAFE[proom] && P.st === 'charge') { this.stompT = (this.stompT || 0) - dt; if (this.stompT <= 0) { this.stompT = 0.35; this.noiseS(P.x, P.z, 5, '?', true); } } else
       if (loud) { this.stompT = (this.stompT || 0) - dt; if (this.stompT <= 0) { this.stompT = P.st === 'charge' ? 0.35 : 0.5; this.noise(P.x, P.z, loud, '?', true); } } else this.stompT = 0;
       for (const b of this.buckets) if (b.state === 'fly') {
         b.t += dt; const k = Math.min(1, b.t / b.dur); b.x = b.sx + (b.tx - b.sx) * k; b.z = b.sz + (b.tz - b.sz) * k; b.y = b.sy + (b.ty - b.sy) * k + Math.sin(Math.PI * k) * (b.arc === undefined ? 1.6 : b.arc);
@@ -802,7 +805,7 @@
         if (k >= 1) { b.state = 'floor'; b.arc = undefined; if (b.water) { b.water = false; if (!b.wet) this.spill(b.tx, b.tz, b.ty); } if (b.soda) { b.soda = false; if (!b.wet) this.spill(b.tx, b.tz, b.ty, 'soda'); }
           const pud = this.puddles.some((q) => ((b.x - q.x) / q.rx) ** 2 + ((b.z - q.z) / q.rz) ** 2 < 1.4);
           if (b.wet) { this.fx.water && (this.fx.water(b.x, b.z, 2.4, POOL.water), this.fx.water(b.x + 0.2, b.z - 0.1, 1.4, POOL.water)); b.m.rotation.set(0.3, 0.4, 0.2); b.m.position.y = b.ty; }
-          else { if (pud && this.fx.water) this.fx.water(b.x, b.z, 1.4, b.ty); b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + (b.kind === 'can' ? 0.1 : 0.3); if (b.kind === 'can') b.m.children[0].position.y = -0.085; } if (!SAFE[roomAt(b.x, b.z)]) this.noise(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think(b.wet ? '*SPLOOSH*' : '*CLATTER*', 1); }
+          else { if (pud && this.fx.water) this.fx.water(b.x, b.z, 1.4, b.ty); b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + (b.kind === 'can' ? 0.1 : 0.3); if (b.kind === 'can') b.m.children[0].position.y = -0.085; } if (true) this.noiseS(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think(b.wet ? '*SPLOOSH*' : '*CLATTER*', 1); }
       }
       this.canStep(dt); this.printStep(dt); this.bossStep(dt);
       for (const f of this.flying) {
@@ -958,7 +961,7 @@
       }
       this.fx.dust && this.fx.dust(cx, y0 + 0.6, cz, 10, 0.5, 0.7, 0.5); this.flash = 0.5;
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(8);
-      if (!SAFE[roomAt(cx, cz)]) this.noise(cx, cz, 12, '!?');
+      if (true) this.noiseS(cx, cz, 12, '!?');
       this.think(['*CRASH*', 'Oops.', '...that was loud.', 'Sorry!'][(this.t * 3 | 0) % 4], 1.2);
     }
     heelsDown() {   // out of puff on tiptoe: the heels come down, THUD
@@ -1059,7 +1062,7 @@
       // nothing to hit, a wall right there: he knocks on it. Anyone in earshot comes over to see who's knocking (a lure)
       const rr = this.reach(P.x, P.z, P.f, 1.7); if (!any && rr < 1.6) { const kx = P.x + fx * rr, kz = P.z + fz * rr;
         this.think(['*knock knock*', '*KNOCK KNOCK*', '*bonk bonk*'][(this.t * 3 | 0) % 3], 1.0); this.ringAt(kx, kz, 1.2, 0.5);
-        if (!SAFE[roomAt(P.x, P.z)]) this.noise(kx - fx * 0.6, kz - fz * 0.6, 7.5, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3);
+        if (true) this.noiseS(kx - fx * 0.6, kz - fz * 0.6, 7.5, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3);
         if (!this.saidKnock) { this.saidKnock = true; this.later(1.2, () => this.think('...that\'ll bring someone over to look. Then I go the other way.', 2.6)); } }
     }
     // hold K with something in hand: he slams it down on the floor in front of him (loud; water goes everywhere)
@@ -1077,7 +1080,7 @@
       if (b.water && !inPool(x, z)) { b.water = false; this.spill(x, z, y); }
       if (b.soda && !inPool(x, z)) { b.soda = false; this.spill(x, z, y, 'soda'); }
       this.think(quiet ? '*crack*' : ['*CRASH!*', '*SMASH!*', '*KRAKK!*'][(this.t * 3 | 0) % 3], 1);
-      if (!SAFE[roomAt(x, z)]) this.noise(x, z, quiet ? 3 : 14, quiet ? '?' : '?!'); else this.ringAt(x, z, quiet ? 1 : 2, 0.5);
+      if (true) this.noiseS(x, z, quiet ? 3 : 14, quiet ? '?' : '?!'); if (SAFE[roomAt(x, z)]) this.ringAt(x, z, quiet ? 1 : 2, 0.5);
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(quiet ? 2 : 9);
     }
     // the water in a tub shows only while it's carried upright / standing; a spill leaves a puddle that staff can slip on
@@ -1578,7 +1581,7 @@
       this.hits = Math.max(0, (this.hits || 0) - 1); P.stam = 1; P.tired = false;
       this.think((this.hits ? '*glug glug glug* Ahhh... that\'s better. ♥' : '*glug glug glug* AHHH. Good as new! ♥'), 1.6);
       this.later(1.7, () => { this.think(['*BUUUUURP*', '*BWAAARP!*', '*urrrp*... pardon.'][(this.t * 3 | 0) % 3], 1.6); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'げっぷ', 1.2);
-        if (!SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, 6, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); });   // (loud enough to turn heads)
+        if (true) this.noiseS(P.x, P.z, 6, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); });   // (loud enough to turn heads)
     }
     // a big bare footprint (x forward, the big toe on the inside): a sole, wide at the ball, and five toes
     footGeo(side) {
