@@ -1420,10 +1420,10 @@
       if (w.st !== B.st) { w.st = B.st; w.t = 0; } else w.t += dt;
       w.carry = B.hold ? { overhead: true } : null; w.relaxed = true; w.hand = 1;
       bv.update(w, Math.max(dt, 1e-4), T); bv.root.position.y += B.y; bv.root.visible = true;
-      // our mawashi, held up over his head in both hands (it glints)
+      // our mawashi, held up over his head in both hands
       if (B.hold) { if (!this.mawM) this.mawM = this.makeMawashi(B.belt); const a = this._ha || (this._ha = new THREE.Vector3()), b = this._hb || (this._hb = new THREE.Vector3());
         bv.handWorld(1, a); bv.handWorld(-1, b); this.mawDrape(this.mawM, b, a, B.f, T); this.mawM.visible = true;
-        B.holdT = (B.holdT || 0) + dt; if ((B.glint = (B.glint || 0) - dt) <= 0) { B.glint = 0.35; this.popAt({ x: (a.x + b.x) / 2 + (Math.random() - 0.5) * 0.9, z: (a.z + b.z) / 2, y: a.y + 0.1 + Math.random() * 0.5 }, '✦', 0.6); } }
+        B.holdT = (B.holdT || 0) + dt; }
       else if (this.mawM) this.mawM.visible = false;
     }
     // a mawashi: a long, wide band of heavy cloth. Held up by both hands it sags between them, the loose end hanging down
