@@ -833,7 +833,7 @@
       const first = !this.chasing(), P = this.P;
       n.mode = 'chase'; n.path = null; n.alarm = 0; n.lostT = 0; n.rp = 0; n.last = [P.x, P.z]; n.raid = false;
       this.popAt(n.a, this.wearing ? ['箱が…動いてる!?', 'おい!その箱!', '歩く箱!?'][this.spotted % 3] : ['イレズミ!?', '変態!', '刺青だ!', 'おい!待て!'][this.spotted % 4], 1.5, true);
-      if (first) { this.spotted++; if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4); this.flash = 0.5; }
+      if (first) { this.spotted++; this.bonusLose('seen'); if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4); this.flash = 0.5; }
       for (const m of this.npcs) if (m !== n && m.mode !== 'chase' && !m.ko && m.a.st === 'free' && !m.busy && Math.abs(m.a.y - n.a.y) < 1.5 && Math.hypot(m.a.x - n.a.x, m.a.z - n.a.z) < 9) {
         m.mode = 'chase'; m.path = null; m.alarm = 0; m.lostT = 0; m.rp = 0.2; m.last = [P.x, P.z]; m.raid = false; this.popAt(m.a, '!', 1.0); }
     }
@@ -895,6 +895,7 @@
     }
     range(n) { if (n.raid && n.looked) return 10; return n.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }   // (the bath searchers look right across the water)
     breakThing(B) {
+      this.bonusLose('broke');
       const P = this.P, sd = B.s; B.done = true; B.o.visible = false;
       if (B.w) this.walls.splice(this.walls.indexOf(B.w), 1); if (B.bl) this.blockers.splice(this.blockers.indexOf(B.bl), 1);
       this.buildNav(); P.vx *= 0.7; P.vz *= 0.7;
@@ -923,7 +924,7 @@
     use() {
       const P = this.P, near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
       if (P.held) { // throw it where you face
-        const b = P.held; this.waterOff(b); P.held = null; b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y;
+        const b = P.held; this.waterOff(b); P.held = null; b.state = 'fly'; this.bonusLose('thrown'); b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y;
         const L = Math.max(1, this.reach(P.x, P.z, P.f, 8) - 0.6); b.tx = P.x + Math.cos(P.f) * L; b.tz = P.z + Math.sin(P.f) * L;
         b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz);   // into the bath: it floats
         b.dur = 0.35 + L * 0.05; P.st = 'busy'; P.t = 0; P.dur = 0.3; this.w.hand = 1; return;
@@ -1012,7 +1013,7 @@
     }
     // hold K with something in hand: he slams it down on the floor in front of him (loud; water goes everywhere)
     smashHeld() {
-      const P = this.P, b = P.held; if (!b) return; P.held = null; this.waterOff(b);
+      const P = this.P, b = P.held; if (!b) return; this.bonusLose('broke'); P.held = null; this.waterOff(b);
       const fx = Math.cos(P.f), fz = Math.sin(P.f), L = Math.max(0.3, Math.min(0.7, this.reach(P.x, P.z, P.f, 2) - 0.4)), x = P.x + fx * L, z = P.z + fz * L, y = floorY(x, z);
       P.st = 'busy'; P.t = 0; P.dur = 0.45; this.w.hand = 1; this.flash = 0.2;
       // in pieces: the thing is gone, splinters fly out across the floor
@@ -1044,6 +1045,21 @@
       gl.rotation.x = -Math.PI / 2; gl.position.set(-rx * 0.1, 0.004, -rz * 0.25); gl.userData.flatDone = true; g.add(gl);
       this.puddles.push({ x, z, rx, rz, y: fy, m: g, soda });
     }
+    // ---- bonuses: kept until you blow them. Never seen / nobody knocked out / nothing broken (that the story didn't need) / nothing thrown
+    bonusLose(k) {
+      const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, thrown: true }); if (!B[k]) return; B[k] = false;
+      const e = this.el('.st-bonus i[data-k="' + k + '"]'); if (e) { e.classList.add('pop'); setTimeout(() => { e.classList.remove('pop'); e.classList.add('off'); }, 450); }
+    }
+    bonusBar() {
+      const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, thrown: true }), e = this.el('.st-bonus'); if (!e || e.childNodes.length) return;
+      e.innerHTML = [['seen', 'UNSEEN'], ['ko', 'NO ONE HURT'], ['broke', 'NOTHING BROKEN'], ['thrown', 'NOTHING THROWN']].map(([k, t]) => '<i data-k="' + k + '"' + (B[k] ? '' : ' class="off"') + '>' + t + '</i>').join('');
+    }
+    bonusHTML() {
+      const B = this.bonus || { seen: true, ko: true, broke: true, thrown: true }, all = B.seen && B.ko && B.broke && B.thrown;
+      const row = (ok, jp, t, d) => '<div style="display:flex;gap:10px;align-items:baseline;justify-content:center;opacity:' + (ok ? 1 : 0.45) + '"><b style="font:400 20px \'Yuji Syuku\',serif;color:' + (ok ? '#d8262e' : '#8a8178') + '">' + jp + '</b><span style="font:700 18px \'Barlow Condensed\',sans-serif;letter-spacing:0.06em;' + (ok ? '' : 'text-decoration:line-through') + '">' + (ok ? '✓ ' : '') + t + '</span><span style="font:500 15px \'Barlow Condensed\',sans-serif;opacity:0.7">' + d + '</span></div>';
+      return '<div style="margin:10px 0 14px;display:flex;flex-direction:column;gap:4px">' + row(B.seen, '忍', 'GHOST', 'never spotted') + row(B.ko, '和', 'PACIFIST', 'nobody knocked out') + row(B.broke, '静', 'LIGHT TOUCH', 'nothing smashed') + row(B.thrown, '素手', 'EMPTY HANDS', 'nothing thrown') +
+        (all ? '<div style="font:400 26px \'Dela Gothic One\',sans-serif;color:#d8262e;margin-top:6px">完璧 · PERFECT</div>' : '') + '</div>';
+    }
     // ---- subtitles: who's speaking, the Japanese as they say it, the English underneath
     say(lines, done) {
       const e = this.el('.st-sub'); let t = 0;
@@ -1054,8 +1070,8 @@
     // ---- the phone call: he's in the stall; outside, one of the staff takes a call from the boss
     phoneCall(D) {
       const P = this.P, n = this.npcs.find((m) => m.room === 'toilet' && !m.ko) || this.npcs[0], a = n.a, ST = LY.stalls[LY.stall_use];
-      n.hold = 14; n.path = null; a.vx = a.vz = 0; n.phone = true; a.f = Math.atan2(ST.z - a.z, ST.x - a.x);
-      this.popAt(a, '♪ プルルル…', 1.4);
+      n.hold = 14; n.path = null; a.vx = a.vz = 0; n.phone = true; a.f = Math.PI / 2 + 0.5;   // (turned towards us, so we see the phone at the ear)
+      this.popAt(a, '♪ プルルル…', 1.4); this.camFocus = { x: a.x, z: a.z, dist: 7.5, y: 0.5, h: 0.45 };   // (the camera goes to them)
       this.say([
         { jp: '♪ プルルル… プルルル…', en: '*ring ring... ring ring...*', t: 2.0 },
         { who: '店員', jp: '…はい、もしもし。', en: '...Hello?', t: 2.0 },
@@ -1064,11 +1080,11 @@
         { who: '店員', jp: '…で、まだ湯船につかってるんですね。', en: '...and you\'re still soaking in the tub with it.', t: 3.0 },
         { who: '店員', jp: 'はい、わかりました…。', en: 'Right... understood.', t: 2.0 },
       ], () => {
-        n.phone = false; n.hold = 0.5; if (this.phoneM) this.phoneM.visible = false;
+        n.phone = false; n.hold = 0.5; if (this.phoneM) this.phoneM.visible = false; this.camFocus = null;
         P.inStall = false; if (D) D.rotation.y = -1.4; P.st = 'free';
         this.stage = 'bossgo'; this.cp = CP.toilet; this.spBack.visible = false;
         this.think('MY MAWASHI!! It\'s in the BATH... and someone\'s GOT it!', 3);
-        this.objective('Your MAWASHI is in the BATH! Get back there (through the wash area)');
+        this.spOut.visible = true; this.objective('Your MAWASHI is in the BATH! Back to the bath steps, where you woke up');
       });
       P.dur = 99;   // (stays put in the stall, listening)
     }
@@ -1083,17 +1099,17 @@
       hd.updateMatrixWorld(true); bl.updateMatrixWorld(true);
       const ear = new V().setFromMatrixPosition(hd.matrixWorld).add(rt.clone().multiplyScalar(0.11)), el = new V().setFromMatrixPosition(bl.matrixWorld);
       aim(bl, bh, ear.sub(el));
-      if (!this.phoneM) { const g = new THREE.Group(), m = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.014), S.Flat.mat(0x3a3644)); m.userData.flatDone = true; g.add(m);
-        const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.12), new THREE.MeshBasicMaterial({ color: 0x9fd0ef })); sc.position.z = 0.008; sc.userData.flatDone = true; g.add(sc); this.G.add(g); this.phoneM = g; }
+      if (!this.phoneM) { const g = new THREE.Group(), m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.24, 0.02), S.Flat.mat(0x3a3644)); m.userData.flatDone = true; g.add(m);
+        const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.2), new THREE.MeshBasicMaterial({ color: 0x9fd0ef })); sc.position.z = 0.011; sc.userData.flatDone = true; g.add(sc); this.G.add(g); this.phoneM = g; }
       const pm = this.phoneM; pm.visible = true; bh.updateMatrixWorld(true); pm.position.setFromMatrixPosition(bh.matrixWorld); pm.rotation.set(0, Math.PI / 2 - f, 0.3);
     }
     // ---- the boss rises out of the bath
     bossStep(dt) {
       const B = this.boss, P = this.P; if (!B) return;
-      if (this.stage === 'bossgo' && P.z > -15.6 && !B.rise) {   // into the bath hall: the water stirs
-        B.rise = { t: 0 }; B.on = true; B.x = clamp(P.x, POOL.x0 + 1.4, POOL.x1 - 1.4); B.z = POOL.z0 + 2.4; B.y = -2.7; B.hold = false;
+      if (this.stage === 'bossgo' && Math.hypot(P.x - 1, P.z + 0.9) < 2.2 && !B.rise) {   // back at the bath steps, where he woke up: the water stirs
+        B.rise = { t: 0 }; B.on = true; B.x = 1.8; B.z = -4.6; B.y = -2.7; B.hold = false; this.spOut.visible = false;
         B.f = Math.atan2(P.z - B.z, P.x - B.x); P.st = 'busy'; P.t = 0; P.dur = 99; P.vx = P.vz = 0;
-        this.camFocus = { x: (B.x + P.x) / 2, z: (B.z + P.z) / 2 + 0.6, flip: true, dist: 9.5, y: 0.6 }; this.camT.set(this.camFocus.x, 0, this.camFocus.z); this.objective('...');   // (a cut: the camera behind him, looking at the bath)
+        P.f = Math.atan2(B.z - P.z, B.x - P.x); this.camFocus = { x: (B.x + P.x) / 2, z: (B.z + P.z) / 2, dist: 10, y: 0.5, h: 0.36 }; this.objective('...');   // (the camera eases in on the two of them)
         this.think('...hm? The water\'s... bubbling?', 1.6);
       }
       if (!B.rise) return;
@@ -1120,17 +1136,28 @@
       w.carry = B.hold ? { overhead: true } : null; w.relaxed = true; w.hand = 1;
       bv.update(w, Math.max(dt, 1e-4), T); bv.root.position.y += B.y; bv.root.visible = true;
       // our mawashi, held up over his head in both hands (it glints)
-      if (B.hold) { if (!this.mawM) this.mawM = this.makeMawashi(B.belt); const m = this.mawM, a = this._ha || (this._ha = new THREE.Vector3()), b = this._hb || (this._hb = new THREE.Vector3());
-        bv.handWorld(1, a); bv.handWorld(-1, b); a.add(b).multiplyScalar(0.5); m.position.set(a.x, a.y + 0.12, a.z); m.rotation.set(0, Math.PI / 2 - B.f, 0); m.visible = true;
-        B.holdT = (B.holdT || 0) + dt; if ((B.glint = (B.glint || 0) - dt) <= 0) { B.glint = 0.35; this.popAt({ x: a.x + (Math.random() - 0.5) * 0.8, z: a.z, y: a.y + 0.2 + Math.random() * 0.5 }, '✦', 0.6); } }
+      if (B.hold) { if (!this.mawM) this.mawM = this.makeMawashi(B.belt); const a = this._ha || (this._ha = new THREE.Vector3()), b = this._hb || (this._hb = new THREE.Vector3());
+        bv.handWorld(1, a); bv.handWorld(-1, b); this.mawDrape(this.mawM, b, a, B.f, T); this.mawM.visible = true;
+        B.holdT = (B.holdT || 0) + dt; if ((B.glint = (B.glint || 0) - dt) <= 0) { B.glint = 0.35; this.popAt({ x: (a.x + b.x) / 2 + (Math.random() - 0.5) * 0.9, z: (a.z + b.z) / 2, y: a.y + 0.1 + Math.random() * 0.5 }, '✦', 0.6); } }
       else if (this.mawM) this.mawM.visible = false;
     }
-    // a mawashi, folded into a thick bundle with a loose end hanging down
+    // a mawashi: a long, wide band of heavy cloth. Held up by both hands it sags between them, the loose end hanging down
     makeMawashi(col) {
-      const g = new THREE.Group(), M = S.Flat.mat(col === undefined ? 0x2c3d93 : col), M2 = S.Flat.mat(new THREE.Color(col === undefined ? 0x2c3d93 : col).multiplyScalar(0.8));
-      for (let k = 0; k < 4; k++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.62 - k * 0.04, 0.07, 0.24), k % 2 ? M2 : M); b.position.set((k % 2 ? 0.02 : -0.02), k * 0.068, 0); b.userData.flatDone = true; b.castShadow = true; g.add(b); }
-      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.42, 0.03), M); tail.position.set(0.33, -0.16, 0.06); tail.rotation.z = 0.15; tail.userData.flatDone = true; g.add(tail);
-      this.G.add(g); return g;
+      const N = 34, pos = new Float32Array(N * 2 * 3), idx = [];
+      for (let k = 0; k < N - 1; k++) { if (k === 21) continue; const a = k * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }   // (two strips: the sag, and the end hanging)
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(idx);
+      const m = new THREE.Mesh(g, S.Flat.mat(col === undefined ? 0x2c3d93 : col, { side: THREE.DoubleSide })); m.userData.flatDone = true; m.castShadow = true; m.frustumCulled = false; m.N = N;
+      this.G.add(m); return m;
+    }
+    mawDrape(m, L, R, f, T) {
+      const N = m.N, pos = m.geometry.attributes.position, fw = new THREE.Vector3(Math.cos(f), 0, Math.sin(f)), side = new THREE.Vector3().subVectors(R, L).setY(0).normalize(), up = new THREE.Vector3(0, 1, 0);
+      const put = (k, p, wd, wv) => { pos.setXYZ(k * 2, p.x + wv.x * wd, p.y + wv.y * wd, p.z + wv.z * wd); pos.setXYZ(k * 2 + 1, p.x - wv.x * wd, p.y - wv.y * wd, p.z - wv.z * wd); };
+      const p = new THREE.Vector3();
+      for (let k = 0; k < 22; k++) { const t = k / 21; p.lerpVectors(L, R, t); p.y += 0.2 - Math.sin(t * Math.PI) * 0.06; p.addScaledVector(fw, 0.04);   // the sag between his hands
+        put(k, p, 0.17, up.clone().addScaledVector(fw, -0.15).normalize()); }
+      for (let k = 22; k < N; k++) { const t = (k - 22) / (N - 23), sw = Math.sin(T * 2.2 + t * 2) * 0.06 * t;   // the loose end, hanging off his right hand
+        p.copy(R).addScaledVector(fw, -0.12 - 0.08 * t).addScaledVector(side, 0.12 + 0.1 * t + sw); p.y += 0.1 - t * 0.9; put(k, p, 0.15, side); }
+      pos.needsUpdate = true; m.geometry.computeVertexNormals(); m.geometry.computeBoundingSphere();
     }
     // ---- the shrine to him: framed photos (the locker room; on the counter behind reception) and his bronze statue upstairs
     makeShrine(T) {
@@ -1155,17 +1182,20 @@
         fr.userData.flatDone = true; this.G.add(g); return g; };
       // 1: the changing room, on the far wall by the staff door (facing into the room)
       const p1 = photo(0.76, 0.92); p1.position.set(3.2, 0.6, -46.76);
-      // 2: propped up on the counter behind reception, leaning back a little
-      const p2 = photo(0.6, 0.75); p2.position.set(4.3, UP + 1.38, -85.45); p2.rotation.x = -0.14;
+      // 2: on the reception desk, propped up facing the door, leaning back a little
+      const p2 = photo(0.6, 0.75); p2.position.set(6.6, UP + 1.5, -82.75); p2.rotation.x = -0.14;   // (standing on the front desk, facing whoever walks in)
       // 3: the statue, upstairs in the lounge: bronze, on a stone plinth, flexing
       const sv = new S.WrestlerView(this.scene, B.w.a, this.fx, S.DEF_EQ); sv.viewer = 2; sv.match = null;
       if (S.SoftSumo.attach(sv, { noBlob: true })) { const bz = S.Flat.mat(0xc39a62); sv.soft.M.traverse((q) => { if (q.isMesh) q.material = Array.isArray(q.material) ? q.material.map(() => bz) : bz; }); }
-      const sw = Object.assign({}, B.w, { x: 8, z: -64.6, f: Math.PI / 2, fx: 0, fz: 1, st: 'win', t: 0.7, carry: null }); sv.victory = 'crossed';   // (arms folded: the proud old champion)
+      const fr = this.breakables.find((q) => q.s.k === 'fridge' && q.s.f);   // the milk fridge makes way for him
+      if (fr) { fr.done = true; fr.o.visible = false; if (fr.w) this.walls.splice(this.walls.indexOf(fr.w), 1); }
+      const SX = 11.35, SZ = -64.8;
+      const sw = Object.assign({}, B.w, { x: SX, z: SZ, f: 2.3, fx: Math.cos(2.3), fz: Math.sin(2.3), st: 'win', t: 0.7, carry: null }); sv.victory = 'crossed';   // (arms folded: the proud old champion)
       for (let i = 0; i < 10; i++) sv.update(sw, 1 / 30, T);
       sv.root.position.y += UP + 0.5; sv.root.scale.multiplyScalar(1.12); this.statue = sv;
-      const pl = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), S.Flat.mat(0xc4beb4)); pl.position.set(8, UP + 0.25, -64.6); pl.castShadow = true; pl.userData.flatDone = true; this.G.add(pl);
-      const pq = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.18), new THREE.MeshBasicMaterial({ map: plateTex() })); pq.position.set(8, UP + 0.27, -64.0 + 0.005); pq.userData.flatDone = true; this.G.add(pq);
-      this.walls.push({ x0: 7.4, x1: 8.6, z0: -65.2, z1: -64.0, tall: true }); this.buildNav();
+      const pl = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.5, 1.3), S.Flat.mat(0xc4beb4)); pl.position.set(SX, UP + 0.25, SZ); pl.castShadow = true; pl.userData.flatDone = true; this.G.add(pl);
+      const pq = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.18), new THREE.MeshBasicMaterial({ map: plateTex() })); pq.position.set(SX - 0.58, UP + 0.27, SZ); pq.rotation.y = -Math.PI / 2; pq.userData.flatDone = true; this.G.add(pq);
+      this.walls.push({ x0: SX - 0.6, x1: 12, z0: SZ - 0.7, z1: SZ + 0.7, tall: true }); this.buildNav();
     }
     // ---- the drinks machine: no coins on him, but a good thump drops a can; the third wrecks it
     hitVend() {
@@ -1174,7 +1204,7 @@
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(7); this.noise(V.x0 - 0.5, V.z, 11, '?!');
       if (V.hits < 3) { this.makeCan(fx, 0.35, nz(), -1.6 - Math.random() * 0.8, (Math.random() - 0.5) * 1.2);
         this.think(V.hits === 1 ? '*THUNK* ...oh! A free one!' : '*KA-CHUNK* Another! One more thump...', 2); return; }
-      V.broke = true; if (this.spVend) this.spVend.visible = false; this.think('*KRRRASH!!* ...oops.', 2); this.noise(V.x0 - 0.5, V.z, 16, '?!'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(10);
+      V.broke = true; this.bonusLose('broke'); if (this.spVend) this.spVend.visible = false; this.think('*KRRRASH!!* ...oops.', 2); this.noise(V.x0 - 0.5, V.z, 16, '?!'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(10);
       // it pitches forward onto its face a little, the front glass bursts, and out comes everything
       if (V.o) { const piv = new THREE.Group(); piv.position.set(V.x0, 0, V.z); this.scene.add(piv); piv.attach(V.o); V.piv = piv; V.tilt = 0; }
       if (S.Flat) for (let k = 0; k < 8; k++) { const sh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.02, 0.12), S.Flat.mat(k % 3 ? 0xc4dde8 : 0xf2ede4)); sh.userData.flatDone = true; this.G.add(sh);
@@ -1251,6 +1281,7 @@
     }
     // out cold (a slap, or bowled over by a charge before they'd made him out): ten seconds, or till a colleague wakes them
     knockOut(n, fx, fz, sfx, pow) {
+      this.bonusLose('ko');
       const a = n.a; if (n.raid && n.mode === 'raid') n.raid = false;
       if (n.pushing) { const c = this.carts.find((cc) => cc.ret && cc.ret.n === n); if (c) c.ret.n = null; n.pushing = false; }
       a.st = 'down'; a.t = 0; a.dur = 10; a.slipFall = false; a.fallX = fx; a.fallZ = fz; a.vx = fx * (pow || 2.2); a.vz = fz * (pow || 2.2); n.ko = true; n.alarm = 0; n.path = null; n.hold = 0;
@@ -1518,7 +1549,7 @@
       this.over = 'win'; this.spExit.visible = false; this.P.vx = this.P.vz = 0;
       this.think('Freedom. Nobody will ever know.', 3);
       if (this.g.audio && this.g.audio.swell) this.g.audio.swell(0.6, 1.4);
-      setTimeout(() => { if (!this.scene) return; const e = this.el('.st-over'); e.innerHTML = '<h2 data-jp="脱出">ESCAPED (WELL FED)</h2><p>Time ' + fmtT(this.t) + ' · Spotted ' + this.spotted + ' time' + (this.spotted === 1 ? '' : 's') + '</p><button data-c="retry">PLAY AGAIN</button><button data-c="quit">QUIT TO TITLE</button><p class="k">Enter / J play again · Esc quit</p>'; e.classList.add('on'); this.overI = 0; this.markMenu('.st-over', 0); }, 1800);
+      setTimeout(() => { if (!this.scene) return; const e = this.el('.st-over'); e.innerHTML = '<h2 data-jp="脱出">ESCAPED (WELL FED)</h2><p>Time ' + fmtT(this.t) + ' · Spotted ' + this.spotted + ' time' + (this.spotted === 1 ? '' : 's') + '</p>' + this.bonusHTML() + '<button data-c="retry">PLAY AGAIN</button><button data-c="quit">QUIT TO TITLE</button><p class="k">Enter / J play again · Esc quit</p>'; e.classList.add('on'); this.overI = 0; this.markMenu('.st-over', 0); }, 1800);
     }
 
     // ============================================================== drawing
@@ -1566,7 +1597,7 @@
         b.m.rotation.set(0, -P.f, 0);
       }
       this.kdt = Math.min(0.05, dt); this.drawN = (this.drawN || 0) + 1;
-      this.bossDraw(dt, T);
+      this.bossDraw(dt, T); this.bonusBar();
       for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); this.drawCone(n); }
       this.sweatStep(dt);
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
@@ -1589,7 +1620,8 @@
       // camera: high, behind, following (as in the campaign), up the stairs with him; closer for the ending
       const CF = this.camFocus; this.camT.lerp(CF ? new THREE.Vector3(CF.x, CF.y || 0, CF.z) : new THREE.Vector3(this.over ? P.x + 2.2 : clamp(P.x * 0.8, -18, 18), Math.max(0, P.y), P.z - (this.over ? 0.6 : 2.6)), 1 - Math.exp(-dt * (CF ? 2.5 : 4)));
       this.camD = (this.camD || 15) + ((CF && CF.dist ? CF.dist : this.over ? 9 : 15) - (this.camD || 15)) * Math.min(1, dt * 2); const dist = this.camD, sh = this.flash ? this.flash * 0.25 : 0; this.flash = Math.max(0, (this.flash || 0) - dt * 2);
-      this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh, this.camT.y + dist * 0.64, this.camT.z + dist * 0.77 * (CF && CF.flip ? -1 : 1));   // (a cutscene can look from the far side)
+      this.camH = (this.camH || 0.64) + ((CF && CF.h ? CF.h : 0.64) - (this.camH || 0.64)) * Math.min(1, dt * 2); const ch = this.camH, cz = Math.sqrt(Math.max(0.05, 1 - ch * ch));
+      this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh, this.camT.y + dist * ch, this.camT.z + dist * cz * (CF && CF.flip ? -1 : 1));   // (a cutscene can look from the far side)
       this.cam.lookAt(this.camT.x, this.camT.y + 0.6, this.camT.z); this.cam.updateMatrixWorld();
       this.flat.lights.aim(this.camT.x, this.camT.z - 3);
       if ((this.cvN = (this.cvN || 0) + 1) % 30 === 1) S.Flat.convert(this.scene, { pastel: 0.6 });
@@ -1613,6 +1645,7 @@
       h.innerHTML = '<style>#stealthHud{position:fixed;inset:0;pointer-events:none;z-index:6;font-family:"Barlow Condensed",sans-serif;color:#3a3440}' +
         '#stealthHud .st-obj{position:absolute;left:24px;top:20px;background:rgba(255,250,240,.9);padding:8px 14px;border-radius:10px;font-weight:700;font-size:20px;letter-spacing:.02em;max-width:60vw}' +
         '#stealthHud .st-ko{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;text-shadow:0 4px 0 rgba(40,30,50,.35);opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
+        '#stealthHud .st-bonus{position:absolute;left:24px;top:64px;display:flex;gap:6px;pointer-events:none}#stealthHud .st-bonus i{font:700 13px "Barlow Condensed",sans-serif;font-style:normal;letter-spacing:0.06em;padding:3px 8px 2px;border-radius:999px;background:rgba(255,250,240,0.9);color:#2e7d4c;transition:all .3s}#stealthHud .st-bonus i.off{color:#a49c94;background:rgba(255,250,240,0.55);text-decoration:line-through}#stealthHud .st-bonus i.pop{transform:scale(1.25);color:#d8262e}#stealthHud .st-hp{top:96px!important}' +
         '#stealthHud .st-sub{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);width:max-content;max-width:94vw;text-align:center;pointer-events:none;display:none}#stealthHud .st-sub .jp{display:inline-block;font:400 24px "Dela Gothic One",sans-serif;color:#fffaf0;background:rgba(34,30,40,0.72);padding:6px 14px 4px;border-radius:10px;letter-spacing:0.04em}#stealthHud .st-sub .en{display:block;margin-top:6px;font:700 19px "Barlow Condensed",sans-serif;color:#fffaf0;text-shadow:0 2px 0 rgba(0,0,0,0.55)}#stealthHud .st-sub .who{color:#f2cf4a;margin-right:8px}' +
         '#stealthHud .st-hp{position:absolute;left:24px;top:76px;font-size:28px;letter-spacing:4px;color:#cf3a3a;text-shadow:0 2px 0 #fffaf0;display:none}#stealthHud .st-hp.chase{animation:hpPulse .5s ease-in-out infinite alternate}@keyframes hpPulse{to{transform:scale(1.12)}}' +
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
@@ -1633,7 +1666,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-sub"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<div class="st-sub"></div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
