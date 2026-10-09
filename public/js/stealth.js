@@ -130,6 +130,7 @@
         const ar = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.arrowTex(), transparent: true, depthWrite: false, depthTest: false })); ar.scale.set(0.62, 0.62, 1); ar.position.y = 2.3; ar.renderOrder = 7; g.add(ar);
         g.userData = { ring, ar }; return g; };
       this.spOut = sp(1, -0.9); this.spLocker = sp(this.locker.x, this.locker.z + 0.6); this.spKey = sp(this.washSpot.x, this.washSpot.z); this.spCrack = sp(LY.crack.x, LY.crack.z1 + 0.9);
+      { const q = LY.solids.find((o) => o.k === 'vending' && !o.f); if (q) { this.spVend = sp(q.x0 - 0.75, (q.z0 + q.z1) / 2); this.spVend.userData.ar.visible = false; this.spVend.visible = true; } }   // (just the ring: something to use here)
       this.spBox = sp(this.boxSpot.x, this.boxSpot.z); this.spTowel = sp(LY.towel.x, LY.towel.z); this.spExit = sp((LY.entrance.x0 + LY.entrance.x1) / 2, LY.entrance.z + 1.2);
       const ST = LY.stalls[LY.stall_use]; this.spKitchen = sp(LY.kdoor.x, LY.kdoor.z + 0.9); this.spOni = sp(LY.onigiri.x, LY.onigiri.z - 1.3); this.spStall = sp(ST.x + 1.6, ST.z);
       this.spTP = sp(LY.tp.x, LY.tp.z); this.spBack = sp(LY.backdoor.x + 0.8, (LY.backdoor.z0 + LY.backdoor.z1) / 2);
@@ -140,7 +141,7 @@
       for (const r of this.rats) r.m.visible = false;
       this.traps = LY.traps.map((q) => ({ x: q.x, z: q.z, armed: true, m: holder(q.x, 0, q.z) }));
       for (const t of this.traps) { t.m.visible = false; t.m.rotation.y = (t.x * 3) % 6.28; }
-      this.marks = [this.spOut, this.spLocker, this.spKey, this.spCrack, this.spBox, this.spExit, this.spTowel, this.spKitchen, this.spOni, this.spStall, this.spTP, this.spBack];
+      this.marks = [this.spOut, this.spLocker, this.spKey, this.spCrack, this.spBox, this.spExit, this.spTowel, this.spKitchen, this.spOni, this.spStall, this.spTP, this.spBack]; if (this.spVend) this.marks.push(this.spVend);
       this.spOut.visible = true;
       // laundry carts: push them about (K), hide inside (I, standing still next to one)
       this.carts = (LY.carts || []).map((q) => { const c = { x: q.x, z: q.z, f: q.r || 0, hx: q.x, hz: q.z, hf: q.r || 0, vx: 0, vz: 0, m: holder(q.x, 0, q.z), w: add(0, 0, 0, 0, false) }; this.cartBox(c); return c; });
@@ -295,6 +296,17 @@
       }
       return true;
     }
+    // running (hurrying over, or chasing him) across a puddle: their feet go every time. Walking is fine
+    slipCheck(n) {
+      const a = n.a, spd = Math.hypot(a.vx, a.vz); if (spd < 1.7 || n.slipCd || a.st !== 'free') return false;
+      for (const q of this.puddles) if (Math.abs((q.y !== undefined ? q.y : floorY(q.x, q.z)) - a.y) < 1 && ((a.x - q.x) / (q.rx + 0.15)) ** 2 + ((a.z - q.z) / (q.rz + 0.15)) ** 2 < 1) {
+        a.st = 'down'; a.t = 0; a.dur = 1.6; a.slipFall = true; a.fallX = -a.vx / spd; a.fallZ = -a.vz / spd; a.vx *= 0.7; a.vz *= 0.7; n.slipCd = 4; n.alarm = 0; n.pushing2 = false;
+        this.popAt(a, ['うわっ!', 'おっと—!', 'いてっ!'][(this.t * 3 | 0) % 3], 1.2); this.fx.water && this.fx.water(a.x, a.z, 5);
+        if (this.g.audio && this.g.audio.thump) this.g.audio.thump(5);
+        return true;
+      }
+      return false;
+    }
     // straining: drops of sweat fly off their forehead/temples and fall to the floor
     sweat(n, dt) {
       if ((n.dropT = (n.dropT || 0) - dt) > 0) return; n.dropT = 0.07 + Math.random() * 0.08;
@@ -438,7 +450,7 @@
         return;
       }
       if (a.st === 'act' && a.t >= a.dur) a.st = 'free';   // (a punch or a grab finishes: never left gliding about in a fighting pose)
-      if (n.mode === 'chase') { this.chaseStep(n, dt); return; }
+      if (n.mode === 'chase' && a.st !== 'down' && a.st !== 'getup') { this.chaseStep(n, dt); this.slipCheck(n); return; }   // (after him: a puddle still takes their feet; see slipCheck)
       if (a.st === 'act') { a.vx = a.vz = 0; return; }
       // he ducked into the box while they came to look: they stop short, peer at the box... and wander off
       if (n.mode === 'goto' && this.P.boxHide && Math.hypot(this.P.x - a.x, this.P.z - a.z) < 1.9) { n.mode = 'search'; n.wait = 2.2; n.path = null; a.vx = a.vz = 0; a.f = Math.atan2(this.P.z - a.z, this.P.x - a.x); this.popAt(a, '…箱?', 1.2); return; }
@@ -516,14 +528,7 @@
       else { a.vx *= 0.8; a.vz *= 0.8; }
       const ox = a.x, oz = a.z; a.x += a.vx * dt; a.z += a.vz * dt;
       this.collide(a, 0.4); a.y = floorY(a.x, a.z);
-      // running (hurrying to a noise) over a puddle: they slip too. Walking is fine
-      const spd = Math.hypot(a.vx, a.vz);
-      if (spd > 2.2 && !n.slipCd) for (const q of this.puddles) if (Math.abs(floorY(q.x, q.z) - a.y) < 1 && ((a.x - q.x) / q.rx) ** 2 + ((a.z - q.z) / q.rz) ** 2 < 1) {
-        a.st = 'down'; a.t = 0; a.dur = 1.3; a.slipFall = true; a.fallX = -a.vx / spd; a.fallZ = -a.vz / spd; a.vx *= 0.7; a.vz *= 0.7; n.slipCd = 4; n.alarm = 0;
-        this.popAt(a, ['うわっ!', 'おっと—!', 'いてっ!'][(this.t * 3 | 0) % 3], 1.2); this.fx.water && this.fx.water(a.x, a.z, 5);
-        if (this.g.audio && this.g.audio.thump) this.g.audio.thump(5);
-        break;
-      }
+      if (this.slipCheck(n)) return;
       // a colleague out cold: anyone who sees them goes over; whoever gets there shakes them awake
       if ((n.kChk = (n.kChk || 0) - dt) <= 0) { n.kChk = 0.3;
         for (const m of this.npcs) if (m !== n && m.ko && m.a.st === 'down' && Math.abs(m.a.y - a.y) < 1) {
@@ -626,7 +631,8 @@
  if (P.stam <= 0) { P.stam = 0; P.tired = true; this.heelsDown(); } }
       else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
-      if (P.st === 'free' && c.dash.held && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
+      if (!c.dash.held) this.lRel = true;   // (one charge per press: let go of L before the next, no endless re-charging)
+      if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
       let spd = 0;
       if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 2.6 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
       if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur; if (P.t > 0.85) P.t = P.dur + 0.01; }   // (never longer than 0.85 s)
@@ -958,7 +964,7 @@
         if (cc) { P.cart = cc; P.f = Math.atan2(cc.z - P.z, cc.x - P.x); if (!this.saidPush) { this.saidPush = true; this.think('Rolling... (K let go · I hop inside and hide)', 2.4); } return; } }
       // the test box: K next to it puts it on (the story doesn't move); K again (wearing it, away from anything else) puts it back down
       if (this.testBox && !this.wearing && this.testBox.visible && near(this.testBoxAt.x, this.testBoxAt.z, 1.9)) { this.testBox.visible = false; this.wearing = true; this.testWear = true; this.wearBox(); P.st = 'busy'; P.t = 0; P.dur = 0.5; this.think('A box! (just to try it out: K to take it off)', 1.8); return; }
-      if (this.testWear && this.wearing && this.stage !== 'box' && this.stage !== 'exit') { this.wearing = false; this.testWear = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.boxDown = false; this.testBoxAt = { x: P.x + Math.cos(P.f) * 1.4, z: P.z + Math.sin(P.f) * 1.4 }; this.testBox.position.set(this.testBoxAt.x, P.y, this.testBoxAt.z); this.testBox.visible = true; P.st = 'busy'; P.t = 0; P.dur = 0.4; return; }
+      if (this.testWear && this.wearing && this.stage !== 'box' && this.stage !== 'exit' && !this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.wearing = false; this.testWear = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.boxDown = false; this.testBoxAt = { x: P.x + Math.cos(P.f) * 1.4, z: P.z + Math.sin(P.f) * 1.4 }; this.testBox.position.set(this.testBoxAt.x, P.y, this.testBoxAt.z); this.testBox.visible = true; P.st = 'busy'; P.t = 0; P.dur = 0.4; return; }
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { P.st = 'wear'; P.t = 0; P.dur = 0.9; return; }
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
         b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0); if (b.kind === 'can') b.m.children[0].position.y = 0;
@@ -1004,9 +1010,10 @@
       const fx = Math.cos(P.f), fz = Math.sin(P.f), L = Math.max(0.3, Math.min(0.7, this.reach(P.x, P.z, P.f, 2) - 0.4)), x = P.x + fx * L, z = P.z + fz * L, y = floorY(x, z);
       P.st = 'busy'; P.t = 0; P.dur = 0.45; this.w.hand = 1; this.flash = 0.2;
       // in pieces: the thing is gone, splinters fly out across the floor
-      let mat = null; b.m.traverse((o) => { if (!mat && o.isMesh) mat = o.material; }); b.m.visible = false; b.state = 'gone';
-      if (!this.shardGeo) this.shardGeo = new THREE.BoxGeometry(0.16, 0.05, 0.1);
-      for (let k = 0; k < 9; k++) { const m = new THREE.Mesh(this.shardGeo, mat || new THREE.MeshLambertMaterial({ color: 0xc89a5a })); m.userData.flatDone = true; m.scale.setScalar(0.7 + Math.random() * 1.1); this.G.add(m);
+      b.m.visible = false; b.state = 'gone';
+      const col = b.col || { stool: 0xe2b85e, oke: 0xe8cb98, bucket: 0x84b5ad }[b.kind] || 0xbb8b5e, mat = S.Flat ? S.Flat.mat(col) : new THREE.MeshLambertMaterial({ color: col });
+      if (!this.shardGeo) this.shardGeo = [new THREE.TetrahedronGeometry(0.09).scale(1.2, 0.45, 1), new THREE.BoxGeometry(0.15, 0.04, 0.08), new THREE.TetrahedronGeometry(0.07).scale(1, 0.5, 1.5)];
+      for (let k = 0; k < 9; k++) { const m = new THREE.Mesh(this.shardGeo[k % 3], mat); m.userData.flatDone = true; m.castShadow = true; m.scale.setScalar(0.7 + Math.random() * 0.9); this.G.add(m);
         const a = Math.random() * 6.28, r = 0.4 + Math.random() * 1.0, tx = x + Math.cos(a) * r, tz = z + Math.sin(a) * r;
         this.flying.push({ m, sx: x, sy: y + 0.3, sz: z, tx, ty: floorY(tx, tz) + 0.02, tz, h: 0.25 + Math.random() * 0.4, t: 0, dur: 0.3 + Math.random() * 0.25, r0: [0, 0, 0], r1: [Math.random() * 8, Math.random() * 8, Math.random() * 8] }); }
       if (b.water && !inPool(x, z)) { b.water = false; this.spill(x, z, y); }
@@ -1038,7 +1045,7 @@
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(7); this.noise(V.x0 - 0.5, V.z, 11, '?!');
       if (V.hits < 3) { this.makeCan(fx, 0.35, nz(), -1.6 - Math.random() * 0.8, (Math.random() - 0.5) * 1.2);
         this.think(V.hits === 1 ? '*THUNK* ...oh! A free one!' : '*KA-CHUNK* Another! One more thump...', 2); return; }
-      V.broke = true; this.think('*KRRRASH!!* ...oops.', 2); this.noise(V.x0 - 0.5, V.z, 16, '?!'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(10);
+      V.broke = true; if (this.spVend) this.spVend.visible = false; this.think('*KRRRASH!!* ...oops.', 2); this.noise(V.x0 - 0.5, V.z, 16, '?!'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(10);
       // it pitches forward onto its face a little, the front glass bursts, and out comes everything
       if (V.o) { const piv = new THREE.Group(); piv.position.set(V.x0, 0, V.z); this.scene.add(piv); piv.attach(V.o); V.piv = piv; V.tilt = 0; }
       if (S.Flat) for (let k = 0; k < 8; k++) { const sh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.02, 0.12), S.Flat.mat(k % 3 ? 0xc4dde8 : 0xf2ede4)); sh.userData.flatDone = true; this.G.add(sh);
@@ -1051,7 +1058,7 @@
     makeCan(x, y, z, vx, vz) {
       const ci = (this.canN = (this.canN || 0) + 1) % 3, o = this.cloneP && this.cloneP('ITEM_CAN' + ci); if (!o) return null;
       const m = new THREE.Group(); m.add(o); m.position.set(x, y, z); m.scale.setScalar(1.7); this.G.add(m);   // (sumo-sized: big enough to read)
-      const b = { m, kind: 'can', x, z, y: 0, state: 'roll', x0: x, z0: z, base: 0, soda: true, vx, vz, vy: 0.5, roll: 0, yaw: Math.atan2(vz, vx) + Math.PI / 2 };
+      const b = { m, kind: 'can', col: [0x5a8fd0, 0xef9a4c, 0x84b5ad][ci], x, z, y: 0, state: 'roll', x0: x, z0: z, base: 0, soda: true, vx, vz, vy: 0.5, roll: 0, yaw: Math.atan2(vz, vx) + Math.PI / 2 };
       this.buckets.push(b); return b;
     }
     canStep(dt) {
@@ -1086,7 +1093,18 @@
       if (!b.soda) { this.think('Empty.', 1); return; }
       P.held = null; b.state = 'gone'; b.m.visible = false; P.st = 'busy'; P.t = 0; P.dur = 1.1; this.w.hand = 1;
       this.hits = Math.max(0, (this.hits || 0) - 1); P.stam = 1; P.tired = false;
-      this.think((this.hits ? '*glug glug glug* Ahhh... that\'s better. ♥' : '*glug glug glug* AHHH. Good as new! ♥'), 2);
+      this.think((this.hits ? '*glug glug glug* Ahhh... that\'s better. ♥' : '*glug glug glug* AHHH. Good as new! ♥'), 1.6);
+      this.later(1.7, () => { this.think(['*BUUUUURP*', '*BWAAARP!*', '*urrrp*... pardon.'][(this.t * 3 | 0) % 3], 1.6); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'げっぷ', 1.2);
+        if (!SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, 6, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); });   // (loud enough to turn heads)
+    }
+    // a big bare footprint (x forward, the big toe on the inside): a sole, wide at the ball, and five toes
+    footGeo(side) {
+      const K = this._feet || (this._feet = {}); if (K[side]) return K[side];
+      const sole = new THREE.Shape(), N = 16;
+      for (let k = 0; k <= N; k++) { const a = k / N * Math.PI * 2, x = Math.cos(a) * 0.15 - 0.03, t = (x + 0.18) / 0.3, w = 0.05 + 0.035 * Math.min(1, Math.max(0, t)) + 0.012 * side * Math.sin(a) * t, y = Math.sin(a) * w + side * 0.008 * t;
+        k ? sole.lineTo(x, y) : sole.moveTo(x, y); }
+      const toes = [[0.165, 0.052, 0.03], [0.178, 0.018, 0.022], [0.172, -0.012, 0.02], [0.16, -0.038, 0.018], [0.142, -0.06, 0.016]].map(([x, y, r]) => { const t = new THREE.Shape(); t.absarc(x, y * side, r, 0, Math.PI * 2, false); return t; });
+      return (K[side] = new THREE.ShapeGeometry([sole, ...toes], 3));
     }
     // ---- wet feet: out of a puddle he leaves a trail of big footprints for a few steps (staff who spot it follow it)
     printStep(dt) {
@@ -1097,10 +1115,9 @@
       if (onP) { if (!this.wetF || this.wetF.n < 5 || this.wetF.from !== onP) this.wetF = { n: 5, trail: ++this.trailN, i: 0, acc: 0, side: 1, soda: !!onP.soda, from: onP }; this.wetF.lx = P.x; this.wetF.lz = P.z; return; }
       const W = this.wetF; if (!W || W.n <= 0) return;
       W.acc += Math.hypot(P.x - W.lx, P.z - W.lz); W.lx = P.x; W.lz = P.z; if (W.acc < (P.tip > 0.5 ? 0.45 : 0.62)) return; W.acc = 0;
-      const sx = -Math.sin(P.f) * 0.2 * W.side, sz = Math.cos(P.f) * 0.2 * W.side, x = P.x + sx, z = P.z + sz, o = 0.25 + 0.5 * W.n / 5;
-      if (!this.footGeo) { this.footGeo = new THREE.CircleGeometry(1, 12); }
-      const m = new THREE.Mesh(this.footGeo, new THREE.MeshBasicMaterial({ color: W.soda ? 0xd9a250 : 0x9cc6e8, transparent: true, opacity: o, depthWrite: false }));
-      m.rotation.set(-Math.PI / 2, 0, -P.f); m.scale.set(0.2, 0.12, 1); m.position.set(x, floorY(x, z) + 0.014, z); m.userData.flatDone = true; m.renderOrder = 1; this.G.add(m);
+      const sx = -Math.sin(P.f) * 0.3 * W.side, sz = Math.cos(P.f) * 0.3 * W.side, x = P.x + sx, z = P.z + sz, o = 0.25 + 0.5 * W.n / 5;
+      const m = new THREE.Mesh(this.footGeo(W.side), new THREE.MeshBasicMaterial({ color: W.soda ? 0xd9a250 : 0x9cc6e8, transparent: true, opacity: o, depthWrite: false }));
+      m.rotation.set(-Math.PI / 2, 0, -P.f); m.scale.setScalar(P.tip > 0.5 ? 1.7 : 2.0); /* (his feet are huge) */ m.position.set(x, floorY(x, z) + 0.014, z); m.userData.flatDone = true; m.renderOrder = 1; this.G.add(m);
       this.prints.push({ x, z, y: P.y, t: 0, trail: W.trail, i: W.i++, m, o }); W.n--; W.side = -W.side;
     }
     // out cold (a slap, or bowled over by a charge before they'd made him out): ten seconds, or till a colleague wakes them
