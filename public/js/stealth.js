@@ -37,6 +37,7 @@
   }
   const SAFE = { bath: 1, shower: 1 };
   function floorY(x, z) {
+    if (x < -12.4 && z > -66) return 0;   // the back alley (outside the kitchen) is ground level all the way to its end
     if (z < -61) return x > -12 && x < -4 && z > -70 && z < -62 ? UP + 0.15 : UP;   // the tatami platform, a step up
     if (z < -53 && x > 6.4 && x < 11.6) return UP * clamp((-53 - z) / 8, 0, 1);
     return 0;
@@ -185,8 +186,10 @@
       }
       if (P.cart) {   // pushing: the cart rolls in front of him; he steers it
         const c = P.cart, d = 1.35 * this.view.s / 1.15; c.off = true; this.cartBox(c);
-        c.f = lerpA(c.f, P.f, dt * 8); const q = { x: P.x + Math.cos(c.f) * d, z: P.z + Math.sin(c.f) * d };
-        this.collide(q, 0.55); c.x = q.x; c.z = q.z; P.x = c.x - Math.cos(c.f) * d; P.z = c.z - Math.sin(c.f) * d;
+        const f0 = c.f; c.f = lerpA(c.f, P.f, dt * 8); let q = { x: P.x + Math.cos(c.f) * d, z: P.z + Math.sin(c.f) * d }; this.collide(q, 0.55);
+        if (!this.clear(P.x, P.z, q.x, q.z) || Math.hypot(q.x - P.x, q.z - P.z) < d * 0.7) { c.f = f0; q = { x: c.x, z: c.z }; }   // (it won't swing round into, or through, a wall)
+        c.x = q.x; c.z = q.z; const pp = { x: c.x - Math.cos(c.f) * d, z: c.z - Math.sin(c.f) * d }; this.collide(pp, P.r);
+        if (this.clear(c.x, c.z, pp.x, pp.z) && this.clear(P.x, P.z, pp.x, pp.z)) { P.x = pp.x; P.z = pp.z; }   // (and he's never put inside one behind it)
         c.m.position.set(c.x, 0, c.z); c.m.rotation.y = -c.f;
       }
       if (P.hidden) { const c = P.hidden; if (c.mesh) { c.mesh.scale.y = 1 + Math.sin(this.t * 2.2) * 0.02; } }
@@ -434,6 +437,7 @@
     goTo(n, x, z) { n.path = this.navPath(n.a.x, n.a.z, x, z) || [[x, z]]; n.pi = 0; n.stuckT = 0; }
     // a noise: anyone in earshot (in that room) walks over the shortest way to look, searches, goes back
     noise(x, z, radius, msg, soft) {   // soft: footsteps (no ripples on the floor; they walk over to look)
+      (this.mapRings || (this.mapRings = [])).push({ x, z, r: radius, t: 0, y: this.P.y }); if (this.mapRings.length > 12) this.mapRings.shift();
       if (!soft) { this.ringAt(x, z, radius * 0.4, 0.6); this.ringAt(x, z, radius * 0.7, 0.9); }
       const room = roomAt(x, z); let rank = 0;
       for (const n of this.npcs) {
@@ -633,8 +637,9 @@
         for (const cc of this.carts) { const w = cc.w, ex = clamp(P.x, w.x0, w.x1), ez = clamp(P.z, w.z0, w.z1), d = Math.hypot(P.x - ex, P.z - ez) - P.r;
           if (d < 0.12 && !cc.ret && ((ex - P.x) * mx + (ez - P.z) * mz) / (Math.hypot(ex - P.x, ez - P.z) || 1) > 0.5) { walkIn = true; break; } }
       if ((iPress || walkIn) && !this.hideCd && P.st === 'free' && !wet && !P.held) {   // I next to a cart (walking or not): climb in
-        let near = null, nd = 0.3; for (const cc of this.carts) { const w = cc.w, d = Math.hypot(P.x - clamp(P.x, w.x0, w.x1), P.z - clamp(P.z, w.z0, w.z1)) - P.r; if (d < nd && !cc.ret && this.clear(P.x, P.z, cc.x, cc.z)) { nd = d; near = cc; } }   // (right up against it; never one through a wall)
-        if (near) { this.markWitness(); if (P.cart) P.cart = null; P.hidden = near; P.hideT = 0; near.off = true; this.cartBox(near); P.x = near.x; P.z = near.z; P.vx = P.vz = 0; this.view.root.visible = false; P.tip = 0; this.dropShorts(true);
+        let near = null, nd = 0.3; for (const cc of this.carts) { const w = cc.w, d = Math.hypot(P.x - clamp(P.x, w.x0, w.x1), P.z - clamp(P.z, w.z0, w.z1)) - P.r; if (d < nd && !cc.ret && this.clear(P.x, P.z, cc.x, cc.z) && !this.inWall(cc.x, cc.z, cc.w)) { nd = d; near = cc; } }   // (right up against it; never one through a wall, nor one jammed into one)
+        if (P.cart && iPress && this.clear(P.x, P.z, P.cart.x, P.cart.z) && !this.inWall(P.cart.x, P.cart.z, P.cart.w)) near = P.cart;   // (the one he's pushing: straight in)
+        if (near) { this.markWitness(); if (P.cart) P.cart = null; this.noGuard = true; P.hidden = near; P.hideT = 0; near.off = true; this.cartBox(near); P.x = near.x; P.z = near.z; P.vx = P.vz = 0; this.view.root.visible = false; P.tip = 0; this.dropShorts(true);
           if (!this.saidCart) { this.saidCart = true; this.think('...just a cart of towels. Nothing to see.', 2.0); } return; }
       }
       // I: TIPTOE. Silent, slow, and tiring: about six seconds on his toes, then the heels come down with a thud
@@ -705,7 +710,7 @@
       }
       this.cartStep(dt);
       const hit = this.collide(P, P.r);
-      if (this.noGuard) this.noGuard = false; else if ((P.x !== px0 || P.z !== pz0) && Math.hypot(P.x - px0, P.z - pz0) < 2.5 && !this.clear(px0, pz0, P.x, P.z)) { P.x = px0; P.z = pz0; }   // (never squeezed through a wall: a shove, a punch, a crowd pushing)
+      if (this.noGuard) this.noGuard = false; else if ((P.x !== px0 || P.z !== pz0) && Math.hypot(P.x - px0, P.z - pz0) < 2.5 && this.segInWall(px0, pz0, P.x, P.z)) { P.x = px0; P.z = pz0; }   // (never squeezed through a wall: a shove, a punch, a crowd pushing)
       // how high he stands: in the bath up to his chest, the stairs, the floor above
       const ty = wet ? (P.sub ? -1.6 : P.z > -3.4 && P.x > 0 && P.x < 2 ? -0.3 : -0.62) : floorY(P.x, P.z);
       P.y = Math.abs(ty - P.y) > 1 && !wet ? ty : P.y + (ty - P.y) * Math.min(1, dt * (wet || P.y < -0.05 ? 6 : 20));
@@ -746,7 +751,7 @@
         if (room === 'kitchen' && this.stage === 'kitchen') this.hungry();
         if (room === 'store' && this.stage === 'storage') { this.stage = 'box'; this.spBox.visible = true; this.think('A cardboard box... it\'ll have to do!', 2.8); this.objective('Put on the BOX (K next to it)'); }
       }
-      if (!this.crackDone && !this.saidCrack && room === 'corr' && P.x > 4) { this.saidCrack = true; this.spCrack.visible = true;
+      if (!this.crackDone && !this.saidCrack && room === 'corr' && P.x > 4 && this.stage === 'storage') {   // (only once he needs to get upstairs: after the towels) this.saidCrack = true; this.spCrack.visible = true;
         this.think('The stairs! ...buried under a heap of delivery boxes. One good charge (hold L) should clear them.', 3.4); }
       // fire exit
       if (P.x < EXIT.x + 0.4 && P.z < EXIT.z1 && P.z > EXIT.z0 && !this.saidChain) { this.saidChain = true; this.think('The fire exit... chained shut?!', 2.0); }
@@ -758,7 +763,7 @@
       P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet && !(this.noDuck > 0); this.noDuck = Math.max(0, (this.noDuck || 0) - dt);
       if (!this.boxW) { this.boxW = { x0: 1e4, x1: 1e4, z0: 1e4, z1: 1e4, tall: false, box: true }; this.walls.push(this.boxW); }
       if (P.boxHide && !this.wasBoxHide) this.markWitness();
-      if (!P.boxHide && this.wasBoxHide) for (const n of this.npcs) if (n.pushing2 && !n.ko && Math.hypot(n.a.x - P.x, n.a.z - P.z) < 2.2) {   // the box they were shoving stands up: they leap back
+      if (!P.boxHide && this.wasBoxHide) for (const n of this.npcs) if ((n.pushing2 || (n.mode !== 'chase' && !n.pullOut && n.a.st === 'free' && !n.busy)) && !n.ko && Math.abs(n.a.y - P.y) < 1.2 && Math.hypot(n.a.x - P.x, n.a.z - P.z) < (n.pushing2 ? 2.2 : 2.8)) {   // (anyone close who wasn't expecting a box to stand up)   // the box they were shoving stands up: they leap back
         const d = Math.hypot(n.a.x - P.x, n.a.z - P.z) || 1; n.shock = 1.1; n.a.shock = 1; n.shockV = [(n.a.x - P.x) / d * 2.6, (n.a.z - P.z) / d * 2.6];
         n.pushing2 = false; n.tug = 0; n.path = null; n.a.push = false; this.popAt(n.a, ['うわぁっ!?', 'ひぃっ!?', 'えっ!?'][(this.t * 3 | 0) % 3], 1.1, true); }
       this.wasBoxHide = P.boxHide;
@@ -907,6 +912,9 @@
         setTimeout(() => { k.style.display = 'none'; }, 2100);
       } else this.popAt(a, ['バシッ!', 'ドン!', 'パーン!'][this.hits % 3], 0.8);
     }
+    // is this spot inside a wall (not skirting its edge)? and does a short move pass into one?
+    inWall(x, z, skip) { for (const w of this.walls) if (w !== skip && x > w.x0 + 0.05 && x < w.x1 - 0.05 && z > w.z0 + 0.05 && z < w.z1 - 0.05) return true; return false; }
+    segInWall(x0, z0, x1, z1) { const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.05)); for (let k = 1; k <= n; k++) if (this.inWall(x0 + (x1 - x0) * k / n, z0 + (z1 - z0) * k / n)) return true; return false; }
     unstick(n) {   // wedged somewhere for 3 s: hop to the nearest clear spot (away from anyone else) and work out the way again
       const a = n.a, N = this.nav; let best = null, bd = 1e9;
       for (let k = 0; k < 10; k++) { const r = 0.5 + k * 0.12, an = k * 2.4 + Math.random(), x = a.x + Math.cos(an) * r, z = a.z + Math.sin(an) * r; if (!this.walkable(x, z) || !this.clear(a.x, a.z, x, z)) continue;
@@ -1091,9 +1099,14 @@
       if (!fl) { x.fillStyle = '#a9d3ef'; x.fillRect(X(POOL.x0), Z(POOL.z0), (POOL.x1 - POOL.x0) * k, (POOL.z1 - POOL.z0) * k); }
       for (const q of LY.solids) { if ((q.f ? 1 : 0) !== fl) continue; const near = Math.abs((q.x0 + q.x1) / 2 - P.x) < 26 && Math.abs((q.z0 + q.z1) / 2 - P.z) < 26; if (!near) continue;
         x.fillStyle = q.k === 'wall' ? '#6b5f66' : '#d6c6aa'; x.fillRect(X(q.x0), Z(q.z0), Math.max(1.5, (q.x1 - q.x0) * k), Math.max(1.5, (q.z1 - q.z0) * k)); }
-      // staff: close by, or after him
+      // noise: how far it carried (footsteps, knocks, crashes), a ring that fades
+      for (const q of this.mapRings || []) { q.t += 1 / 30; if (q.t > 1.2 || Math.abs(q.y - P.y) > 1.5) continue; x.strokeStyle = 'rgba(216,38,46,' + (0.55 * (1 - q.t / 1.2)) + ')'; x.lineWidth = 1.5; x.beginPath(); x.arc(X(q.x), Z(q.z), q.r * k * (0.6 + 0.4 * Math.min(1, q.t * 3)), 0, Math.PI * 2); x.stroke(); }
+      // staff on this floor within the map: where they're looking (their cone), and a dot
+      for (const n of this.npcs) { const a = n.a; if (Math.abs(a.y - P.y) > 1.5 || n.ko || a.st === 'down') continue; if (Math.hypot(a.x - P.x, a.z - P.z) > R / k + 6) continue;
+        const rr = this.range(n) * k, h = n.half || 0.62; x.fillStyle = n.mode === 'chase' ? 'rgba(216,38,46,0.22)' : 'rgba(242,190,60,0.3)';
+        x.beginPath(); x.moveTo(X(a.x), Z(a.z)); x.arc(X(a.x), Z(a.z), rr, a.f - h, a.f + h); x.closePath(); x.fill(); }
       for (const n of this.npcs) { const a = n.a; if (Math.abs(a.y - P.y) > 1.5) continue; const d = Math.hypot(a.x - P.x, a.z - P.z);
-        if (!(d < 7 || n.mode === 'chase' || n.alarm > 0.3) || d > R / k) continue;
+        if (d > R / k + 2) continue;
         x.fillStyle = n.ko ? '#a49c94' : n.mode === 'chase' ? '#d8262e' : (n.mode === 'goto' || n.mode === 'search' || n.alarm > 0.3) ? '#e0a020' : '#ffffff';
         x.strokeStyle = '#3a3340'; x.lineWidth = 1.5; x.beginPath(); x.arc(X(a.x), Z(a.z), 4.5, 0, Math.PI * 2); x.fill(); x.stroke(); }
       // the goal: a pulsing ring (or, off the edge, a little arrow pointing to it)
@@ -1134,14 +1147,12 @@
     phoneCall(D) {
       const P = this.P, n = this.npcs.find((m) => m.room === 'toilet' && !m.ko) || this.npcs[0], a = n.a, ST = LY.stalls[LY.stall_use];
       n.hold = 14; n.path = null; a.vx = a.vz = 0; n.phone = true; a.f = Math.PI / 2 + 0.5;   // (turned towards us, so we see the phone at the ear)
-      this.popAt(a, '♪ プルルル…', 1.4); this.camFocus = { x: a.x, z: a.z, dist: 7.5, y: 0.5, h: 0.45 };   // (the camera goes to them)
+      this.popAt(a, '♪ プルルル…', 1.4);
       this.say([
         { jp: '♪ プルルル… プルルル…', en: '*ring ring... ring ring...*', t: 2.0 },
         { who: '店員', jp: '…はい、もしもし。', en: '...Hello?', t: 2.0 },
         { who: '店員', jp: 'え、親方ですか?', en: 'Oh, boss? It\'s you?', t: 2.2 },
-        { who: '店員', jp: '風呂で…まわしを拾った!?', en: 'You found a MAWASHI... in the bath!?', t: 2.8 },
-        { who: '店員', jp: '…で、まだ湯船につかってるんですね。', en: '...and you\'re still soaking in the tub with it.', t: 3.0 },
-        { who: '店員', jp: 'はい、わかりました…。', en: 'Right... understood.', t: 2.0 },
+        { who: '店員', jp: '風呂で…まわしを拾った!?', en: 'You found a MAWASHI... in the bath!?', t: 3.4 },
       ], () => {
         n.phone = false; n.hold = 0.5; if (this.phoneM) this.phoneM.visible = false; this.camFocus = null;
         P.inStall = false; if (D) D.rotation.y = -1.4; P.st = 'free';
@@ -1185,7 +1196,7 @@
       if (this.stage === 'bossgo' && Math.hypot(P.x - 1, P.z + 0.9) < 2.2 && !B.rise && !B.done) {   // back at the bath steps, where he woke up: the water stirs
         B.rise = { t: 0 }; B.on = true; B.x = 1.8; B.z = -4.6; B.y = -2.7; B.hold = false; this.spOut.visible = false;
         B.f = Math.atan2(P.z - B.z, P.x - B.x); P.st = 'busy'; P.t = 0; P.dur = 99; P.vx = P.vz = 0;
-        P.f = Math.atan2(B.z - P.z, B.x - P.x); this.camFocus = { x: (B.x + P.x) / 2, z: (B.z + P.z) / 2, dist: 10, y: 0.5, h: 0.36 }; this.objective('...');   // (the camera eases in on the two of them)
+        P.f = Math.atan2(B.z - P.z, B.x - P.x); this.objective('...');   // (the camera eases in on the two of them)
         this.think('...hm? The water\'s... bubbling?', 1.6);
       }
       if (!B.rise) return;
@@ -1565,44 +1576,58 @@
       skin.customProgramCacheKey = () => ck() + '|tattoo'; skin.needsUpdate = true;
     }
     // out of the towel cart: somebody's shorts draped over his shoulder. Three steps and they slide off onto the floor
+    // borrowed towel-cart trunks, draped over his right shoulder like a towel: one leg down his front, the waistband down
+    // his back, the cloth curving over the top of the shoulder. Three steps and they slide off and settle flat on the floor
     shoulderShorts() {
       this.dropShorts(true);
-      // borrowed trunks, folded over his right shoulder: the front half down his chest, the back half down his back
-      const g = new THREE.Group(), m = new THREE.Group(); g.add(m); this.G.add(g);
-      const M = S.Flat.mat(0x86aede), W = S.Flat.mat(0xf4f1ea), fl = [];
-      const sh = new THREE.Shape(); sh.moveTo(-0.17, 0); sh.lineTo(0.17, 0); sh.lineTo(0.2, -0.27); sh.lineTo(0.035, -0.29); sh.lineTo(0, -0.14); sh.lineTo(-0.035, -0.29); sh.lineTo(-0.2, -0.27); sh.closePath();
-      // laid over the top of the shoulder: waistband by his neck, the two legs flopping down over his arm (reads from above)
-      const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.02, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.006, bevelSegments: 2 }).rotateX(-Math.PI / 2);
-      const f = new THREE.Group(); f.position.z = -0.1; m.add(f); fl.push(f);
-      f.add(new THREE.Mesh(geo, M));
-      const band = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.035, 0.045), W); band.position.set(0, 0.012, 0.0); f.add(band);
-      f.rotation.x = 0.55;
-      g.traverse((q) => { if (q.isMesh) { q.castShadow = true; q.userData.flatDone = true; } });
-      this.shorts = { g, m, fl, d: 0, on: true };
+      if (!this.shortsTex) { const c = document.createElement('canvas'); c.width = 128; c.height = 192; const x = c.getContext('2d');
+        x.fillStyle = '#86aede'; x.beginPath(); x.moveTo(8, 0); x.lineTo(120, 0); x.lineTo(126, 186); x.lineTo(72, 190); x.lineTo(64, 104); x.lineTo(56, 190); x.lineTo(2, 186); x.closePath(); x.fill();   // the trunks, legs at the bottom
+        x.fillStyle = '#f4f1ea'; x.fillRect(8, 0, 112, 18);   // the white waistband
+        x.strokeStyle = 'rgba(40,60,110,0.25)'; x.lineWidth = 3; x.beginPath(); x.moveTo(64, 20); x.lineTo(64, 100); x.stroke();
+        this.shortsTex = new THREE.CanvasTexture(c); }
+      const geo = new THREE.PlaneGeometry(0.4, 0.6, 6, 30), mat = S.Flat.mat(0xffffff, { map: this.shortsTex, side: THREE.DoubleSide }); mat.alphaTest = 0.5; mat.transparent = false;
+      const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.userData.flatDone = true; m.frustumCulled = false;
+      const g = new THREE.Group(); g.add(m); this.G.add(g);
+      const base = Float32Array.from(geo.attributes.position.array);   // (u across, v along the trunks: +0.3 waistband .. -0.3 leg ends)
+      this.shorts = { g, m, base, d: 0, on: true, k: 0, seed: Math.random() * 6 };
+      this.shortsShape(this.shorts, 0, 0);
       if (!this.saidShorts) { this.saidShorts = true; this.think('...someone\'s shorts came with me.', 1.8); }
+    }
+    // the cloth's shape: k 0 = over the shoulder (bent round a 0.11 m roll, the two halves hanging down front and back), k 1 = lying crumpled flat
+    shortsShape(s, k, T) {
+      const pos = s.m.geometry.attributes.position, B = s.base, r = 0.11, s0 = 0.04, arc = Math.PI * r / 2;
+      for (let i = 0; i < pos.count; i++) { const u = B[i * 3], v = B[i * 3 + 1], sv = v - s0;
+        let fx, fy; const th = clamp(sv / r, -Math.PI / 2, Math.PI / 2);
+        fx = Math.sin(th) * r; fy = Math.cos(th) * r - r;                                       // over the top of the shoulder
+        if (Math.abs(sv) > arc) { const hang = Math.abs(sv) - arc, sg = Math.sign(sv); fx = sg * (r + hang * 0.18) ; fy = -r - hang; }   // hanging down, flaring a little away from him
+        fx += Math.sin(T * 3 + v * 9 + s.seed) * 0.008 * Math.min(1, Math.abs(sv) * 4);   // (a little sway as he walks)
+        // on the floor: laid out flat, a few soft rucks
+        const gx = v * 0.95 + Math.sin(u * 13 + s.seed) * 0.02, gy = 0.006 + Math.max(0, Math.sin(v * 17 + u * 6 + s.seed)) * 0.025, gz = u * 1.05;
+        pos.setXYZ(i, fx + (gx - fx) * k, fy + (gy - fy) * k, u + (gz - u) * k); }
+      pos.needsUpdate = true; s.m.geometry.computeVertexNormals();
     }
     dropShorts(now) {
       const s = this.shorts; if (!s) return;
       if (now) { this.G.remove(s.g); this.shorts = null; return; }
-      if (!s.on) return; const P = this.P; s.on = false; s.vy = 0.6; s.vx = -Math.cos(P.f) * 0.9; s.vz = -Math.sin(P.f) * 0.9; s.life = 12;
+      if (!s.on) return; const P = this.P; s.on = false; s.vy = 0.6; s.vx = -Math.cos(P.f) * 0.9; s.vz = -Math.sin(P.f) * 0.9; s.life = 12; s.spin = (Math.random() - 0.5) * 3;
     }
     shortsStep(dt) {
       const s = this.shorts; if (!s) return; const P = this.P, v = this.view, g = s.g;
       if (s.on) {
         s.d += Math.hypot(P.vx, P.vz) * dt;
-        // on his right shoulder (the soft sumo's own shoulder joint)
+        // on his right shoulder (the soft sumo's own shoulder joint), the fold along the line of the shoulder
         const A = v.arms && v.arms.find((q) => q.sd < 0), w = this._shw || (this._shw = new THREE.Vector3());
         if (A && A.sh && v.body) { w.copy(A.sh); v.body.localToWorld(w); } else w.set(P.x, P.y + 1.5 * v.s, P.z);
-        g.position.set(w.x - Math.sin(P.f) * 0.04 * v.s, w.y + 0.16 * v.s, w.z + Math.cos(P.f) * 0.04 * v.s); g.rotation.set(0, -P.f, 0); g.scale.setScalar(1.45 * v.s);
-        g.visible = v.root.visible;
+        g.position.set(w.x, w.y + 0.17 * v.s, w.z); g.rotation.set(0, -P.f, 0); g.scale.setScalar(1.4 * v.s);
+        g.visible = v.root.visible; this.shortsShape(s, 0, this.t);
         if (s.d > 1.5) this.dropShorts();   // about three steps
         return;
       }
-      if (s.vy !== null) {
-        g.position.x += s.vx * dt; g.position.z += s.vz * dt; g.position.y += s.vy * dt; s.vy -= 9.8 * dt;
-        for (const f of s.fl) f.rotation.x *= Math.max(0, 1 - dt * 6);   // flattens out as it falls
-        const fy = floorY(g.position.x, g.position.z) + 0.03;
-        if (g.position.y <= fy) { g.position.y = fy; s.vy = null; for (const f of s.fl) f.rotation.x = 0; if (this.fx.dust) this.fx.dust(g.position.x, fy + 0.05, g.position.z, 3, 0.2, 0.3, 0.2); }
+      if (s.vy !== null) {   // sliding off: it falls, turning, and spreads out as it lands
+        g.position.x += s.vx * dt; g.position.z += s.vz * dt; g.position.y += s.vy * dt; s.vy -= 9.8 * dt; g.rotation.y += s.spin * dt;
+        s.k = Math.min(1, s.k + dt * 2.2); this.shortsShape(s, s.k * 0.7, this.t);
+        const fy = floorY(g.position.x, g.position.z) + 0.01;
+        if (g.position.y <= fy) { g.position.y = fy; s.vy = null; s.k = 1; this.shortsShape(s, 1, 0); if (this.fx.dust) this.fx.dust(g.position.x, fy + 0.05, g.position.z, 3, 0.2, 0.3, 0.2); }
       }
       if ((s.life -= dt) <= 0) this.dropShorts(true);
     }
