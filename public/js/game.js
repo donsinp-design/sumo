@@ -107,7 +107,7 @@
       this.names = [kind === 'boss' ? 'YOU' : human(0) ? P.names[0] : 'CPU', kind === 'pvp' ? P.names[1] : kind === 'boss' ? 'YUNOFUJI' : kind === 'tutorial' || kind === 'training' ? 'PARTNER' : 'CPU'];
       this.viewerIdx = kind === 'pvp' ? -1 : kind === 'attract' ? -1 : 0;
       for (let k = 0; k < 2; k++) m.w[k].extraTaunts = this.loadouts[k].taunts.map((id) => (id ? S.item(id).pose : null));
-      this.R.setWrestlers(archs, this.loadouts, this.names);
+      this.R.noMasks = kind === 'boss'; this.R.setWrestlers(archs, this.loadouts, this.names);
       for (const v of this.R.views) v.onDerobe = (w) => { this.audio.whoosh(0.4); this.R.fx.dust(w.x, 0.05, w.z, 6, 0.3, 0.5, 0.3); this.audio.cheer(0.4, 0.8); };
       this.ui.setFighters(archs, kind === 'cpu' ? [this.names[0], 'CPU · ' + this.settings.difficulty.toUpperCase()] : kind === 'boss' ? ['', '湯乃富士'] : kind === 'pvp' ? this.names : kind === 'tutorial' ? ['YOU', 'PARTNER'] : ['CPU', 'CPU']);
       this.ui.setSkills([null, null], [false, false], ['', '']);

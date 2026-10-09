@@ -1696,7 +1696,7 @@
       for (const v of this.views) v.dispose(this.scene);
       this.views = archs.map((a, i) => new WrestlerView(this.scene, a, this.fx, loadouts && loadouts[i]));
       // everyone fights masked, like the campaign: two different masks each match (cosmetic in versus)
-      if (S.CampSkills) {
+      if (S.CampSkills && !this.noMasks) {   // (the boss bout: bare faces)
         const pool = ['oni', 'tengu', 'kitsune', 'hannya', 'okame'], m0 = pool[(Math.random() * pool.length) | 0];
         const m1 = pool.filter((k) => k !== m0)[(Math.random() * (pool.length - 1)) | 0];
         this.views.forEach((v, i) => { const mk = S.CampSkills.maskMesh(i ? m1 : m0); if (mk && v.head) { mk.scale.setScalar((v.s || 1) * 1.3); v.head.add(mk); v.maskId = i ? m1 : m0; } });
