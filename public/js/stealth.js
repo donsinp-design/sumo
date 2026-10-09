@@ -365,7 +365,9 @@
     }
     cell(x, z) { const N = this.nav; return [clamp(Math.floor((x - N.x0) / N.cs), 0, N.nx - 1), clamp(Math.floor((z - N.z0) / N.cs), 0, N.nz - 1)]; }
     walkable(x, z) { const N = this.nav, [i, j] = this.cell(x, z); return !!N.free[j * N.nx + i]; }
-    lineWalk(x0, z0, x1, z1) { const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / 0.15); for (let k = 1; k <= n; k++) if (!this.walkable(x0 + (x1 - x0) * k / n, z0 + (z1 - z0) * k / n)) return false; return true; }
+    lineWalk(x0, z0, x1, z1) { const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / 0.15), bw = this.P && this.P.boxHide && this.boxW && this.boxW.x0 < 1e3 ? this.boxW : null;
+      const inB = (x, z) => bw && x > bw.x0 - 0.45 && x < bw.x1 + 0.45 && z > bw.z0 - 0.45 && z < bw.z1 + 0.45, from = inB(x0, z0);   // (and not through the box he's crouched in)
+      for (let k = 1; k <= n; k++) { const x = x0 + (x1 - x0) * k / n, z = z0 + (z1 - z0) * k / n; if (!this.walkable(x, z) || (!from && inB(x, z))) return false; } return true; }
     nearestFree(i, j) {
       const N = this.nav; if (N.free[j * N.nx + i]) return [i, j];
       for (let r = 1; r < 12; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue; const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < N.nx && b < N.nz && N.free[b * N.nx + a]) return [a, b]; }
@@ -377,7 +379,10 @@
       if (!s0 || !s1) return null;
       const id = (i, j) => j * N.nx + i, goal = id(s1[0], s1[1]), start = id(s0[0], s0[1]), W = (k) => [N.x0 + (k % N.nx + 0.5) * cs, N.z0 + (Math.floor(k / N.nx) + 0.5) * cs];
       const end = this.walkable(x1, z1) ? [x1, z1] : W(goal);
-      if (start === goal || this.lineWalk(x0, z0, end[0], end[1])) return [end];
+      // the box he's crouched in is in the way too (the grid itself is fixed): they plan round it
+      const bw = this.P.boxHide && this.boxW && this.boxW.x0 < 1e3 ? this.boxW : null, inB = (x, z) => bw && x > bw.x0 - 0.45 && x < bw.x1 + 0.45 && z > bw.z0 - 0.45 && z < bw.z1 + 0.45;
+      const segB = () => { if (!bw) return false; const L = Math.hypot(end[0] - x0, end[1] - z0), n = Math.ceil(L / 0.2); for (let k = 1; k <= n; k++) if (inB(x0 + (end[0] - x0) * k / n, z0 + (end[1] - z0) * k / n)) return true; return false; };
+      if (start === goal || (this.lineWalk(x0, z0, end[0], end[1]) && !segB())) return [end];
       const M = N.nx * N.nz; if (!N.g) { N.g = new Float32Array(M); N.from = new Int32Array(M); N.seen = new Uint32Array(M); N.shut = new Uint32Array(M); N.gen = 0; }
       const gen = ++N.gen, G = N.g, from = N.from, seen = N.seen, shutA = N.shut, gq = (q) => (seen[q] === gen ? G[q] : 1e9);
       const shut = { get: (k) => shutA[k] === gen, set: (k) => { shutA[k] = gen; } };
@@ -390,7 +395,7 @@
         const i = k % N.nx, j = Math.floor(k / N.nx);
         for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
           if (!di && !dj) continue; const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= N.nx || b >= N.nz) continue;
-          const q = id(a, b); if (!N.free[q] || shut.get(q)) continue; if (di && dj && (!N.free[id(i + di, j)] || !N.free[id(i, j + dj)])) continue;
+          const q = id(a, b); if (!N.free[q] || shut.get(q)) continue; if (bw && q !== goal) { const [wx, wz] = W(q); if (inB(wx, wz) && !inB(x0, z0)) continue; } if (di && dj && (!N.free[id(i + di, j)] || !N.free[id(i, j + dj)])) continue;
           const ng = G[k] + (di && dj ? 1.414 : 1); if (ng < gq(q)) { G[q] = ng; seen[q] = gen; from[q] = k; push(q, ng + h(q)); }
         }
       }
@@ -463,27 +468,47 @@
       }
       if (tx !== null) { let dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
         const P = this.P;   // a box on the floor in the way: they put their shoulder to it and shove it along (sweating); stuck fast, they turn back
-        if (!P.boxHide) { n.pushing2 = false; n.tug = 0; }
-        if (P.boxHide) { const bx = P.x - a.x, bz = P.z - a.z, bd = Math.hypot(bx, bz);
-          if (bd < 1.5 && (bx * dx + bz * dz) / (bd || 1) > 0.3 || n.tug > 0 || (n.pushing2 && bd < 1.9 && (bx * dx + bz * dz) / (bd || 1) > 0)) {   // (once they're on it they stay on it: no flickering in and out)
-            if (!n.pushing2) n.pd = Math.atan2(bz, bx);   // one steady heading: from them through the box, turning only slowly toward where they're going
-            else n.pd += clamp(ang(Math.atan2(dz, dx) - n.pd), -0.45 * dt, 0.45 * dt);
-            dx = Math.cos(n.pd); dz = Math.sin(n.pd); this.boxYaw = n.pd;
-            n.pushing2 = true; const PS = 0.55;   // a heavy box: slow and steady
-            if (n.tug > 0) {   // won't go forward: they get hold of it and drag it back towards themselves, walking backwards
-              n.tug -= dt; const q = { x: P.x - dx * PS * dt, z: P.z - dz * PS * dt, boxProbe: true }; this.collide(q, P.r); P.x = q.x; P.z = q.z;
-              a.x -= dx * PS * dt; a.z -= dz * PS * dt; this.collide(a, 0.4); a.vx = -dx * PS; a.vz = -dz * PS; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 6);
-              if (n.tug <= 0) { n.pushing2 = false; n.i = (n.i + n.route.length - 1) % n.route.length; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); this.popAt(a, 'もう…', 1.0); }
-              return;
-            }
-            const q = { x: P.x + dx * PS * dt, z: P.z + dz * PS * dt, boxProbe: true }; this.collide(q, P.r);
-            if (Math.hypot(q.x - P.x, q.z - P.z) > PS * 0.4 * dt && Math.hypot(q.x - P.x, q.z - P.z) < PS * 3 * dt) { P.x = q.x; P.z = q.z; n.boxT = 0; }
-            else if ((n.boxT = (n.boxT || 0) + dt) > 0.7) { n.boxT = 0; n.tug = 1.2; this.popAt(a, 'ぐぬぬ…!', 1.0); }
-            // they stay right up against it, leaning in, at the box's pace
-            const st = 0.85 + 0.42, ek = Math.min(1, dt * 8); a.x += (P.x - dx * st - a.x) * ek; a.z += (P.z - dz * st - a.z) * ek; this.collide(a, 0.4); a.vx = dx * PS; a.vz = dz * PS; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 6);
-            if ((n.sweatT = (n.sweatT || 0) - dt) <= 0) { n.sweatT = 1.4; this.popAt(a, ['ふんっ…!', '重っ…!'][(this.t * 2 | 0) % 2], 1.0); }
+        if (!P.boxHide) { n.pushing2 = false; n.tug = 0; n.clr = null; }
+        n.clrCd = Math.max(0, (n.clrCd || 0) - dt);
+        // the box sat in their way: shove it off to the side of their route (or, no room either side, drag it back
+        // towards themselves), then carry on along their way. They don't push it any further than that
+        if (P.boxHide) { const bx = P.x - a.x, bz = P.z - a.z, bd = Math.hypot(bx, bz), PS = 0.6, st = 0.85 + 0.42;
+          if (!n.clr && !(n.tug > 0) && !n.clrCd && bd < 1.5 && (bx * dx + bz * dz) / (bd || 1) > 0.3) {
+            // which side? the one with room for the box, that leaves it furthest from the way they're going
+            const pts = [[a.x, a.z]].concat((n.path || []).slice(n.pi, n.pi + 4)), segD = (x, z) => { let m = 1e9;
+              for (let k = 0; k + 1 < pts.length; k++) { const [x0, z0] = pts[k], [x1, z1] = pts[k + 1], ex = x1 - x0, ez = z1 - z0, l2 = ex * ex + ez * ez || 1e-6, t = clamp(((x - x0) * ex + (z - z0) * ez) / l2, 0, 1); m = Math.min(m, Math.hypot(x - x0 - ex * t, z - z0 - ez * t)); }
+              return pts.length > 1 ? m : Math.hypot(x - a.x, z - a.z); };
+            let best = null;
+            for (const sd of [1, -1]) { const ux = -dz * sd, uz = dx * sd, tx = P.x + ux * 1.6, tz = P.z + uz * 1.6; let ok = true;
+              for (const f of [0.5, 1]) { const q = { x: P.x + ux * 1.6 * f, z: P.z + uz * 1.6 * f, boxProbe: true }; this.collide(q, P.r); if (Math.hypot(q.x - P.x - ux * 1.6 * f, q.z - P.z - uz * 1.6 * f) > 0.06) ok = false; }
+              const sc = segD(tx, tz); if (ok && (!best || sc > best.sc)) best = { ux, uz, sc }; }
+            if (best) { n.clr = { ux: best.ux, uz: best.uz, left: 1.6, t: 0, on: false, stuck: 0 }; this.popAt(a, ['邪魔だな…', 'なんだこの箱…', 'よいしょ…'][(this.t * 3 | 0) % 3], 1.2); }
+            else { n.tug = 1.3; n.tugU = [dx, dz]; this.popAt(a, 'ぐぬぬ…!', 1.0); }
+          }
+          if (n.tug > 0) {   // no room to shove it aside: they grab it and drag it back towards themselves, walking backwards, then go round
+            const [ux, uz] = n.tugU || [dx, dz]; n.pushing2 = true; this.boxYaw = Math.atan2(uz, ux);
+            n.tug -= dt; const q = { x: P.x - ux * PS * dt, z: P.z - uz * PS * dt, boxProbe: true }; this.collide(q, P.r); P.x = q.x; P.z = q.z;
+            a.x += (P.x - ux * st - a.x) * Math.min(1, dt * 8); a.z += (P.z - uz * st - a.z) * Math.min(1, dt * 8); this.collide(a, 0.4); a.vx = -ux * PS; a.vz = -uz * PS; a.f = lerpA(a.f, Math.atan2(uz, ux), dt * 6);
+            if (n.tug <= 0) { n.pushing2 = false; n.clrCd = 2.5; if (n.path) { const e = n.path[n.path.length - 1]; this.goTo(n, e[0], e[1]); } this.popAt(a, 'ふぅ…', 1.0); }
             return;
-          } else n.pushing2 = false; }
+          }
+          if (n.clr) { const C = n.clr; C.t += dt;
+            const gx = P.x - C.ux * st, gz = P.z - C.uz * st;
+            if (!C.on) {   // step round to the side of it first
+              const ex = gx - a.x, ez = gz - a.z, ed = Math.hypot(ex, ez);
+              if (ed > 0.12 && C.t < 2.5) { a.vx = ex / ed * 1.1; a.vz = ez / ed * 1.1; a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4); a.f = lerpA(a.f, Math.atan2(P.z - a.z, P.x - a.x), dt * 6); return; }
+              C.on = true; }
+            n.pushing2 = true; this.boxYaw = Math.atan2(C.uz, C.ux);
+            const q = { x: P.x + C.ux * PS * dt, z: P.z + C.uz * PS * dt, boxProbe: true }; this.collide(q, P.r);
+            const mv = Math.hypot(q.x - P.x, q.z - P.z);
+            if (mv > PS * 0.4 * dt && mv < PS * 3 * dt) { P.x = q.x; P.z = q.z; C.left -= mv; C.stuck = 0; } else C.stuck += dt;
+            a.x += (P.x - C.ux * st - a.x) * Math.min(1, dt * 8); a.z += (P.z - C.uz * st - a.z) * Math.min(1, dt * 8); this.collide(a, 0.4); a.vx = C.ux * PS; a.vz = C.uz * PS; a.f = lerpA(a.f, Math.atan2(C.uz, C.ux), dt * 6);
+            if ((n.sweatT = (n.sweatT || 0) - dt) <= 0) { n.sweatT = 1.4; this.popAt(a, ['ふんっ…!', '重っ…!'][(this.t * 2 | 0) % 2], 1.0); }
+            if (C.left <= 0 || C.stuck > 0.6 || C.t > 7) {   // out of the way (or as far as it'll go): back to what they were doing
+              n.clr = null; n.pushing2 = false; n.clrCd = 3; if (n.path) { const e = n.path[n.path.length - 1]; this.goTo(n, e[0], e[1]); } }
+            return;
+          }
+          n.pushing2 = false; }
         a.vx = dx * sp; a.vz = dz * sp; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 7); }
       else { a.vx *= 0.8; a.vz *= 0.8; }
       const ox = a.x, oz = a.z; a.x += a.vx * dt; a.z += a.vz * dt;
@@ -622,7 +647,9 @@
         const dx = n.a.x - P.x, dz = n.a.z - P.z, d = Math.hypot(dx, dz);
         if (d < P.r + 0.55 && (dx * Math.cos(P.f) + dz * Math.sin(P.f)) / (d || 1) > 0.2) this.knockOut(n, Math.cos(P.f), Math.sin(P.f), ['ドーン!', 'ドスン!'][(this.t * 3 | 0) % 2], 4.5);
       }
-      P.brkCd = Math.max(0, (P.brkCd || 0) - dt);
+      P.brkCd = Math.max(0, (P.brkCd || 0) - dt); this.runupCd = Math.max(0, (this.runupCd || 0) - dt);
+      if (P.st === 'charge' && !power && this.breakables && !this.runupCd && this.breakables.some((B) => !B.done && Math.abs((B.s.f ? UP : 0) - P.y) < 1.2 && Math.hypot(P.x - clamp(P.x, B.s.x0, B.s.x1), P.z - clamp(P.z, B.s.z0, B.s.z1)) < P.r + 0.15)) {
+        this.runupCd = 8; this.think('Too close... I need a RUN-UP to smash through that!', 2); }   // (from right up against it he only bumps it)
       if (power && this.breakables && !P.brkCd) {   // one piece at a time: the nearest one he hits
         let best = null, bd = P.r + 0.15;
         for (const B of this.breakables) {
@@ -957,11 +984,18 @@
     // hold K with something in hand: he slams it down on the floor in front of him (loud; water goes everywhere)
     smashHeld() {
       const P = this.P, b = P.held; if (!b) return; P.held = null; this.waterOff(b);
-      const fx = Math.cos(P.f), fz = Math.sin(P.f), L = Math.max(0.3, Math.min(0.75, this.reach(P.x, P.z, P.f, 2) - 0.4));
-      b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y; b.tx = P.x + fx * L; b.tz = P.z + fz * L;
-      b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz); b.dur = 0.16; b.arc = 0.05;
-      P.st = 'busy'; P.t = 0; P.dur = 0.45; this.w.hand = 1; this.flash = 0.15;
-      if (this.g.audio && this.g.audio.thump) this.g.audio.thump(8);
+      const fx = Math.cos(P.f), fz = Math.sin(P.f), L = Math.max(0.3, Math.min(0.7, this.reach(P.x, P.z, P.f, 2) - 0.4)), x = P.x + fx * L, z = P.z + fz * L, y = floorY(x, z);
+      P.st = 'busy'; P.t = 0; P.dur = 0.45; this.w.hand = 1; this.flash = 0.2;
+      // in pieces: the thing is gone, splinters fly out across the floor
+      let mat = null; b.m.traverse((o) => { if (!mat && o.isMesh) mat = o.material; }); b.m.visible = false; b.state = 'gone';
+      if (!this.shardGeo) this.shardGeo = new THREE.BoxGeometry(0.16, 0.05, 0.1);
+      for (let k = 0; k < 9; k++) { const m = new THREE.Mesh(this.shardGeo, mat || new THREE.MeshLambertMaterial({ color: 0xc89a5a })); m.userData.flatDone = true; m.scale.setScalar(0.7 + Math.random() * 1.1); this.G.add(m);
+        const a = Math.random() * 6.28, r = 0.4 + Math.random() * 1.0, tx = x + Math.cos(a) * r, tz = z + Math.sin(a) * r;
+        this.flying.push({ m, sx: x, sy: y + 0.3, sz: z, tx, ty: floorY(tx, tz) + 0.02, tz, h: 0.25 + Math.random() * 0.4, t: 0, dur: 0.3 + Math.random() * 0.25, r0: [0, 0, 0], r1: [Math.random() * 8, Math.random() * 8, Math.random() * 8] }); }
+      if (b.water && !inPool(x, z)) { b.water = false; this.spill(x, z, y); }
+      this.think(['*CRASH!*', '*SMASH!*', '*KRAKK!*'][(this.t * 3 | 0) % 3], 1);
+      if (!SAFE[roomAt(x, z)]) this.noise(x, z, 14, '?!'); else this.ringAt(x, z, 2, 0.5);
+      if (this.g.audio && this.g.audio.thump) this.g.audio.thump(9);
     }
     // the water in a tub shows only while it's carried upright / standing; a spill leaves a puddle that staff can slip on
     waterOff(b) { if (b.waterM) b.waterM.visible = false; }
@@ -1354,7 +1388,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud) · K use / pick up / throw / push a cart · Esc pause</div>' +
+        '<div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
