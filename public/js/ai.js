@@ -8,7 +8,7 @@
     easy:   { react: 0.30, think: 0.16, skill: 0.45, dodge: 0.25, tricky: 0.08, aggr: 0.45 },
     normal: { react: 0.19, think: 0.10, skill: 0.72, dodge: 0.45, tricky: 0.18, aggr: 0.6 },
     hard:   { react: 0.12, think: 0.06, skill: 0.94, dodge: 0.6, tricky: 0.28, aggr: 0.72 },
-    boss:   { react: 0.62, think: 0.34, skill: 0.08, dodge: 0.04, tricky: 0, aggr: 0.26 },   // the bathhouse owner: a patient old champion, for casual players (and he goes easier after each round you lose)
+    boss:   { react: 0.5, think: 0.26, skill: 0.15, dodge: 0.08, tricky: 0, aggr: 0.36 },   // the bathhouse owner: a patient old champion, for casual players (and he goes easier after each round you lose)
   };
   // remembers how the human opens, across rounds and matches
   const MEM = { charge: 1, brace: 0.6, henka: 0.4, wait: 0.6 };

@@ -1190,7 +1190,7 @@
       const B = this.boss; B.hold = false; if (this.mawM) this.mawM.visible = false;   // (the mawashi's tucked in his belt: the fight's for it)
       this.g.bossBox = true;   // (the first bout: he fights in the storage-room box, until he loses a round)
       const q = n === 0 ? [{ who: '親方', jp: '返してほしければ、わしに勝て。', en: 'If you want it back, beat me.', t: 2.8 }, { who: '親方', jp: '…だが、お前は相撲を知らんようだな。稽古が先か?', en: '...But you don\'t look like you know sumo. Training first?', t: 3.6 }]
-        : [{ who: '親方', jp: '…ふむ。', en: 'Hm.', t: 1.6 }, { who: '親方', jp: '本当に、稽古はいらないのか?', en: 'Are you sure you don\'t want the training?', t: 3.0 }];
+        : [{ who: '親方', jp: '…ふむ。', en: 'Hm.', t: 1.6 }, { who: '親方', jp: '断るなら…必要になるぞ。わしを信じろ。', en: 'If you refuse... you\'ll need it. Trust me.', t: 3.4 }];
       this.say(q, () => this.choice('稽古?', 'TRAINING?', ['YES: learn to play', 'NO: just fight'], (i) => {
         if (i === 0) { this.say([{ who: '親方', jp: 'よし。ついてこい。', en: 'Good. Follow me.', t: 1.8 }], () => this.g.startBossTraining(this)); }
         else if (n === 0) this.bossAsk(1);
