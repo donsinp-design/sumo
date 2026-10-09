@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // BIG BOY SUMO: the same build as the kumitegame fork (Where's my Mawashi), also served at looktwicestudio.com/bigboysumo/
+  // Same server code as the main game, its own online rooms and ratings.
+  // Its files are built into dist-kumitegame/ by tools/build-fork.js.
+  "name": "bigboysumo",
+  "main": "server/worker.mjs",
+  "compatibility_date": "2026-09-15",
+  "assets": { "directory": "./dist-kumitegame", "binding": "ASSETS" },
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "looktwicestudio.com/bigboysumo", "zone_name": "looktwicestudio.com" },
+    { "pattern": "looktwicestudio.com/bigboysumo/*", "zone_name": "looktwicestudio.com" }
+  ],
+  "vars": { "BASE_PATH": "/bigboysumo" },
+  "durable_objects": { "bindings": [ { "name": "ROOMS", "class_name": "Room" }, { "name": "MM", "class_name": "Matchmaker" } ] },
+  "migrations": [ { "tag": "v1", "new_sqlite_classes": ["Room"] }, { "tag": "v2", "new_sqlite_classes": ["Matchmaker"] } ]
+}
