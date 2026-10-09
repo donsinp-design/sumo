@@ -99,6 +99,7 @@
       this.asleep = false; this.el('.st-obj').style.display = ''; this.el('.st-wake').style.display = 'none'; this.el('.st-zzz').style.display = 'none';
       this.objective('Get out of the BATH (the steps, towards you)');
       this.think('Zzz... mm? I fell asleep in the bath again...', 3.0);
+      this.tip(['WASD  ·  MOVE'], { until: () => this.outOfBath, min: 2 });
     }
     later(sec, fn) { (this.timers || (this.timers = [])).push({ t: sec, fn }); }
 
@@ -776,7 +777,8 @@
       }
       // J: a slap. Rats go flying; things get knocked about; hitting a person is NOT allowed
       if (c.push.pressed && P.st === 'free' && !P.held && !P.cart) this.slap();
-      else if (c.push.pressed && P.st === 'free' && P.held && P.held.kind === 'can') this.drink();
+      else if (c.push.pressed && P.st === 'free' && P.held && P.held.kind === 'can' && P.held.soda) this.drink();
+      else if (c.push.pressed && P.st === 'free' && P.held) this.drop();
       // K: use (locker, wash bucket, pick up / throw, put on the box)
       // (holding something: tap K to throw it, hold K to smash it down at your feet)
       if (c.grab.pressed && P.st === 'free') { if (P.held) this.kArm = true; else this.use(); }
@@ -970,6 +972,9 @@
       if (this.chasing() && !P.cart && !this.carts.some((cc) => near(cc.x, cc.z, 2.0)) && !this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4))) { this.think('No time! They\'re right behind me!', 1.4); return; }
       if (this.stage === 'locker' && near(this.locker.x, this.locker.z, 1.7)) {
         P.st = 'busy'; P.t = 0; P.dur = 0.8; this.stage = 'key'; this.spLocker.visible = false; this.spKey.visible = true;
+        if (!this.tipLocker) { this.tipLocker = true; this.later(1.2, () => { this.tip(['I  ·  TIPTOE', 'people hear you coming: HOLD I to move quietly', 'you\'re a big boy, so it tires you out: stand still and you recover', 'I also lets you HIDE (carts, toilet stalls...)'], { sec: 13 });
+          this.tip(['J  ·  PUNCH', 'punch a wall to make a noise and lure people away'], { sec: 8 });
+          this.tip(['HOLD L + A DIRECTION  ·  CHARGE', 'charging breaks things', 'but you need room for a run-up, and you can\'t charge right away'], { sec: 10 }); }); }
         this.think('Locked. The key... it must be in my wash bucket, by the bath!', 3.2);
         this.objective('Go back to the BATH and check your WASH BUCKET for the KEY'); return;
       }
@@ -1012,6 +1017,7 @@
       if (this.testWear && this.wearing && this.stage !== 'box' && this.stage !== 'exit' && !this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.wearing = false; this.testWear = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.boxDown = false; this.testBoxAt = { x: P.x + Math.cos(P.f) * 1.4, z: P.z + Math.sin(P.f) * 1.4 }; this.testBox.position.set(this.testBoxAt.x, P.y, this.testBoxAt.z); this.testBox.visible = true; P.st = 'busy'; P.t = 0; P.dur = 0.4; return; }
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { this.putOnBox(); P.st = 'busy'; P.t = 0; P.dur = 0.35; return; }   // (on at once: no wait)
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
+        if (!this.tipHeld) { this.tipHeld = true; this.tip(['K again  ·  THROW IT', 'hit someone and they come looking · throw a bucket of water and it leaves a PUDDLE: anyone who runs over it SLIPS', 'HOLD K  ·  SMASH IT instead', 'J  ·  DROP IT'], { sec: 16, min: 4, until: () => !this.P.held }); }
         b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0); if (b.kind === 'can') b.m.children[0].position.y = 0;
         if (b.water && !this.saidWater) { this.saidWater = true; this.think('Full of water... throw it (K) or smash it (hold K): a puddle. Anyone running over it goes flying!', 3); }
         else if (b.kind === 'can') { if (!this.saidCan) { this.saidCan = true; this.think(b.soda ? 'A cold one! (J drink it · K throw · hold K smash)' : 'Empty. Still... (K throw · hold K smash)', 2.6); } }
@@ -1023,6 +1029,7 @@
     }
     leaveBath() {
       this.outOfBath = true; this.spOut.visible = false; this.mosaic.pop = 0.5;
+      if (this.stage === 'locker' && !this.tipPick) { this.tipPick = true; this.later(1.0, () => this.tip(['K  ·  PICK UP ITEMS', 'buckets, cans... anything lying about'], { sec: 12, until: () => this.tipHeld })); }
       if (this.stage !== 'locker') return;
       this.spLocker.visible = true;
       this.think('...WAIT. Where is my MAWASHI?!', 2.6);
@@ -1501,6 +1508,20 @@
         if (b.state === 'roll' && spd < 0.15 && p.y <= 0.101) { b.state = 'floor'; b.vx = b.vz = 0; b.x = p.x; b.z = p.z; }
       }
     }
+    // J with something in hand: set it down at his feet (a gentle toss, not a throw)
+    drop() {
+      const P = this.P, b = P.held; if (!b) return; this.waterOff(b); P.held = null; b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y;
+      const L = clamp(this.reach(P.x, P.z, P.f, 1.2) - 0.4, 0.3, 0.8); b.tx = P.x + Math.cos(P.f) * L; b.tz = P.z + Math.sin(P.f) * L; b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz);
+      b.dur = 0.22; P.st = 'busy'; P.t = 0; P.dur = 0.25; this.w.hand = 1;
+    }
+    // the big on-screen tips: lines of text, one tip at a time, each for its time (or until its condition is met)
+    tip(lines, o) { (this.tipQ || (this.tipQ = [])).push({ lines, sec: (o && o.sec) || 6, min: (o && o.min) || 0, until: o && o.until, t: 0 }); }
+    tipStep(dt) {
+      const q = this.tipQ, e = this.el('.st-tip'); if (!e) return;
+      if (!q || !q.length) { if (e.style.display !== 'none') e.style.display = 'none'; return; }
+      const c = q[0]; if (!c.shown) { c.shown = true; e.innerHTML = '<b>' + c.lines[0] + '</b>' + c.lines.slice(1).map((l, i) => / {2}· /.test(l) ? '<b>' + l + '</b>' : '<i>' + l + '</i>').join(''); e.style.display = 'block'; }
+      c.t += dt; if (c.t >= c.sec || (c.until && c.t >= c.min && c.until())) q.shift();
+    }
     drink() {
       const P = this.P, b = P.held; if (!b) return;
       if (!b.soda) { this.think('Empty.', 1); return; }
@@ -1873,6 +1894,7 @@
       if (this.drawN % 10 === 1) { this.hudApply(); const o = this.el('.st-obj'), bn = this.el('.st-bonus'), hp = this.el('.st-hp'); if (o && bn) { const y = o.offsetTop + o.offsetHeight + 8; bn.style.top = y + 'px'; if (hp) hp.style.setProperty('top', (y + 34) + 'px', 'important'); } }   // (a two-line goal pushes the badges down, never over them)
       for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }
       this.sweatStep(dt);
+      this.tipStep(dt);
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
       const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden && !this.gotMawashi;
       if (m.s.visible) {
@@ -1935,6 +1957,7 @@
         '#stealthHud .st-choice{position:absolute;left:50%;top:52%;transform:translateX(-50%);display:none;text-align:center;background:rgba(42,36,48,0.92);padding:18px 34px 20px;border-radius:14px;color:#fffaf0}#stealthHud .st-choice.on{display:block}' +
         '#stealthHud .st-choice h3{margin:0 0 4px;font:400 26px "Dela Gothic One",sans-serif}#stealthHud .st-choice p{margin:0 0 12px;font:600 19px "Barlow Condensed",sans-serif;opacity:0.85}' +
         '#stealthHud .st-choice button{display:block;width:100%;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:4px 0;cursor:pointer}#stealthHud .st-choice button.sel{color:#f4efe6;border-left:5px solid #d8262e;padding-left:16px}' +
+        '#stealthHud .st-tip{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:max-content;max-width:min(70vw,760px);display:none;text-align:center;pointer-events:none;background:#14101a;color:#fffaf0;padding:10px 24px 12px;border-radius:12px;box-shadow:0 0 0 3px #d8262e}#stealthHud .st-tip b{display:block;font:800 26px "Barlow Condensed",sans-serif;letter-spacing:.06em;margin:2px 0}#stealthHud .st-tip i{display:block;font:600 18px "Barlow Condensed",sans-serif;font-style:normal;color:#e9e3d8;margin:3px 0}#stealthHud.nh-tips .st-tip{display:none!important}' +
         '#stealthHud .st-sub{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);width:max-content;max-width:94vw;text-align:center;pointer-events:none;display:none}#stealthHud .st-sub{background:#14101a;padding:10px 26px 12px;border-radius:12px}#stealthHud .st-sub .jp{display:block;font:400 26px "Dela Gothic One",sans-serif;color:#fffaf0;letter-spacing:0.04em}#stealthHud .st-sub .en{display:block;margin-top:6px;font:700 22px "Barlow Condensed",sans-serif;color:#e9e3d8}#stealthHud .st-sub .who{color:#f2cf4a;margin-right:8px}' +
         '#stealthHud .st-hp{position:absolute;left:24px;top:76px;font-size:28px;letter-spacing:4px;color:#cf3a3a;text-shadow:0 2px 0 #fffaf0;display:none}#stealthHud .st-hp.chase{animation:hpPulse .5s ease-in-out infinite alternate}@keyframes hpPulse{to{transform:scale(1.12)}}' +
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
@@ -1956,7 +1979,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J punch (knocks them out) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J punch (knocks them out) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
@@ -2000,7 +2023,7 @@
     markMenu(q, i) { this.el(q).querySelectorAll('button').forEach((b, k) => b.classList.toggle('sel', k === i)); }
     setPause(on) { this.paused = on; this.el('.st-pause').classList.toggle('on', on); if (on) { this.pauseI = 0; this.markMenu('.st-pause', 0); } }
     hudApply() {   // the HUD pieces he can hide in SETTINGS
-      const st = this.g.settings || {}; for (const k of ['guide', 'map', 'bonus', 'goal', 'meter']) this.hud.classList.toggle('nh-' + k, st['hud' + k[0].toUpperCase() + k.slice(1)] === false);
+      const st = this.g.settings || {}; for (const k of ['guide', 'map', 'bonus', 'goal', 'meter', 'tips']) this.hud.classList.toggle('nh-' + k, st['hud' + k[0].toUpperCase() + k.slice(1)] === false);
     }
     command(c) {
       if (c === 'resume') this.setPause(false);
