@@ -1374,7 +1374,7 @@
       }
     }
 
-    isOption(a) { return a === 'diff' || a === 'endless' || a === 'hints' || a === 'sound' || a === 'debug' || a === 'pstage'; }
+    isOption(a) { return a === 'diff' || a === 'endless' || a === 'hints' || a === 'sound' || a === 'debug' || a === 'pstage' || /^hud[A-Z]/.test(a); }
     toggleRules() {
       const P = S.profile; P.rules = P.rules === 'gacha' ? 'pure' : 'gacha'; P.save();
       this.audio.blip(true); this.ui.show('select', this.sel);
@@ -1533,6 +1533,7 @@
           break;
         }
         case 'hints': st.hints = !st.hints; this.save(); refresh(); break;
+        case 'hudGuide': case 'hudMap': case 'hudBonus': case 'hudGoal': case 'hudMeter': st[a] = st[a] === false; this.save(); refresh(); break;   // (stealth level HUD pieces)
         case 'style': st[this.styleKey] = st[this.styleKey] === 'anime' ? 'classic' : 'anime'; this.R.setAnime(st[this.styleKey] === 'anime'); this.save(); refresh(); break;
         case 'endless': st.endless = !st.endless; this.save(); refresh(); break;
         case 'sound': st.sound = !st.sound; this.audio.muted = !st.sound; this.save(); refresh(); break;

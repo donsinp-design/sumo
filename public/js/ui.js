@@ -287,6 +287,11 @@
           btn('ART STYLE', 'style', st[this.g.styleKey] === 'anime' ? 'ANIME' : 'CLASSIC') +
           btn('COUNTER TIPS', 'hints', st.hints ? 'ON' : 'OFF') +
           btn('SOUND', 'sound', st.sound ? 'ON' : 'OFF') +
+          btn('CONTROLS GUIDE', 'hudGuide', st.hudGuide === false ? 'HIDDEN' : 'SHOWN') +
+          btn('MINIMAP', 'hudMap', st.hudMap === false ? 'HIDDEN' : 'SHOWN') +
+          btn('BONUS BADGES', 'hudBonus', st.hudBonus === false ? 'HIDDEN' : 'SHOWN') +
+          btn('GOAL TEXT', 'hudGoal', st.hudGoal === false ? 'HIDDEN' : 'SHOWN') +
+          btn('TIPTOE / BREATH METER', 'hudMeter', st.hudMeter === false ? 'HIDDEN' : 'SHOWN') +
           (S.APP === 'desktop' ? btn('DISPLAY', 'fullscreen', window.kumiteDesktop && window.kumiteDesktop.isFullScreen() ? 'FULLSCREEN' : 'WINDOWED') : '') +
           btn('DEBUG VIEW', 'debug', st.debug ? 'ON' : 'OFF') + btn('CONTROLS', 'controls') + btn('PHONE CONTROLLERS', 'phones', (S.phones.on ? (S.phones.slots.filter(Boolean).length + ' CONNECTED') : 'OFF')) +
           btn('YOUR NAME', 'name1', P.names[0]) +
