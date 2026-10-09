@@ -69,7 +69,7 @@
       this.w = { x: 0, z: 0, y: 0, f: 0, fx: 0, fz: 1, vx: 0, vz: 0, st: 'free', t: 0, dur: 1, fxs: {}, a: arch, idx: 0, szCur: 1, squash: 0, bal: 1, tx: 0, tz: 0, power: 0, pre: null, preT: 0,
         hand: 0, windPow: 0, charges: 0, uprightT: 0, throatT: 0, lifted: false, down: false, fallX: 0, fallZ: 1, clinch: null, slideT: 0, spd: 0, crouchT: 0, lean: 0, gulpI: -1, contact: false, fwdIn: 0, ddx: 0, ddz: 0, boomT: 0, relaxed: true };
       // THE BOSS: the bathhouse's owner, a retired yokozuna (湯乃富士). Grey topknot, his own dark mawashi; ours, he's found
-      this.bossOn = !!(S.Stealth.BOSS || /[?&]boss/.test(location.search));
+      this.bossOn = !/[?&]noboss/.test(location.search);
       { const ai = Math.max(0, S.ARCH.indexOf(arch)), bA = Object.assign({}, S.ARCH[(ai + 2) % S.ARCH.length], { belt: 0x3b3346 });
         const bv = new S.WrestlerView(this.scene, bA, this.fx, S.DEF_EQ); bv.viewer = 1; bv.match = null; bv.root.visible = false;
         const bw = Object.assign({}, this.w, { a: bA, idx: 1, fxs: {}, carry: null });
@@ -199,7 +199,7 @@
       const clone = (n) => { const o = proto[n].clone(); o.visible = true; o.position.set(0, 0, 0); o.rotation.set(0, 0, 0); o.traverse((q) => { if (q.isMesh) q.castShadow = true; }); return o; };
       this.cloneP = (n) => proto[n] ? clone(n) : null;
       for (const b of this.buckets) if (proto['ITEM_' + b.kind.toUpperCase()]) { const o = clone('ITEM_' + b.kind.toUpperCase()); b.m.add(o);
-        if (b.kind === 'oke' && !b.base) {   // the wash tubs in the wash area are full of water (thrown or smashed: a puddle)
+        if (b.kind === 'oke' || b.kind === 'bucket') {   // every tub and bucket has water in it (thrown or smashed: a puddle)
           const bb = new THREE.Box3().setFromObject(o), sz = bb.getSize(new THREE.Vector3()), r = Math.min(sz.x, sz.z) * 0.42;
           const w = new THREE.Mesh(new THREE.CircleGeometry(r, 20), new THREE.MeshBasicMaterial({ color: 0x8fcdf0, transparent: true, opacity: 0.85 })); w.rotation.x = -Math.PI / 2; w.position.y = bb.max.y - b.m.position.y - sz.y * 0.22; w.userData.flatDone = true;
           o.add(w); b.waterM = w; b.water = true; } }
@@ -434,7 +434,7 @@
       for (const n of this.npcs) {
         if (n.room !== room || Math.hypot(n.a.x - x, n.a.z - z) > radius || n.a.st !== 'free' || n.hold > 0 || (n.raid && n.mode === 'raid')) continue;
         // several coming to look: each stops at their own spot round it (not all on the same tile)
-        const ra = rank ? 1.0 : 0, aa = rank * 2.3 + Math.atan2(n.a.z - z, n.a.x - x), q = { x: x + Math.cos(aa) * ra, z: z + Math.sin(aa) * ra }; if (rank) this.collide(q, 0.4); rank++;
+        const ra = rank ? 1.25 + 0.25 * rank : 0, aa = rank * 2.3 + Math.atan2(n.a.z - z, n.a.x - x), q = { x: x + Math.cos(aa) * ra, z: z + Math.sin(aa) * ra }; if (rank) this.collide(q, 0.4); rank++;
         const path = this.navPath(n.a.x, n.a.z, q.x, q.z) || this.navPath(n.a.x, n.a.z, x, z); if (!path) continue;
         if (n.mode !== 'goto') this.popAt(n.a, msg || '?!', 1.6);
         n.path = path; n.pi = 0; n.stuckT = 0; n.mode = 'goto'; n.noiseAt = [x, z]; n.inv = !!soft;
@@ -542,7 +542,8 @@
           if (d < 1.5) { m.a.t = m.a.dur; n.mode = 'search'; n.wait = 3; n.path = null; this.popAt(a, ['おい!起きろ!', '大丈夫か!?', 'しっかりしろ!'][(this.t * 3 | 0) % 3], 1.5); break; }
           if (n.mode !== 'goto' && d < 9 && this.sees(n, m.a.x, m.a.z, 9)) { this.goTo(n, m.a.x, m.a.z); n.mode = 'goto'; n.inv = false; n.noiseAt = [m.a.x, m.a.z]; this.popAt(a, '!?', 1.2); break; }
         } }
-      if (tx !== null) { n.stuckT = Math.hypot(a.x - ox, a.z - oz) < sp * dt * 0.3 ? (n.stuckT || 0) + dt : 0;
+      if (tx !== null) { n.stk = Math.hypot(a.x - ox, a.z - oz) < sp * dt * 0.2 ? (n.stk || 0) + dt : 0; if (n.stk > 3) { n.stk = 0; this.unstick(n); }
+        n.stuckT = Math.hypot(a.x - ox, a.z - oz) < sp * dt * 0.3 ? (n.stuckT || 0) + dt : 0;
         // walking into a colleague: if they're standing on the very spot, this is close enough; otherwise step round them
         if (n.stuckT > 0.45) { const o = this.npcs.find((m) => m !== n && Math.hypot(m.a.x - a.x, m.a.z - a.z) < 1.05);
           if (o) { const e = n.path && n.path[n.path.length - 1];
@@ -592,7 +593,14 @@
       P.t += dt; P.cd = Math.max(0, P.cd - dt);
       let mx = c.mx, mz = c.mz; const mag = Math.hypot(mx, mz); if (mag > 1) { mx /= mag; mz /= mag; }
       if (this.asleep) { this.npcsOnly(dt); return; }
-      const wet = inPool(P.x, P.z), iPress = this.iPress; this.iPress = false;
+      const wet = inPool(P.x, P.z), iPress = this.iPress; this.iPress = false; const px0 = P.x, pz0 = P.z;
+      // in a toilet stall, door shut: nobody sees him. Any move and he comes out
+      if (P.stallHide !== undefined) { P.vx = P.vz = 0; P.hideT = (P.hideT || 0) + dt; P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false;
+        if ((mag > 0.5 || iPress) && P.hideT > 0.3) this.stallOut(); else { this.npcsOnly(dt); return; } }
+      if (iPress && !this.hideCd && P.st === 'free' && !P.held && !P.cart && roomAt(P.x, P.z) === 'toilet') {
+        const k = LY.stalls.findIndex((q) => Math.abs(P.z - q.z) < 1.0 && P.x < q.x + 2.6 && P.x > q.x - 0.5);
+        if (k >= 0) { const q = LY.stalls[k], D = this.stallDoors && this.stallDoors[k]; this.markWitness(); P.stallHide = k; P.inStall = true; P.hideT = 0; P.x = q.x + 0.2; P.z = q.z; P.f = 0; P.vx = P.vz = 0; P.tip = 0; if (D) D.rotation.y = 0; this.dropShorts(true);
+          if (!this.saidStallHide) { this.saidStallHide = true; this.think('Occupied! ...nobody checks an occupied stall.', 2.2); } return; } }
       // hidden in a cart: still as a heap of towels. Any move (or I) and he climbs out
       if (P.hidden) {
         P.vx = P.vz = 0;
@@ -606,7 +614,7 @@
             if (Math.hypot(q.x - ox, q.z - oz) < 0.45 && roomAt(q.x, q.z) === room && this.clear(hc.x, hc.z, q.x, q.z)) { spot = q; break; }
           }
           if (!spot) { P.hidden = hc; this.view.root.visible = false; hc.off = true; this.cartBox(hc); this.cartStep(dt); this.npcsOnly(dt); return; }
-          P.x = spot.x; P.z = spot.z; P.f = a0;
+          P.x = spot.x; P.z = spot.z; P.f = a0; this.noGuard = true;
           // out with I held: straight onto his toes, silent. And a pair of towel-cart shorts over his shoulder (falls off after a few steps)
           P.tip = this.keys.KeyI && !P.tired ? 1 : 0; this.hideCd = 0.6; this.shoulderShorts(); }
         else { P.hideT = (P.hideT || 0) + dt; P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; this.cartStep(dt); this.grace = Math.max(this.grace, 0); this.npcsOnly(dt); return; }
@@ -641,6 +649,7 @@
       if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
       let spd = 0;
       if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 2.6 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
+      P.chT = P.st === 'charge' ? (P.chT || 0) + dt : 0; if (P.chT > 0.95) { P.st = 'free'; P.t = 0; P.cd = 0.5; P.chT = 0; }   // (a charge can never run on)
       if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur; if (P.t > 0.85) P.t = P.dur + 0.01; }   // (never longer than 0.85 s)
       if (P.st === 'wind' && mag > 0.3) { P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * 8); P.f = P.cdir; }
       const power = P.st === 'charge' && P.run > 1.0;   // it needs a run-up: from right next to something he just bumps it
@@ -691,6 +700,7 @@
       }
       this.cartStep(dt);
       const hit = this.collide(P, P.r);
+      if (this.noGuard) this.noGuard = false; else if ((P.x !== px0 || P.z !== pz0) && Math.hypot(P.x - px0, P.z - pz0) < 2.5 && !this.clear(px0, pz0, P.x, P.z)) { P.x = px0; P.z = pz0; }   // (never squeezed through a wall: a shove, a punch, a crowd pushing)
       // how high he stands: in the bath up to his chest, the stairs, the floor above
       const ty = wet ? (P.sub ? -1.6 : P.z > -3.4 && P.x > 0 && P.x < 2 ? -0.3 : -0.62) : floorY(P.x, P.z);
       P.y = Math.abs(ty - P.y) > 1 && !wet ? ty : P.y + (ty - P.y) * Math.min(1, dt * (wet || P.y < -0.05 ? 6 : 20));
@@ -717,7 +727,7 @@
       // the room you're in: checkpoints at each doorway
       const room = roomAt(P.x, P.z);
       if (room !== this.room) {
-        const from = this.room; this.room = room;
+        const from = this.room; this.room = room; const cp0 = this.cp; this.later(0, () => { if (this.chasing()) this.cp = cp0; });
         if (room === 'lock') { this.cp = from === 'corr' ? CP.lockS : CP.lockN; if (!this.saidOut) { this.saidOut = true; this.think('No tattoos allowed in here... and mine says INVINCIBLE. Nobody can see me. (Hold I to tiptoe)', 3.6); } }
         if (room === 'laundry' || (room === 'corr' && from === 'laundry')) this.cp = CP.laundry;
         if (room === 'laundry' && this.stage === 'towel' && !this.saidLaundry) { this.saidLaundry = true; this.think('The towels are on the shelf at the far end... past all these machines.', 3.0); }
@@ -825,7 +835,7 @@
     chasing() { return this.npcs.some((n) => n.mode === 'chase'); }
     chaseGoal() {   // while they're after him, the goal line says what matters (then puts the real goal back)
       const ch = this.chasing(), e = this.el('.st-obj'); if (!e) return;
-      if (ch && !this.chaseObj) { this.chaseObj = e.innerHTML; e.innerHTML = '<b>RUN!</b> HIDE (cart · box · stall) ' + (this.wearing ? '' : 'or get back to the BATH!'); e.classList.add('chase'); }
+      if (ch && !this.chaseObj) { this.chaseObj = e.innerHTML; e.innerHTML = '<b>RUN!</b> HIDE (laundry cart · box · toilet stall: I) ' + (this.wearing ? '' : 'or get back to the BATH!'); e.classList.add('chase'); }
       else if (!ch && this.chaseObj) { e.innerHTML = this.chaseObj; this.chaseObj = null; e.classList.remove('chase'); }
     }
     startChase(n) {
@@ -840,13 +850,18 @@
     // anyone who watched him climb in knows exactly where he is
     markWitness() {
       const P = this.P;
-      for (const n of this.npcs) if (!n.ko && ((n.mode === 'chase' && n.lostT < 0.6) || (n.a.st === 'free' && !n.busy && Math.abs(n.a.y - P.y) < 1.5 && roomAt(n.a.x, n.a.z) === roomAt(P.x, P.z) && this.sees(n, P.x, P.z, this.range(n))))) {
+      for (const n of this.npcs) if (!n.ko && n.a.st !== 'down' && Math.abs(n.a.y - P.y) < 1.5 && this.sees(n, P.x, P.z, n.mode === 'chase' ? 11 : this.range(n))) {   // (only someone actually watching him go in)
         n.pullOut = true; if (n.mode !== 'chase') this.startChase(n); }
+    }
+    stallOut() {   // out of the stall: door open, a step out in front of it
+      const P = this.P, k = P.stallHide, q = LY.stalls[k], D = this.stallDoors && this.stallDoors[k]; if (k === undefined) return;
+      this.noGuard = true; P.stallHide = undefined; P.inStall = false; P.x = q.x + 1.7; P.z = q.z; P.f = 0; this.collide(P, P.r); if (D) D.rotation.y = -1.4; this.hideCd = 0.6;
     }
     pullOut(n) {   // dragged out of his hiding place
       const P = this.P, a = n.a; this.popAt(a, '見つけた!', 1.2, true);
       if (P.hidden) { const hc = P.hidden; P.hidden = null; this.view.root.visible = true; hc.off = false; this.cartBox(hc); const ang = Math.atan2(a.z - hc.z, a.x - hc.x) + 0.6; P.x = hc.x + Math.cos(ang) * 1.5; P.z = hc.z + Math.sin(ang) * 1.5; this.collide(P, P.r); this.shoulderShorts(); }
       if (P.boxHide) { this.noDuck = 1.5; }
+      if (P.stallHide !== undefined) this.stallOut();
       for (const m of this.npcs) m.pullOut = false;
     }
     chaseStep(n, dt) {
@@ -854,11 +869,12 @@
       if (a.st === 'act' && a.t >= a.dur) a.st = 'free';
       const d = Math.hypot(P.x - a.x, P.z - a.z);
       if (SAFE[roomAt(P.x, P.z)] && !this.wearing) { n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); if (!this.saidBathSafe) { this.saidBathSafe = true; this.popAt(a, '…風呂か。', 1.4); } return; }   // back in the bath: they give up
-      const seenHide = n.pullOut && (P.hidden || P.boxHide);
-      const seen = seenHide || (!P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.freeze && Math.abs(P.y - a.y) < 1.5 && d < 12 && this.clear(a.x, a.z, P.x, P.z));
+      const seenHide = n.pullOut && (P.hidden || P.boxHide || P.stallHide !== undefined);
+      const inCone = d < 2.2 || Math.abs(ang(Math.atan2(P.z - a.z, P.x - a.x) - a.f)) < 1.25;
+      const seen = seenHide || (!P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.freeze && Math.abs(P.y - a.y) < 1.5 && d < 11 && inCone && this.clear(a.x, a.z, P.x, P.z));
       if (seenHide && d < 1.6 && a.st === 'free') { this.pullOut(n); a.st = 'act'; a.atk = 'grab'; a.t = 0; a.dur = 0.5; return; }
       if (seen) { n.lostT = 0; n.last = [P.x, P.z]; } else n.lostT += dt;
-      if (n.lostT > 2.5) {   // lost him: off to where he was last seen, and a good look round
+      if (n.lostT > 1.6) {   // lost him: off to where he was last seen, and a good look round
         n.mode = 'goto'; n.inv = false; n.noiseAt = n.last; this.goTo(n, n.last[0], n.last[1]); n.mode = 'goto'; this.popAt(a, ['どこだ…?', '消えた…?'][(this.t * 2 | 0) % 2], 1.4); return;
       }
       // run at him, aiming a little ahead (to cut him off), round the walls
@@ -869,14 +885,15 @@
       const dx = tx - a.x, dz = tz - a.z, dd = Math.hypot(dx, dz);
       if (!seen && !n.pullOut && P.boxHide && d < 1.9) { a.vx = a.vz = 0; a.f = lerpA(a.f, Math.atan2(P.z - a.z, P.x - a.x), dt * 4); return; }   // (stops short of the box he ducked into)
       if (a.st === 'free' && dd > 0.2) { const sp = 3.2; a.vx = dx / dd * sp; a.vz = dz / dd * sp; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 9); } else { a.vx *= 0.8; a.vz *= 0.8; }
-      a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4); a.y = floorY(a.x, a.z);
+      const cx0 = a.x, cz0 = a.z; a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4); a.y = floorY(a.x, a.z);
+      n.stk = a.st === 'free' && dd > 0.5 && Math.hypot(a.x - cx0, a.z - cz0) < 0.4 * dt ? (n.stk || 0) + dt : 0; if (n.stk > 3) { n.stk = 0; this.unstick(n); n.rp = 0; }
       if (seen && d < 1.3 && !(this.hitCd > 0) && a.st === 'free' && P.st !== 'charge') this.hitBy(n);
     }
     hitBy(n) {   // a shove and a slap: he staggers back. Three and he's out cold
-      const P = this.P, a = n.a; this.hitCd = 1.1; this.hits = (this.hits || 0) + 1; this.calmT = 0;
+      const P = this.P, a = n.a; this.hitCd = 1.1; this.hits = (this.hits || 0) + 1; this.calmT = 0; this.bonusLose('hit');
       a.st = 'act'; a.atk = 'jab'; a.t = 0; a.dur = 0.45; a.f = Math.atan2(P.z - a.z, P.x - a.x);
       const dx = P.x - a.x, dz = P.z - a.z, d = Math.hypot(dx, dz) || 1;
-      this.shove = { x: dx / d * 5.5, z: dz / d * 5.5, t: 0.3 }; P.st = 'busy'; P.t = 0; P.dur = 0.45; P.vx = P.vz = 0;
+      this.shove = { x: dx / d * 5.5, z: dz / d * 5.5, t: 0.3 }; this.lRel = false; P.st = 'busy'; P.t = 0; P.dur = 0.45; P.vx = P.vz = 0;
       this.flash = 0.35; if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6);
       if (this.hits >= 3) {   // out cold: one clean card, no pile of speech bubbles
         this.catcher = n; this.freeze = 2.2; this.P.vx = this.P.vz = 0; this.clearPops(); this.el('.st-think').classList.remove('on'); this.thinkT = 0;
@@ -884,6 +901,14 @@
         k.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;z-index:60;pointer-events:none;font:400 72px "Dela Gothic One",sans-serif;letter-spacing:3px;text-shadow:none;opacity:1;transition:none';
         setTimeout(() => { k.style.display = 'none'; }, 2100);
       } else this.popAt(a, ['バシッ!', 'ドン!', 'パーン!'][this.hits % 3], 0.8);
+    }
+    unstick(n) {   // wedged somewhere for 3 s: hop to the nearest clear spot (away from anyone else) and work out the way again
+      const a = n.a, N = this.nav; let best = null, bd = 1e9;
+      for (let k = 0; k < 10; k++) { const r = 0.5 + k * 0.12, an = k * 2.4 + Math.random(), x = a.x + Math.cos(an) * r, z = a.z + Math.sin(an) * r; if (!this.walkable(x, z) || !this.clear(a.x, a.z, x, z)) continue;
+        const crowd = this.npcs.reduce((s2, m) => s2 + (m !== n && Math.hypot(m.a.x - x, m.a.z - z) < 1 ? 1 : 0), 0), sc = crowd * 3 + r; if (sc < bd) { bd = sc; best = [x, z]; } }
+      if (!best) { const c = this.nearestFree(...this.cell(a.x, a.z)); if (c) best = [N.x0 + (c[0] + 0.5) * N.cs, N.z0 + (c[1] + 0.5) * N.cs]; }
+      if (best) { a.x = best[0]; a.z = best[1]; this.collide(a, 0.4); }
+      if (n.path && n.path.length && n.mode !== 'chase') { const e = n.path[n.path.length - 1]; this.goTo(n, e[0], e[1]); }
     }
     sepNpcs() {   // people don't walk through each other: nudge apart anyone overlapping
       const N = this.npcs;
@@ -924,7 +949,7 @@
     use() {
       const P = this.P, near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
       if (P.held) { // throw it where you face
-        const b = P.held; this.waterOff(b); P.held = null; b.state = 'fly'; this.bonusLose('thrown'); b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y;
+        const b = P.held; this.waterOff(b); P.held = null; b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y;
         const L = Math.max(1, this.reach(P.x, P.z, P.f, 8) - 0.6); b.tx = P.x + Math.cos(P.f) * L; b.tz = P.z + Math.sin(P.f) * L;
         b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz);   // into the bath: it floats
         b.dur = 0.35 + L * 0.05; P.st = 'busy'; P.t = 0; P.dur = 0.3; this.w.hand = 1; return;
@@ -975,7 +1000,8 @@
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { P.st = 'wear'; P.t = 0; P.dur = 0.9; return; }
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
         b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0); if (b.kind === 'can') b.m.children[0].position.y = 0;
-        if (b.kind === 'can') { if (!this.saidCan) { this.saidCan = true; this.think(b.soda ? 'A cold one! (J drink it · K throw · hold K smash)' : 'Empty. Still... (K throw · hold K smash)', 2.6); } }
+        if (b.water && !this.saidWater) { this.saidWater = true; this.think('Full of water... throw it (K) or smash it (hold K): a puddle. Anyone running over it goes flying!', 3); }
+        else if (b.kind === 'can') { if (!this.saidCan) { this.saidCan = true; this.think(b.soda ? 'A cold one! (J drink it · K throw · hold K smash)' : 'Empty. Still... (K throw · hold K smash)', 2.6); } }
         else if (!this.saidItem) { this.saidItem = true; this.think('If I throw this (K), whoever hears it will go and look...', 2.4); }
         return;
       }
@@ -1013,7 +1039,7 @@
     }
     // hold K with something in hand: he slams it down on the floor in front of him (loud; water goes everywhere)
     smashHeld() {
-      const P = this.P, b = P.held; if (!b) return; this.bonusLose('broke'); P.held = null; this.waterOff(b);
+      const P = this.P, b = P.held; if (!b) return; this.bonusLose('smash'); P.held = null; this.waterOff(b);
       const fx = Math.cos(P.f), fz = Math.sin(P.f), L = Math.max(0.3, Math.min(0.7, this.reach(P.x, P.z, P.f, 2) - 0.4)), x = P.x + fx * L, z = P.z + fz * L, y = floorY(x, z);
       P.st = 'busy'; P.t = 0; P.dur = 0.45; this.w.hand = 1; this.flash = 0.2;
       // in pieces: the thing is gone, splinters fly out across the floor
@@ -1047,17 +1073,17 @@
     }
     // ---- bonuses: kept until you blow them. Never seen / nobody knocked out / nothing broken (that the story didn't need) / nothing thrown
     bonusLose(k) {
-      const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, thrown: true }); if (!B[k]) return; B[k] = false;
+      const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, smash: true, hit: true }); if (!B[k]) return; B[k] = false;
       const e = this.el('.st-bonus i[data-k="' + k + '"]'); if (e) { e.classList.add('pop'); setTimeout(() => { e.classList.remove('pop'); e.classList.add('off'); }, 450); }
     }
     bonusBar() {
-      const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, thrown: true }), e = this.el('.st-bonus'); if (!e || e.childNodes.length) return;
-      e.innerHTML = [['seen', 'UNSEEN'], ['ko', 'NO ONE HURT'], ['broke', 'NOTHING BROKEN'], ['thrown', 'NOTHING THROWN']].map(([k, t]) => '<i data-k="' + k + '"' + (B[k] ? '' : ' class="off"') + '>' + t + '</i>').join('');
+      const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, smash: true, hit: true }), e = this.el('.st-bonus'); if (!e || e.childNodes.length) return;
+      e.innerHTML = [['seen', 'UNSEEN'], ['ko', 'NO ONE HURT'], ['broke', 'NOTHING BROKEN'], ['smash', 'NOTHING SMASHED'], ['hit', 'FLAWLESS']].map(([k, t]) => '<i data-k="' + k + '"' + (B[k] ? '' : ' class="off"') + '>' + t + '</i>').join('');
     }
     bonusHTML() {
-      const B = this.bonus || { seen: true, ko: true, broke: true, thrown: true }, all = B.seen && B.ko && B.broke && B.thrown;
+      const B = this.bonus || { seen: true, ko: true, broke: true, smash: true, hit: true }, all = B.seen && B.ko && B.broke && B.smash && B.hit;
       const row = (ok, jp, t, d) => '<div style="display:flex;gap:10px;align-items:baseline;justify-content:center;opacity:' + (ok ? 1 : 0.45) + '"><b style="font:400 20px \'Yuji Syuku\',serif;color:' + (ok ? '#d8262e' : '#8a8178') + '">' + jp + '</b><span style="font:700 18px \'Barlow Condensed\',sans-serif;letter-spacing:0.06em;' + (ok ? '' : 'text-decoration:line-through') + '">' + (ok ? '✓ ' : '') + t + '</span><span style="font:500 15px \'Barlow Condensed\',sans-serif;opacity:0.7">' + d + '</span></div>';
-      return '<div style="margin:10px 0 14px;display:flex;flex-direction:column;gap:4px">' + row(B.seen, '忍', 'GHOST', 'never spotted') + row(B.ko, '和', 'PACIFIST', 'nobody knocked out') + row(B.broke, '静', 'LIGHT TOUCH', 'nothing smashed') + row(B.thrown, '素手', 'EMPTY HANDS', 'nothing thrown') +
+      return '<div style="margin:10px 0 14px;display:flex;flex-direction:column;gap:4px">' + row(B.seen, '忍', 'GHOST', 'never spotted') + row(B.ko, '和', 'PACIFIST', 'nobody knocked out') + row(B.broke, '静', 'LIGHT TOUCH', 'nothing broken by charging') + row(B.smash, '丁寧', 'GENTLE', 'nothing smashed on the floor') + row(B.hit, '無傷', 'FLAWLESS', 'never got hit') +
         (all ? '<div style="font:400 26px \'Dela Gothic One\',sans-serif;color:#d8262e;margin-top:6px">完璧 · PERFECT</div>' : '') + '</div>';
     }
     // ---- subtitles: who's speaking, the Japanese as they say it, the English underneath
@@ -1106,24 +1132,26 @@
     // ---- the boss rises out of the bath
     bossStep(dt) {
       const B = this.boss, P = this.P; if (!B) return;
-      if (this.stage === 'bossgo' && Math.hypot(P.x - 1, P.z + 0.9) < 2.2 && !B.rise) {   // back at the bath steps, where he woke up: the water stirs
+      if (this.stage === 'bossgo' && Math.hypot(P.x - 1, P.z + 0.9) < 2.2 && !B.rise && !B.done) {   // back at the bath steps, where he woke up: the water stirs
         B.rise = { t: 0 }; B.on = true; B.x = 1.8; B.z = -4.6; B.y = -2.7; B.hold = false; this.spOut.visible = false;
         B.f = Math.atan2(P.z - B.z, P.x - B.x); P.st = 'busy'; P.t = 0; P.dur = 99; P.vx = P.vz = 0;
         P.f = Math.atan2(B.z - P.z, B.x - P.x); this.camFocus = { x: (B.x + P.x) / 2, z: (B.z + P.z) / 2, dist: 10, y: 0.5, h: 0.36 }; this.objective('...');   // (the camera eases in on the two of them)
         this.think('...hm? The water\'s... bubbling?', 1.6);
       }
       if (!B.rise) return;
-      const R = B.rise; R.t += dt; const t = R.t;
+      const R = B.rise; if (!R) return; R.t += dt; const t = R.t;
       if (t < 1.6) { if ((R.bub = (R.bub || 0) - dt) <= 0) { R.bub = 0.12; this.fx.water && this.fx.water(B.x + (Math.random() - 0.5) * 1.2, B.z + (Math.random() - 0.5) * 1.2, 0.8, POOL.water); } }
       else if (t < 3.0) { if (!R.splash) { R.splash = true; this.fx.water && (this.fx.water(B.x, B.z, 7, POOL.water), this.fx.water(B.x + 0.6, B.z - 0.3, 5, POOL.water)); if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.8); this.flash = 0.2; }
         const k = Math.min(1, (t - 1.6) / 0.9); B.y = -2.7 + (2.7 - 0.12) * (1 - Math.pow(1 - k, 3)); }   // (up to his belly: the water streams off him)
-      if (t > 2.4 && !B.hold) { B.hold = true; B.holdT = 0; }
+      if (t > 2.4 && !B.hold && B.sink === undefined) { B.hold = true; B.holdT = 0; }
+      if (B.sink !== undefined) { B.sink += dt; B.hold = false; B.y -= dt * 1.6; if (B.sink > 0.4 && !R.gone) { R.gone = true; this.fx.water && this.fx.water(B.x, B.z, 4, POOL.water); } if (B.y < -2.8) { B.on = false; B.rise = null; B.sink = undefined; B.done = true; } }
       if (t > 3.0 && !R.talk) { R.talk = true;
         this.say([
           { who: '親方', jp: '探しものは…これか?', en: 'Looking for... THIS?', t: 3.0 },
           { who: '親方', jp: 'わしの風呂で、ずいぶん好き勝手してくれたな。', en: 'You\'ve been running riot all over MY bathhouse.', t: 3.4 },
           { who: '親方', jp: '欲しけりゃ…力ずくで取ってみい!', en: 'Want it back? ...Then come and TAKE it!', t: 3.2 },
-        ], () => { this.think('He\'s got MY MAWASHI... and he\'s a YOKOZUNA?!', 2.6); this.stage = 'bossfight'; this.P.st = 'free'; this.P.dur = 0; this.camFocus = null; this.objective('Beat the BOSS and win back your mawashi  (the fight: coming next)'); });
+          { who: '親方', jp: '…と言いたいところだが、今日は見逃してやる。', en: '...is what I\'d say. But I\'ll let you off. Today.', t: 3.2 },
+        ], () => { B.sink = 0; this.P.st = 'free'; this.P.dur = 0; this.camFocus = null; this.think('He\'s got MY MAWASHI... and he\'s a YOKOZUNA?! ...Out. NOW.', 2.8); this.escapeStage(); });   // (the fight itself comes later)
       }
     }
     bossDraw(dt, T) {
@@ -1334,7 +1362,7 @@
     }
     stall(second) {   // into the stall: the door shuts behind him
       const P = this.P, ST = LY.stalls[LY.stall_use], D = this.stallDoors && this.stallDoors[LY.stall_use];
-      P.x = ST.x + 0.2; P.z = ST.z; P.f = 0; P.vx = P.vz = 0; P.st = 'busy'; P.t = 0; P.dur = second ? 3.2 : 4.6; P.inStall = true; this.spStall.visible = false;
+      this.noGuard = true; P.x = ST.x + 0.2; P.z = ST.z; P.f = 0; P.vx = P.vz = 0; P.st = 'busy'; P.t = 0; P.dur = second ? 3.2 : 4.6; P.inStall = true; this.spStall.visible = false;
       if (D) D.rotation.y = 0;
       if (!second) {
         this.think('Nnnnnnngh...!!', 2.0); this.flash = 0.25;
@@ -1529,7 +1557,7 @@
       if ((s.life -= dt) <= 0) this.dropShorts(true);
     }
     respawn() {
-      const P = this.P; this.dropShorts(true); P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.y = floorY(P.x, P.z); P.vx = P.vz = 0; P.st = 'free';
+      const P = this.P; this.dropShorts(true); this.noGuard = true; P.x = this.cp.x; P.z = this.cp.z; P.f = this.cp.f; P.y = floorY(P.x, P.z); P.vx = P.vz = 0; P.st = 'free';
       if (P.held) { const b = P.held; P.held = null; b.state = 'floor'; b.m.position.set(b.x0, b.base, b.z0); b.m.rotation.set(0, 0, 0); }
       // the staff are where they were: nobody resets. Whoever caught him looks round for a moment
       for (const n of this.npcs) { n.alarm = 0; n.pullOut = false; if (n.mode === 'chase' || (n === this.catcher && this.hits >= 3)) { const r = n.route[n.i]; n.a.x = r[0]; n.a.z = r[1]; n.a.y = floorY(r[0], r[1]); n.mode = 'route'; n.wait = r[2] || 1; n.path = null; n.a.vx = n.a.vz = 0; continue; }   /* (back at their posts: no spawn-camping) */ if (n === this.catcher) { n.mode = 'search'; n.wait = 3.0; n.path = null; } if (n.a.st === 'act') n.a.st = 'free'; }
@@ -1666,8 +1694,8 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-sub"></div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
-        '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
+        '<div class="st-sub"></div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
       this.pops = [];
@@ -1711,6 +1739,7 @@
     setPause(on) { this.paused = on; this.el('.st-pause').classList.toggle('on', on); if (on) { this.pauseI = 0; this.markMenu('.st-pause', 0); } }
     command(c) {
       if (c === 'resume') this.setPause(false);
+      else if (c === 'cp') { this.setPause(false); if (this.P.stallHide !== undefined) this.stallOut(); this.respawn(); this.grace = 2.5; }
       else if (c === 'retry') { const g = this.g; this.stop(); g.camp = new S.Stealth(g); g.camp.start(); }
       else if (c === 'quit') this.g.endCampaign();
     }
