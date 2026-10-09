@@ -1535,7 +1535,7 @@
           break;
         }
         case 'hints': st.hints = !st.hints; this.save(); refresh(); break;
-        case 'hudGuide': case 'hudMap': case 'hudBonus': case 'hudGoal': case 'hudMeter': case 'hudTips': st[a] = st[a] === false; this.save(); refresh(); break;   // (stealth level HUD pieces)
+        case 'hudGuide': case 'hudMap': case 'hudBonus': case 'hudGoal': case 'hudMeter': case 'hudTips': case 'hudCtx': st[a] = st[a] === false; this.save(); refresh(); break;   // (stealth level HUD pieces)
         case 'style': st[this.styleKey] = st[this.styleKey] === 'anime' ? 'classic' : 'anime'; this.R.setAnime(st[this.styleKey] === 'anime'); this.save(); refresh(); break;
         case 'endless': st.endless = !st.endless; this.save(); refresh(); break;
         case 'sound': st.sound = !st.sound; this.audio.muted = !st.sound; this.save(); refresh(); break;
