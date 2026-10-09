@@ -1035,7 +1035,13 @@
         const L = clamp(this.reach(b.m.position.x, b.m.position.z, P.f, 3) - 0.4, 0.5, 2.5);
         this.waterOff(b); b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y; b.tx = b.sx + fx * L; b.tz = b.sz + fz * L; b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz); b.dur = 0.3 + L * 0.05;
       }
-      for (const cc of this.carts) if (cc !== P.cart && inFront(cc.x, cc.z, 1.9)) { cc.vx = fx * 3; cc.vz = fz * 3; cc.spin = 0; }
+      let any = false; for (const cc of this.carts) if (cc !== P.cart && inFront(cc.x, cc.z, 1.9)) { cc.vx = fx * 3; cc.vz = fz * 3; cc.spin = 0; any = true; }
+      any = any || this.rats.some((r) => r.st === 'fly' && r.t > 0.5) || this.buckets.some((b) => b.state === 'fly' && b.t < 0.05);
+      // nothing to hit, a wall right there: he knocks on it. Anyone in earshot comes over to see who's knocking (a lure)
+      const rr = this.reach(P.x, P.z, P.f, 1.7); if (!any && rr < 1.6) { const kx = P.x + fx * rr, kz = P.z + fz * rr;
+        this.think(['*knock knock*', '*KNOCK KNOCK*', '*bonk bonk*'][(this.t * 3 | 0) % 3], 1.0); this.ringAt(kx, kz, 1.2, 0.5);
+        if (!SAFE[roomAt(P.x, P.z)]) this.noise(kx - fx * 0.6, kz - fz * 0.6, 7.5, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3);
+        if (!this.saidKnock) { this.saidKnock = true; this.later(1.2, () => this.think('...that\'ll bring someone over to look. Then I go the other way.', 2.6)); } }
     }
     // hold K with something in hand: he slams it down on the floor in front of him (loud; water goes everywhere)
     smashHeld() {
@@ -1070,6 +1076,32 @@
       const gl = new THREE.Mesh(new THREE.PlaneGeometry(rx * 0.55, rz * 0.12), S.Flat ? S.Flat.mat(0xfaf8f2) : new THREE.MeshBasicMaterial({ color: 0xfaf8f2 }));
       gl.rotation.x = -Math.PI / 2; gl.position.set(-rx * 0.1, 0.004, -rz * 0.25); gl.userData.flatDone = true; g.add(gl);
       this.puddles.push({ x, z, rx, rz, y: fy, m: g, soda });
+    }
+    // ---- the minimap: round, north up (the camera never turns), this floor only. You, the goal, and staff only when they're close or after you
+    mapDraw(T) {
+      const cv = this.el('.st-map'); if (!cv) return; if ((this.mapN = (this.mapN || 0) + 1) % 2) return;
+      const x = cv.getContext('2d'), W = cv.width, R = W / 2, k = 6.2, P = this.P, fl = P.y > 1.6 ? 1 : 0, X = (wx) => R + (wx - P.x) * k, Z = (wz) => R + (wz - P.z) * k;
+      x.save(); x.clearRect(0, 0, W, W); x.beginPath(); x.arc(R, R, R, 0, Math.PI * 2); x.clip();
+      x.fillStyle = '#f3ead8'; x.fillRect(0, 0, W, W);
+      if (!fl) { x.fillStyle = '#a9d3ef'; x.fillRect(X(POOL.x0), Z(POOL.z0), (POOL.x1 - POOL.x0) * k, (POOL.z1 - POOL.z0) * k); }
+      for (const q of LY.solids) { if ((q.f ? 1 : 0) !== fl) continue; const near = Math.abs((q.x0 + q.x1) / 2 - P.x) < 26 && Math.abs((q.z0 + q.z1) / 2 - P.z) < 26; if (!near) continue;
+        x.fillStyle = q.k === 'wall' ? '#6b5f66' : '#d6c6aa'; x.fillRect(X(q.x0), Z(q.z0), Math.max(1.5, (q.x1 - q.x0) * k), Math.max(1.5, (q.z1 - q.z0) * k)); }
+      // staff: close by, or after him
+      for (const n of this.npcs) { const a = n.a; if (Math.abs(a.y - P.y) > 1.5) continue; const d = Math.hypot(a.x - P.x, a.z - P.z);
+        if (!(d < 7 || n.mode === 'chase' || n.alarm > 0.3) || d > R / k) continue;
+        x.fillStyle = n.ko ? '#a49c94' : n.mode === 'chase' ? '#d8262e' : (n.mode === 'goto' || n.mode === 'search' || n.alarm > 0.3) ? '#e0a020' : '#ffffff';
+        x.strokeStyle = '#3a3340'; x.lineWidth = 1.5; x.beginPath(); x.arc(X(a.x), Z(a.z), 4.5, 0, Math.PI * 2); x.fill(); x.stroke(); }
+      // the goal: a pulsing ring (or, off the edge, a little arrow pointing to it)
+      for (const m of this.marks) { if (!m.visible || !m.userData.ar || !m.userData.ar.visible) continue;
+        let gx = X(m.position.x), gz = Z(m.position.z); const dx = gx - R, dz = gz - R, dd = Math.hypot(dx, dz), up = (m.position.y > 1.6 ? 1 : 0) !== fl;
+        x.strokeStyle = '#d8262e'; x.fillStyle = '#d8262e'; x.lineWidth = 2.5;
+        if (dd > R - 12) { const ux = dx / dd, uz = dz / dd; gx = R + ux * (R - 10); gz = R + uz * (R - 10); x.beginPath(); x.moveTo(gx + ux * 7, gz + uz * 7); x.lineTo(gx - uz * 6 - ux * 4, gz + ux * 6 - uz * 4); x.lineTo(gx + uz * 6 - ux * 4, gz - ux * 6 - uz * 4); x.closePath(); x.fill(); }
+        else { x.beginPath(); x.arc(gx, gz, 6 + 2 * Math.sin(T * 5), 0, Math.PI * 2); x.stroke(); }
+        if (up) { x.font = '700 13px "Barlow Condensed",sans-serif'; x.textAlign = 'center'; x.fillText(fl ? '▼' : '▲', Math.min(W - 10, Math.max(10, gx)), Math.min(W - 6, Math.max(14, gz - 9))); } }
+      // him: an arrow, the way he faces
+      const f = P.f; x.translate(R, R); x.rotate(f); x.fillStyle = '#f2cf4a'; x.strokeStyle = '#3a3340'; x.lineWidth = 2;
+      x.beginPath(); x.moveTo(9, 0); x.lineTo(-6, 6); x.lineTo(-3, 0); x.lineTo(-6, -6); x.closePath(); x.fill(); x.stroke();
+      x.restore();
     }
     // ---- bonuses: kept until you blow them. Never seen / nobody knocked out / nothing broken (that the story didn't need) / nothing thrown
     bonusLose(k) {
@@ -1625,7 +1657,7 @@
         b.m.rotation.set(0, -P.f, 0);
       }
       this.kdt = Math.min(0.05, dt); this.drawN = (this.drawN || 0) + 1;
-      this.bossDraw(dt, T); this.bonusBar();
+      this.bossDraw(dt, T); this.bonusBar(); this.mapDraw(T);
       for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); this.drawCone(n); }
       this.sweatStep(dt);
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
@@ -1674,6 +1706,7 @@
         '#stealthHud .st-obj{position:absolute;left:24px;top:20px;background:rgba(255,250,240,.9);padding:8px 14px;border-radius:10px;font-weight:700;font-size:20px;letter-spacing:.02em;max-width:60vw}' +
         '#stealthHud .st-ko{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;text-shadow:0 4px 0 rgba(40,30,50,.35);opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
         '#stealthHud .st-bonus{position:absolute;left:24px;top:64px;display:flex;gap:6px;pointer-events:none}#stealthHud .st-bonus i{font:700 13px "Barlow Condensed",sans-serif;font-style:normal;letter-spacing:0.06em;padding:3px 8px 2px;border-radius:999px;background:rgba(255,250,240,0.9);color:#2e7d4c;transition:all .3s}#stealthHud .st-bonus i.off{color:#a49c94;background:rgba(255,250,240,0.55);text-decoration:line-through}#stealthHud .st-bonus i.pop{transform:scale(1.25);color:#d8262e}#stealthHud .st-hp{top:96px!important}' +
+        '#stealthHud .st-map{position:absolute;right:24px;bottom:96px;width:150px;height:150px;border-radius:50%;box-shadow:0 0 0 4px rgba(255,250,240,0.9),0 4px 12px rgba(40,30,40,0.25);pointer-events:none}' +
         '#stealthHud .st-sub{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);width:max-content;max-width:94vw;text-align:center;pointer-events:none;display:none}#stealthHud .st-sub .jp{display:inline-block;font:400 24px "Dela Gothic One",sans-serif;color:#fffaf0;background:rgba(34,30,40,0.72);padding:6px 14px 4px;border-radius:10px;letter-spacing:0.04em}#stealthHud .st-sub .en{display:block;margin-top:6px;font:700 19px "Barlow Condensed",sans-serif;color:#fffaf0;text-shadow:0 2px 0 rgba(0,0,0,0.55)}#stealthHud .st-sub .who{color:#f2cf4a;margin-right:8px}' +
         '#stealthHud .st-hp{position:absolute;left:24px;top:76px;font-size:28px;letter-spacing:4px;color:#cf3a3a;text-shadow:0 2px 0 #fffaf0;display:none}#stealthHud .st-hp.chase{animation:hpPulse .5s ease-in-out infinite alternate}@keyframes hpPulse{to{transform:scale(1.12)}}' +
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
@@ -1694,7 +1727,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-sub"></div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J knock out (loud) · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sub"></div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J punch (knocks them out) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
