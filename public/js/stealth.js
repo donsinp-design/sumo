@@ -287,15 +287,20 @@
     }
     cook(n, dt) {   // true while he's at it (the rest of npcStep is skipped)
       const a = n.a, C = LY.onigiri.chef, d = Math.hypot(a.x - C[0], a.z - C[1]);
-      if (n.mode !== 'cook') { if (d > 0.3) { if (!n.path || !n.cookGo) { this.goTo(n, C[0], C[1]); n.cookGo = true; } return false; } n.mode = 'cook'; n.path = null; n.cookGo = false; n.ck = { ph: 'make', t: 0, k: 0 }; }
+      if (n.mode !== 'cook') { if (d > 0.3) { if (!n.path || !n.cookGo) { this.goTo(n, C[0], C[1]); n.cookGo = true; } return false; } n.mode = 'cook'; n.path = null; n.cookGo = false; n.ck = { ph: n.cooked && this.oni.n === 0 ? 'shock' : 'make', t: 0, k: 0 }; }   // (back with more rice to an EMPTY plate: a double take)
       a.vx = a.vz = 0; a.x += (C[0] - a.x) * Math.min(1, dt * 5); a.z += (C[1] - a.z) * Math.min(1, dt * 5); a.y = floorY(a.x, a.z); a.st = 'free';
       const K = n.ck; K.t += dt;
       if (!n.rice && this.proto && this.proto.ITEM_ONIGIRI) { n.rice = this.proto.ITEM_ONIGIRI.clone(); n.rice.visible = false; this.G.add(n.rice); }
       if (K.ph === 'make') {   // kneading at the counter: both hands low in front, a ball of rice pressed between them; one onto the plate every ~1.6 s
         a.f = lerpA(a.f, Math.PI / 2, dt * 6); n.busy = true;
         if (n.rice) { const fx = Math.cos(a.f), fz = Math.sin(a.f), q = Math.sin(K.t * 7.5); n.rice.visible = true; n.rice.scale.set(1.5 * (1 + 0.12 * q), 1.5 * (1 - 0.15 * q), 1.5 * (1 + 0.12 * q)); n.rice.rotation.y = a.f; }
-        if (K.t > 1.6) { K.t = 0; K.k++; this.oni.n = Math.min(4, this.oni.n + 1); this.oniDraw(); }
+        if (K.t > 1.6) { K.t = 0; K.k++; this.oni.n = Math.min(4, this.oni.n + 1); this.oniDraw(); n.cooked = true; }
         if (K.k >= 3 || this.oni.n >= 4) { K.ph = 'look'; K.t = 0; K.k = 0; this.cookStop(n); }
+      } else if (K.ph === 'shock') {   // the plate's empty: a jump, a stare at the plate, a long scratch of the head... then back to work
+        a.f = lerpA(a.f, Math.PI / 2, dt * 6); n.busy = false; if (n.rice) n.rice.visible = false;
+        if (!K.said) { K.said = true; a.shock = 1; this.popAt(a, 'えっ!?', 1.0); }
+        if (K.t > 0.7) { a.shock = 0; n.scratch = true; if (!K.said2) { K.said2 = true; this.popAt(a, ['あれ…?', 'おかしいな…', '…ネズミか?'][(this.t * 3 | 0) % 3], 1.6); } }
+        if (K.t > 3.2) { n.scratch = false; K.ph = 'make'; K.t = 0; K.k = 0; }
       } else {   // looks up from the counter, round the kitchen; then off to the rice pot by the stove for more rice
         a.f = lerpA(a.f, -Math.PI / 2 + Math.sin(K.t * 1.2) * 0.7, dt * 3);
         if (K.t > 2.4) { this.cookStop(n); n.mode = 'route'; n.i = 1; this.goTo(n, n.route[1][0], n.route[1][1]); n.ckAway = 9; return false; }
@@ -354,7 +359,7 @@
       }
       if (!push && n.rice && B.handPos) { const a = new V(), b = new V(); if (B.handPos('R', a) && B.handPos('L', b)) { n.rice.position.copy(a.add(b).multiplyScalar(0.5)); n.rice.position.y -= 0.04; } }
     }
-    cookStop(n) { n.busy = false; if (n.rice) n.rice.visible = false; }
+    cookStop(n) { n.busy = false; n.scratch = false; n.a.shock = 0; if (n.rice) n.rice.visible = false; }
     sees(n, x, z, range) {
       const a = n.a, dx = x - a.x, dz = z - a.z, d = Math.hypot(dx, dz);
       if (d > range) return false;
@@ -1146,6 +1151,19 @@
       });
       P.dur = 99;   // (stays put in the stall, listening)
     }
+    // scratching his head: elbow up and out, the hand on the top of his head, rubbing back and forth
+    scratchPose(n, T) {
+      const B = n.v.body; if (!B || !B.bones || !B.bones.RightArm || !B.bones.Head) return;
+      const V = THREE.Vector3, Q = THREE.Quaternion, f = n.a.f, fw = new V(Math.cos(f), 0, Math.sin(f)), rt = new V(-Math.sin(f), 0, Math.cos(f));
+      const aim = (b, c, dir) => { b.updateMatrixWorld(true); const bp = new V().setFromMatrixPosition(b.matrixWorld), cp = new V().setFromMatrixPosition(c.matrixWorld);
+        const q = new Q().setFromUnitVectors(cp.sub(bp).normalize(), dir.normalize()), wq = b.getWorldQuaternion(new Q()); b.quaternion.copy(b.parent.getWorldQuaternion(new Q()).invert().multiply(q.multiply(wq))); b.updateMatrixWorld(true); };
+      const bu = B.bones.RightArm, bl = B.bones.RightForeArm, bh = B.bones.RightHand, hd = B.bones.Head;
+      aim(bu, bl, new V(0, 0.55, 0).add(rt.clone().multiplyScalar(0.8)).add(fw.clone().multiplyScalar(0.1)));   // elbow up and out to the side
+      hd.updateMatrixWorld(true); bl.updateMatrixWorld(true);
+      const top = new V().setFromMatrixPosition(hd.matrixWorld).add(new V(0, 0.16, 0)).add(fw.clone().multiplyScalar(0.04 * Math.sin(T * 14))).add(rt.clone().multiplyScalar(0.05)), el = new V().setFromMatrixPosition(bl.matrixWorld);
+      aim(bl, bh, top.sub(el));
+      hd.rotation.z += 0.18;   // (head tipped, puzzled)
+    }
     // the phone to the ear: the right arm folds up so the hand's at the side of the head
     phonePose(n) {
       const B = n.v.body; if (!B || !B.bones || !B.bones.RightArm || !B.bones.Head) return;
@@ -1658,7 +1676,7 @@
       }
       this.kdt = Math.min(0.05, dt); this.drawN = (this.drawN || 0) + 1;
       this.bossDraw(dt, T); this.bonusBar(); this.mapDraw(T);
-      for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); this.drawCone(n); }
+      for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }
       this.sweatStep(dt);
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
       const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden;

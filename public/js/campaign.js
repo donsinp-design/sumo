@@ -1618,6 +1618,11 @@
         });
       }
       // holding someone: arms forward, braced
+      // startled: hands flung up by the head, leaning back
+      M.shk = (M.shk || 0) + (((a.shock > 0) ? 1 : 0) - (M.shk || 0)) * Math.min(1, dt * 12);
+      if (M.shk > 0.01) { const w = M.shk, nk = out[1].clone();
+        for (let i = 1; i <= 8; i++) out[i].z -= 0.1 * w;
+        [[4, 5, -1], [7, 8, 1]].forEach(([el, hd, sg]) => { out[el].lerp(new THREE.Vector3(nk.x + sg * 0.34, nk.y + 0.02, nk.z + 0.06), w); out[hd].lerp(new THREE.Vector3(nk.x + sg * 0.28, nk.y + 0.42, nk.z + 0.16), w); }); }
       // held up by the collar: hanging upright, legs kicking, hands clawing at the holder's wrists
       if (st === 'held' || st === 'clawed') {
         A.sample('stance', 0.3, out);
