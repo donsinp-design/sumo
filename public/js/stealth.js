@@ -100,7 +100,9 @@
       this.objective('Get out of the BATH (the steps, towards you)');
       this.think('Zzz... mm? I fell asleep in the bath again...', 3.0);
       this.later(3, () => { if (!this.outOfBath && this.scene && !this.tipWasd) { this.tipWasd = true; this.tip(['WASD  ·  MOVE'], { until: () => this.outOfBath });
-        this.tip(['THE MINIMAP  ·  WHERE TO GO', 'the red ring is your goal (at the edge, an arrow points the way)', 'white dots are staff, and their yellow cones show where they\'re looking'], { arrow: true }); } });
+        this.tip(['THE MINIMAP  ·  WHERE TO GO', 'the red ring is your goal (at the edge, an arrow points the way)', 'white dots are staff'], { arrow: true });
+        this.tip(['YELLOW CONES  ·  WHAT THEY CAN SEE', 'on the minimap, the yellow cone from each person is their line of sight', 'stay out of it, or hide (I). If you stay in it they notice you'], { arrow: true });
+        this.tip(['RED RINGS  ·  NOISE', 'every noise spreads a red ring on the minimap: how far it carries', 'footsteps, charging, crashes, knocks, thrown things. Anyone inside the ring comes over to check', 'tiptoeing (hold I) makes no noise at all'], { arrow: true }); } });
     }
     later(sec, fn) { (this.timers || (this.timers = [])).push({ t: sec, fn }); }
 
@@ -1015,7 +1017,7 @@
       if (this.testWear && this.wearing && this.stage !== 'box' && this.stage !== 'exit' && !this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.wearing = false; this.testWear = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.boxDown = false; this.testBoxAt = { x: P.x + Math.cos(P.f) * 1.4, z: P.z + Math.sin(P.f) * 1.4 }; this.testBox.position.set(this.testBoxAt.x, P.y, this.testBoxAt.z); this.testBox.visible = true; P.st = 'busy'; P.t = 0; P.dur = 0.4; return; }
       if (this.stage === 'box' && near(this.boxSpot.x, this.boxSpot.z, 1.9)) { this.putOnBox(); P.st = 'busy'; P.t = 0; P.dur = 0.35; return; }   // (on at once: no wait)
       for (const b of this.buckets) if (b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4) && Math.abs(b.m.position.y - P.y) < 1.2) {
-        if (!this.tipHeld) { this.tipHeld = true; this.tip(['K again  ·  THROW IT', 'hit someone and they come looking · throw a bucket of water and it leaves a PUDDLE: anyone who runs over it SLIPS', 'HOLD K  ·  SMASH IT instead (loud)', 'J  ·  PUT IT DOWN (cancel)']); }
+        if (!this.tipHeld) { this.tipHeld = true; this.tip(['K again  ·  THROW IT', 'throw it AT someone and it knocks them out', 'a thrown item makes a noise when it lands: whoever hears it comes to look', 'throw a bucket of water and it leaves a PUDDLE: anyone who runs over it SLIPS', 'HOLD K  ·  SMASH IT instead (loud)', 'J  ·  PUT IT DOWN (cancel)']); }
         b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0); if (b.kind === 'can') b.m.children[0].position.y = 0;
         if (b.water && !this.saidWater) { this.saidWater = true; this.think('Full of water... throw it (K) or smash it (hold K): a puddle. Anyone running over it goes flying!', 3); }
         else if (b.kind === 'can') { if (!this.saidCan) { this.saidCan = true; this.tip(b.soda ? ['A COLD ONE!', 'J  ·  DRINK IT (heals you, refills your energy)', 'K  ·  THROW IT', 'HOLD K  ·  SMASH IT'] : ['AN EMPTY CAN', 'K  ·  THROW IT', 'HOLD K  ·  SMASH IT', 'J  ·  PUT IT DOWN']); } }
@@ -1550,6 +1552,7 @@
       const P = this.P, q = this.tipQ || [], near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
       if (this.over || this.asleep || this.sf || this.freeze) return;
       if (!this.tipPick && this.outOfBath && !P.held && this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 2.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.tipPick = true; this.tip(['K  ·  PICK UP', 'things lying about'], { until: () => !!P.held }); }
+      if (!this.tipPrint && this.prints && this.prints.length) { this.tipPrint = true; this.tip(['WET FOOTPRINTS', 'walking through a puddle leaves big wet footprints behind you', 'staff who spot a fresh trail will follow it to see where it goes', 'they dry up after a while']); }
       const room = roomAt(P.x, P.z);
       if (!this.tipDuck && !this.outOfBath && !q.length && this.t > 8 && P.y < -0.2) { this.tipDuck = true; this.tip(['I  ·  DUCK UNDER', 'in the bath, hold I to go under the water: nobody sees you', 'but you can only hold your breath for a few seconds'], { until: () => this.outOfBath }); }
       const V = this.vend; if (!this.tipVend && V && !V.broke && this.outOfBath && !P.held && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) { this.tipVend = true; this.tip(['J  ·  THUMP THE VENDING MACHINE', 'no money, but a good whack might shake a drink loose', 'K  ·  LOOK AT IT']); }
