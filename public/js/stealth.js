@@ -1189,8 +1189,11 @@
     bossAsk(n) {
       const B = this.boss; B.hold = false; if (this.mawM) this.mawM.visible = false;   // (the mawashi's tucked in his belt: the fight's for it)
       this.g.bossBox = true;   // (the first bout: he fights in the storage-room box, until he loses a round)
-      this.say([{ who: '親方', jp: '返してほしければ、わしに勝て。', en: 'If you want it back, beat me.', t: 2.8 }, { who: '親方', jp: '…だが、お前は相撲を知らんようだな。稽古が先か?', en: '...But you don\'t look like you know sumo. Training first?', t: 3.6 }], () => this.choice('稽古?', 'TRAINING?', ['YES: learn to play', 'NO: just fight'], (i) => {
+      const q = n === 0 ? [{ who: '親方', jp: '返してほしければ、わしに勝て。', en: 'If you want it back, beat me.', t: 2.8 }, { who: '親方', jp: '…だが、お前は相撲を知らんようだな。稽古が先か?', en: '...But you don\'t look like you know sumo. Training first?', t: 3.6 }]
+        : [{ who: '親方', jp: '…ふむ。', en: 'Hm.', t: 1.6 }, { who: '親方', jp: '本当に、稽古はいらないのか?', en: 'Are you sure you don\'t want the training?', t: 3.0 }];
+      this.say(q, () => this.choice('稽古?', 'TRAINING?', ['YES: learn to play', 'NO: just fight'], (i) => {
         if (i === 0) { this.say([{ who: '親方', jp: 'よし。ついてこい。', en: 'Good. Follow me.', t: 1.8 }], () => this.g.startBossTraining(this)); }
+        else if (n === 0) this.bossAsk(1);
         else this.say([{ who: '親方', jp: '…よかろう。相撲で勝負だ!', en: '...Very well. Let\'s settle it in the ring!', t: 2.8 }], () => this.g.startBossBout(this));
       }));
     }
@@ -1201,14 +1204,17 @@
       if (res === 'trained') { this.say([{ who: '親方', jp: 'どうだ、わかったか。…では、いくぞ。', en: 'There. Understood? ...Then let\'s begin.', t: 3.0 }], () => this.g.startBossBout(this)); return; }
       if (res === 'lost' || res === 'won') { const B = this.boss; B.on = true; B.hold = false; B.holdSet = true; B.sink = undefined; B.x = 1.8; B.z = -4.6; B.y = -0.12; B.f = Math.atan2(this.P.z - B.z, this.P.x - B.x); if (this.mawM) this.mawM.visible = false; B.w.throatT = 0; }
       if (res === 'lost') { this.say([{ who: '親方', jp: 'まだまだ青いな。もう一番!', en: 'Still green. Again!', t: 2.6 }], () => this.g.startBossBout(this)); return; }
-      // won: the mawashi comes back
+      // the first win is not enough: he was going easy, so there's a rematch (bare this time: the box is gone)
+      if (!this.bossWon1) { this.bossWon1 = true; this.g.bossBox = false;
+        this.say([{ who: '親方', jp: '…ほう。やるじゃないか。', en: '...Oh? Not bad at all.', t: 2.4 }, { who: '親方', jp: 'だが、今のは手加減してやったんだ。もう一番!', en: 'But I was going easy on you. Once more!', t: 3.2 }], () => this.g.startBossBout(this)); return; }
+      // won the rematch: the mawashi comes back
       this.boss.on = true; this.boss.y = -0.12; this.boss.hold = false;
       this.say([
         { who: '親方', jp: '…見事だ。', en: '...Magnificent.', t: 2.2 },
         { who: '親方', jp: 'ところで、その背中の…「半額豆腐」とは何だ?', en: 'By the way. That thing on your back... "HALF-PRICE TOFU"?', t: 3.4 },
         { who: '', jp: '…「無敵」と頼んだんだ。', en: '...I asked for "INVINCIBLE".', t: 2.8 },
         { who: '親方', jp: 'まあいい。持っていけ。だが、その刺青を見られる前に出ていくんだぞ。', en: 'Never mind. Take it. But get out before anyone sees that tattoo.', t: 4.0 },
-      ], () => { this.gotMawashi = true; this.boss.sink = 0; if (this.wearing) { this.wearing = false; this.boxDown = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.pantsBox.visible = false; this.spExit && (this.spExit.visible = false); }   // (he takes off the box: the mawashi is back on)
+      ], () => { this.P.st = 'free'; this.P.t = 0; this.P.dur = 0; this.P.vx = this.P.vz = 0; this.keys = {}; this.gotMawashi = true; this.boss.sink = 0; if (this.wearing) { this.wearing = false; this.boxDown = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.pantsBox.visible = false; this.spExit && (this.spExit.visible = false); }   // (he takes off the box: the mawashi is back on)
          this.think('My MAWASHI! ...still can\'t go out the front door like this.', 2.8); this.escapeStage(); });
     }
     // ---- stage 1: a Street Fighter style bout in front of the Mt Fuji mural (best of three rounds)
