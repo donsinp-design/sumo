@@ -157,7 +157,7 @@ for sd in (-1, 1):
     for z in (-18.6, -21.2, -23.8): ITEMS += [dict(k='stool', x=sd * 10.5, z=z), dict(k='oke', x=sd * 10.2, z=z - 0.65)]
 for z in (-19.7, -23.5):
     for x in (-7.6, -4.4, 4.4, 7.6): ITEMS += [dict(k='stool', x=x, z=z)]
-ITEMS += [dict(k='bucket', x=21.4, z=-58.8), dict(k='bucket', x=1.4, z=-54.2), dict(k='bucket', x=-13.6, z=-43.2), dict(k='bucket', x=-4.4, z=-45.4), dict(k='bucket', x=0.6, z=-38.6), dict(k='oke', x=-3.2, z=-64.2, f=F), dict(k='bucket', x=5.6, z=-70.4, f=F), dict(k='stool', x=-5.4, z=-84.4, f=F)]
+ITEMS += [dict(k='bucket', x=21.4, z=-58.8), dict(k='bucket', x=13.7, z=-49.5), dict(k='bucket', x=1.4, z=-54.2), dict(k='bucket', x=-13.6, z=-43.2), dict(k='bucket', x=-4.4, z=-45.4), dict(k='bucket', x=0.6, z=-38.6), dict(k='oke', x=-3.2, z=-64.2, f=F), dict(k='bucket', x=5.6, z=-70.4, f=F), dict(k='stool', x=-5.4, z=-84.4, f=F)]
 WASHB = dict(x=3.6, z=-1.0)                                         # his yellow wash bucket by the steps
 PUDDLES = [dict(x=3.0, z=-59.5, rx=0.9, rz=0.5), dict(x=-15.0, z=-39.0, rx=0.9, rz=0.55), dict(x=-1.2, z=-29.2, rx=1.0, rz=0.6), dict(x=6.2, z=-44.4, rx=1.2, rz=0.7), dict(x=-9.6, z=-44.4, rx=0.9, rz=0.55), dict(x=9.8, z=-33.6, rx=0.8, rz=0.55),
            dict(x=-5.6, z=-48.6, rx=0.9, rz=0.5), dict(x=9.4, z=-66.4, rx=0.7, rz=0.45, f=F, milk=True)]

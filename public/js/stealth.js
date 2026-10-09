@@ -383,6 +383,13 @@
       for (const b of this.blockers) { const h = segCircleT(x0, z0, x1, z1, b.x, b.z, b.r); if (h !== null && h < t) t = h; }
       return t * L;
     }
+    // how far he can run ahead before anything solid (low walls, machines, breakable furniture too): used to refuse a charge with no room to run up
+    runRoom(x0, z0, a, L) {
+      let d = this.reach(x0, z0, a, L); const x1 = x0 + Math.cos(a) * L, z1 = z0 + Math.sin(a) * L;
+      for (const w of this.walls) { if (w.tall) continue; const h = segBoxT(x0, z0, x1, z1, w.x0, w.z0, w.x1, w.z1); if (h !== null && h * L < d) d = h * L; }
+      for (const B of this.breakables || []) { if (B.done || Math.abs((B.s.f ? UP : 0) - this.P.y) > 1.2) continue; const h = segBoxT(x0, z0, x1, z1, B.s.x0, B.s.z0, B.s.x1, B.s.z1); if (h !== null && h * L < d) d = h * L; }
+      return d;
+    }
     // ---------------------------------------------------------------- walking: a grid over the floor, A*, then the corners cut
     buildNav() {
       const cs = 0.4, x0 = -15.6, z0 = -93.2, nx = Math.ceil(39.2 / cs), nz = Math.ceil((5.2 - z0) / cs), free = new Uint8Array(nx * nz), R = 0.5;
@@ -662,7 +669,9 @@
       else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
       if (!c.dash.held) this.lRel = true;   // (one charge per press: let go of L before the next, no endless re-charging)
-      if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
+      if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart && this.runRoom(P.x, P.z, Math.atan2(mz, mx), 2) < 1.05) {   // right up against a wall or anything solid: no room to run up, so he doesn't launch into it
+        this.lRel = false; P.cd = 0.3; P.f = Math.atan2(mz, mx); if (!this.noRoomT || this.t - this.noRoomT > 3) { this.noRoomT = this.t; this.think('No room for a run-up! Back up first.', 1.6); } }
+      else if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
       let spd = 0;
       if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 2.6 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
       P.chT = P.st === 'charge' ? (P.chT || 0) + dt : 0; if (P.chT > 0.95) { P.st = 'free'; P.t = 0; P.cd = 0.5; P.chT = 0; }   // (a charge can never run on)
