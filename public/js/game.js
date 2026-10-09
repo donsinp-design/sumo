@@ -85,8 +85,8 @@
       for (let k = 0; k < 2; k++) {
         let src;
         if (kind === 'online') { src = new S.NetSource(this, k); }
-        else if (kind === 'attract' || (kind === 'cpu' && k === 1)) {
-          const ai = new S.AI(m.w[k], m, kind === 'attract' ? 'normal' : this.settings.difficulty, { noLearn: kind === 'attract' });
+        else if (kind === 'attract' || ((kind === 'cpu' || kind === 'boss') && k === 1)) {
+          const ai = new S.AI(m.w[k], m, kind === 'attract' ? 'normal' : kind === 'boss' ? 'hard' : this.settings.difficulty, { noLearn: kind === 'attract' || kind === 'boss' });
           this.ais.push(ai); src = ai;
         } else if (kind === 'training' && k === 1) {
           this.dummy = new S.Dummy(); this.dummy.me = m.w[1];
@@ -100,14 +100,14 @@
         this.ctrls.push(c); m.w[k].input = c;
       }
       const P = S.profile;
-      const human = (k) => kind === 'pvp' || ((kind === 'cpu' || kind === 'tutorial' || kind === 'showcase' || kind === 'training') && k === 0);
+      const human = (k) => kind === 'pvp' || ((kind === 'cpu' || kind === 'boss' || kind === 'tutorial' || kind === 'showcase' || kind === 'training') && k === 0);
       this.loadouts = kind === 'online' ? [0, 1].map((k) => (this.netMatch.los[k] || JSON.parse(JSON.stringify(S.DEF_EQ)))) : [0, 1].map((k) => (k === 0 && human(0) ? P.loadout() : kind === 'pvp' ? JSON.parse(JSON.stringify(S.DEF_EQ)) : P.randomLoadout()));
-      this.names = [human(0) ? P.names[0] : 'CPU', kind === 'pvp' ? P.names[1] : kind === 'tutorial' || kind === 'training' ? 'PARTNER' : 'CPU'];
+      this.names = [human(0) ? P.names[0] : 'CPU', kind === 'pvp' ? P.names[1] : kind === 'boss' ? 'YUNOFUJI' : kind === 'tutorial' || kind === 'training' ? 'PARTNER' : 'CPU'];
       this.viewerIdx = kind === 'pvp' ? -1 : kind === 'attract' ? -1 : 0;
       for (let k = 0; k < 2; k++) m.w[k].extraTaunts = this.loadouts[k].taunts.map((id) => (id ? S.item(id).pose : null));
       this.R.setWrestlers(archs, this.loadouts, this.names);
       for (const v of this.R.views) v.onDerobe = (w) => { this.audio.whoosh(0.4); this.R.fx.dust(w.x, 0.05, w.z, 6, 0.3, 0.5, 0.3); this.audio.cheer(0.4, 0.8); };
-      this.ui.setFighters(archs, kind === 'cpu' ? [this.names[0], 'CPU · ' + this.settings.difficulty.toUpperCase()] : kind === 'pvp' ? this.names : kind === 'tutorial' ? ['YOU', 'PARTNER'] : ['CPU', 'CPU']);
+      this.ui.setFighters(archs, kind === 'cpu' ? [this.names[0], 'CPU · ' + this.settings.difficulty.toUpperCase()] : kind === 'boss' ? [this.names[0], 'YUNOFUJI'] : kind === 'pvp' ? this.names : kind === 'tutorial' ? ['YOU', 'PARTNER'] : ['CPU', 'CPU']);
       this.ui.setSkills([null, null], [false, false], ['', '']);
       this.ui.setRecord(kind === 'cpu' || kind === 'pvp' ? this.recordText() : '');
       this.ui.setWins([0, 0], this.need);
@@ -128,6 +128,37 @@
       this.refreshSkills();
       this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1200;
       setTimeout(() => { if (this.match === m) { this.ui.gacha(0, m.skills[0], false, this.skillKey(0), true, this.contKey(0)); this.audio.blip(true); } }, 500);
+    }
+    // ---- the boss, from the bathhouse: a sumo bout against him (best of three), a training session; then back to the bathhouse
+    dealBossGacha() {   // "ハンデだ": you lost a round, so he flicks you a capsule: one skill, yours for the next
+      const m = this.match; if (!m) return;
+      m.skills = [S.Skills.random(), null]; m.peek = [false, false]; this.refreshSkills();
+      this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1200;
+      this.ui.gacha(0, m.skills[0], false, this.skillKey(0), true, this.contKey(0)); this.audio.blip(true);
+    }
+    enterBoss(camp) {   // park the bathhouse (it stays exactly as it is) and take over the screen
+      this.campSaved = camp; this.camp = null; this.leavingBoss = false;
+      if (camp.hud) camp.hud.style.display = 'none';
+      document.body.classList.remove('campaign'); document.body.classList.add('playing');
+    }
+    startBossBout(camp) {
+      this.enterBoss(camp);
+      const c1 = this.sel.c1 || 0, c2 = c1 === 1 ? 0 : 1;
+      this.sel = { mode: 'cpu', c1, c2, lock1: false, lock2: false };
+      this.nsStreak = 0; this.mode = 'game'; this.paused = false; this.endTutorial(); this.ui.training(null); this.ui.hide(); this.ui.showHud(true); this.ui.hint('Esc pause'); this.stake = 0;
+      this.setupMatch(c1, c2, 'boss');
+    }
+    startBossTraining(camp) { this.enterBoss(camp); this.startTutorial(); }
+    leaveBoss(res) {
+      if (this.leavingBoss || !this.campSaved) return; this.leavingBoss = true;
+      const done = () => {
+        const camp = this.campSaved; this.campSaved = null; this.leavingBoss = false; this.paused = false;
+        this.startAttract(); this.ui.hide(); this.ui.showHud(false); this.ui.hint(''); this.ui.training(null);
+        this.mode = 'campaign'; document.body.classList.add('playing', 'campaign'); this.camp = camp; this.R.resize();
+        if (camp.hud) camp.hud.style.display = '';
+        camp.resumeFromBoss(res);
+      };
+      const bn = S.Banners; if (bn && !bn.busy) bn.flood({ hold: 0.06, speed: 1.6, onCovered: done }); else done();
     }
     startAttract() {
       if (!this.ui.pending) S.Banners.stop(); // a menu wipe may be on its way: let it finish
@@ -474,13 +505,14 @@
       if (m.third && m.wins[0] + m.wins[1] + t3 >= this.need * 2 - 1) return { draw: true };
       return null;
     }
-    bannerKind() { return this.kind === 'cpu' || this.kind === 'pvp' || this.kind === 'online'; }
+    bannerKind() { return this.kind === 'cpu' || this.kind === 'boss' || this.kind === 'pvp' || this.kind === 'online'; }
     advanceRound() {
       const m = this.match, r = m.result;
       {
         this.ui.hideKimarite();
         this.R.focus(0, 0, 0);
         const best = Math.max(m.wins[0], m.wins[1]), fin = this.matchEnd(m);
+        if (fin && this.kind === 'boss' && fin.wi !== undefined) { this.matchOver = true; this.ui.hideBanner(); this.leaveBoss(fin.wi === 0 ? 'won' : 'lost'); return; }
         if (fin && (fin.third || fin.draw) && this.kind !== 'attract') {
           // the challenger took it, or everyone has one point: nobody wins; a draw hands back the bet
           this.matchOver = true;
@@ -863,6 +895,10 @@
       if (lo && this.kind !== 'attract') setTimeout(() => { if (this.match && this.match.result === r) R.crowdThrow((S.item(lo.throw) || {}).kind || 'zabuton', W.x, W.z); }, 500);
       const m = this.match;
       const matchGoesOn = m && !this.matchEnd(m);
+      if (matchGoesOn && this.kind === 'boss' && W.idx === 1) {
+        m.skills = [null, null]; this.refreshSkills(); this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1500;
+        setTimeout(() => { if (this.match === m && this.awaitGacha) this.dealBossGacha(); }, 900);
+      }
       if (matchGoesOn && S.profile.rules === 'gacha' && (this.kind === 'cpu' || this.kind === 'pvp')) {
         m.skills = [null, null]; this.refreshSkills();
         this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1500; // next round's draw is shown before it starts
@@ -1516,7 +1552,7 @@
         case 'prevLesson': this.paused = false; ui.hide(); if (this.tut) this.tut.prev(); break;
         case 'replayLesson': this.paused = false; ui.hide(); if (this.tut) this.tut.replay(); break;
         case 'restart': this.paused = false; if (this.tut) this.startTutorial(); else if (this.kind === 'training') this.startTraining(); else this.startGame(); break;
-        case 'quit': this.ui.training(null); this.paused = false; this.rematchT = 0; this.R.camOverride = null; ui.show('title'); this.startAttract(); break;
+        case 'quit': if (this.campSaved) { this.paused = false; this.rematchT = 0; this.leaveBoss('quit'); break; } this.ui.training(null); this.paused = false; this.rematchT = 0; this.R.camOverride = null; ui.show('title'); this.startAttract(); break;
         case 'rematch': this.rematchT = 0; this.startGame(); break;
         case 'select': this.rematchT = 0; this.sel.lock1 = this.sel.lock2 = false; ui.show('select', this.sel); break;
         default: if (act.indexOf('item:') === 0) this.lockerBuy(act.slice(5));

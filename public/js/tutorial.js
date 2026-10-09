@@ -245,6 +245,7 @@
       this.g.R.setMarker(null);
       this.g.tut = null;
       this.g.seenTut = true; this.g.save();
+      if (this.g.campSaved) { this.g.leaveBoss('trained'); return; }   // (taught by the boss: straight back to him)
       this.g.ui.show('tutdone');
     }
     hide() { this.el.classList.remove('on'); this.g.R.setMarker(null); this.g.ui.hideGacha(); }

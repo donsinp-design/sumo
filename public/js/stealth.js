@@ -597,6 +597,7 @@
     }
     step(dt) {
       this.t += dt;
+      if (this.sf) { if (this.timers && this.timers.length) { const due = []; this.timers = this.timers.filter((q) => { q.t -= dt; if (q.t <= 0) { due.push(q); return false; } return true; }); for (const q of due) if (this.scene) q.fn(); } this.sfStep(dt); return; }
       if (this.timers && this.timers.length) { const due = []; this.timers = this.timers.filter((q) => { q.t -= dt; if (q.t <= 0) { due.push(q); return false; } return true; }); for (const q of due) if (this.scene) q.fn(); }   // (run after: a timer may set new ones)
       const P = this.P, c = this.ctrl;
       P.t += dt; P.cd = Math.max(0, P.cd - dt);
@@ -1121,6 +1122,138 @@
       x.beginPath(); x.moveTo(9, 0); x.lineTo(-6, 6); x.lineTo(-3, 0); x.lineTo(-6, -6); x.closePath(); x.fill(); x.stroke();
       x.restore();
     }
+    // ================================================================ THE BOSS: the questions, the fight, the sumo bout
+    choice(jp, en, opts, cb) {
+      const e = this.el('.st-choice'); e.innerHTML = '<h3>' + jp + '</h3><p>' + en + '</p>' + opts.map((o, k) => '<button class="' + (k ? '' : 'sel') + '">' + o + '</button>').join('');
+      e.classList.add('on'); this.choiceI = 0; this.choiceCb = cb; this.keys = {};
+    }
+    // the training offer: asked, and if he's turned down, asked again (as him teaching you)
+    bossAsk(n) {
+      const B = this.boss; B.hold = false; if (this.mawM) this.mawM.visible = false;   // (the mawashi's tucked in his belt: the fight's for it)
+      const q = n === 0 ? [{ who: '親方', jp: '…その前に。稽古をつけてやろうか?', en: '...Before that. Shall I put you through some training?', t: 3.2 }]
+        : [{ who: '親方', jp: '…ふむ。必要になると思うがな。', en: 'Hm. I think you\'ll need it.', t: 2.8 }, { who: '親方', jp: 'では、このわしが直々に教えてやろう。…どうだ?', en: 'Then I\'ll teach you myself. The champion in person. ...Well?', t: 3.4 }];
+      this.say(q, () => this.choice(n === 0 ? '稽古?' : '直々に教えよう', n === 0 ? 'TRAINING?' : 'LET ME TEACH YOU', ['YES: learn to play', 'NO: just fight'], (i) => {
+        if (i === 0) { this.say([{ who: '親方', jp: 'よし。ついてこい。', en: 'Good. Follow me.', t: 1.8 }], () => this.g.startBossTraining(this)); }
+        else if (n === 0) this.bossAsk(1);
+        else this.say([{ who: '親方', jp: '…よかろう。かかってこい!', en: '...Very well. Come at me!', t: 2.4 }], () => this.sfStart());
+      }));
+    }
+    // back from the versus screen (a sumo bout, or the training)
+    resumeFromBoss(res) {
+      this.keys = {}; this.over = false; this.paused = false; this.acc = 0;
+      if (res === 'quit') { this.g.endCampaign(); return; }
+      if (res === 'trained') { this.say([{ who: '親方', jp: 'どうだ、わかったか。…では、いくぞ。', en: 'There. Understood? ...Then let\'s begin.', t: 3.0 }], () => this.sfStart()); return; }
+      if (res === 'lost') { this.say([{ who: '親方', jp: 'まだまだ青いな。もう一番!', en: 'Still green. Again!', t: 2.6 }], () => this.g.startBossBout(this)); return; }
+      // won: the mawashi comes back
+      this.boss.on = true; this.boss.y = -0.12; this.boss.hold = false;
+      this.say([
+        { who: '親方', jp: '…見事だ。', en: '...Magnificent.', t: 2.2 },
+        { who: '親方', jp: 'ところで、その背中の…「半額豆腐」とは何だ?', en: 'By the way. That thing on your back... "HALF-PRICE TOFU"?', t: 3.4 },
+        { who: '', jp: '…「無敵」と頼んだんだ。', en: '...I asked for "INVINCIBLE".', t: 2.8 },
+        { who: '親方', jp: 'まあいい。持っていけ。だが、その刺青を見られる前に出ていくんだぞ。', en: 'Never mind. Take it. But get out before anyone sees that tattoo.', t: 4.0 },
+      ], () => { this.gotMawashi = true; this.boss.sink = 0; this.think('My MAWASHI! ...still can\'t go out the front door like this.', 2.8); this.escapeStage(); });
+    }
+    // ---- stage 1: a Street Fighter style bout in front of the Mt Fuji mural (best of three rounds)
+    sfHide(on) {   // potted plants and the like out of the arena while they fight
+      if (on) this.sfHidden = []; for (const q of this.breakables || []) if (q.s && q.s.k === 'plant' && !q.done && q.o) { if (on && Math.abs((q.s.x0 + q.s.x1) / 2 - 7) < 9 && q.s.z0 > -6 && !q.s.f) { q.o.visible = false; this.sfHidden.push(q); } }
+      if (!on) { for (const q of this.sfHidden || []) if (!q.done) q.o.visible = true; this.sfHidden = []; }
+    }
+    sfFighter(x, dir) { return { x, dir, hp: 100, st: 'idle', t: 0, done: false, stun: 0, inv: 0, vx: 0, ai: 0, mv: 0, blockT: 0 }; }
+    sfStart() {
+      const P = this.P, B = this.boss, bn = S.Banners;
+      const go = () => { this.hud.classList.add('sf'); this.stage = 'bossfight'; this.camD = 10.5; this.camH = 0.27; this.camT.set(7, 1.1, -0.9); this.sfHide(true); this.sf = { round: 1, wins: [0, 0], ph: 'none', t: 0, you: this.sfFighter(5.2, 1), boss: this.sfFighter(8.8, -1), timer: 60, pose: null, shake: 0 };
+        B.on = true; B.hold = false; B.sink = undefined; B.rise = B.rise || { t: 9, gone: true }; if (this.mawM) this.mawM.visible = false; this.sfHud(true); this.sfReset(); };
+      if (bn && !bn.busy) bn.flood({ hold: 0.15, speed: 1.4, onCovered: go }); else go();
+    }
+    sfHud(init) {
+      const e = this.el('.st-sf'), f = this.sf;
+      if (init) e.innerHTML = '<div class="bars"><div class="bar l"><b></b><i></i></div><div class="tm">60</div><div class="bar r"><b></b><i></i></div></div><div class="nm l">YOU</div><div class="nm r">YUNOFUJI</div><div class="pips l"></div><div class="pips r"></div><div class="big"></div><div class="keys">A / D move · J slap · K shove (slow, heavy) · hold I block</div>';
+      const y = f.you, b = f.boss, q = (c) => e.querySelector(c), pc = (h) => Math.max(0, h) + '%';
+      f.dy = (f.dy === undefined ? 100 : f.dy + (y.hp - f.dy) * 0.08); f.db = (f.db === undefined ? 100 : f.db + (b.hp - f.db) * 0.08);
+      q('.bar.l i').style.width = pc(y.hp); q('.bar.l b').style.width = pc(f.dy); q('.bar.r i').style.width = pc(b.hp); q('.bar.r b').style.width = pc(f.db);
+      q('.tm').textContent = Math.max(0, Math.ceil(f.timer)); q('.pips.l').textContent = '★'.repeat(f.wins[0]) + '☆'.repeat(2 - f.wins[0]); q('.pips.r').textContent = '★'.repeat(f.wins[1]) + '☆'.repeat(2 - f.wins[1]);
+    }
+    sfText(t) { const b = this.el('.st-sf .big'); if (!b) return; b.classList.remove('on'); if (!t) return; b.textContent = t; void b.offsetWidth; b.classList.add('on'); }
+    sfReset() {
+      const f = this.sf; Object.assign(f.you, this.sfFighter(5.2, 1)); Object.assign(f.boss, this.sfFighter(8.8, -1));
+      f.dy = f.db = 100; f.timer = 60; f.ph = 'intro'; f.t = 0; f.pose = null; f.fightShown = false; this.sfApply(); this.sfText('ROUND ' + f.round); this.sfHud();
+    }
+    sfApply() {   // the two fighters onto the real characters
+      const f = this.sf, P = this.P, B = this.boss, y = f.you, b = f.boss, pose = { idle: 'free', jab: 'busy', heavy: 'charge', block: 'wind', hit: 'free', ko: 'slip', win: 'free', lose: 'slip' };
+      P.x = y.x; P.z = -0.9; P.y = 0; P.f = y.dir > 0 ? 0 : Math.PI; P.vx = P.vz = 0; P.st = pose[y.st]; P.t = y.t; P.dur = 9; P.fall = y.dir > 0 ? Math.PI : 0; P.tip = 0; P.hidden = null; P.cart = null; P.held = null;
+      this.w.throatT = y.st === 'hit' ? Math.max(0, 0.3 - y.t) * 3.3 : 0; f.pose = y.st === 'win' ? 'win' : null;
+      B.x = b.x; B.z = -0.9; B.y = 0; B.f = b.dir > 0 ? 0 : Math.PI; B.st = { idle: 'free', jab: 'palm', heavy: 'charge', block: 'brace', hit: 'free', ko: 'fall', win: 'win', lose: 'fall' }[b.st]; B.w.throatT = b.st === 'hit' ? Math.max(0, 0.3 - b.t) * 3.3 : 0;
+      B.w.fallX = b.dir > 0 ? -1 : 1; B.w.fallZ = 0; B.w.down = b.st === 'ko' && b.t > 0.3 && b.t < 1.0;
+    }
+    sfHit(a, d, kind) {   // a (the attacker) hits d, if it reaches
+      const f = this.sf, dist = Math.abs(a.x - d.x), reach = kind === 'jab' ? 1.75 : 2.15; if (dist > reach || (d.x - a.x) * a.dir < 0) return;
+      const dmg = kind === 'jab' ? 6 : 14, kb = kind === 'jab' ? 0.5 : 1.8, blocking = d.st === 'block' && (a.x - d.x) * d.dir > 0; a.done = true;
+      if (blocking) { d.hp -= dmg * 0.12; d.vx = a.dir * kb * 2.2; this.fx.dust && this.fx.dust(d.x, 1.0, -0.9, 2, 0.1, 0.2, 0.1); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); return; }
+      if (d.inv > 0) return;
+      d.hp -= dmg; d.st = 'hit'; d.t = 0; d.stun = kind === 'jab' ? 0.28 : 0.5; d.vx = a.dir * kb * 3.2; d.inv = d.stun + 0.12; d.done = true;
+      this.fx.dust && this.fx.dust(d.x, 1.0, -0.9, 5, 0.2, 0.3, 0.2); this.flash = kind === 'jab' ? 0.1 : 0.3; f.shake = kind === 'jab' ? 0.08 : 0.2;
+      this.popAt({ x: d.x, z: -0.9, y: 0.3 }, kind === 'jab' ? 'バシッ!' : 'ドーン!', 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(kind === 'jab' ? 6 : 10);
+    }
+    sfStep(dt) {
+      const f = this.sf, y = f.you, b = f.boss, c = this.ctrl; f.t += dt;
+      const face = () => { y.dir = b.x >= y.x ? 1 : -1; b.dir = y.x >= b.x ? 1 : -1; };
+      const run = (F, fr, kind) => {   // an attack's timeline: startup, active, recovery
+        F.t += dt; const [s0, s1, e] = kind === 'jab' ? [0.09, 0.2, 0.34] : [0.3, 0.42, 0.72];
+        if (!F.done && F.t >= s0 && F.t <= s1) this.sfHit(F, fr, kind); if (F.t >= e) { F.st = 'idle'; F.t = 0; F.done = false; } else if (kind === 'heavy' && F.t > s0 && F.t < s1) F.x += F.dir * 5 * dt;   // (the shove lunges)
+      };
+      if (f.ph === 'intro') { if (f.t > 1.3 && !f.fightShown) { f.fightShown = true; this.sfText('FIGHT!'); } if (f.t > 2.2) { f.ph = 'fight'; f.t = 0; this.sfText(''); } }
+      else if (f.ph === 'fight') {
+        f.timer -= dt; face();
+        for (const F of [y, b]) { F.inv = Math.max(0, F.inv - dt); F.x += F.vx * dt; F.vx *= Math.max(0, 1 - dt * 7); }
+        if (y.st === 'hit') { y.t += dt; if (y.t >= y.stun) { y.st = 'idle'; y.t = 0; } }
+        else if (y.st === 'jab' || y.st === 'heavy') run(y, b, y.st);
+        else {
+          const mx = c ? c.mx : 0, blk = !!this.keys.KeyI; y.st = blk ? 'block' : 'idle'; y.t += dt;
+          if (!blk && Math.abs(mx) > 0.3) y.x += Math.sign(mx) * (Math.sign(mx) === y.dir ? 3.3 : 2.7) * dt;
+          if (c && c.push.pressed) { y.st = 'jab'; y.t = 0; y.done = false; } else if (c && (c.grab.pressed || c.dash.pressed)) { y.st = 'heavy'; y.t = 0; y.done = false; }
+        }
+        if (b.st === 'hit') { b.t += dt; if (b.t >= b.stun) { b.st = 'idle'; b.t = 0; } }
+        else if (b.st === 'jab' || b.st === 'heavy') run(b, y, b.st);
+        else {
+          const dist = Math.abs(y.x - b.x); b.t += dt; b.ai -= dt; b.blockT = Math.max(0, b.blockT - dt);
+          if (b.blockT > 0) b.st = 'block'; else if (b.st === 'block') b.st = 'idle';
+          if ((y.st === 'jab' || y.st === 'heavy') && y.t < 0.2 && dist < 2.4 && !b.reacted) { b.reacted = true; if (Math.random() < 0.38) { b.blockT = 0.55; b.st = 'block'; } }
+          if (y.st !== 'jab' && y.st !== 'heavy') b.reacted = false;
+          if (b.st !== 'block' && b.ai <= 0) { b.ai = 0.22 + Math.random() * 0.38; const r = Math.random();
+            if (dist > 2.7) b.mv = 1;
+            else if (dist > 1.8) { if (r < 0.4) { b.st = 'heavy'; b.t = 0; b.done = false; } else if (r < 0.7) b.mv = 1; else b.mv = 0; }
+            else { if (r < 0.42) { b.st = 'jab'; b.t = 0; b.done = false; } else if (r < 0.6) { b.st = 'heavy'; b.t = 0; b.done = false; } else if (r < 0.8) { b.blockT = 0.6; b.st = 'block'; } else b.mv = -1; } }
+          if (b.st === 'idle') b.x += b.dir * b.mv * 2.5 * dt;
+        }
+        for (const F of [y, b]) F.x = clamp(F.x, 3.3, 11.2);
+        const gap = 1.45, d = b.x - y.x; if (Math.abs(d) < gap) { const m = (gap - Math.abs(d)) / 2 * Math.sign(d || 1); y.x -= m; b.x += m; y.x = clamp(y.x, 3.3, 11.2); b.x = clamp(b.x, 3.3, 11.2); }
+        if (y.hp <= 0 || b.hp <= 0 || f.timer <= 0) {
+          const youWin = b.hp <= 0 ? true : y.hp <= 0 ? false : y.hp >= b.hp; f.wins[youWin ? 0 : 1]++; f.last = youWin;
+          (youWin ? b : y).st = 'ko'; (youWin ? b : y).t = 0; (youWin ? y : b).st = 'win'; (youWin ? y : b).t = 0; f.ph = 'ko'; f.t = 0;
+          this.sfText(f.timer <= 0 && y.hp > 0 && b.hp > 0 ? 'TIME UP' : 'K.O.'); this.flash = 0.5; f.shake = 0.35; if (this.g.audio) { this.g.audio.thump && this.g.audio.thump(14); this.g.audio.roar && this.g.audio.roar(); }
+        }
+      } else if (f.ph === 'ko') {
+        for (const F of [y, b]) { F.t += dt; F.x += F.vx * dt; F.vx *= Math.max(0, 1 - dt * 6); }
+        if (f.t > 2.6) {
+          const done = f.wins[0] >= 2 || f.wins[1] >= 2;
+          if (!done) { f.round++; this.sfReset(); } else { f.ph = 'end'; f.t = 0; this.sfText(f.wins[0] >= 2 ? 'YOU WIN' : 'YOU LOSE'); }
+        }
+      } else if (f.ph === 'end') {
+        for (const F of [y, b]) F.t += dt;
+        if (f.t > 3.0) { f.ph = 'gone'; this.sfEnd(f.wins[0] >= 2); }
+      }
+      if (this.sf) { this.sfApply(); this.sfHud(); const mid = clamp((y.x + b.x) / 2, 5.6, 8.9); this.camFocus = { x: mid, z: -0.9, y: 1.1, dist: 10.5, h: 0.27 }; }
+    }
+    sfEnd(won) {
+      const bn = S.Banners, B = this.boss, P = this.P;
+      const back = () => { this.hud.classList.remove('sf'); this.sfHide(false); this.sf = null; this.camD = 15; this.camH = 0.64; this.camFocus = null; this.el('.st-sf').innerHTML = ''; P.x = 5.6; P.z = 0.6; P.f = 0; P.st = 'free'; P.dur = 0; B.st = 'free'; B.x = 8.4; B.z = 0.6; B.f = Math.PI; B.w.throatT = 0; this.w.throatT = 0; this.camT.set(7, 0, 0);
+        if (won) this.say([
+          { who: '親方', jp: '…ぐっ。やるじゃないか。', en: '...Gh. Not bad at all.', t: 2.6 },
+          { who: '親方', jp: 'いや、待て待て。相撲のルールでやろう!', en: 'Nah, nah, hold on. Let\'s play by SUMO rules!', t: 3.2 },
+        ], () => this.g.startBossBout(this));
+        else this.say([{ who: '親方', jp: 'まだまだだな。もう一度!', en: 'Not yet. Once more!', t: 2.4 }], () => this.sfStart()); };
+      if (bn && !bn.busy) bn.flood({ hold: 0.12, speed: 1.4, onCovered: back }); else back();
+    }
     // ---- bonuses: kept until you blow them. Never seen / nobody knocked out / nothing broken (that the story didn't need) / nothing thrown
     bonusLose(k) {
       const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, smash: true, hit: true }); if (!B[k]) return; B[k] = false;
@@ -1211,8 +1344,7 @@
           { who: '親方', jp: '探しものは…これか?', en: 'Looking for... THIS?', t: 3.0 },
           { who: '親方', jp: 'わしの風呂で、ずいぶん好き勝手してくれたな。', en: 'You\'ve been running riot all over MY bathhouse.', t: 3.4 },
           { who: '親方', jp: '欲しけりゃ…力ずくで取ってみい!', en: 'Want it back? ...Then come and TAKE it!', t: 3.2 },
-          { who: '親方', jp: '…と言いたいところだが、今日は見逃してやる。', en: '...is what I\'d say. But I\'ll let you off. Today.', t: 3.2 },
-        ], () => { B.sink = 0; this.P.st = 'free'; this.P.dur = 0; this.camFocus = null; this.think('He\'s got MY MAWASHI... and he\'s a YOKOZUNA?! ...Out. NOW.', 2.8); this.escapeStage(); });   // (the fight itself comes later)
+        ], () => { this.think('He\'s got MY MAWASHI... and he\'s a YOKOZUNA?!', 2.2); try { localStorage.setItem('wmm_boss', '1'); } catch (e) {} this.later(1.4, () => this.bossAsk(0)); });
       }
     }
     bossDraw(dt, T) {
@@ -1659,7 +1791,8 @@
     draw(dt) {
       const P = this.P, T = this.t, w = this.w, v = this.view;
       if (S.SoftSumo && S.SoftSumo.loaded && !v.soft) S.SoftSumo.attach(v, { noBlob: true });
-      if (v.soft && !v.pantsOff) { v.pantsOff = true; for (const m of v.soft.mats) if (/mawashi/i.test(m.name || '')) m.visible = false; }
+      if (v.soft && !v.pantsOff && !this.gotMawashi) { v.pantsOff = true; for (const m of v.soft.mats) if (/mawashi/i.test(m.name || '')) m.visible = false; }
+      if (v.soft && v.pantsOff && this.gotMawashi) { v.pantsOff = false; for (const m of v.soft.mats) if (/mawashi/i.test(m.name || '')) m.visible = true; }   // (won it back)
       w.x = P.x; w.z = P.z; w.y = 0; w.f = P.f; w.fx = Math.cos(P.f); w.fz = Math.sin(P.f); w.vx = P.vx; w.vz = P.vz; w.spd = Math.hypot(P.vx, P.vz);
       if (this.eatAnim) {   // a vacuum, like Kirby (the gacha inhale): each one spirals in, faster and faster, and vanishes into his mouth
         const E = this.eatAnim; E.t += dt; const hy = P.y + 1.72 * v.s, fx = Math.cos(P.f), fz = Math.sin(P.f), mx = P.x + fx * 0.32 * v.s, mz = P.z + fz * 0.32 * v.s;
@@ -1667,7 +1800,7 @@
           q.m.position.set(q.sx + (mx - q.sx) * e - fz * sw, q.sy + (hy - q.sy) * e + sw * 0.4, q.sz + (mz - q.sz) * e + fx * sw); q.m.rotation.y += dt * 18; q.m.rotation.x += dt * 9; q.m.scale.setScalar(1.3 * (1 - 0.7 * e)); q.m.visible = k < 1; }
         if (E.t > E.dur) { for (const q of E.pieces) if (q.m) this.G.remove(q.m); this.eatAnim = null; }
       }
-      const nst = this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
+      const nst = this.sf && this.sf.pose ? this.sf.pose : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.t > 0.3 && P.t < 1.0; } else w.down = false;
       w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0); w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : null;
@@ -1704,7 +1837,7 @@
       for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }
       this.sweatStep(dt);
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
-      const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden;
+      const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden && !this.gotMawashi;
       if (m.s.visible) {
         m.t -= dt;
         if (m.t <= 0) { m.t = 0.1; const g = m.cv.getContext('2d'), sk = ['#e9b894', '#d9a07c', '#f0c8a8', '#c98a6a', '#e0ac88'];
@@ -1750,6 +1883,20 @@
         '#stealthHud .st-ko{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(30,24,36,.28);color:#fffaf0;text-shadow:0 4px 0 rgba(40,30,50,.35);opacity:0;pointer-events:none;transition:opacity .3s}#stealthHud .st-ko.on{opacity:1}#stealthHud .st-ko b{font:400 64px "Dela Gothic One",sans-serif;letter-spacing:2px}#stealthHud .st-ko i{font-style:normal;font-size:24px;opacity:.8;margin-top:6px}#stealthHud .st-obj.chase b{color:#cf3a3a}' +
         '#stealthHud .st-bonus{position:absolute;left:24px;top:64px;display:flex;gap:6px;pointer-events:none}#stealthHud .st-bonus i{font:700 13px "Barlow Condensed",sans-serif;font-style:normal;letter-spacing:0.06em;padding:3px 8px 2px;border-radius:999px;background:rgba(255,250,240,0.9);color:#2e7d4c;transition:all .3s}#stealthHud .st-bonus i.off{color:#a49c94;background:rgba(255,250,240,0.55);text-decoration:line-through}#stealthHud .st-bonus i.pop{transform:scale(1.25);color:#d8262e}#stealthHud .st-hp{top:96px!important}' +
         '#stealthHud .st-map{position:absolute;right:24px;bottom:96px;width:150px;height:150px;border-radius:50%;box-shadow:0 0 0 4px rgba(255,250,240,0.9),0 4px 12px rgba(40,30,40,0.25);pointer-events:none}' +
+        '#stealthHud.sf .st-bonus,#stealthHud.sf .st-map,#stealthHud.sf .st-obj,#stealthHud.sf .st-hp,#stealthHud.sf .st-think,#stealthHud.sf .st-help,#stealthHud.sf .st-safe,#stealthHud.sf .st-stam{display:none!important}' +
+        '#stealthHud .st-sf{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;display:none;font-family:"Barlow Condensed",sans-serif}#stealthHud.sf .st-sf{display:block}' +
+        '#stealthHud .st-sf .bars{position:absolute;left:3%;right:3%;top:18px;display:flex;align-items:flex-start;gap:14px}' +
+        '#stealthHud .st-sf .bar{flex:1;height:30px;background:#2a2430;border:4px solid #f4efe6;border-radius:6px;position:relative;overflow:hidden}' +
+        '#stealthHud .st-sf .bar i{position:absolute;top:0;bottom:0;background:#f2cf4a}#stealthHud .st-sf .bar b{position:absolute;top:0;bottom:0;background:#d8262e}' +
+        '#stealthHud .st-sf .bar.l i,#stealthHud .st-sf .bar.l b{right:0}#stealthHud .st-sf .bar.r i,#stealthHud .st-sf .bar.r b{left:0}' +
+        '#stealthHud .st-sf .tm{width:84px;height:62px;margin-top:-6px;background:#2a2430;border:4px solid #f4efe6;border-radius:10px;color:#f2cf4a;font:800 44px "Barlow Condensed",sans-serif;text-align:center;line-height:60px;font-style:italic}' +
+        '#stealthHud .st-sf .nm{position:absolute;top:60px;font:800 26px "Barlow Condensed",sans-serif;font-style:italic;letter-spacing:0.08em;color:#fffaf0;background:rgba(42,36,48,0.85);padding:1px 12px 0}#stealthHud .st-sf .nm.l{left:3%}#stealthHud .st-sf .nm.r{right:3%}' +
+        '#stealthHud .st-sf .pips{position:absolute;top:96px;font:700 24px "Barlow Condensed",sans-serif;color:#d8262e;letter-spacing:6px}#stealthHud .st-sf .pips.l{left:3%}#stealthHud .st-sf .pips.r{right:3%}' +
+        '#stealthHud .st-sf .big{position:absolute;left:0;right:0;top:34%;text-align:center;font:800 118px "Barlow Condensed",sans-serif;font-style:italic;letter-spacing:0.06em;color:#d8262e;text-shadow:none;opacity:0}#stealthHud .st-sf .big.on{opacity:1;animation:sfpop .35s ease-out}@keyframes sfpop{0%{transform:scale(1.9)}100%{transform:scale(1)}}' +
+        '#stealthHud .st-sf .keys{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);text-align:center;font:700 22px "Barlow Condensed",sans-serif;color:#fffaf0;background:rgba(42,36,48,0.82);padding:6px 18px 4px;border-radius:8px;white-space:nowrap}' +
+        '#stealthHud .st-choice{position:absolute;left:50%;top:52%;transform:translateX(-50%);display:none;text-align:center;background:rgba(42,36,48,0.92);padding:18px 34px 20px;border-radius:14px;color:#fffaf0}#stealthHud .st-choice.on{display:block}' +
+        '#stealthHud .st-choice h3{margin:0 0 4px;font:400 26px "Dela Gothic One",sans-serif}#stealthHud .st-choice p{margin:0 0 12px;font:600 19px "Barlow Condensed",sans-serif;opacity:0.85}' +
+        '#stealthHud .st-choice button{display:block;width:100%;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:4px 0;cursor:pointer}#stealthHud .st-choice button.sel{color:#f4efe6;border-left:5px solid #d8262e;padding-left:16px}' +
         '#stealthHud .st-sub{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);width:max-content;max-width:94vw;text-align:center;pointer-events:none;display:none}#stealthHud .st-sub .jp{display:inline-block;font:400 24px "Dela Gothic One",sans-serif;color:#fffaf0;background:rgba(34,30,40,0.72);padding:6px 14px 4px;border-radius:10px;letter-spacing:0.04em}#stealthHud .st-sub .en{display:block;margin-top:6px;font:700 19px "Barlow Condensed",sans-serif;color:#fffaf0;text-shadow:0 2px 0 rgba(0,0,0,0.55)}#stealthHud .st-sub .who{color:#f2cf4a;margin-right:8px}' +
         '#stealthHud .st-hp{position:absolute;left:24px;top:76px;font-size:28px;letter-spacing:4px;color:#cf3a3a;text-shadow:0 2px 0 #fffaf0;display:none}#stealthHud .st-hp.chase{animation:hpPulse .5s ease-in-out infinite alternate}@keyframes hpPulse{to{transform:scale(1.12)}}' +
         '#stealthHud .st-obj b{color:#cf5a4a}#stealthHud .st-safe{position:absolute;right:24px;top:20px;background:#a8dcc6;color:#2f4b4a;padding:6px 12px;border-radius:10px;font-weight:800;font-size:18px;display:none}' +
@@ -1770,7 +1917,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sub"></div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J punch (knocks them out) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · I in the bath: duck under · J punch (knocks them out) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
@@ -1820,6 +1967,12 @@
       else if (c === 'quit') this.g.endCampaign();
     }
     onKey(e) {
+      if (this.choiceCb) {   // the boss's question
+        if (e.repeat) return true; const bs = this.el('.st-choice').querySelectorAll('button');
+        if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'ArrowDown' || e.code === 'KeyS') { this.choiceI = (this.choiceI + 1) % bs.length; bs.forEach((b, k) => b.classList.toggle('sel', k === this.choiceI)); }
+        else if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'KeyJ' || e.code === 'Space') { const cb = this.choiceCb, i = this.choiceI; this.choiceCb = null; this.el('.st-choice').classList.remove('on'); this.keys = {}; cb(i); }
+        return true;
+      }
       const menu = this.paused ? '.st-pause' : this.over && this.el('.st-over').classList.contains('on') ? '.st-over' : null;
       if (menu) {
         if (e.repeat) return true;

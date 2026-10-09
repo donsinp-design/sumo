@@ -263,7 +263,7 @@
       const P = S.profile;
       const foot = (t) => '<div class="foot">' + t + '</div>';
       if (n === 'title' && S.WMM) {   // Where's my Mawashi: white, the menu on the left, the ninja on the right
-        h = '<div class="wmm-wrap"><div class="menu">' + btn('PLAY', 'wmmPlay') + btn('SUMO BATTLES', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') +
+        h = '<div class="wmm-wrap"><div class="menu">' + btn('PLAY', 'wmmPlay') + (localStorage.getItem('wmm_boss') ? btn('TRAINING', 'learn') : '') + btn('SUMO BATTLES', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') +
           (S.APP === 'desktop' ? btn('QUIT', 'quitApp') : '') + '</div></div>';
       } else if (n === 'title') {
         h = '<div class="title-wrap"><img class="logo-img" src="assets/logo.webp?v=2" alt="Kumite"><div class="menu">' +
