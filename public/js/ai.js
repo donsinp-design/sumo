@@ -8,7 +8,7 @@
     easy:   { react: 0.30, think: 0.16, skill: 0.45, dodge: 0.25, tricky: 0.08, aggr: 0.45 },
     normal: { react: 0.19, think: 0.10, skill: 0.72, dodge: 0.45, tricky: 0.18, aggr: 0.6 },
     hard:   { react: 0.12, think: 0.06, skill: 0.94, dodge: 0.6, tricky: 0.28, aggr: 0.72 },
-    boss:   { react: 0.5, think: 0.26, skill: 0.225, dodge: 0.08, tricky: 0, aggr: 0.36 },   // the bathhouse owner: a patient old champion, for casual players (and he goes easier after each round you lose)
+    boss:   { react: 0.5, think: 0.26, skill: 0.225, escP: 0.5, parryP: 0.5, dodge: 0.08, tricky: 0, aggr: 0.36 },   // the bathhouse owner: a patient old champion, for casual players (and he goes easier after each round you lose)
   };
   // remembers how the human opens, across rounds and matches
   const MEM = { charge: 1, brace: 0.6, henka: 0.4, wait: 0.6 };
@@ -238,7 +238,10 @@
       if (gap < 0.6 && P.st === 'palm' && P.flurry >= 2 && canAct) {
         // they are flurrying: parry it, slap them down with their own lean, or step off the line
         const r = this.rnd(), ad = L.skill * Math.min(1, 0.45 + 0.2 * HAB.flurry);
-        if (r < ad * 0.3) { this.dir(0, 0); this.tap('dash', 0.04); this.state = 'parry'; return; }
+        if (L.parryP !== undefined) {   // (a set share of flurries get parried: one roll per flurry, not one per tick)
+          if (this.time - (this.parryT === undefined ? -9 : this.parryT) > 1.2) this.parryGo = this.rnd() < L.parryP;
+          this.parryT = this.time; if (this.parryGo) { this.dir(0, 0); this.tap('dash', 0.04); this.state = 'parry'; return; }
+        } else if (r < ad * 0.3) { this.dir(0, 0); this.tap('dash', 0.04); this.state = 'parry'; return; }
         if (r < ad * 0.65 && myEdge > 1.3) { this.dir(-nx, -nz); this.tap('push'); this.state = 'slapdown-flurry'; return; }
         if (r < ad && me.dashCD <= 0) { let lx = -nz, lz = nx; if (lx * -me.x + lz * -me.z < 0) { lx = -lx; lz = -lz; } this.dir(lx, lz); this.tap('dash'); this.state = 'sidestep-flurry'; return; }
       }
@@ -341,7 +344,7 @@
       if (c.b === me && c.t < 0.3 && !c.rear && !this.techTried) { this.techTried = true; if (this.rnd() < L.skill * (0.35 + 0.1 * Math.min(2, HAB.grab))) { this.tap('grab', 0.04); this.state = 'grab-break'; return; } }
       if (c.tech) {
         // their throw has only just started: slip it
-        if (c.tech.o === me && c.tech.t < 0.2 && this.escFor !== c.tech) { this.escFor = c.tech; if (this.rnd() < L.skill * 0.35) { this.escape(c); return; } }
+        if (c.tech.o === me && c.tech.t < 0.2 && this.escFor !== c.tech) { this.escFor = c.tech; if (this.rnd() < (L.escP !== undefined ? L.escP : L.skill * 0.35)) { this.escape(c); return; } }
         this.dir(0, 0); this.state = 'tech'; return;
       }
       // they are winding up (K held and aiming) or already swinging me: get out

@@ -900,7 +900,7 @@
       const matchGoesOn = m && !this.matchEnd(m);
       if (matchGoesOn && this.kind === 'boss' && W.idx === 1) {
         if (this.bossBox) { this.bossBox = false; if (this.R.bossG) this.R.bossG.box = false; }   // (the box bursts; from here on he's bare)
-        const L = this.ais[0] && this.ais[0].L; if (L) { this.bossSoft = (this.bossSoft || 0) + 1; const k = this.bossSoft; L.react += 0.1; L.think += 0.06; L.aggr = Math.max(0.15, L.aggr - 0.06 * k); L.skill = Math.max(0.04, L.skill * 0.6); L.dodge = Math.max(0.02, L.dodge * 0.6); }   // (a lost round: he goes easier still)
+        const L = this.ais[0] && this.ais[0].L; if (L) { this.bossSoft = (this.bossSoft || 0) + 1; const k = this.bossSoft; L.react += 0.1; L.think += 0.06; L.aggr = Math.max(0.15, L.aggr - 0.06 * k); L.skill = Math.max(0.04, L.skill * 0.6); L.escP = Math.max(0.15, L.escP * 0.75); L.parryP = Math.max(0.15, L.parryP * 0.75); L.dodge = Math.max(0.02, L.dodge * 0.6); }   // (a lost round: he goes easier still)
         m.skills = [null, null]; this.refreshSkills(); this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1500;
         setTimeout(() => { if (this.match === m && this.awaitGacha) this.dealBossGacha(); }, 900);
       }
