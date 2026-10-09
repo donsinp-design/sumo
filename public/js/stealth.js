@@ -1017,7 +1017,7 @@
         if (!this.tipHeld) { this.tipHeld = true; this.tip(['K again  ·  THROW IT', 'hit someone and they come looking · throw a bucket of water and it leaves a PUDDLE: anyone who runs over it SLIPS', 'HOLD K  ·  SMASH IT instead (loud)', 'J  ·  DROP IT (it breaks, quietly)']); }
         b.state = 'held'; b.wet = false; P.held = b; b.m.rotation.set(0, 0, 0); if (b.kind === 'can') b.m.children[0].position.y = 0;
         if (b.water && !this.saidWater) { this.saidWater = true; this.think('Full of water... throw it (K) or smash it (hold K): a puddle. Anyone running over it goes flying!', 3); }
-        else if (b.kind === 'can') { if (!this.saidCan) { this.saidCan = true; this.think(b.soda ? 'A cold one! (J drink it · K throw · hold K smash)' : 'Empty. Still... (K throw · hold K smash)', 2.6); } }
+        else if (b.kind === 'can') { if (!this.saidCan) { this.saidCan = true; this.tip(b.soda ? ['A COLD ONE!', 'J  ·  DRINK IT (heals you, refills your energy)', 'K  ·  THROW IT', 'HOLD K  ·  SMASH IT'] : ['AN EMPTY CAN', 'K  ·  THROW IT', 'HOLD K  ·  SMASH IT', 'J  ·  DROP IT']); } }
         else if (!this.saidItem) { this.saidItem = true; this.think('If I throw this (K), whoever hears it will go and look...', 2.4); }
         return;
       }
@@ -1523,10 +1523,11 @@
       if (!this.tipPick && this.outOfBath && !P.held && this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 2.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.tipPick = true; this.tip(['K  ·  PICK UP', 'things lying about'], { until: () => !!P.held }); }
       const room = roomAt(P.x, P.z);
       if (!this.tipDuck && !this.outOfBath && !q.length && this.t > 8 && P.y < -0.2) { this.tipDuck = true; this.tip(['I  ·  DUCK UNDER', 'in the bath, hold I to go under the water: nobody sees you', 'but you can only hold your breath for a few seconds'], { until: () => this.outOfBath }); }
+      const V = this.vend; if (!this.tipVend && V && !V.broke && this.outOfBath && !P.held && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) { this.tipVend = true; this.tip(['J  ·  THUMP THE VENDING MACHINE', 'no money, but a good whack might shake a drink loose', 'K  ·  LOOK AT IT']); }
       if (!this.tipCart && this.outOfBath && !P.held && !P.cart && this.carts.some((cc) => near(cc.x, cc.z, 2.6))) { this.tipCart = true; this.tip(['K  ·  PUSH THE CART', 'K again lets go', 'I next to it: hop inside and HIDE'], { until: () => !!P.cart }); }
       if (!this.tipSneak && room === 'lock') { this.tipSneak = true;
         this.tip(['I  ·  SNEAK', 'people hear you coming: HOLD I to move quietly', 'you\'re a big boy, so it tires you out: stand still and you recover', 'I also lets you HIDE (carts, toilet stalls...)']);
-        this.tip(['J  ·  PUNCH', 'punch a wall to make a noise and lure people away']); }
+        this.tip(['J  ·  PUNCH', 'punch a WALL to make a noise: whoever hears it comes to look, so you can lure them away', 'punch a PERSON to knock them out']); }
       if (!this.tipLockK && this.stage === 'locker' && near(this.locker.x, this.locker.z, 3.2)) { this.tipLockK = true; this.tip(['K  ·  OPEN YOUR LOCKER'], { until: () => this.stage !== 'locker' }); }
       if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['HOLD L + A DIRECTION  ·  CHARGE', 'charging breaks things', 'but you need room for a run-up, and you can\'t charge right away']); }
     }
