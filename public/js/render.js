@@ -2214,7 +2214,7 @@
             const v = me.userData.views[k];
             if (!c.alive) { v.root.visible = false; v.shadow.visible = false; return; }
             const p = Object.assign(Object.create(Object.getPrototypeOf(own)), own);
-            p.x = c.x; p.z = c.z; p.vx = c.vx || 0; p.vz = c.vz || 0; p.f = Math.atan2(own.opp.z - c.z, own.opp.x - c.x); p.clinch = null; p.swallowed = false; p.st = c.kb > 0 ? 'stun' : 'free'; p.t = c.kb > 0 ? 0.45 - c.kb : 0; p.dur = 0.45; p.lifted = false; p.down = false; p.fxs = {};
+            p.x = c.x; p.z = c.z; p.vx = c.vx || 0; p.vz = c.vz || 0; p.f = Math.atan2(own.opp.z - c.z, own.opp.x - c.x); p.clinch = null; p.swallowed = false; p.st = c.kb > 0 ? 'stun' : 'free'; p.t = c.kb > 0 ? 0.8 - c.kb : 0; p.dur = 0.8; p.lifted = false; p.down = false; p.fxs = {};
             v.viewer = this.viewer; v.match = m; v.update(p, Math.max(dt, 1e-4), this.animT);
             if (v.armband) v.armband.visible = false;
           });
@@ -2281,6 +2281,7 @@
       const spn = m.objs.find((o) => o.type === 'spin');
       if (spn) { this.spinNow = spn.a; this.spinG.rotation.y = -((this.spinBase || 0) + spn.a); }
       else if (this.spinNow) { this.spinBase = (this.spinBase || 0) + this.spinNow; this.spinNow = 0; }
+      this.tickPuffs(dt);
       // bumper ring: a pinball bumper wall rises out of the floor round the straw, flashes on every bounce, sinks when done
       const bump = m.w.some((w) => w.fxs.bumper > 0);
       if (this.bumperG && !bump && this.bumperG.userData.k <= 0 && this.bumperG.userData.stage !== this.stageId) { this.scene.remove(this.bumperG); this.bumperG = null; } // stage changed: rebuild in its colours
@@ -2349,6 +2350,20 @@
       wall.children.forEach((q) => { q.castShadow = true; q.receiveShadow = true; });
       g.userData = { k: 0, pop: 0, H, wall, cap, hit, lights, lit, dim, flash: [...mats, capM].map((q) => [q, q.color.clone()]), stage: this.stageId };
       this.bumperG = g; this.scene.add(g);
+    }
+    // a ninja "doron" puff: a ball of white cloud that bursts out, rises and thins away (a clone vanishing)
+    puff(x, z, k) {
+      k = k || 1; const g = new THREE.Group(), mat = new THREE.MeshBasicMaterial({ color: 0xfffdf8, transparent: true, depthWrite: false }), mat2 = new THREE.MeshBasicMaterial({ color: 0xe4e0f2, transparent: true, depthWrite: false });
+      for (let i = 0; i < 9; i++) { const a = i / 9 * 6.28 + Math.random() * 0.5, h = 0.4 + Math.random() * 1.4, r = i < 3 ? 0.15 : 0.55, b = new THREE.Mesh(GEO.sphere, i % 3 ? mat : mat2);
+        b.position.set(Math.cos(a) * r, h, Math.sin(a) * r); b.userData.s = (0.45 + Math.random() * 0.3) * k; b.userData.v = new THREE.Vector3(Math.cos(a) * 1.2, 0.6 + Math.random() * 0.8, Math.sin(a) * 1.2); g.add(b); }
+      g.position.set(x, 0, z); g.userData = { t: 0, mats: [mat, mat2] }; this.scene.add(g); (this.puffs = this.puffs || []).push(g);
+    }
+    tickPuffs(dt) {
+      if (!this.puffs) return;
+      this.puffs = this.puffs.filter((g) => { const P = g.userData; P.t += dt; const u = P.t / 0.65;
+        if (u >= 1) { this.scene.remove(g); P.mats.forEach((q) => q.dispose()); return false; }
+        for (const b of g.children) { b.position.addScaledVector(b.userData.v, dt * (1 - u)); b.scale.setScalar(b.userData.s * (0.4 + 1.1 * Math.sqrt(u))); }
+        P.mats.forEach((q) => { q.opacity = u < 0.5 ? 1 : 1 - (u - 0.5) * 2; }); return true; });
     }
     // a bounce off the bumper: the whole wall flashes and pops up, the spot that was hit flares white
     bumpHit(x, z) { const B = this.bumperG && this.bumperG.userData; if (!B) return; B.pop = 1; B.hit.rotation.y = -Math.atan2(z, x) + Math.PI / 2; }

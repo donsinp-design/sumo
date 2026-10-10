@@ -661,7 +661,7 @@
         } else if (ob.type === 'clones') {
           // the clones are solid: bump into one and it's shoved aside, slap one and it flies. Only a ring-out (or time) pops it
           const own = ob.owner, T = own.opp;
-          const atk = T.st === 'palm' && T.t < 0.14 ? [0.42, 4.5] : T.st === 'heavy' && T.t < 0.2 ? [0.55, 7] : T.st === 'charge' ? [0.25, 6.5] : null;
+          const atk = T.st === 'palm' && T.t < 0.14 ? [0.42, 5.5] : T.st === 'heavy' && T.t < 0.2 ? [0.55, 8] : T.st === 'charge' ? [0.25, 7.5] : null;
           for (const c of ob.c) {
             if (!c.alive) continue;
             c.hitCd -= dt; c.kb -= dt;
@@ -682,7 +682,7 @@
             if (gap < 0 && !T.swallowed && T.st !== 'air') { c.x -= nx * gap; c.z -= nz * gap; const vin = c.vx * nx + c.vz * nz; if (vin < 0) { c.vx -= nx * vin; c.vz -= nz * vin; } }
             // a palm, heavy or charge that lands on a clone knocks it back
             if (atk && c.hitCd <= 0 && gap < atk[0] && T.fx * nx + T.fz * nz > 0.3 && m.phase === 'fight') {
-              c.vx = nx * atk[1]; c.vz = nz * atk[1]; c.kb = 0.45; c.hitCd = 0.3; c.lunge = 0;
+              c.vx = nx * atk[1]; c.vz = nz * atk[1]; c.kb = 0.8; c.hitCd = 0.3; c.lunge = 0;
               m.emit('cloneHit', { w: T, x: c.x, z: c.z });
             }
             // and the clones keep apart from each other and from you

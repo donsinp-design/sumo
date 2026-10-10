@@ -677,7 +677,7 @@
           case 'poof': fx.dust(e.x, 0.05, e.z, 14, 0.5, 1.2, 0.5); A.whoosh(0.3); break;
           case 'cloneHit': A.slap(4); fx.spark(e.x, 1.2, e.z, 1.0); fx.dust(e.x, 0.05, e.z, 5, 0.3, 0.5, 0.35); break;
           case 'clonePoof': { // a clone goes up in smoke: a big white puff, a ring and a pop
-            fx.dust(e.x, 0.3, e.z, 26, 0.7, 1.8, 0.75); fx.dust(e.x, 1.2, e.z, 12, 0.5, 1.4, 0.6); fx.ring(e.x, e.z, 1.4, 0.4); fx.spark(e.x, 1.2, e.z, 1.6); A.whoosh(0.6); A.clack();
+            R.puff(e.x, e.z, e.out ? 1.2 : 1); fx.dust(e.x, 0.3, e.z, 14, 0.7, 1.4, 0.6); fx.ring(e.x, e.z, 1.4, 0.4); fx.spark(e.x, 1.2, e.z, 1.6); A.whoosh(0.6); A.clack();
             if (e.out) { const p = this.scr(e.x, e.z, 2.2); if (!quiet) ui.callout('ドロン!', p.x, p.y, 'skill'); A.cheer(0.4, 1); } break;
           }
           case 'refBreak': R.ref.set('go'); fx.dust(e.x, 0.05, e.z, 10, 0.5, 0.8, 0.4); A.clack(); break;
