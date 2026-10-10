@@ -1714,7 +1714,7 @@
         if (this.fx.dust) this.fx.dust(p.x, 0.3, p.z, 14, 0.8, 1.0, 0.8);
       }
       for (const c of G.bits) { const u = c.userData; u.t += dt; u.vy -= 14 * dt; c.position.x += u.vx * dt; c.position.y = Math.max(0.02, c.position.y + u.vy * dt); c.position.z += u.vz * dt; c.rotation.x += 6 * dt; c.rotation.z += 5 * dt; if (u.t > 2.5) c.visible = false; }
-      const s = G.mos; s.visible = !G.boxM;
+      const fs = (w && w.fxs) || {}; const s = G.mos; s.visible = !G.boxM && !(fs.ball > 0) && !(fs.chicken > 0) && !(fs.invis > 0);   // (nothing to censor on a daruma, a chicken, or thin air)
       if (s.visible) {   // a jittering pixel block on his hips, towards the camera
         G.t -= dt; if (G.t <= 0) { G.t = 0.1; const g = G.cv.getContext('2d'), sk = ['#f6e2d2', '#8a6454', '#e9b894', '#5e4438', '#fff2e6', '#b88468']; g.clearRect(0, 0, 8, 5);
           for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { if ((x === 0 || x === 7) && Math.random() < 0.6) continue; g.fillStyle = sk[(Math.random() * sk.length) | 0]; g.fillRect(x, y, 1, 1); } s.material.map.needsUpdate = true; }
