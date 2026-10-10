@@ -682,7 +682,7 @@
       if (!c.dash.held) this.lRel = true;   // (one charge per press: let go of L before the next, no endless re-charging)
       if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
       let spd = 0;
-      if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 2.6 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
+      if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 2.6 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : this.wearing && this.keys.KeyI ? 1.2 : (this.wearing ? 3.0 : 3.4);   // (crouched in the box, out of puff: a slow shuffle)
       P.chT = P.st === 'charge' ? (P.chT || 0) + dt : 0; if (P.chT > 0.95) { P.st = 'free'; P.t = 0; P.cd = 0.5; P.chT = 0; }   // (a charge can never run on)
       if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur; if (P.t > 0.85) P.t = P.dur + 0.01; }   // (never longer than 0.85 s)
       if (P.st === 'wind' && mag > 0.3) { P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * 8); P.f = P.cdir; }
@@ -1950,7 +1950,7 @@
       v.update(w, Math.max(dt, 1e-4), T);
       if (this.asleep && v.soft) for (const m of v.soft.mats) m.emissive.setRGB(0, 0, 0);   // (asleep: the pose, not the versus sleep-skill's blue tint)
       v.root.position.y += P.y + 0.04 * v.s * P.tip; v.root.visible = !P.hidden;
-      const boxTip = this.wearing && !!this.keys.KeyI && P.tip > 0.5 && P.st === 'free' && !P.sub && !P.hidden;   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
+      const boxTip = this.wearing && !!this.keys.KeyI && (P.tip > 0.5 || P.tired) && P.st === 'free' && !P.sub && !P.hidden;   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
       const ball = P.boxHide || boxTip || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
       this.ballK = (this.ballK || 0) + ((ball ? 1 : 0) - (this.ballK || 0)) * Math.min(1, dt * 10);
       if (this.ballK > 0.01) { const k = this.ballK; v.root.position.y -= (P.boxHide || boxTip ? 0.8 : 0.06) * v.s * k; v.root.scale.set(v.s * (1 - 0.1 * k), v.s * (1 - 0.32 * k), v.s * (1 - 0.1 * k)); } else v.root.scale.setScalar(v.s);
