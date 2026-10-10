@@ -415,6 +415,11 @@
         g.globalCompositeOperation = 'source-over';
         if (!this.spotOn) { this.spotOn = true; this.audio.thump(10); }
       } else if (cv && cv.classList.contains('on')) { cv.classList.remove('on'); this.spotOn = false; }
+      // REWIND: the VHS screen while anyone winds back; the counter is the bout clock running backwards 3 s
+      const rw = live && m.w.find((w) => w.st === 'rewinding');
+      if (rw) { const f = Math.max(0, (m.time || 0) - rw.t - 3 * Math.min(1, rw.t / (rw.dur || 0.75))) * 30 | 0, p2 = (n) => String(n).padStart(2, '0');
+        this.ui.vhs(true, '0:' + p2((f / 1800 | 0) % 60) + ':' + p2((f / 30 | 0) % 60) + ':' + p2(f % 30)); }
+      else this.ui.vhs(false);
       // CONVENIENCE STORE: the shop menu while you're inside, and the shop's health over the building
       const shop = live && m.objs.find((o) => o.type === 'konbini');
       const su = document.getElementById('shopUi'), sh = document.getElementById('shopHp');
@@ -587,7 +592,7 @@
           case 'skillUse': this.onSkill(e); break;
           case 'peek': this.refreshSkills(); if (this.kind !== 'attract' && (e.w.idx === 0 || this.kind === 'pvp')) this.ui.peek(e.w.idx, e.theirs, e.mine, this.skillKey(e.w.idx), e.fakeOf); break;
           case 'rewind': {
-            A.whoosh(0.9); if (this.kind !== 'attract') ui.vhs(true); break;
+            A.whoosh(0.9); break; // (the VHS screen: screenFx, for as long as anyone is rewinding)
           }
           case 'unplug': A.blip(false); A.blip(false); break;
           case 'confused': { const p = this.scr(e.w.x, e.w.z, 2.7); if (!quiet) ui.callout('?', p.x, p.y, 'big'); break; }
@@ -622,7 +627,7 @@
           case 'trainGo': A.whoosh(1.4); A.thump(12); R.shake(0.6); break;
           case 'trainHit': { A.thump(16); R.shake(0.8); this.stop(0.08); const p = this.scr(e.x, e.z, 1.6); if (!quiet) ui.callout('TRAIN!', p.x, p.y, 'big'); break; }
           case 'crowdSave': { const p = this.scr(e.x, e.z, 2.2); if (!quiet) ui.callout('THE CROWD SAVES YOU!', p.x, p.y, 'big'); A.roar(); this.excite = 2; fx.dust(e.x, 0.05, e.z, 18, 0.8, 1.2, 0.5); R.shake(0.3); break; }
-          case 'bump': { fx.ring(e.x, e.z, 1.6, 0.35); fx.spark(e.x, 0.8, e.z, 1.6); A.thump(6); A.clack(); R.shake(0.15); break; }
+          case 'bump': { R.bumpHit(e.x, e.z); fx.ring(e.x, e.z, 1.6, 0.35); fx.spark(e.x, 0.8, e.z, 1.6); fx.spark(e.x, 0.5, e.z, 1.2); A.thump(6); A.clack(); R.shake(0.15); break; }
           case 'cyclone': A.whoosh(0.9); fx.dust(e.x, 0.05, e.z, 14, 0.4, 0.8, 0.45); break;
           case 'cycloneHit': { fx.burst(e.x, e.z, 10); A.thump(9); R.shake(0.25); this.stop(0.05); const p = this.scr(e.x, e.z, 1.6); if (!quiet) ui.callout('WHIRLED!', p.x, p.y, 'skill'); break; }
           case 'ballDash': A.whoosh(0.5); fx.dust(e.x, 0.05, e.z, 8, 0.3, 0.6, 0.35); break;
@@ -670,6 +675,11 @@
           case 'slip': { const p = this.scr(e.x, e.z); if (!quiet) ui.callout('SLIP!', p.x, p.y - 60, 'gold'); A.whoosh(0.3); A.cheer(0.7, 1); fx.dust(e.x, 0.05, e.z, 6, 0.3, 0.5, 0.3); break; }
           case 'projHit': A.thump(2); fx.dust(e.x, 0.05, e.z, 3, 0.2, 0.3, 0.25); break;
           case 'poof': fx.dust(e.x, 0.05, e.z, 14, 0.5, 1.2, 0.5); A.whoosh(0.3); break;
+          case 'cloneHit': A.slap(4); fx.spark(e.x, 1.2, e.z, 1.0); fx.dust(e.x, 0.05, e.z, 5, 0.3, 0.5, 0.35); break;
+          case 'clonePoof': { // a clone goes up in smoke: a big white puff, a ring and a pop
+            fx.dust(e.x, 0.3, e.z, 26, 0.7, 1.8, 0.75); fx.dust(e.x, 1.2, e.z, 12, 0.5, 1.4, 0.6); fx.ring(e.x, e.z, 1.4, 0.4); fx.spark(e.x, 1.2, e.z, 1.6); A.whoosh(0.6); A.clack();
+            if (e.out) { const p = this.scr(e.x, e.z, 2.2); if (!quiet) ui.callout('ドロン!', p.x, p.y, 'skill'); A.cheer(0.4, 1); } break;
+          }
           case 'refBreak': R.ref.set('go'); fx.dust(e.x, 0.05, e.z, 10, 0.5, 0.8, 0.4); A.clack(); break;
           case 'trapdoor': { this.slowmo(0.3, 0.6); R.shake(0.3); A.thump(10); const p = this.scr(e.x, e.z); if (!quiet) ui.callout('TRAPDOOR!', p.x, p.y - 60, 'big'); break; }
           case 'quakeDust': fx.dust(e.x + (Math.random() - 0.5), 0.05, e.z + (Math.random() - 0.5), 2, 0.3, 0.6, 0.3); break;

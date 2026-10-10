@@ -4,6 +4,7 @@
 (function () {
   const R = S.RING_R;
   const clamp = S.clamp;
+  const WHITE = new THREE.Color(0xffffff);
   const LIGHT_W = new THREE.Vector3(-0.5, 0.85, 0.42).normalize();
   const RIM_W = new THREE.Vector3(0.6, 0.35, -0.75).normalize();
   const LIGHT_ANIME = new THREE.Vector3(-0.85, 0.5, 0.35).normalize(); // anime fighters light from the side: a clear lit half and shadow half
@@ -2213,7 +2214,7 @@
             const v = me.userData.views[k];
             if (!c.alive) { v.root.visible = false; v.shadow.visible = false; return; }
             const p = Object.assign(Object.create(Object.getPrototypeOf(own)), own);
-            p.x = c.x; p.z = c.z; p.vx = c.vx || 0; p.vz = c.vz || 0; p.f = Math.atan2(own.opp.z - c.z, own.opp.x - c.x); p.clinch = null; p.swallowed = false; p.st = 'free'; p.lifted = false; p.down = false; p.fxs = {};
+            p.x = c.x; p.z = c.z; p.vx = c.vx || 0; p.vz = c.vz || 0; p.f = Math.atan2(own.opp.z - c.z, own.opp.x - c.x); p.clinch = null; p.swallowed = false; p.st = c.kb > 0 ? 'stun' : 'free'; p.t = c.kb > 0 ? 0.45 - c.kb : 0; p.dur = 0.45; p.lifted = false; p.down = false; p.fxs = {};
             v.viewer = this.viewer; v.match = m; v.update(p, Math.max(dt, 1e-4), this.animT);
             if (v.armband) v.armband.visible = false;
           });
@@ -2280,10 +2281,20 @@
       const spn = m.objs.find((o) => o.type === 'spin');
       if (spn) { this.spinNow = spn.a; this.spinG.rotation.y = -((this.spinBase || 0) + spn.a); }
       else if (this.spinNow) { this.spinBase = (this.spinBase || 0) + this.spinNow; this.spinNow = 0; }
-      // bumper ring: the straw glows while it's bouncy
+      // bumper ring: a pinball bumper wall rises out of the floor round the straw, flashes on every bounce, sinks when done
       const bump = m.w.some((w) => w.fxs.bumper > 0);
-      if (bump && !this.bumperM) { this.bumperM = new THREE.Mesh(new THREE.TorusGeometry(R, 0.09, 8, 72), new THREE.MeshBasicMaterial({ color: 0xf0c35a, transparent: true, opacity: 0.7, depthWrite: false })); this.bumperM.rotation.x = Math.PI / 2; this.bumperM.position.y = 0.16; this.scene.add(this.bumperM); }
-      if (this.bumperM) { this.bumperM.visible = bump; this.bumperM.material.opacity = 0.45 + 0.3 * Math.sin(this.time * 8); }
+      if (this.bumperG && !bump && this.bumperG.userData.k <= 0 && this.bumperG.userData.stage !== this.stageId) { this.scene.remove(this.bumperG); this.bumperG = null; } // stage changed: rebuild in its colours
+      if (bump && !this.bumperG) this.buildBumper();
+      if (this.bumperG) {
+        const B = this.bumperG.userData; B.k = Math.max(0, Math.min(1, B.k + (bump ? dt / 0.35 : -dt / 0.4)));
+        const k = B.k, up = bump ? 1 + 2.7 * Math.pow(k - 1, 3) + 1.7 * Math.pow(k - 1, 2) : k * k; // springs up with an overshoot, eases down
+        B.pop = Math.max(0, B.pop - dt * 4);
+        this.bumperG.visible = k > 0; this.bumperG.position.y = -B.H * (1 - up);
+        B.wall.scale.set(1, 1 + 0.35 * B.pop, 1); B.cap.position.y = B.H * (1 + 0.35 * B.pop); B.cap.scale.setScalar(1 + 0.012 * B.pop);
+        const fl = B.pop * B.pop; for (const [q, c0] of B.flash) q.color.copy(c0).lerp(WHITE, fl * 0.85);
+        B.lights.forEach((l, i) => { l.material = (Math.floor(this.time * 10) + i) % 3 === 0 || B.pop > 0.5 ? B.lit : B.dim; });
+        B.hit.visible = B.pop > 0; B.hit.material.opacity = B.pop; B.hit.scale.set(1, 1 + 0.6 * B.pop, 1);
+      }
       // belly-flop target shadow
       for (const w of m.w) {
         const v = this.views[w.idx]; if (!v) continue;
@@ -2317,6 +2328,30 @@
     }
     kick(amount) { this.cs.kick = Math.max(this.cs.kick, amount); }
     shake(amount) { this.cs.shake = Math.max(this.cs.shake, amount); }
+    // BUMPER RING wall: a red pinball skirt with a yellow rubber cap and chase lights; red-and-white chip stripes on the casino table
+    buildBumper() {
+      const casino = this.stageId === 'chip', H = 0.62, r0 = R + 0.04, r1 = R + 0.3, N = 24;
+      const M = (c) => this.flat ? S.Flat.mat(c) : new THREE.MeshBasicMaterial({ color: c });
+      const g = new THREE.Group(), cols = casino ? [0xd8262e, 0xf6f0e4] : [0xff3d5e, 0xff3d5e];
+      const mats = cols.map(M), wall = new THREE.Group(); g.add(wall);
+      // the skirt: a rounded profile turned round the ring, in segments (so the casino one can stripe)
+      const prof = [[r0, -0.05], [r0, H - 0.08], [r0 + 0.05, H], [r1 - 0.05, H], [r1, H - 0.08], [r1, -0.05]].map(([x, y]) => new THREE.Vector2(x, y));
+      for (let k = 0; k < N; k++) { const q = new THREE.Mesh(new THREE.LatheGeometry(prof, 3, k / N * Math.PI * 2, Math.PI * 2 / N), mats[k % 2]); q.material.side = THREE.DoubleSide; wall.add(q); }
+      const capM = M(casino ? 0xf0c35a : 0xffd23a), cap = new THREE.Mesh(new THREE.TorusGeometry((r0 + r1) / 2, 0.1, 8, 96), capM); cap.rotation.x = Math.PI / 2; g.add(cap);
+      // chase lights round the inside face
+      const lit = new THREE.MeshBasicMaterial({ color: casino ? 0xfff2b0 : 0xfffbe8 }), dim = new THREE.MeshBasicMaterial({ color: casino ? 0xb88a2a : 0xffa3b4 });
+      const geo = new THREE.SphereGeometry(0.065, 10, 8), lights = [];
+      for (let k = 0; k < 40; k++) { const a = k / 40 * Math.PI * 2, l = new THREE.Mesh(geo, lit); l.position.set(Math.cos(a) * (r0 - 0.02), H * 0.5, Math.sin(a) * (r0 - 0.02)); wall.add(l); lights.push(l); }
+      // the bit that was hit: a white-hot arc that flares and fades
+      const hit = new THREE.Mesh(new THREE.LatheGeometry(prof.map((v) => new THREE.Vector2(v.x + (v.x > R + 0.1 ? 0.03 : -0.03), v.y + 0.02)), 1, -0.45, 0.9), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+      g.add(hit);
+      for (const o of [g, wall, cap, hit, ...lights, ...wall.children]) o.userData.flatDone = true;
+      wall.children.forEach((q) => { q.castShadow = true; q.receiveShadow = true; });
+      g.userData = { k: 0, pop: 0, H, wall, cap, hit, lights, lit, dim, flash: [...mats, capM].map((q) => [q, q.color.clone()]), stage: this.stageId };
+      this.bumperG = g; this.scene.add(g);
+    }
+    // a bounce off the bumper: the whole wall flashes and pops up, the spot that was hit flares white
+    bumpHit(x, z) { const B = this.bumperG && this.bumperG.userData; if (!B) return; B.pop = 1; B.hit.rotation.y = -Math.atan2(z, x) + Math.PI / 2; }
     focus(x, z, w) { this.cs.fox = x; this.cs.foz = z; this.cs.focusW = w; }
 
     update(game, dt, rdt) {

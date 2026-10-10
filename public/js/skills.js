@@ -38,7 +38,7 @@
     { id: 'ball', name: 'DARUMA ROLL', desc: 'Turn into a daruma doll for 5s. Roll around fast and press dash (L) to smash forward. Nobody can grab a daruma.', kind: 'atk' },
     { id: 'hole', name: 'BLACK HOLE', desc: 'Drop a tiny gravity point where you stand. For 3s it drags both of you toward it.', kind: 'trap' },
     { id: 'favourite', name: 'AUDIENCE FAVOURITE', desc: 'A second life. The first time you would lose, the crowd shoves you back into the ring. Works by itself.', kind: 'def' },
-    { id: 'triplets', name: 'TRIPLETS', desc: 'Poof: you and two clones appear around them. The clones move on their own. Only you can see your armband. A clone vanishes when touched; only the real you can lose.', kind: 'atk' },
+    { id: 'triplets', name: 'TRIPLETS', desc: 'Poof: you and two clones appear around them. The clones move on their own. Only you can see your armband. Hit a clone and it is knocked back; push one out of the ring and it vanishes. Only the real you can lose.', kind: 'atk' },
     { id: 'possess', name: 'POSSESSION', desc: 'For 1.2s their body runs for the nearest edge, whatever they press.', kind: 'any' },
     { id: 'fish', name: 'LIVE FISH', desc: 'Throw a giant tuna into the ring. It flops around wildly for 7s and knocks over anyone it hits.', kind: 'any' },
     { id: 'bomb', name: 'BOMB', desc: 'A bomb lands in the middle and blows in 5s. Shove it toward them. Hit it too often and it goes off early.', kind: 'any' },
@@ -209,7 +209,7 @@
           }
           m.emit('poof', { x: w.x, z: w.z });
           w.x = pos[real][0]; w.z = pos[real][1]; w.vx = w.vz = 0; w.ghostT = 0.3; w.f = Math.atan2(o.z - w.z, o.x - w.x);
-          const clones = pos.filter((_, k) => k !== real).map(([x, z]) => ({ x, z, vx: 0, vz: 0, alive: true, ang: Math.atan2(z - o.z, x - o.x), dir: S.rand() < 0.5 ? -1 : 1, lunge: 0, think: 0 }));
+          const clones = pos.filter((_, k) => k !== real).map(([x, z]) => ({ x, z, vx: 0, vz: 0, alive: true, ang: Math.atan2(z - o.z, x - o.x), dir: S.rand() < 0.5 ? -1 : 1, lunge: 0, think: 0, kb: 0, hitCd: 0 }));
           for (const p of pos) m.emit('poof', { x: p[0], z: p[1] });
           m.objs.push({ type: 'clones', owner: w, t: 0, dur: 8, c: clones });
           break;
@@ -659,25 +659,39 @@
             }
           }
         } else if (ob.type === 'clones') {
-          // the clones copy your every step; touch one and it's gone
+          // the clones are solid: bump into one and it's shoved aside, slap one and it flies. Only a ring-out (or time) pops it
           const own = ob.owner, T = own.opp;
+          const atk = T.st === 'palm' && T.t < 0.14 ? [0.42, 4.5] : T.st === 'heavy' && T.t < 0.2 ? [0.55, 7] : T.st === 'charge' ? [0.25, 6.5] : null;
           for (const c of ob.c) {
             if (!c.alive) continue;
-            // each clone stalks them on its own: circling, feinting in and out, switching direction
-            c.think -= dt;
-            if (c.think <= 0) { c.think = 0.4 + S.rand() * 0.8; if (S.rand() < 0.35) c.dir = -c.dir; if (S.rand() < 0.3) c.lunge = 0.45; }
-            c.lunge -= dt; c.ang += c.dir * 0.9 * dt;
-            const rad = c.lunge > 0 ? own.r + T.r + 0.5 : own.r + T.r + 0.9 + Math.sin(ob.t * 2 + c.ang) * 0.25;
-            let tx = T.x + Math.cos(c.ang) * rad, tz = T.z + Math.sin(c.ang) * rad; const tl = Math.hypot(tx, tz); if (tl > RR - 0.5) { tx *= (RR - 0.5) / tl; tz *= (RR - 0.5) / tl; }
-            const dx = tx - c.x, dz = tz - c.z, dl = Math.hypot(dx, dz) || 1, want = Math.min(3.4, dl * 4);
-            c.vx += (dx / dl * want - c.vx) * Math.min(1, dt * 8); c.vz += (dz / dl * want - c.vz) * Math.min(1, dt * 8);
+            c.hitCd -= dt; c.kb -= dt;
+            if (c.kb > 0) { const k = Math.exp(-2.6 * dt); c.vx *= k; c.vz *= k; } // knocked: sliding, no steering
+            else {
+              // each clone stalks them on its own: circling, feinting in and out, switching direction
+              c.think -= dt;
+              if (c.think <= 0) { c.think = 0.4 + S.rand() * 0.8; if (S.rand() < 0.35) c.dir = -c.dir; if (S.rand() < 0.3) c.lunge = 0.45; }
+              c.lunge -= dt; c.ang += c.dir * 0.9 * dt;
+              const rad = c.lunge > 0 ? own.r + T.r + 0.5 : own.r + T.r + 0.9 + Math.sin(ob.t * 2 + c.ang) * 0.25;
+              let tx = T.x + Math.cos(c.ang) * rad, tz = T.z + Math.sin(c.ang) * rad; const tl = Math.hypot(tx, tz); if (tl > RR - 0.5) { tx *= (RR - 0.5) / tl; tz *= (RR - 0.5) / tl; }
+              const dx = tx - c.x, dz = tz - c.z, dl = Math.hypot(dx, dz) || 1, want = Math.min(3.4, dl * 4);
+              c.vx += (dx / dl * want - c.vx) * Math.min(1, dt * 8); c.vz += (dz / dl * want - c.vz) * Math.min(1, dt * 8);
+            }
             c.x += c.vx * dt; c.z += c.vz * dt;
-            const dc = Math.hypot(c.x, c.z);
-            const reach = own.r + T.r + (['palm', 'heavy', 'charge'].includes(T.st) ? 0.35 : 0.02);
-            if (dc > RR || Math.hypot(T.x - c.x, T.z - c.z) < reach || m.phase !== 'fight') { c.alive = false; m.emit('poof', { x: c.x, z: c.z }); }
+            // body contact: the clone gives way (it never moves them)
+            const ex = c.x - T.x, ez = c.z - T.z, ed = Math.hypot(ex, ez) || 1e-4, nx = ex / ed, nz = ez / ed, gap = ed - own.r - T.r;
+            if (gap < 0 && !T.swallowed && T.st !== 'air') { c.x -= nx * gap; c.z -= nz * gap; const vin = c.vx * nx + c.vz * nz; if (vin < 0) { c.vx -= nx * vin; c.vz -= nz * vin; } }
+            // a palm, heavy or charge that lands on a clone knocks it back
+            if (atk && c.hitCd <= 0 && gap < atk[0] && T.fx * nx + T.fz * nz > 0.3 && m.phase === 'fight') {
+              c.vx = nx * atk[1]; c.vz = nz * atk[1]; c.kb = 0.45; c.hitCd = 0.3; c.lunge = 0;
+              m.emit('cloneHit', { w: T, x: c.x, z: c.z });
+            }
+            // and the clones keep apart from each other and from you
+            for (const q of [own, ...ob.c]) { if (q === c || q.alive === false) continue; const qx = c.x - q.x, qz = c.z - q.z, qd = Math.hypot(qx, qz) || 1e-4, ov = own.r * 1.8 - qd; if (ov > 0) { c.x += qx / qd * ov * 0.5; c.z += qz / qd * ov * 0.5; } }
+            const cd = Math.hypot(c.x, c.z); if (c.kb <= 0 && cd > RR - 0.3) { c.x *= (RR - 0.3) / cd; c.z *= (RR - 0.3) / cd; } // digs in at the straw: only a hit sends one over
+            if (cd > RR + 0.2 || m.phase !== 'fight') { c.alive = false; m.emit('clonePoof', { x: c.x, z: c.z, out: m.phase === 'fight' }); }
           }
           if (!ob.c.some((c) => c.alive)) ob.dur = ob.t;
-          else if (ob.t >= ob.dur - dt) for (const c of ob.c) if (c.alive) { c.alive = false; m.emit('poof', { x: c.x, z: c.z }); }
+          else if (ob.t >= ob.dur - dt) for (const c of ob.c) if (c.alive) { c.alive = false; m.emit('clonePoof', { x: c.x, z: c.z }); }
         } else if (ob.type === 'potato') {
           // stuck to the holder; touching the other wrestler passes it on
           const H = m.w[ob.holder], O = H.opp;
