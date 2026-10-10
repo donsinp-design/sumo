@@ -88,7 +88,7 @@
         let src;
         if (kind === 'online') { src = new S.NetSource(this, k); }
         else if (kind === 'attract' || ((kind === 'cpu' || kind === 'boss') && k === 1)) {
-          const ai = new S.AI(m.w[k], m, kind === 'attract' ? 'normal' : kind === 'boss' ? 'boss' : this.settings.difficulty, { noLearn: kind === 'attract' || kind === 'boss' }); if (kind === 'boss') { ai.L = Object.assign({}, S.AI_LEVELS.boss); this.bossSoft = 0; }
+          const ai = new S.AI(m.w[k], m, kind === 'attract' ? 'normal' : kind === 'boss' ? 'boss' : this.settings.difficulty, { noLearn: kind === 'attract' || kind === 'boss' }); if (kind === 'boss') { ai.L = Object.assign({}, S.AI_LEVELS[this.campSaved && this.campSaved.bossWon1 ? 'bossRematch' : 'boss']); this.bossSoft = 0; }
           this.ais.push(ai); src = ai;
         } else if (kind === 'training' && k === 1) {
           this.dummy = new S.Dummy(); this.dummy.me = m.w[1];
@@ -901,7 +901,7 @@
       const matchGoesOn = m && !this.matchEnd(m);
       if (matchGoesOn && this.kind === 'boss' && W.idx === 1) {
         if (this.bossBox) { this.bossBox = false; if (this.R.bossG) this.R.bossG.box = false; }   // (the box bursts; from here on he's bare)
-        const L = this.ais[0] && this.ais[0].L; if (L) { this.bossSoft = (this.bossSoft || 0) + 1; const k = this.bossSoft; L.react += 0.1; L.think += 0.06; L.aggr = Math.max(0.15, L.aggr - 0.06 * k); L.skill = Math.max(0.04, L.skill * 0.6); L.escP = Math.max(0.15, L.escP * 0.75); L.parryP = Math.max(0.15, L.parryP * 0.75); L.dodge = Math.max(0.02, L.dodge * 0.6); }   // (a lost round: he goes easier still)
+        const L = this.ais[0] && this.ais[0].L; if (L && !(this.campSaved && this.campSaved.bossWon1)) { this.bossSoft = (this.bossSoft || 0) + 1; const k = this.bossSoft; L.react += 0.1; L.think += 0.06; L.aggr = Math.max(0.15, L.aggr - 0.06 * k); L.skill = Math.max(0.04, L.skill * 0.6); L.escP = Math.max(0.15, L.escP * 0.75); L.parryP = Math.max(0.15, L.parryP * 0.75); L.dodge = Math.max(0.02, L.dodge * 0.6); }   // (a lost round: he goes easier still)
         m.skills = [null, null]; this.refreshSkills(); this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1500;
         setTimeout(() => { if (this.match === m && this.awaitGacha) this.dealBossGacha(); }, 900);
       }

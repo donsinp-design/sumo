@@ -8,7 +8,8 @@
     easy:   { react: 0.30, think: 0.16, skill: 0.45, dodge: 0.25, tricky: 0.08, aggr: 0.45 },
     normal: { react: 0.19, think: 0.10, skill: 0.72, dodge: 0.45, tricky: 0.18, aggr: 0.6 },
     hard:   { react: 0.12, think: 0.06, skill: 0.94, dodge: 0.6, tricky: 0.28, aggr: 0.72 },
-    boss:   { react: 0.5, think: 0.26, skill: 0.225, escP: 0.5, parryP: 0.5, dodge: 0.08, tricky: 0, aggr: 0.36 },   // the bathhouse owner: a patient old champion, for casual players (and he goes easier after each round you lose)
+    boss:   { react: 0.5, think: 0.26, skill: 0.225, escP: 0.5, parryP: 0.5, dodge: 0.08, tricky: 0, aggr: 0.36 },
+    bossRematch: { react: 0.3, think: 0.15, skill: 0.55, escP: 0.75, parryP: 0.75, edgeSave: 0.75, dodge: 0.3, tricky: 0.35, aggr: 0.5 },   // the rematch: no more going easy. Saves himself at the straw 3 times in 4, techs, parries, slaps down, slips grabs   // the bathhouse owner: a patient old champion, for casual players (and he goes easier after each round you lose)
   };
   // remembers how the human opens, across rounds and matches
   const MEM = { charge: 1, brace: 0.6, henka: 0.4, wait: 0.6 };
@@ -189,7 +190,9 @@
       const grabWary = L.skill * Math.min(2, HAB.grab) > 0.7;
 
       if (me.st === 'teeter') { // win the balance back: lean in toward the middle (the weaker ones flail)
-        if (this.rnd() < 0.45 + 0.55 * L.skill) this.dir(-me.x, -me.z); else this.dir(this.rnd() - 0.5, this.rnd() - 0.5);
+        if (L.edgeSave !== undefined) { if (this.state !== 'teeter') this.saveGo = this.rnd() < L.edgeSave;   // (one roll per teeter: he either fights it all the way or he goes)
+          if (this.saveGo) this.dir(-me.x, -me.z); else this.dir(this.rnd() - 0.5, this.rnd() - 0.5); }
+        else if (this.rnd() < 0.45 + 0.55 * L.skill) this.dir(-me.x, -me.z); else this.dir(this.rnd() - 0.5, this.rnd() - 0.5);
         this.state = 'teeter'; return;
       }
       if (me.st === 'stumble' || me.st === 'overrun' || (me.st === 'recover' && RR - Math.hypot(me.x, me.z) < 1.2)) { this.steer(nx, nz, 0, 0); this.state = 'recovering'; return; }
