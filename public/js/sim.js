@@ -584,7 +584,7 @@
     tryClinch(w) {
       const o = w.opp;
       if (w.gripCD > 0) return false; // hands still shaken loose from the last grip
-      if (o.clinch || o.down || o.st === 'fall' || o.st === 'charge' || o.st === 'dash' || o.st === 'air' || o.fxs.thru > 0 || o.swallowed || w.swallowed || w.gulpI >= 0 || o.fxs.ball > 0 || w.fxs.ball > 0 || o.fxs.cyclone > 0 || w.fxs.cyclone > 0 || o.fxs.chicken > 0 || w.fxs.chicken > 0 || o.carried || w.carried || o.inShop || w.inShop) return false;
+      if (o.clinch || o.down || o.st === 'fall' || o.st === 'charge' || o.st === 'dash' || o.st === 'air' || o.fxs.thru > 0 || o.swallowed || w.swallowed || w.gulpI >= 0 || o.fxs.ball > 0 || w.fxs.ball > 0 || o.fxs.cyclone > 0 || w.fxs.cyclone > 0 || o.fxs.chicken > 0 || w.fxs.chicken > 0 || o.carried || w.carried || o.inShop || w.inShop || o.st === 'rewinding' || w.st === 'rewinding') return false; // (a wrestler winding back on the tape can't be grabbed)
       const dx = o.x - w.x, dz = o.z - w.z, d = Math.hypot(dx, dz) || 1e-4;
       if (d > w.r + o.r + 0.45) return false;
       const nx = dx / d, nz = dz / d;
