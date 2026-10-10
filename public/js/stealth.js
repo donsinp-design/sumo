@@ -1000,7 +1000,8 @@
       }
       if (this.chasing() && !P.cart && !this.carts.some((cc) => near(cc.x, cc.z, 2.0)) && !this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 1.4))) { this.think('No time! They\'re right behind me!', 1.4); return; }
       if (this.stage === 'locker' && near(this.locker.x, this.locker.z, 1.7)) {
-        P.st = 'busy'; P.t = 0; P.dur = 0.8; this.stage = 'key'; this.spLocker.visible = false; this.spKey.visible = true;
+        P.st = 'busy'; P.t = 0; P.dur = 1.1; this.stage = 'key'; this.spLocker.visible = false; this.spKey.visible = true; P.f = Math.atan2(this.locker.z - P.z, this.locker.x - P.x);
+        this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ガチャ…ガチャ…', 1.0); this.later(1.1, () => this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, '…カギがない!?', 1.5));   // (rattles the door: locked)
         this.think('Locked. The key... it must be in my wash bucket, by the bath!', 3.2);
         this.objective('Go back to the BATH and check your WASH BUCKET for the KEY'); return;
       }
@@ -1057,6 +1058,8 @@
       this.outOfBath = true; this.spOut.visible = false; this.mosaic.pop = 0.5;
       if (this.stage !== 'locker') return;
       this.spLocker.visible = true;
+      const P = this.P; P.st = 'gasp'; P.t = 0; P.dur = 2.1; P.vx = P.vz = 0;   // out of the water he looks down... and jolts: no mawashi. Then hunches over, covering up
+      this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ええっ!?', 1.0); this.later(1.0, () => this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ま…まわしが…ない!!', 1.4));
       this.think('...WAIT. Where is my MAWASHI?!', 2.6);
       this.later(2.8, () => this.think('In the bath nobody minds. Out by the lockers, nobody can see me like this.', 3.2));
       this.objective('Find your LOCKER (through the wash area)');
@@ -1084,7 +1087,7 @@
       any = any || this.rats.some((r) => r.st === 'fly' && r.t > 0.5) || this.buckets.some((b) => b.state === 'fly' && b.t < 0.05);
       // nothing to hit, a wall right there: he knocks on it. Anyone in earshot comes over to see who's knocking (a lure)
       const rr = this.reach(P.x, P.z, P.f, 1.7); if (!any && rr < 1.6) { const kx = P.x + fx * rr, kz = P.z + fz * rr;
-        this.think(['*knock knock*', '*KNOCK KNOCK*', '*bonk bonk*'][(this.t * 3 | 0) % 3], 1.0); this.ringAt(kx, kz, 1.2, 0.5);
+        this.think(['*knock knock*', '*KNOCK KNOCK*', '*bonk bonk*'][(this.t * 3 | 0) % 3], 1.0); this.ringAt(kx, kz, 1.2, 0.5); this.popAt({ x: kx - fx * 0.2, z: kz - fz * 0.2, y: P.y + 0.5 }, 'コンコン', 0.9);
         if (true) this.noiseS(kx - fx * 0.6, kz - fz * 0.6, 7.5, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3);
         if (!this.saidKnock) { this.saidKnock = true; this.later(1.2, () => this.think('...that\'ll bring someone over to look. Then I go the other way.', 2.6)); } }
     }
@@ -1942,7 +1945,7 @@
           q.m.position.set(q.sx + (mx - q.sx) * e - fz * sw, q.sy + (hy - q.sy) * e + sw * 0.4, q.sz + (mz - q.sz) * e + fx * sw); q.m.rotation.y += dt * 18; q.m.rotation.x += dt * 9; q.m.scale.setScalar(1.3 * (1 - 0.7 * e)); q.m.visible = k < 1; }
         if (E.t > E.dur) { for (const q of E.pieces) if (q.m) this.G.remove(q.m); this.eatAnim = null; }
       }
-      const nst = this.sf && this.sf.pose ? this.sf.pose : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
+      const nst = this.sf && this.sf.pose ? this.sf.pose : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.t > 0.3 && P.t < 1.0; } else w.down = false;
       w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0); w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : null;
@@ -1950,12 +1953,13 @@
       v.update(w, Math.max(dt, 1e-4), T);
       if (this.asleep && v.soft) for (const m of v.soft.mats) m.emissive.setRGB(0, 0, 0);   // (asleep: the pose, not the versus sleep-skill's blue tint)
       v.root.position.y += P.y + 0.04 * v.s * P.tip; v.root.visible = !P.hidden;
-      const boxTip = this.wearing && !!this.keys.KeyI && (P.tip > 0.5 || P.tired) && P.st === 'free' && !P.sub && !P.hidden;   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
+      const boxTip = this.wearing && !!this.keys.KeyI && P.st === 'free' && !P.sub && !P.hidden;   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
       const ball = P.boxHide || boxTip || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
       this.ballK = (this.ballK || 0) + ((ball ? 1 : 0) - (this.ballK || 0)) * Math.min(1, dt * 10);
       if (this.ballK > 0.01) { const k = this.ballK; v.root.position.y -= (P.boxHide || boxTip ? 0.8 : 0.06) * v.s * k; v.root.scale.set(v.s * (1 - 0.1 * k), v.s * (1 - 0.32 * k), v.s * (1 - 0.1 * k)); } else v.root.scale.setScalar(v.s);
       // ducking in the box: the same box stays where it stood on the floor and he sinks down into it (no second box)
-      const duck = (!!P.boxHide || boxTip) && (this.ballK || 0) > 0.05, bw = this.boxWorn;
+      const duck0 = (!!P.boxHide || boxTip) && (this.ballK || 0) > 0.05; this.duckHold = duck0 ? 0.2 : Math.max(0, (this.duckHold || 0) - dt);
+      const duck = duck0 || (this.duckHold > 0 && this.wearing && !!this.keys.KeyI), bw = this.boxWorn;   // (a frame's blip never pops him out of it)
       if (this.squatBox) this.squatBox.visible = false;
       if (bw) {
         if (duck && !this.boxDown) { this.boxDown = true; this.scene.attach(bw);   // let go of it where it is: it stays standing on the floor, its own size, level
