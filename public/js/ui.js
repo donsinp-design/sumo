@@ -287,7 +287,7 @@
           btn('ART STYLE', 'style', st[this.g.styleKey] === 'anime' ? 'ANIME' : 'CLASSIC') +
           btn('COUNTER TIPS', 'hints', st.hints ? 'ON' : 'OFF') +
           btn('SOUND', 'sound', st.sound ? 'ON' : 'OFF') +
-          btn('CONTROLS GUIDE', 'hudGuide', st.hudGuide === false ? 'HIDDEN' : 'SHOWN') +
+          btn('CONTROLS GUIDE', 'hudGuide', st.hudGuide === true ? 'SHOWN' : 'HIDDEN') +
           btn('MINIMAP', 'hudMap', st.hudMap === false ? 'HIDDEN' : 'SHOWN') +
           btn('BONUS BADGES', 'hudBonus', st.hudBonus === false ? 'HIDDEN' : 'SHOWN') +
           btn('GOAL TEXT', 'hudGoal', st.hudGoal === false ? 'HIDDEN' : 'SHOWN') +

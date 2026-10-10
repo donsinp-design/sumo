@@ -672,9 +672,7 @@
       else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
       if (!c.dash.held) this.lRel = true;   // (one charge per press: let go of L before the next, no endless re-charging)
-      if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart && this.runRoom(P.x, P.z, Math.atan2(mz, mx), 2) < 0.7) {   // right up against a wall or anything solid: no room to run up, so he doesn't launch into it
-        this.lRel = false; P.cd = 0.3; P.f = Math.atan2(mz, mx); if (!this.noRoomT || this.t - this.noRoomT > 3) { this.noRoomT = this.t; this.think('No room for a run-up! Back up first.', 1.6); } }
-      else if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
+      if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
       let spd = 0;
       if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 2.6 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : (this.wearing ? 3.0 : 3.4);
       P.chT = P.st === 'charge' ? (P.chT || 0) + dt : 0; if (P.chT > 0.95) { P.st = 'free'; P.t = 0; P.cd = 0.5; P.chT = 0; }   // (a charge can never run on)
@@ -710,7 +708,9 @@
           if (B.done) continue; const sd = B.s; if (Math.abs((sd.f ? UP : 0) - P.y) > 1.2) continue;
           // his own locker (the mission one) never shatters: it only dents and bursts open, three charges (hitLocker)
           if (sd.k === 'lockers' && Math.abs((sd.z0 + sd.z1) / 2 - (LY.locker.bz0 + 0.35)) < 0.6 && sd.x1 > LY.locker.bx0 - 0.1 && sd.x0 < LY.locker.bx0 + 8.1) continue;   // (the whole bank)
-          const cx = clamp(P.x, sd.x0, sd.x1), cz = clamp(P.z, sd.z0, sd.z1), d = Math.hypot(P.x - cx, P.z - cz); if (d < bd) { bd = d; best = B; }
+          const cx = clamp(P.x, sd.x0, sd.x1), cz = clamp(P.z, sd.z0, sd.z1), d = Math.hypot(P.x - cx, P.z - cz); if (d > 0.05 && ((cx - P.x) * Math.cos(P.cdir) + (cz - P.z) * Math.sin(P.cdir)) / d < 0.35) continue;   // (only what he runs INTO: brushing past something at speed doesn't break it)
+          if (this.segInWall(P.x, P.z, cx, cz)) continue;   // (and never through a wall: a charge into the wall doesn't break what's on the other side)
+          if (d < bd) { bd = d; best = B; }
         }
         if (best) { this.breakThing(best); P.brkCd = 0.3; }
       }
@@ -804,6 +804,7 @@
       // footsteps: walking is heard by anyone close by (they come and look), the charge further; tiptoe is silent
       const proom = roomAt(P.x, P.z), loud = (SAFE[proom] ? 0 : P.st === 'charge' ? 5 : P.st === 'free' && P.tip < 0.5 && Math.hypot(P.vx, P.vz) > 1.2 ? 2.8 : 0) * (proom === 'laundry' ? 0.45 : 1);   // (the machines drown footsteps out)
       if (SAFE[proom] && P.st === 'charge') { this.stompT = (this.stompT || 0) - dt; if (this.stompT <= 0) { this.stompT = 0.35; this.noiseS(P.x, P.z, 5, '?', true); } } else
+      if (SAFE[proom] && P.st === 'free' && P.tip < 0.5 && Math.hypot(P.vx, P.vz) > (wet ? 0.6 : 1.2)) { this.stompT = (this.stompT || 0) - dt; if (this.stompT <= 0) { this.stompT = 0.5; this.noiseS(P.x, P.z, wet ? 4.5 : 2.8, '?', true); } } else   // (the bath: nobody minds, but the map still shows how far his steps and splashes carry)
       if (loud) { this.stompT = (this.stompT || 0) - dt; if (this.stompT <= 0) { this.stompT = P.st === 'charge' ? 0.35 : 0.5; this.noise(P.x, P.z, loud, '?', true); } } else this.stompT = 0;
       for (const b of this.buckets) if (b.state === 'fly') {
         b.t += dt; const k = Math.min(1, b.t / b.dur); b.x = b.sx + (b.tx - b.sx) * k; b.z = b.sz + (b.tz - b.sz) * k; b.y = b.sy + (b.ty - b.sy) * k + Math.sin(Math.PI * k) * (b.arc === undefined ? 1.6 : b.arc);
@@ -955,7 +956,7 @@
     }
     range(n) { if (n.raid && n.looked) return 10; return n.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }   // (the bath searchers look right across the water)
     breakThing(B) {
-      this.bonusLose('broke');
+      this.bonusLose('broke', { lockers: 'a locker', bench: 'a bench', plant: 'a plant pot', baskets: 'the baskets', washer: 'a washing machine', vanity: 'a mirror stand', towels: 'the towel shelf', boiler: 'a boiler', crates: 'the crates', prep: 'a counter', pantry: 'the pantry shelf', kfridge: 'the fridge', firewood: 'the firewood', tsinks: 'a sink', washisland: 'a wash station', washrow: 'a wash station', foldtable: 'a table' }[B.s.k] || 'something');
       const P = this.P, sd = B.s; B.done = true; B.o.visible = false;
       if (B.w) this.walls.splice(this.walls.indexOf(B.w), 1); if (B.bl) this.blockers.splice(this.blockers.indexOf(B.bl), 1);
       this.buildNav(); P.vx *= 0.7; P.vz *= 0.7;
@@ -1318,8 +1319,9 @@
       if (bn && !bn.busy) bn.flood({ hold: 0.12, speed: 1.4, onCovered: back }); else back();
     }
     // ---- bonuses: kept until you blow them. Never seen / nobody knocked out / nothing broken (that the story didn't need) / nothing thrown
-    bonusLose(k) {
+    bonusLose(k, what) {
       const B = this.bonus || (this.bonus = { seen: true, ko: true, broke: true, hit: true }); if (!B[k]) return; B[k] = false;
+      if (k === 'broke' && what) this.later(0.9, () => this.think('...I broke ' + what + '. There goes the NO DAMAGE bonus.', 2.4));   // (so it's clear what cost it)
       const e = this.el('.st-bonus i[data-k="' + k + '"]'); if (e) { e.classList.add('pop'); setTimeout(() => { e.classList.remove('pop'); e.classList.add('off'); }, 450); }
     }
     bonusBar() {
@@ -1494,7 +1496,7 @@
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(7); this.noise(V.x0 - 0.5, V.z, 11, '?!');
       if (V.hits < 3) { this.makeCan(fx, 0.35, nz(), -1.6 - Math.random() * 0.8, (Math.random() - 0.5) * 1.2);
         this.think(V.hits === 1 ? '*THUNK* ...oh! A free one!' : '*KA-CHUNK* Another! One more thump...', 2); return; }
-      V.broke = true; this.bonusLose('broke'); if (this.spVend) this.spVend.visible = false; this.think('*KRRRASH!!* ...oops.', 2); this.noise(V.x0 - 0.5, V.z, 16, '?!'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(10);
+      V.broke = true; this.bonusLose('broke', 'the vending machine'); if (this.spVend) this.spVend.visible = false; this.think('*KRRRASH!!* ...oops.', 2); this.noise(V.x0 - 0.5, V.z, 16, '?!'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(10);
       // it pitches forward onto its face a little, the front glass bursts, and out comes everything
       if (V.o) { const piv = new THREE.Group(); piv.position.set(V.x0, 0, V.z); this.scene.add(piv); piv.attach(V.o); V.piv = piv; V.tilt = 0; }
       if (S.Flat) for (let k = 0; k < 8; k++) { const sh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.02, 0.12), S.Flat.mat(k % 3 ? 0xc4dde8 : 0xf2ede4)); sh.userData.flatDone = true; this.G.add(sh);
@@ -1554,7 +1556,7 @@
       if (!q || !q.length) { if (e.style.display !== 'none') e.style.display = 'none'; return; }
       const c = q[0]; if (!c.shown) { c.shown = true; const cl = (t) => t.replace(/\.{2,}/g, ' ').replace(/[:()·]/g, ' ').replace(/\s{2,}/g, ' ').replace(/\.$/, '').trim();   // (no stops, colons or brackets: plain short lines)
         const ls = []; c.lines.forEach((l, k) => { const h = l[0] === '#', raw = h ? l.slice(1) : l; raw.split(/\.\s+/).forEach((q, j) => { const t = cl(q); if (t) ls.push({ t, h: k === 0 || (h && j === 0) }); }); });
-        e.innerHTML = ls.map((q, k) => (k === 0 || q.h ? '<b>' + q.t + '</b>' : '<i>' + q.t + '</i>')).join('') + '<u>ENTER  OK</u>'; e.style.display = 'block'; }
+        e.innerHTML = ls.map((q, k) => (k === 0 || q.h ? '<b>' + q.t + '</b>' : '<i>' + q.t + '</i>')).join('') + '<u>PRESS <span>ENTER</span> TO CONTINUE</u>'; e.style.display = 'block'; }
       c.t += dt; if (c.t >= c.sec || (c.until && c.t > 0.4 && c.until())) q.shift();
     }
     // the bottom-of-screen prompt: what's possible right here, and how to press it (always on; the tips above are the ones that can be turned off)
@@ -1586,7 +1588,7 @@
       if (!this.tipPick && this.outOfBath && !P.held && this.buckets.some((b) => b.state === 'floor' && near(b.m.position.x, b.m.position.z, 2.4) && Math.abs(b.m.position.y - P.y) < 1.2)) { this.tipPick = true; this.tip(['K: PICK UP', 'Things lying about can be picked up.'], { until: () => !!P.held }); }
       if (!this.tipPrint && this.prints && this.prints.length) { this.tipPrint = true; this.tip(['WET FOOTPRINTS', 'Walking through a puddle leaves big wet footprints behind you.', 'Staff who spot a fresh trail will follow it to see where it goes.', 'The footprints dry up after a while.']); }
       const room = roomAt(P.x, P.z);
-      if (!this.tipBon && (room === 'shower' || room === 'lock')) { this.tipBon = true; this.tip(['BONUS ICONS ABOVE THE MINIMAP', '#EYE: UNSEEN. Nobody ever spots you.', '#FIST: NO ONE HARMED. Nobody is knocked out.', '#HAND: UNTOUCHED. Nobody lays a hand on you.', '#VASE: NOTHING BROKEN. Nothing is smashed by charging.', 'Lose a bonus and its icon is crossed out.']); }
+      if (!this.tipBon && (room === 'shower' || room === 'lock')) { this.tipBon = true; this.tip(['BONUS ICONS ABOVE THE MINIMAP', '#EYE: UNSEEN. Nobody ever spots you.', '#FIST: NO ONE HARMED. Nobody is knocked out.', '#HAND: UNTOUCHED. Nobody lays a hand on you.', '#VASE: NO DAMAGE. Leave the bathhouse in one piece (lockers, benches, plants, the vending machine). Throwing or smashing buckets is fine.', 'Lose a bonus and its icon is crossed out.']); }
       if (!this.tipDuck && !this.outOfBath && !q.length && this.t > 8 && P.y < -0.2) { this.tipDuck = true; this.tip(['I: DUCK UNDER', 'In the bath, hold I to go under the water. Nobody can see you.', 'You can only hold your breath for a few seconds.'], { until: () => this.outOfBath }); }
       const V = this.vend; if (!this.tipVend && V && !V.broke && this.outOfBath && !P.held && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) { this.tipVend = true; this.tip(['J: THUMP THE VENDING MACHINE', 'You have no money, but a good whack might shake a drink loose.', '#K: LOOK AT IT']); }
       if (!this.tipCart && this.outOfBath && !P.held && !P.cart && this.carts.some((cc) => near(cc.x, cc.z, 2.6))) { this.tipCart = true; this.tip(['K: PUSH THE CART', 'Press K again to let go.', '#I next to it: HIDE INSIDE', 'Hide while nobody can see you. If they see you climb in, they will look inside.'], { until: () => !!P.cart }); }
@@ -2033,7 +2035,7 @@
         '#stealthHud .st-choice{position:absolute;left:50%;top:52%;transform:translateX(-50%);display:none;text-align:center;background:rgba(42,36,48,0.92);padding:18px 34px 20px;border-radius:14px;color:#fffaf0}#stealthHud .st-choice.on{display:block}' +
         '#stealthHud .st-choice h3{margin:0 0 4px;font:400 26px "Dela Gothic One",sans-serif}#stealthHud .st-choice p{margin:0 0 12px;font:600 19px "Barlow Condensed",sans-serif;opacity:0.85}' +
         '#stealthHud .st-choice button{display:block;width:100%;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:4px 0;cursor:pointer}#stealthHud .st-choice button.sel{color:#f4efe6;border-left:5px solid #d8262e;padding-left:16px}' +
-        '#stealthHud .st-tip{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:max-content;max-width:min(70vw,760px);display:none;text-align:center;pointer-events:none;background:#14101a;color:#fffaf0;padding:10px 24px 12px;border-radius:12px}#stealthHud .st-tip b{display:block;font:800 26px "Barlow Condensed",sans-serif;letter-spacing:.06em;margin:2px 0}#stealthHud .st-tip u{display:block;text-decoration:none;margin-top:8px;font:700 15px "Barlow Condensed",sans-serif;letter-spacing:.14em;color:#f2cf4a}#stealthHud .st-tip i{display:block;font:600 18px "Barlow Condensed",sans-serif;font-style:normal;color:#e9e3d8;margin:3px 0}#stealthHud.nh-tips .st-tip{display:none!important}' +
+        '#stealthHud .st-tip{position:absolute;left:50%;top:16%;transform:translateX(-50%);width:max-content;max-width:min(70vw,760px);display:none;text-align:center;pointer-events:none;background:#14101a;color:#fffaf0;padding:10px 24px 12px;border-radius:12px}#stealthHud .st-tip b{display:block;font:800 26px "Barlow Condensed",sans-serif;letter-spacing:.06em;margin:2px 0}#stealthHud .st-tip u{display:block;text-decoration:none;margin-top:8px;font:700 15px "Barlow Condensed",sans-serif;letter-spacing:.14em;color:#f2cf4a}#stealthHud .st-tip u{font-size:19px;margin-top:12px}#stealthHud .st-tip u span{display:inline-block;border:2px solid #f2cf4a;border-radius:6px;padding:0 9px 1px;margin:0 6px;color:#14101a;background:#f2cf4a}#stealthHud .st-tip i{display:block;font:600 18px "Barlow Condensed",sans-serif;font-style:normal;color:#e9e3d8;margin:3px 0}#stealthHud.nh-tips .st-tip{display:none!important}' +
         '#stealthHud .st-ctx{position:absolute;left:50%;bottom:104px;transform:translateX(-50%);display:none;gap:8px 18px;flex-wrap:wrap;justify-content:center;width:max-content;max-width:min(88vw,820px);pointer-events:none;background:rgba(20,16,26,.9);padding:8px 18px;border-radius:12px;align-items:center}#stealthHud .st-ctx kbd{font:800 19px "Barlow Condensed",sans-serif;background:#fffaf0;color:#2a2430;border-radius:6px;padding:0 9px;margin-right:7px;letter-spacing:.04em}#stealthHud .st-ctx span{font:700 19px "Barlow Condensed",sans-serif;color:#fffaf0}#stealthHud.nh-ctx .st-ctx{display:none!important}' +
         '#stealthHud .st-maparrow{position:absolute;left:178px;bottom:78px;display:none;font:800 26px "Barlow Condensed",sans-serif;letter-spacing:.08em;color:#fffaf0;background:#d8262e;padding:2px 14px 0;border-radius:8px;animation:stmapa .7s ease-in-out infinite alternate;pointer-events:none}@keyframes stmapa{to{transform:translateX(14px)}}' +
         '#stealthHud .st-sub{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);width:max-content;max-width:94vw;text-align:center;pointer-events:none;display:none}#stealthHud .st-sub{background:#14101a;padding:10px 26px 12px;border-radius:12px}#stealthHud .st-sub .jp{display:block;font:400 26px "Dela Gothic One",sans-serif;color:#fffaf0;letter-spacing:0.04em}#stealthHud .st-sub .en{display:block;margin-top:6px;font:700 22px "Barlow Condensed",sans-serif;color:#e9e3d8}#stealthHud .st-sub .who{color:#f2cf4a;margin-right:8px}' +
@@ -2058,7 +2060,7 @@
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
         '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · J punch (knocks them out) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
-        '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
+        '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="settings">SETTINGS</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
       this.pops = [];
@@ -2101,7 +2103,7 @@
     markMenu(q, i) { this.el(q).querySelectorAll('button').forEach((b, k) => b.classList.toggle('sel', k === i)); }
     setPause(on) { this.paused = on; this.el('.st-pause').classList.toggle('on', on); if (on) { this.pauseI = 0; this.markMenu('.st-pause', 0); } }
     hudApply() {   // the HUD pieces he can hide in SETTINGS
-      const st = this.g.settings || {}; for (const k of ['guide', 'map', 'bonus', 'goal', 'meter', 'tips', 'ctx']) this.hud.classList.toggle('nh-' + k, st['hud' + k[0].toUpperCase() + k.slice(1)] === false);
+      const st = this.g.settings || {}; for (const k of ['guide', 'map', 'bonus', 'goal', 'meter', 'tips', 'ctx']) this.hud.classList.toggle('nh-' + k, k === 'guide' ? st.hudGuide !== true : st['hud' + k[0].toUpperCase() + k.slice(1)] === false);   // (the controls guide: off unless he turns it on)
     }
     command(c) {
       if (c === 'resume') this.setPause(false);
@@ -2109,6 +2111,7 @@
       else if (c === 'cp') { this.setPause(false); if (this.P.stallHide !== undefined) this.stallOut(); this.respawn(); this.grace = 2.5; }
       else if (c === 'retry') { const g = this.g; this.stop(); g.camp = new S.Stealth(g); g.camp.start(); }
       else if (c === 'quit') this.g.endCampaign();
+      else if (c === 'settings') { this.el('.st-pause').classList.remove('on'); this.g.uiBack = 'stealth'; this.g.ui.show('settings'); }   // the game's own settings, over the paused level
     }
     onKey(e) {
       if (this.jumpOn) {

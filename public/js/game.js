@@ -1447,7 +1447,7 @@
     back() {
       const n = this.ui.name;
       if (n === 'pause') this.pause(false);
-      else if (n === 'settings') { if (this.uiBack === 'pause') this.ui.show('pause', { tut: !!this.tut }); else this.ui.show('title'); }
+      else if (n === 'settings') { if (this.uiBack === 'stealth' && this.camp) { this.ui.hide(); this.camp.hudApply(); this.camp.setPause(true); } else if (this.uiBack === 'pause') this.ui.show('pause', { tut: !!this.tut }); else this.ui.show('title'); }
       else if (n === 'play') this.ui.show('title');
       else if (n === 'controls') { const f = this.uiBack; this.ui.show('settings'); this.uiBack = f; }
       else if (n === 'online') this.ui.show('title');
@@ -1536,7 +1536,8 @@
           break;
         }
         case 'hints': st.hints = !st.hints; this.save(); refresh(); break;
-        case 'hudGuide': case 'hudMap': case 'hudBonus': case 'hudGoal': case 'hudMeter': case 'hudTips': case 'hudCtx': st[a] = st[a] === false; this.save(); refresh(); break;   // (stealth level HUD pieces)
+        case 'hudGuide': st.hudGuide = st.hudGuide !== true; this.save(); refresh(); break;   // (the guide starts hidden)
+        case 'hudMap': case 'hudBonus': case 'hudGoal': case 'hudMeter': case 'hudTips': case 'hudCtx': st[a] = st[a] === false; this.save(); refresh(); break;   // (stealth level HUD pieces)
         case 'style': st[this.styleKey] = st[this.styleKey] === 'anime' ? 'classic' : 'anime'; this.R.setAnime(st[this.styleKey] === 'anime'); this.save(); refresh(); break;
         case 'endless': st.endless = !st.endless; this.save(); refresh(); break;
         case 'sound': st.sound = !st.sound; this.audio.muted = !st.sound; this.save(); refresh(); break;
