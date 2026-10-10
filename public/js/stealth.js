@@ -256,7 +256,7 @@
         o = o || {};
         const a = { kind, x: route[0][0], z: route[0][1], y: floorY(route[0][0], route[0][1]), f: route[0][3] || 0, vx: 0, vz: 0, st: 'free', t: 0, hp: 1, maxHp: 1, dead: false, engage: false };
         const v = new S.WorkerView(this.scene, kind, !!o.fat, o.pick); v.walls = this.walls; if (v.pole && v.pole.parent) v.pole.parent.remove(v.pole);   // (the market staff's hook-pole: not in a bathhouse)
-        const cone = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0xffcf3a, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide }));
+        const cone = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0xffcf3a, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }));   // (offset: no flicker against the floor tiles)
         cone.renderOrder = 2; this.scene.add(cone);
         return { a, v, route, i: 0, wait: route[0][2], mode: 'route', alarm: 0, cone, onigiri: !!o.onigiri, range: o.range || 6.4, half: o.half || 0.62, room: o.room, speed: o.speed || 1.35, sway: o.sway || 0.6, ear: o.ear || 0, path: null, pi: 0 };
       };
@@ -475,8 +475,8 @@
       }
       if (n.shock > 0) {   // startled: a hop backwards, frozen a beat staring at him, then they come for him
         n.shock -= dt; const k = Math.max(0, n.shock - 0.75) / 0.35; a.vx = n.shockV[0] * k; a.vz = n.shockV[1] * k;
-        a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4); a.f = lerpA(a.f, Math.atan2(this.P.z - a.z, this.P.x - a.x), dt * 8);
-        if (n.shock <= 0) { a.shock = 0; a.vx = a.vz = 0; if (!this.P.hidden && !this.P.boxHide) this.startChase(n); else { n.mode = 'search'; n.wait = 2; } }
+        a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4); a.y = floorY(a.x, a.z) + (n.hop ? Math.sin(Math.PI * Math.min(1, 1 - k)) * 0.5 * (k > 0 ? 1 : 0) : 0);   // (a real jump back, feet off the floor) a.f = lerpA(a.f, Math.atan2(this.P.z - a.z, this.P.x - a.x), dt * 8);
+        if (n.shock <= 0) { a.shock = 0; a.vx = a.vz = 0; n.hop = false; a.y = floorY(a.x, a.z); if (!this.P.hidden && !this.P.boxHide) this.startChase(n); else { n.mode = 'search'; n.wait = 2; } }
         return;
       }
       if (a.st === 'act' && a.t >= a.dur) a.st = 'free';   // (a punch or a grab finishes: never left gliding about in a fighting pose)
@@ -782,8 +782,8 @@
       if (!this.boxW) { this.boxW = { x0: 1e4, x1: 1e4, z0: 1e4, z1: 1e4, tall: false, box: true }; this.walls.push(this.boxW); }
       if (P.boxHide && !this.wasBoxHide) this.markWitness();
       if (!P.boxHide && this.wasBoxHide) for (const n of this.npcs) if ((n.pushing2 || (n.mode !== 'chase' && !n.pullOut && n.a.st === 'free' && !n.busy)) && !n.ko && Math.abs(n.a.y - P.y) < 1.2 && Math.hypot(n.a.x - P.x, n.a.z - P.z) < (n.pushing2 ? 2.2 : 2.8)) {   // (anyone close who wasn't expecting a box to stand up)   // the box they were shoving stands up: they leap back
-        const d = Math.hypot(n.a.x - P.x, n.a.z - P.z) || 1; n.shock = 1.1; n.a.shock = 1; n.shockV = [(n.a.x - P.x) / d * 2.6, (n.a.z - P.z) / d * 2.6];
-        n.pushing2 = false; n.tug = 0; n.path = null; n.a.push = false; this.popAt(n.a, ['うわぁっ!?', 'ひぃっ!?', 'えっ!?'][(this.t * 3 | 0) % 3], 1.1, true); }
+        const d = Math.hypot(n.a.x - P.x, n.a.z - P.z) || 1; n.shock = 1.1; n.a.shock = 1; n.hop = true; n.shockV = [(n.a.x - P.x) / d * 6.4, (n.a.z - P.z) / d * 6.4];
+        n.pushing2 = false; n.tug = 0; n.path = null; n.a.push = false; this.popAt(n.a, ['うわぁっ!?', 'ひぃっ!?', 'えっ!?'][(this.t * 3 | 0) % 3], 1.1); }
       this.wasBoxHide = P.boxHide;
       if (P.boxHide) { const W = this.boxW; W.x0 = P.x - 0.85; W.x1 = P.x + 0.85; W.z0 = P.z - 0.85; W.z1 = P.z + 0.85; }   /* (flaps and all) */ else this.boxW.x0 = this.boxW.x1 = this.boxW.z0 = this.boxW.z1 = 1e4;
       this.ratStep(dt);
@@ -869,7 +869,7 @@
       else if (!ch && this.chaseObj) { e.innerHTML = this.chaseObj; this.chaseObj = null; e.classList.remove('chase'); }
     }
     startChase(n) {
-      if (n.mode === 'chase' || n.ko) return;
+      if (n.mode === 'chase' || n.ko || n.shock > 0) return;   // (startled: they gape first; the chase starts when the jump's over)
       const first = !this.chasing(), P = this.P;
       n.mode = 'chase'; n.path = null; n.alarm = 0; n.lostT = 0; n.rp = 0; n.last = [P.x, P.z]; n.raid = false;
       this.popAt(n.a, this.wearing ? ['箱が…動いてる!?', 'おい!その箱!', '歩く箱!?'][this.spotted % 3] : ['イレズミ!?', '変態!', '刺青だ!', 'おい!待て!'][this.spotted % 4], 1.5, true);
@@ -1968,7 +1968,7 @@
       this.kdt = Math.min(0.05, dt); this.drawN = (this.drawN || 0) + 1;
       this.bossDraw(dt, T); this.bonusBar(); this.mapDraw(T);
       if (this.drawN % 10 === 1) { this.hudApply(); const o = this.el('.st-obj'), hp = this.el('.st-hp'); if (o && hp) hp.style.setProperty('top', (o.offsetTop + o.offsetHeight + 8) + 'px', 'important'); }   // (a two-line goal pushes the badges down, never over them)
-      for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }
+      this.dtR = dt; for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt, 1e-4), T); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }
       this.sweatStep(dt);
       this.tipStep(dt); this.ctxStep();
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
@@ -2003,11 +2003,11 @@
     drawCone(n) {
       const a = n.a, N = 22, P = this.P, hide = (SAFE[roomAt(P.x, P.z)] && !n.raid) || n.busy || Math.abs(a.y - P.y) > 1.6 || a.st !== 'free';
       n.cone.visible = !hide; if (hide) return;
-      const range = this.range(n), pos = new Float32Array((N + 2) * 3), y = a.y + 0.03; pos[0] = a.x; pos[1] = y; pos[2] = a.z;
+      const range = this.range(n), pos = new Float32Array((N + 2) * 3), y = a.y + 0.06; pos[0] = a.x; pos[1] = y; pos[2] = a.z;
       for (let i = 0; i <= N; i++) { const t = a.f - n.half + (2 * n.half) * i / N, L = this.reach(a.x, a.z, t, range); pos[(i + 1) * 3] = a.x + Math.cos(t) * L; pos[(i + 1) * 3 + 1] = y; pos[(i + 1) * 3 + 2] = a.z + Math.sin(t) * L; }
       const idx = []; for (let i = 1; i <= N; i++) idx.push(0, i + 1, i);
       const g = n.cone.geometry; g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(idx); g.computeBoundingSphere();
-      const k = clamp(n.alarm, 0, 1); n.cone.material.color.setRGB(1, 0.81 - 0.5 * k, 0.23 - 0.1 * k); n.cone.material.opacity = 0.36 + 0.24 * k;
+      n.coneK = (n.coneK || 0) + (clamp(n.alarm, 0, 1) - (n.coneK || 0)) * Math.min(1, (this.dtR || 1 / 60) * 5); const k = n.coneK; n.cone.material.color.setRGB(1, 0.81 - 0.5 * k, 0.23 - 0.1 * k); n.cone.material.opacity = 0.36 + 0.24 * k;
     }
 
     // ============================================================== HUD
