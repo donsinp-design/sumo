@@ -187,7 +187,7 @@
           const a = S.rand() * Math.PI * 2, off = (S.rand() - 0.5) * 2.6;
           // the lane runs through where they stand, give or take
           const px = -Math.sin(a), pz = Math.cos(a), lo = o.x * px + o.z * pz + off * 0.5;
-          m.objs.push({ type: 'train', a, off: lo, t: 0, dur: 3.3, warn: 2.1, hit: [false, false], go: false, owner: w });
+          m.objs.push({ type: 'train', a, off: lo, t: 0, dur: 3.7, warn: 2.1, hit: [false, false], go: false, owner: w });
           m.emit('trainWarn', {}); break;
         }
         case 'possess': of.possessed = 1.2; if (o.clinch) o.clinch.end('skill'); m.tag(o, w, 'sk_possess'); break;
@@ -780,11 +780,11 @@
           const dx = Math.cos(ob.a), dz = Math.sin(ob.a), px = -dz, pz = dx;
           if (ob.t >= ob.warn) {
             if (!ob.go) { ob.go = true; m.emit('trainGo', {}); }
-            ob.front = -14 + (ob.t - ob.warn) * 42;
+            ob.front = -14 + (ob.t - ob.warn) * 52;   // (a long shinkansen: 38 long)
             for (const p of m.w) {
               if (ob.hit[p.idx] || p.st === 'air' || p.swallowed || p.carried || m.phase !== 'fight') continue;
               const u = p.x * dx + p.z * dz, v = p.x * px + p.z * pz - ob.off;
-              if (Math.abs(v) < 1.05 + p.r * 0.5 && ob.front >= u && ob.front - 7 <= u) {
+              if (Math.abs(v) < 1.05 + p.r * 0.5 && ob.front >= u && ob.front - 38 <= u) {
                 ob.hit[p.idx] = true;
                 if (p.fxs.invuln > 0) continue;
                 if (p.clinch) p.clinch.end('skill');

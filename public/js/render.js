@@ -1990,14 +1990,19 @@
         const loco = new THREE.Group(); me.add(loco); me.userData.loco = loco;
         // the sumo express: a white shinkansen with a long duck-bill nose, a blue stripe and a dark window band
         const white = toon(0xf3f6f9, { shade: 0xaab4c4 }), blue = toon(0x1f5fb8, { shade: 0x103a78 }), dark = toon(0x1b2b3d, { shade: 0x0a121c });
-        const body = mesh(GEO.box, white, 0.02); body.scale.set(4.9, 2.0, 1.9); body.position.set(-4.0, 1.25, 0); loco.add(body);
-        const skirt = mesh(GEO.box, blue, 0.02); skirt.scale.set(4.95, 0.42, 1.95); skirt.position.set(-4.0, 0.46, 0); loco.add(skirt);
-        const band = mesh(GEO.box, dark, 0.0); band.scale.set(4.5, 0.42, 1.96); band.position.set(-4.0, 1.7, 0); loco.add(band);
+        for (let k = 0; k < 7; k++) {   // seven cars behind the nose
+          const cx = -4.0 - k * 5.05;
+          const body = mesh(GEO.box, white, 0.02); body.scale.set(4.9, 2.0, 1.9); body.position.set(cx, 1.25, 0); loco.add(body);
+          const skirt = mesh(GEO.box, blue, 0.02); skirt.scale.set(4.95, 0.42, 1.95); skirt.position.set(cx, 0.46, 0); loco.add(skirt);
+          const band = mesh(GEO.box, dark, 0.0); band.scale.set(4.5, 0.42, 1.96); band.position.set(cx, 1.7, 0); loco.add(band);
+          for (const sd of [-1, 1]) { const stripe = mesh(GEO.box, blue, 0.0); stripe.scale.set(4.9, 0.12, 0.02); stripe.position.set(cx, 1.0, sd * 0.96); loco.add(stripe); }
+          if (k < 6) { const joint = mesh(GEO.box, dark, 0.0); joint.scale.set(0.3, 1.5, 1.5); joint.position.set(cx - 2.52, 1.1, 0); loco.add(joint); }
+          if (k % 3 === 1) { const pan = mesh(GEO.box, dark, 0.0); pan.scale.set(0.9, 0.12, 0.7); pan.position.set(cx, 2.4, 0); loco.add(pan); const leg = mesh(GEO.box, dark, 0.0); leg.scale.set(0.08, 0.5, 0.08); leg.position.set(cx, 2.15, 0); loco.add(leg); }
+        }
         const nose = mesh(new THREE.CapsuleGeometry(0.95, 2.0, 6, 16).rotateZ(-Math.PI / 2), white, 0.02); nose.scale.set(1, 0.95, 1); nose.position.set(-1.45, 1.2, 0); loco.add(nose);
         const noseBlue = mesh(new THREE.CapsuleGeometry(0.97, 2.0, 6, 16).rotateZ(-Math.PI / 2), blue, 0.0); noseBlue.scale.set(1.0, 0.3, 1.0); noseBlue.position.set(-1.45, 0.52, 0); loco.add(noseBlue);
         const glass = mesh(GEO.sphere, dark, 0.0); glass.scale.set(1.0, 0.34, 0.74); glass.position.set(-0.75, 1.5, 0); loco.add(glass);
         for (const sd of [-1, 1]) { const lamp = mesh(GEO.sphere, toon(0xfff2a0), 0); lamp.scale.setScalar(0.18); lamp.position.set(0.35, 0.95, sd * 0.45); loco.add(lamp); }
-        for (const sd of [-1, 1]) { const stripe = mesh(GEO.box, blue, 0.0); stripe.scale.set(4.9, 0.12, 0.02); stripe.position.set(-4.0, 1.0, sd * 0.96); loco.add(stripe); }
       } else if (ob.type === 'hole') {
         me = new THREE.Group();
         const core = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), new THREE.MeshBasicMaterial({ color: 0x050008 })); core.position.y = 0.9; me.add(core);
