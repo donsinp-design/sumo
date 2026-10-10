@@ -200,6 +200,14 @@
     }
     dress(root) {
       this.kit = root; this.scene.add(root);
+      // the genkan's stone tiles sat 1 mm over the lobby's board strips (which ran on under them): they fought, the tiles blinked in and out at a distance.
+      // Strips under the genkan go down out of sight, the tiles up a touch (once per loaded kit: the geometry's shared between plays)
+      const fl = root.getObjectByName('FLOORS'); if (fl) { root.updateMatrixWorld(true); fl.traverse((o) => { if (!o.isMesh || o.geometry.userData.genkanFix) return; o.geometry.userData.genkanFix = true;
+        const pa = o.geometry.attributes.position, mw = o.matrixWorld, inv = new THREE.Matrix4().copy(mw).invert(), v = new THREE.Vector3(); let n = 0;
+        for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i).applyMatrix4(mw); if (v.x > -12.01 && v.x < -4.05 && v.z > -86.01 && v.z < -75.99) { const h = v.y - UP;
+          if (h > 0.0025 && h < 0.0035) v.y = UP + 0.009; else if (h > 0.0035 && h < 0.0045) v.y = UP - 0.004; else continue;
+          v.applyMatrix4(inv); pa.setXYZ(i, v.x, v.y, v.z); n++; } }
+        if (n) { pa.needsUpdate = true; o.geometry.computeBoundingSphere(); } }); }
       const get = (n) => root.getObjectByName(n), proto = {};
       for (const n of ['ITEM_STOOL', 'ITEM_OKE', 'ITEM_BUCKET', 'ITEM_WASHB', 'BOX', 'CLOTH_SHIRT', 'CLOTH_SHORTS', 'ITEM_CAN0', 'ITEM_CAN1', 'ITEM_CAN2']) { const o = get(n); if (o) { o.visible = false; proto[n] = o; } }
       this.proto = proto;
@@ -257,7 +265,7 @@
         const a = { kind, x: route[0][0], z: route[0][1], y: floorY(route[0][0], route[0][1]), f: route[0][3] || 0, vx: 0, vz: 0, st: 'free', t: 0, hp: 1, maxHp: 1, dead: false, engage: false };
         const v = new S.WorkerView(this.scene, kind, !!o.fat, o.pick); v.walls = this.walls; if (v.pole && v.pole.parent) v.pole.parent.remove(v.pole);   // (the market staff's hook-pole: not in a bathhouse)
         const cone = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0xffcf3a, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }));   // (offset: no flicker against the floor tiles)
-        cone.renderOrder = 2; this.scene.add(cone);
+        cone.renderOrder = 20; this.scene.add(cone);   // (drawn after every other see-through surface: no flicker as the sort order changes)
         return { a, v, route, i: 0, wait: route[0][2], mode: 'route', alarm: 0, cone, onigiri: !!o.onigiri, range: o.range || 6.4, half: o.half || 0.62, room: o.room, speed: o.speed || 1.35, sway: o.sway || 0.6, ear: o.ear || 0, path: null, pi: 0 };
       };
       const P = Math.PI, U = P / 2;
@@ -1190,7 +1198,7 @@
       const B = this.boss; B.hold = false; if (this.mawM) this.mawM.visible = false;   // (the mawashi's tucked in his belt: the fight's for it)
       this.g.bossBox = true;   // (the first bout: he fights in the storage-room box, until he loses a round)
       const q = n === 0 ? [{ who: '親方', jp: '返してほしければ、わしに勝て。', en: 'If you want it back, beat me.', t: 2.8 }, { who: '親方', jp: '…だが、お前は相撲を知らんようだな。稽古が先か?', en: '...But you don\'t look like you know sumo. Training first?', t: 3.6 }]
-        : [{ who: '親方', jp: '…ふむ。', en: 'Hm.', t: 1.6 }, { who: '親方', jp: '断るなら…必要になるぞ。わしを信じろ。', en: 'If you refuse... you\'ll need it. Trust me.', t: 3.4 }];
+        : [{ who: '親方', jp: '…ふむ。', en: 'Hm.', t: 1.6 }, { who: '親方', jp: '本当に稽古なしでいいのか? …きっと必要になるぞ。', en: 'No training, really? You\'ll need it. Trust me.', t: 3.4 }];
       this.say(q, () => this.choice('稽古?', 'TRAINING?', ['YES: learn to play', 'NO: just fight'], (i) => {
         if (i === 0) { this.say([{ who: '親方', jp: 'よし。ついてこい。', en: 'Good. Follow me.', t: 1.8 }], () => this.g.startBossTraining(this)); }
         else if (n === 0) this.bossAsk(1);

@@ -87,7 +87,8 @@ void RE_Direct_Flat( const in IncidentLight directLight, const in GeometricConte
     sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.035; sun.shadow.radius = 4;
     scene.add(sun, sun.target);
     const off = new THREE.Vector3(-7, 17, 9);   // from behind the camera: the sumo's back (what you see most) is lit, shadows fall away up the street
-    return { sun, aim(x, z) { sun.position.set(x + off.x, off.y, z + off.z); sun.target.position.set(x, 0, z); sun.target.updateMatrixWorld(); } };
+    const ts = 2 * R / (o.map || 2048) * 2;   // shadow texel (x2): the sun moves in whole texels, so shadows don't shimmer as the camera glides
+    return { sun, aim(x, z) { x = Math.round(x / ts) * ts; z = Math.round(z / ts) * ts; sun.position.set(x + off.x, off.y, z + off.z); sun.target.position.set(x, 0, z); sun.target.updateMatrixWorld(); } };
   }
   // a model built from the Blender kit (palette texture or flat colours, glTF linear factors): the master material
   function kit(root) {
