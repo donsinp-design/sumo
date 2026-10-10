@@ -590,6 +590,7 @@
             A.whoosh(0.9); if (this.kind !== 'attract') ui.vhs(true); break;
           }
           case 'unplug': A.blip(false); A.blip(false); break;
+          case 'confused': { const p = this.scr(e.w.x, e.w.z, 2.7); if (!quiet) ui.callout('?', p.x, p.y, 'big'); break; }
           case 'shopIn': { const p = this.scr(e.x, e.z, 1.8); if (!quiet) ui.callout('WELCOME!', p.x, p.y, 'gold'); A.blip(true); break; }
           case 'shopHit': { A.slap(6); this.R.fx.dust(e.x, 0.6, e.z, 6, 0.4, 0.6, 0.3); const p = this.scr(e.x, e.z, 1.7); if (!quiet) ui.callout('-' + e.dmg, p.x + (Math.random() - 0.5) * 60, p.y, 'small'); break; }
           case 'shopBreak': { fx.burst(e.x, e.z, 14); A.thump(12); R.shake(0.4); const p = this.scr(e.x, e.z, 1.6); if (!quiet) ui.callout('SHOP SMASHED!', p.x, p.y, 'big'); this.R.shake(0.3); break; }

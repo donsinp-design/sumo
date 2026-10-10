@@ -66,6 +66,11 @@
       if (this.learn && m.phase === 'fight') this.watch(o, m);
       if (!(o.fxs && o.fxs.invis > 0) || !this.hist.length) this.hist.push({ st: o.st, t: o.t, x: o.x, z: o.z, vx: o.vx, vz: o.vz, bal: o.bal, fwd: o.fwdIn, contact: o.contact, braceT: o.braceT, pressT: o.pressT, flurry: o.flurry || 0 });
       if (this.hist.length > 90) this.hist.shift();
+      // the other one has vanished: he can't see where they went, so he stands there looking about (a question mark now and then), nothing else
+      if (o.fxs && o.fxs.invis > 0 && m.phase === 'fight' && !this.me.clinch) {
+        this.confT = (this.confT || 0) + dt; if (this.confT > 0.9 || this.lostO !== true) { this.confT = 0; this.m.emit('confused', { w: this.me }); }
+        this.lostO = true; this.dir(Math.cos(this.time * 1.9) * 0.4, Math.sin(this.time * 1.4) * 0.4); this.state = 'confused'; return;
+      } else this.lostO = false;
       // learn the human's opening habit
       if (this.learn && m.phase === 'fight' && !this.recorded && m.sinceGo > 0.6) {
         this.recorded = true;
