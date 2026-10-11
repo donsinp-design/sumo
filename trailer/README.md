@@ -15,3 +15,15 @@ On a machine without a GPU set `SWGL=1` (swiftshader) and use `SS=2` (2x supersa
 - `cut.py OUT "dir:start:count[:fadeIn:fadeOut:color]" ... card=PNG:0:frames` concatenates at 30 fps
 - `strobe.py` / `mcflick.py` flicker finders; `cards/` logo + COMING SOON + title overlay (bbs2@2x.png, white, no border)
 - Music: `music/modena.ogg` = The Modena Chamber Orchestra, Vivaldi Summer RV 315 III Presto (Musopen, public domain). Big hit at 8.0 s.
+
+## Showcase v5: what to make (owner's notes on v4)
+Order, all real gameplay at the default camera, no HUD, cut to music/modena.ogg on the beat:
+logo2_sharp (2.2 s) -> food rain (3 s, fade in/out) -> wake4 as ONE take (no jump cut; title overlay bbs2@2x fades in as he wakes)
+-> a couple of seconds before knock2 (the knock must not look like it caused anyone's slip) -> knock2 -> shove2 -> follow9 (~7 s)
+-> cartrun (double speed) -> cartko (he fights back, slap KO) -> chasemaw -> vend3 (drinks BOTH cans, keep through the burp)
+-> gacha singles: ball, banana (red ring), shinkansen, giant, chicken, claw, inhale, potato, torpedo, belly flop, cyclone, bumper,
+   triplets, shock stomp, rewind (fires the moment he's pushed out), + smoke bomb / controller disconnected / rotating ring for timing.
+   NO molotov.
+-> boss: short highlights only (no 30 s of fighting): dodge, catch, parry, tech, lift, edge save, throws (botrec bouts)
+-> finale facecap: salt, clap, boss stomp, both charge; cut to COMING SOON on a strong beat just before they hit; music ends/fades there naturally.
+Check every frame for flicker/freezes (strobe.py, mcflick.py) before sending.
