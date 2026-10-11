@@ -568,7 +568,7 @@
           if (w.thrHand > 0 || w.throat) { Rh = [0.1, 1.05, 1.4]; Lh = [-0.5, 0.45, 0.3]; tw = -0.25; } // one hand up at their throat
           break;
         }
-        case 'torpwind': c = 1.0; p = -0.22; Rh = [0.5, 0.3, -0.42]; Lh = mir(Rh); hp = -0.25; rate = 28; break; // TORPEDO: crouched back, arms drawn behind
+        case 'torpwind': c = 1.0; p = 0.42; Rh = [0.5, 0.5, -0.55]; Lh = mir(Rh); hp = -0.5; rate = 28; break; // TORPEDO: coiled low, eyes on them, arms swept back
         case 'charge': if (w.torpedo) { c = 0.0; p = 0; Rh = [0.26, 1.4, 0.22]; Lh = mir(Rh); hp = -0.75; rate = 40; break; } // stretched out straight, arms past the head (the root lies him flat)
           c = 0.62; p = 0.68; Rh = [0.36, 0.4, 0.78]; Lh = mir(Rh); hp = -0.3; break;
         case 'overrun': c = 0.4; p = 0.85 + 0.12 * Math.sin(T * 25); Rh = [0.78, 0.82, 0.3]; Lh = mir(Rh); rate = 20; break;
@@ -714,8 +714,8 @@
 
     update(w, dt, T) {
       const s = this.s, root = this.root, ps = this.ps;
-      // TORPEDO: the wind-up rocks him back; in flight he lies flat out, head first, at belly height, centred on where he is
-      const tl = w.torpedo ? 1.48 : w.st === 'torpwind' ? -0.2 : 0; this.tilt = (this.tilt || 0) + (tl - (this.tilt || 0)) * Math.min(1, dt * (w.torpedo ? 24 : 10));
+      // TORPEDO: in flight he lies flat out, head first, at belly height, centred on where he is
+      const tl = w.torpedo ? 1.48 : 0; this.tilt = (this.tilt || 0) + (tl - (this.tilt || 0)) * Math.min(1, dt * (w.torpedo ? 24 : 10));
       const lay = Math.max(0, Math.sin(this.tilt));
       root.position.set(w.x - w.fx * lay * 0.55 * s, w.y + lay * 0.62 * s, w.z - w.fz * lay * 0.55 * s); root.rotation.x = this.tilt;
       this.torpFx(w, dt, lay);
@@ -865,6 +865,7 @@
       if (w.torpedo && !this.wasTorp) { this.fx.dust(w.x - fx * 0.4, 0.05, w.z - fz * 0.4, 16, 0.3, 1.1, 0.5, -fx * 3, -fz * 3); this.fx.ring(w.x, w.z, 1.5, 0.3); }
       if (!w.torpedo && this.wasTorp) { this.fx.burst(w.x + fx * 0.5 * s, w.z + fz * 0.5 * s, 10); this.fx.ring(w.x + fx * 0.4 * s, w.z + fz * 0.4 * s, 2.4, 0.4); }
       this.wasTorp = w.torpedo;
+      if (w.st === 'torpwind' && Math.random() < 0.6) this.fx.dust(w.x + fx * 0.3 * s, 0.05, w.z + fz * 0.3 * s, 1, 0.25, 0.3, 0.3, fx * 1.2, fz * 1.2); // heels digging in
       if (w.torpedo && Math.random() < 0.85) this.fx.dust(w.x - fx * 0.5 * s, 0.05, w.z - fz * 0.5 * s, 2, 0.2, 0.35, 0.4, -fx * 1.5, -fz * 1.5);
       if (!this.streak && lay > 0.05) {
         const g = this.streak = new THREE.Group(), mat = this.streakMat = new THREE.MeshBasicMaterial({ color: 0xfff6e6, transparent: true, opacity: 0, depthWrite: false });
@@ -1892,10 +1893,10 @@
       const v = new WrestlerView(this.scene, src.arch, this.fx, src.lo), s = v.s;
       if (src.maskId && S.CampSkills) { const mk = S.CampSkills.maskMesh(src.maskId); if (mk) { mk.scale.setScalar(s * 1.3); v.head.add(mk); v.maskId = src.maskId; } }
       if (src.soft && S.SoftSumo) S.SoftSumo.attach(v, { noBlob: true });
-      const band = mesh(new THREE.TorusGeometry(1, 0.26, 8, 24), toon(0xe2242a, { shade: 0x8a1018 }), 0);
+      const band = mesh(new THREE.TorusGeometry(1, 0.34, 8, 24), toon(0xe2242a, { shade: 0x8a1018 }), 0);
       if (v.soft) { // rides on the soft upper arm bone (its +Y runs down the arm)
         const b = v.soft.B.upperarml, fo = v.soft.B.forearml, L = fo ? fo.position.length() : 0.3 / v.soft.k;
-        band.scale.setScalar(0.175 * s / v.soft.k); band.rotation.x = Math.PI / 2; band.position.y = L * 0.42; b.add(band);
+        band.scale.setScalar(0.2 * s / v.soft.k); band.rotation.x = Math.PI / 2; band.position.y = L * 0.42; b.add(band);
       } else { band.scale.setScalar(0.2 * s); band.rotation.x = Math.PI / 2; v.arms[1].up.add(band); }
       v.cloneBand = band;
       return v;

@@ -208,6 +208,24 @@
           if (h > 0.0025 && h < 0.0035) v.y = UP + 0.009; else if (h > 0.0035 && h < 0.0045) v.y = UP - 0.004; else continue;
           v.applyMatrix4(inv); pa.setXYZ(i, v.x, v.y, v.z); n++; } }
         if (n) { pa.needsUpdate = true; o.geometry.computeBoundingSphere(); } }); }
+      // the TV room behind the front desk had no way in: a doorway through its wall, behind the desk (x -3.2..-1.6). The wall is part of the
+      // building mesh: its faces go, and it's rebuilt as two pieces either side of the gap (same palette colour)
+      const bld = root.getObjectByName('MOD_BUILDING'); if (bld && !root.userData.tvDoor) { root.userData.tvDoor = true; root.updateMatrixWorld(true);
+        const g = bld.geometry, pa = g.attributes.position, uv = g.attributes.uv, ix = g.index, mw = bld.matrixWorld, inv = new THREE.Matrix4().copy(mw).invert(), v = new THREE.Vector3(), w = [0, 0, 0].map(() => new THREE.Vector3());
+        let y0 = 1e9, y1 = -1e9, u0 = null; const uvc = {}; const n = ix ? ix.count / 3 : pa.count / 3, arr = ix ? ix.array : null;
+        if (arr) for (let t = 0; t < n; t++) { let inside = true; for (let k = 0; k < 3; k++) { w[k].fromBufferAttribute(pa, arr[t * 3 + k]).applyMatrix4(mw); const q = w[k]; if (!(q.x > -4.05 && q.x < 9.05 && q.z > -86.25 && q.z < -85.75 && q.y > UP - 0.05 && q.y < UP + 2.5)) inside = false; }
+          if (!inside) continue; for (const q of w) { y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); } if (uv) { const key = uv.getX(arr[t * 3]).toFixed(3) + ',' + uv.getY(arr[t * 3]).toFixed(3); uvc[key] = (uvc[key] || 0) + 1; } arr[t * 3 + 1] = arr[t * 3 + 2] = arr[t * 3]; }
+        if (arr && y1 > y0) { ix.needsUpdate = true; const top = Object.entries(uvc).sort((a, b) => b[1] - a[1])[0]; if (top) u0 = top[0].split(',').map(Number); const m0 = Array.isArray(bld.material) ? bld.material[0] : bld.material;
+          for (const [x0, x1] of [[-4, -3.2], [-1.6, 9]]) { const bg = new THREE.BoxGeometry(x1 - x0, y1 - y0, 0.4); if (u0) { const ua = bg.attributes.uv; for (let i = 0; i < ua.count; i++) ua.setXY(i, u0[0], u0[1]); }
+            const bm = new THREE.Mesh(bg, m0); bm.position.copy(new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, -86).applyMatrix4(inv).applyMatrix4(bld.matrix)); bm.castShadow = bm.receiveShadow = true; bld.parent.add(bm); } } }
+      // furniture built flush against a wall (the wash rows, shelves...) shared the wall's face exactly: the two fought and patches blinked through as the
+      // camera moved. Each piece that touches a wall face is eased 1.5 cm off it
+      if (!root.userData.flushFix) { root.userData.flushFix = true; const SL = LY.solids, walls = SL.filter((w) => w.k === 'wall'), E = 0.015;
+        const byIdx = {}; root.traverse((o) => { const m = /^SOLID_(\d+)_/.exec(o.name || ''); if (m) (byIdx[m[1]] = byIdx[m[1]] || []).push(o); });
+        SL.forEach((q, i) => { if (q.k === 'wall' || !byIdx[i]) return; let dx = 0, dz = 0; const yo = (w) => (w.f || 0) === (q.f || 0);
+          for (const w of walls) { if (!yo(w)) continue; const oz = q.z1 > w.z0 && q.z0 < w.z1, ox = q.x1 > w.x0 && q.x0 < w.x1;
+            if (oz && Math.abs(q.x0 - w.x1) < 0.005) dx = E; if (oz && Math.abs(q.x1 - w.x0) < 0.005) dx = -E; if (ox && Math.abs(q.z0 - w.z1) < 0.005) dz = E; if (ox && Math.abs(q.z1 - w.z0) < 0.005) dz = -E; }
+          if (dx || dz) for (const o of byIdx[i]) { o.position.x += dx; o.position.z += dz; } }); }
       const get = (n) => root.getObjectByName(n), proto = {};
       for (const n of ['ITEM_STOOL', 'ITEM_OKE', 'ITEM_BUCKET', 'ITEM_WASHB', 'BOX', 'CLOTH_SHIRT', 'CLOTH_SHORTS', 'ITEM_CAN0', 'ITEM_CAN1', 'ITEM_CAN2']) { const o = get(n); if (o) { o.visible = false; proto[n] = o; } }
       this.proto = proto;
@@ -735,7 +753,8 @@
         b.wet = inPool(b.tx, b.tz); b.ty = b.wet ? POOL.water - 0.12 : floorY(b.tx, b.tz); b.dur = 0.3 + L * 0.05;
       }
       this.cartStep(dt);
-      const hit = this.collide(P, P.r);
+      const hx0 = P.x, hz0 = P.z, hit0 = this.collide(P, P.r), hpx = P.x - hx0, hpz = P.z - hz0, hpl = Math.hypot(hpx, hpz);
+      const hit = hit0 && (P.st !== 'charge' || (hpl > 1e-5 && (hpx * Math.cos(P.cdir) + hpz * Math.sin(P.cdir)) / hpl < -0.55));   // (a charge only bumps a wall it runs INTO: brushing along one beside him doesn't count)
       if (this.noGuard) this.noGuard = false; else if ((P.x !== px0 || P.z !== pz0) && Math.hypot(P.x - px0, P.z - pz0) < 2.5 && this.segInWall(px0, pz0, P.x, P.z)) { P.x = px0; P.z = pz0; }   // (never squeezed through a wall: a shove, a punch, a crowd pushing)
       // how high he stands: in the bath up to his chest, the stairs, the floor above
       const ty = wet ? (P.sub ? -1.6 : P.z > -3.4 && P.x > 0 && P.x < 2 ? -0.3 : -0.62) : floorY(P.x, P.z);
@@ -789,10 +808,12 @@
       P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet && !(this.noDuck > 0); this.noDuck = Math.max(0, (this.noDuck || 0) - dt);
       if (!this.boxW) { this.boxW = { x0: 1e4, x1: 1e4, z0: 1e4, z1: 1e4, tall: false, box: true }; this.walls.push(this.boxW); }
       if (P.boxHide && !this.wasBoxHide) this.markWitness();
-      if (!P.boxHide && this.wasBoxHide) for (const n of this.npcs) if ((n.pushing2 || (n.mode !== 'chase' && !n.pullOut && n.a.st === 'free' && !n.busy)) && !n.ko && Math.abs(n.a.y - P.y) < 1.2 && Math.hypot(n.a.x - P.x, n.a.z - P.z) < (n.pushing2 ? 2.2 : 2.8)) {   // (anyone close who wasn't expecting a box to stand up)   // the box they were shoving stands up: they leap back
+      // the box stands UP (I let go): only then does anyone jump, and only someone shoving it or actually looking at it (tiptoeing along in it isn't standing up)
+      const ducked = P.boxHide || (this.wearing && !!this.keys.KeyI);
+      if (!ducked && this.wasDucked && this.wearing) for (const n of this.npcs) if ((n.pushing2 || (n.mode !== 'chase' && !n.pullOut && n.a.st === 'free' && !n.busy && this.sees(n, P.x, P.z, 2.8))) && !n.ko && Math.abs(n.a.y - P.y) < 1.2 && Math.hypot(n.a.x - P.x, n.a.z - P.z) < (n.pushing2 ? 2.2 : 2.8)) {   // (anyone close who wasn't expecting a box to stand up)   // the box they were shoving stands up: they leap back
         const d = Math.hypot(n.a.x - P.x, n.a.z - P.z) || 1; n.shock = 1.1; n.a.shock = 1; n.hop = true; n.shockV = [(n.a.x - P.x) / d * 6.4, (n.a.z - P.z) / d * 6.4];
         n.pushing2 = false; n.tug = 0; n.path = null; n.a.push = false; this.popAt(n.a, ['うわぁっ!?', 'ひぃっ!?', 'えっ!?'][(this.t * 3 | 0) % 3], 1.1); }
-      this.wasBoxHide = P.boxHide;
+      this.wasBoxHide = P.boxHide; this.wasDucked = ducked;
       if (P.boxHide) { const W = this.boxW; W.x0 = P.x - 0.85; W.x1 = P.x + 0.85; W.z0 = P.z - 0.85; W.z1 = P.z + 0.85; }   /* (flaps and all) */ else this.boxW.x0 = this.boxW.x1 = this.boxW.z0 = this.boxW.z1 = 1e4;
       this.ratStep(dt);
       if (this.stage === 'escape') for (const t of this.traps) if (t.armed && Math.hypot(t.x - P.x, t.z - P.z) < 0.5 && (P.st === 'free' || P.st === 'charge')) {
@@ -1967,7 +1988,8 @@
         if (duck && !this.boxDown) { this.boxDown = true; this.scene.attach(bw);   // let go of it where it is: it stays standing on the floor, its own size, level
           const e = new THREE.Euler().setFromQuaternion(bw.quaternion, 'YXZ'); bw.rotation.set(0, e.y, 0); bw.scale.setScalar(0.95 * v.s); bw.position.y = P.y; this.boxYawOff = e.y + P.f; }
         else if (!duck && this.boxDown) { this.boxDown = false; v.body.attach(bw); bw.position.set(0, -0.62 * v.s, 0.02 * v.s); bw.rotation.set(0, 0, 0); bw.scale.setScalar(0.95); }
-        if (this.boxDown) { bw.position.x = P.x; bw.position.z = P.z; if (boxTip && !P.boxHide && this.boxYawOff !== undefined) bw.rotation.y = this.boxYawOff - P.f;   // (tiptoeing along: the closed box turns the way he goes)
+        if (this.boxDown) { bw.position.x = P.x; bw.position.z = P.z; bw.position.y = P.y;   // (up the stairs too: it rides each step with him, never left sunk in them)
+          if (boxTip && !P.boxHide && this.boxYawOff !== undefined) bw.rotation.y = this.boxYawOff - P.f;   // (tiptoeing along: the closed box turns the way he goes)
           if (this.boxYaw !== undefined && this.npcs.some((n) => n.pushing2)) { const q = Math.PI / 2, want = -this.boxYaw, d = ((want - bw.rotation.y) % q + q * 1.5) % q - q / 2; bw.rotation.y += d * Math.min(1, dt * 2.5); } }   // (shoved square-on: the box swings round flat to them)
         if (bw.setOpen) bw.setOpen(this.boxDown || boxTip ? Math.max(0, 1 - (this.ballK || 0) * 1.3) : 1);   // the flaps fold shut over him
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)

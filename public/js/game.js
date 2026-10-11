@@ -391,7 +391,7 @@
       R.fx.dust(w.x, 0.05, w.z, 10, 0.4, 0.9, 0.4);
       if (e.id === 'blind') { ui.flash('#ffffff', 0.5); }
       if (e.id === 'slow' || e.id === 'freeze' || e.id === 'trap') this.slowmo(0.5, 0.25);
-      if (e.id === 'giant' || e.id === 'invuln' || e.id === 'torpedo') { R.shake(0.25); R.kick(0.06); }
+      if (e.id === 'giant' || e.id === 'invuln') { R.shake(0.25); R.kick(0.06); }
       if (e.id === 'smoke') A.whoosh(0.8);
       if (e.id === 'gale') { A.whoosh(1.4); R.shake(0.15); }
     }
@@ -604,6 +604,7 @@
           case 'eat': { const p = this.scr(e.x, e.z, 2.4); if (!quiet) ui.callout(e.good ? 'GIANT STRENGTH!' : 'FOOD POISONING!', p.x, p.y, e.good ? 'skill' : 'big'); A.whoosh(0.3); if (e.good) R.shake(0.2); break; }
           case 'boltWarn': A.blip(false); break;
           case 'bolt': { ui.flash('#e8f6ff', e.hit ? 0.55 : 0.3); A.thump(16); A.clack(); R.shake(e.hit ? 0.6 : 0.3); fx.burst(e.x, e.z, 12); fx.spark(e.x, 0.6, e.z, 2.4); if (e.hit) { const p = this.scr(e.x, e.z, 2.2); if (!quiet) ui.callout('ZAPPED!', p.x, p.y, 'big'); } break; }
+          case 'torpedoGo': A.whoosh(1.3); R.shake(0.25); R.kick(0.06); break;
           case 'molotovBurst': { fx.burst(e.x, e.z, 14); fx.spark(e.x, 0.5, e.z, 2.2); A.clack(); A.whoosh(1.0); A.thump(8); R.shake(0.3); const p = this.scr(e.x, e.z, 1.2); if (!quiet) ui.callout('FIRE!', p.x, p.y, 'big'); break; }
           case 'thirdIn': { const p = this.scr(0, 0, 1); if (!quiet) ui.callout('A CHALLENGER APPEARS!', p.x, p.y - 60, 'big'); A.roar(); A.taiko && A.taiko(); this.ui.setWins(m.wins, this.need); break; }
           case 'thirdHit': A.slap(4); fx.spark(e.x, 1.3, e.z, 0.9); break;

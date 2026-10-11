@@ -190,7 +190,7 @@
         w.r = w.r0 * w.szCur; w.m = w.m0 * (f.giant > 0 ? 2 : f.chicken > 0 ? 0.35 : f.shrink > 0 ? 0.5 : 1); w.str = f.giant > 0 ? 2 : f.shrink > 0 ? 0.5 : 1;
         // holding someone you consumed: Space spits them out the way you face
         if (this.phase === 'fight' && S.Skills && w.gulpI >= 0 && w.st !== 'spit' && w.input.skill.pressed && !w.down) S.Skills.spit(this, w);
-        else if (this.phase === 'fight' && S.Skills && w.input.skill.pressed && this.skills[w.idx] && !w.down && w.st !== 'fall' && !w.lifted && !(this.skills[w.idx] === 'copycat' && (!this.skills[w.opp.idx] || this.skills[w.opp.idx] === 'fake')) && !(this.skills[w.idx] === 'favourite') && !(this.skills[w.idx] === 'reset' && !this.wins[0] && !this.wins[1] && !(this.third && this.third.wins)) && !(this.skills[w.idx] === 'third' && this.third)) {
+        else if (this.phase === 'fight' && S.Skills && w.input.skill.pressed && this.skills[w.idx] && !w.down && w.st !== 'fall' && !w.lifted && !(this.skills[w.idx] === 'copycat' && (!this.skills[w.opp.idx] || this.skills[w.opp.idx] === 'fake')) && !(this.skills[w.idx] === 'favourite') && !(this.skills[w.idx] === 'reset' && !this.wins[0] && !this.wins[1] && !(this.third && this.third.wins)) && !(this.skills[w.idx] === 'third' && this.third) && !(this.skills[w.idx] === 'molotov' && this.objs.some((q) => q.type === 'molotov' && q.owner === w))) { // (one molotov at a time: a second pull waits till the fire is out)
           const id = this.skills[w.idx]; this.skills[w.idx] = null;
           S.Skills.use(this, w, id);
         }

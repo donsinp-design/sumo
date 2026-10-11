@@ -135,8 +135,8 @@
         }
         case 'referee': m.objs.push({ type: 'ref', x: (w.x + o.x) / 2, z: (w.z + o.z) / 2, t: 0, dur: 1.5, pushed: false }); break;
         case 'hundred': w.set('hyaku', 3); w.hitT = 0; w.hyN = 0; w.hyHits = 0; break;
-        case 'torpedo':
-          w.f = Math.atan2(nz, nx); w.cspd = 11; w.chargeHit = false; w.dodged = false; w.set('charge', 0.62); w.torpedo = true; break;
+        case 'torpedo': // a crouch back to wind up first (see control), then the launch
+          w.f = Math.atan2(nz, nx); w.vx *= 0.3; w.vz *= 0.3; w.set('torpwind', 0.34); break;
         case 'peek': {
           (m.peek || (m.peek = [false, false]))[w.idx] = true;
           let nid = 'peek'; while (nid === 'peek') nid = LIST[(S.rand() * LIST.length) | 0].id;
@@ -233,6 +233,12 @@
       if (w.inShop) { w.vx = w.vz = 0; w.ghostT = 0.2; return true; } // browsing the shelves
       if (w.swallowed) { // inside the other wrestler: ride along until spat out
         const g = m.w[1 - w.idx]; w.x = g.x; w.z = g.z; w.vx = w.vz = 0; w.ghostT = 0.2; return true;
+      }
+      if (w.st === 'torpwind') { // TORPEDO wind-up: rocks back on his heels, still aiming, then launches head-first
+        const [nx, nz] = dirTo(w, o), k = Math.min(1, dt * 10); w.f = Math.atan2(nz, nx);
+        w.vx += (-nx * 1.2 - w.vx) * k; w.vz += (-nz * 1.2 - w.vz) * k;
+        if (w.t >= w.dur) { w.cspd = 11; w.chargeHit = false; w.dodged = false; w.set('charge', 0.62); w.torpedo = true; w.vx = nx * 6; w.vz = nz * 6; m.emit('torpedoGo', { w, x: w.x, z: w.z }); }
+        return true;
       }
       if (f.zapped > 0) { const k = Math.exp(-dt * 3); w.vx *= k; w.vz *= k; return true; } // frazzled by lightning
       if (f.sleep > 0) { // asleep on their feet: no control, but they can still be shoved
