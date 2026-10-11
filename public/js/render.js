@@ -476,7 +476,7 @@
       } else if (this.armband) this.armband.visible = false;
     }
     dispose(scene) {
-      for (const x of [this.ballSpin, this.chick, this.bigFan, this.flopShadow, this.mosaic, this.streak]) if (x && x.parent) x.parent.remove(x);
+      for (const x of [this.ballSpin, this.chick, this.bigFan, this.flopShadow, this.mosaic, this.censor, this.streak]) if (x && x.parent) x.parent.remove(x);
       if (this.stars) for (const sp of this.stars) if (sp.parent) sp.parent.remove(sp);
       if (this.jacket && this.jacket.parent === scene) scene.remove(this.jacket);
       scene.remove(this.root); scene.remove(this.shadow);
@@ -710,6 +710,14 @@
     handWorld(sd, out) {
       if (this.soft) { const b = this.soft.B[sd > 0 ? 'handl' : 'handr']; if (b) { b.updateWorldMatrix(true, false); return out.setFromMatrixPosition(b.matrixWorld); } }
       const A = this.arms[sd > 0 ? 1 : 0]; return A.hand.getWorldPosition(out);
+    }
+
+    // the crotch (world), on whichever body is showing: between the hip joints, a bit down and forward under the belly
+    crotchWorld(out) {
+      const B = this.soft && this.soft.B, q = this.body.getWorldQuaternion(this.cq || (this.cq = new THREE.Quaternion())), k = this.s * (this.root.scale.x || 1);
+      const fw = (this.cv || (this.cv = new THREE.Vector3())).set(0, -0.1 * k, 0.26 * k).applyQuaternion(q);
+      if (B && B.thighl && B.thighr) { B.thighl.updateWorldMatrix(true, false); B.thighr.updateWorldMatrix(true, false); const e = B.thighl.matrixWorld.elements, f = B.thighr.matrixWorld.elements; return out.set((e[12] + f[12]) / 2, (e[13] + f[13]) / 2, (e[14] + f[14]) / 2).add(fw); }
+      return this.body.localToWorld(out.set(0, -0.22 * this.s, 0)).add(fw);
     }
 
     update(w, dt, T) {
@@ -1724,17 +1732,14 @@
 
     // the boss bout: he's fighting bare (a censor block) and, the first time, inside the storage-room box until he loses a round
     bossGear(on, box, makeBox) {
-      if (this.bossG) { for (const o of [this.bossG.boxM, this.bossG.mos].concat(this.bossG.bits)) if (o && o.parent) o.parent.remove(o); this.bossG = null; }
+      if (this.bossG) { for (const o of [this.bossG.boxM].concat(this.bossG.bits)) if (o && o.parent) o.parent.remove(o); this.bossG = null; }
+      for (const v of this.views) if (v.censor) { if (v.censor.parent) v.censor.parent.remove(v.censor); v.censor = null; }
       if (on) this.bossG = { box: !!box, makeBox, bits: [], t: 0 };
     }
     bossGearStep(m, dt) {
       const G = this.bossG, v = this.views[0], w = m && m.w[0]; if (!G || !v || !w) return;
-      if (v.soft && !G.hid) { G.hid = true; for (const x of v.soft.mats) if (/mawashi/i.test(x.name || '')) x.visible = false; }
+      if (v.soft && !G.hid) { G.hid = true; v.naked = true; for (const x of v.soft.mats) if (/mawashi/i.test(x.name || '')) x.visible = false; }
       const sc = (w.a && w.a.scale || 1) * (w.szCur || 1);
-      if (!G.mos) {
-        const cv = document.createElement('canvas'); cv.width = 8; cv.height = 5; const tex = new THREE.CanvasTexture(cv); tex.magFilter = tex.minFilter = THREE.NearestFilter;
-        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false })); s.renderOrder = 50; this.scene.add(s); G.mos = s; G.cv = cv;
-      }
       if (G.box && !G.boxM && G.makeBox) { G.boxM = G.makeBox(); G.boxM.visible = true; this.scene.add(G.boxM); }
       if (G.boxM) { G.boxM.position.set(w.x, 0.5 * sc, w.z); G.boxM.rotation.y = -w.f + Math.PI / 2; G.boxM.scale.setScalar(1.05 * sc); }
       if (!G.box && G.boxM) {   // lost a round: the box bursts
@@ -1744,13 +1749,23 @@
         if (this.fx.dust) this.fx.dust(p.x, 0.3, p.z, 14, 0.8, 1.0, 0.8);
       }
       for (const c of G.bits) { const u = c.userData; u.t += dt; u.vy -= 14 * dt; c.position.x += u.vx * dt; c.position.y = Math.max(0.02, c.position.y + u.vy * dt); c.position.z += u.vz * dt; c.rotation.x += 6 * dt; c.rotation.z += 5 * dt; if (u.t > 2.5) c.visible = false; }
-      const fs = (w && w.fxs) || {}; const s = G.mos; s.visible = !G.boxM && !(fs.ball > 0) && !(fs.chicken > 0) && !(fs.invis > 0);   // (nothing to censor on a daruma, a chicken, or thin air)
-      if (s.visible) {   // a jittering pixel block on his hips, towards the camera
-        G.t -= dt; if (G.t <= 0) { G.t = 0.1; const g = G.cv.getContext('2d'), sk = ['#f6e2d2', '#8a6454', '#e9b894', '#5e4438', '#fff2e6', '#b88468']; g.clearRect(0, 0, 8, 5);
-          for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { if ((x === 0 || x === 7) && Math.random() < 0.6) continue; g.fillStyle = sk[(Math.random() * sk.length) | 0]; g.fillRect(x, y, 1, 1); } s.material.map.needsUpdate = true; }
-        const cp = this.cam.position, dx = cp.x - w.x, dz = cp.z - w.z, d = Math.hypot(dx, dz) || 1;
-        s.position.set(w.x + dx / d * 0.45 * sc, 0.7 * sc, w.z + dz / d * 0.45 * sc); s.scale.set(0.85 * sc, 0.53 * sc, 1);
+      const fs = (w && w.fxs) || {};
+      this.censorStep(v, dt, !G.boxM && !(fs.ball > 0) && !(fs.chicken > 0) && !(fs.invis > 0));   // (nothing to censor on a daruma, a chicken, or thin air)
+    }
+    // a naked view's censor: a jittering pixel block stuck on the crotch bone, nudged towards the camera, depth-tested (a passing train hides it)
+    censorStep(v, dt, show) {
+      let s = v.censor;
+      if (!s) {
+        const cv = document.createElement('canvas'); cv.width = 8; cv.height = 5; const tex = new THREE.CanvasTexture(cv); tex.magFilter = tex.minFilter = THREE.NearestFilter;
+        s = v.censor = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); s.renderOrder = 6; this.scene.add(s); v.censorCv = cv; v.censorT = 0;
       }
+      s.visible = !!show && v.root.visible; if (!s.visible) return;   // (swallowed, morphed, in the shop: no body, no block)
+      v.censorT -= dt; if (v.censorT <= 0) { v.censorT = 0.1; const g = v.censorCv.getContext('2d'), sk = ['#f6e2d2', '#8a6454', '#e9b894', '#5e4438', '#fff2e6', '#b88468']; g.clearRect(0, 0, 8, 5);
+        for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { if ((x === 0 || x === 7) && Math.random() < 0.6) continue; g.fillStyle = sk[(Math.random() * sk.length) | 0]; g.fillRect(x, y, 1, 1); } s.material.map.needsUpdate = true; }
+      // slid along the camera ray (same spot on screen) to just in front of his body's bulk, so only things in front of HIM cover it
+      const sc = v.s * (v.root.scale.x || 1), p = v.crotchWorld(s.position), c = v.body.getWorldPosition(v.cv), cp = this.cam.position, dx = cp.x - p.x, dy = cp.y - p.y, dz = cp.z - p.z, d = Math.hypot(dx, dy, dz) || 1;
+      const t = Math.max(0, 0.8 * sc - ((p.x - c.x) * dx + (p.y - c.y) * dy + (p.z - c.z) * dz) / d);
+      p.x += dx / d * t; p.y += dy / d * t; p.z += dz / d * t; s.scale.set(0.85 * sc, 0.53 * sc, 1);
     }
 
     setWrestlers(archs, loadouts, names) {
@@ -1893,6 +1908,7 @@
       const v = new WrestlerView(this.scene, src.arch, this.fx, src.lo), s = v.s;
       if (src.maskId && S.CampSkills) { const mk = S.CampSkills.maskMesh(src.maskId); if (mk) { mk.scale.setScalar(s * 1.3); v.head.add(mk); v.maskId = src.maskId; } }
       if (src.soft && S.SoftSumo) S.SoftSumo.attach(v, { noBlob: true });
+      if (src.naked && v.soft) { v.naked = true; for (const x of v.soft.mats) if (/mawashi/i.test(x.name || '')) x.visible = false; }   // a bare caster: bare copies (each with its own censor block)
       const band = mesh(new THREE.TorusGeometry(1, 0.34, 8, 24), toon(0xe2242a, { shade: 0x8a1018 }), 0);
       if (v.soft) { // rides on the soft upper arm bone (its +Y runs down the arm)
         const b = v.soft.B.upperarml, fo = v.soft.B.forearml, L = fo ? fo.position.length() : 0.3 / v.soft.k;
@@ -2261,11 +2277,12 @@
           const own = ob.owner;
           ob.c.forEach((c, k) => {
             const v = me.userData.views[k];
-            if (!c.alive) { v.root.visible = false; v.shadow.visible = false; return; }
+            if (!c.alive) { v.root.visible = false; v.shadow.visible = false; if (v.censor) v.censor.visible = false; return; }
             const p = Object.assign(Object.create(Object.getPrototypeOf(own)), own);
             p.x = c.x; p.z = c.z; p.vx = c.vx || 0; p.vz = c.vz || 0; p.f = Math.atan2(own.opp.z - c.z, own.opp.x - c.x); p.clinch = null; p.swallowed = false; p.st = c.kb > 0 ? 'stun' : 'free'; p.t = c.kb > 0 ? 0.8 - c.kb : 0; p.dur = 0.8; p.lifted = false; p.down = false; p.fxs = {}; p.torpedo = false;
             v.viewer = this.viewer; v.match = m; v.update(p, Math.max(dt, 1e-4), this.animT);
             if (v.armband) v.armband.visible = false;
+            if (v.naked) this.censorStep(v, dt, true);
           });
         } else if (ob.type === 'beartrap') {
           me.position.set(ob.x, 0, ob.z);

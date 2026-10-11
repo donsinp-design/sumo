@@ -80,7 +80,9 @@
       this.awaitGacha = false; if (this.ui) { this.ui.hideGacha(); this.ui.vhs(false); }
       let archs = [S.ARCH[i1], S.ARCH[i2]];
       if (kind === 'boss') { const A = S.ARCH[0]; i2 = 0; archs = [Object.assign({}, S.ARCH[i1], { name: 'YOU', kanji: 'あなた' }),   // the bathhouse owner: regular size, grey topknot, his own dark mawashi, a gentler build
-        Object.assign({}, A, { name: 'YUNOFUJI', kanji: '湯乃富士', belt: 0x3b3346, hair: 0xc9c6c0, accent: '#8a7aa8', moveForce: A.moveForce * 0.82, pushForce: A.pushForce * 0.72, power: A.power * 0.75, dashSpeed: A.dashSpeed * 0.82, grip: A.grip * 0.9, stability: A.stability * 0.92 })]; }
+        Object.assign({}, A, { name: 'YUNOFUJI', kanji: '湯乃富士', belt: 0x3b3346, hair: 0xc9c6c0, accent: '#8a7aa8' }, this.campSaved && this.campSaved.bossWon1
+          ? { mass: 1.3, stability: 1.45, pushForce: A.pushForce * 1.12, power: A.power * 1.1, grip: A.grip * 1.15, tech: 1.15, recovery: 1.25 }   // the rematch: the real champion, low and heavy (hard to shove, lift or stand up)
+          : { moveForce: A.moveForce * 0.82, pushForce: A.pushForce * 0.72, power: A.power * 0.75, dashSpeed: A.dashSpeed * 0.82, grip: A.grip * 0.9, stability: A.stability * 0.92 })]; }
       this.kind = kind; this.archIdx = [i1, i2];
       const m = this.match = new S.Match(archs);
       this.ais = []; this.ctrls = []; this.dummy = null;

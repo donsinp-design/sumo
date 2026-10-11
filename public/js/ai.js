@@ -9,7 +9,10 @@
     normal: { react: 0.19, think: 0.10, skill: 0.72, dodge: 0.45, tricky: 0.18, aggr: 0.6 },
     hard:   { react: 0.12, think: 0.06, skill: 0.94, dodge: 0.6, tricky: 0.28, aggr: 0.72 },
     boss:   { react: 0.5, think: 0.26, skill: 0.225, escP: 0.5, parryP: 0.5, dodge: 0.08, tricky: 0, aggr: 0.36 },
-    bossRematch: { react: 0.3, think: 0.15, skill: 0.55, escP: 0.75, parryP: 0.75, edgeSave: 0.75, dodge: 0.3, tricky: 0.35, aggr: 0.5 },   // the rematch: no more going easy. Saves himself at the straw 3 times in 4, techs, parries, slaps down, slips grabs   // the bathhouse owner: a patient old champion, for casual players (and he goes easier after each round you lose)
+    // the rematch: no more going easy. Breaks grabs and slips throws, spins and lifts 9 times in 10, parries hands on reflex,
+    // charges (and pulls up short when you sidestep), throat-pushes, trips, and saves himself at the straw 9 times in 10
+    bossRematch: { react: 0.1, think: 0.06, skill: 0.95, escP: 0.92, parryP: 0.85, edgeSave: 0.92, grabBreak: 0.88, armEsc: 0.9, stopShort: 0.9, throatP: 0.35, tripP: 0.5, anchor: true, dodge: 0.5, tricky: 0.45, aggr: 0.8 },
+    // (the bathhouse owner, first time: a patient old champion, for casual players; he goes easier after each round you lose)
   };
   // remembers how the human opens, across rounds and matches
   const MEM = { charge: 1, brace: 0.6, henka: 0.4, wait: 0.6 };
@@ -81,12 +84,28 @@
       }
       this.modeT += dt;
       this.thinkT -= dt;
+      if (m.phase === 'fight' && !this.me.clinch) this.reflex(o);
       if (m.phase === 'fight' && S.Skills && S.Skills.aiWant(m, this.me)) this.tap('skill', 0.05);
       if (this.thinkT <= 0) {
         this.thinkT = this.L.think * (0.75 + this.rnd() * 0.5);
         const fogged = this.me.fxs && this.me.fxs.dark > 0 && this.rnd() < 0.45; // can't see properly: guesses
         if (this.me.fxs && (this.me.fxs.blind > 0 || fogged) && m.phase === 'fight') { this.dir(this.rnd() - 0.5, this.rnd() - 0.5); this.state = 'blind'; }
         else this.decide();
+      }
+    }
+    // the rematch boss's reflexes (every tick, no reaction delay): one roll per hand thrown at him, one per sidestep against his charge
+    reflex(o) {
+      const me = this.me, L = this.L;
+      const hk = o.st + Math.round((this.time - o.t) * 30);   // (this hand: its kind and when it started)
+      if (L.anchor && (o.st === 'palm' || o.st === 'heavy') && o.t < 0.05 && me.st === 'free' && this.parFor !== hk) {
+        this.parFor = hk;
+        const dx = me.x - o.x, dz = me.z - o.z, d = Math.hypot(dx, dz) || 1;
+        if (d - me.r - o.r < 0.8 && -(dx * o.fx + dz * o.fz) / d < -0.5 && this.rnd() < L.parryP) { this.dir(0, 0); this.btn.dash.next = 0; this.tap('dash', 0.04); this.state = 'parry'; this.thinkT = Math.max(this.thinkT, 0.08); }
+      }
+      if (L.stopShort && me.st === 'charge' && !me.chargeHit && me.t > 0.08 && o.st === 'dash' && o.t < 0.1 && this.stopFor !== o.dashAt) {
+        this.stopFor = o.dashAt;
+        const lat = Math.abs(o.ddx * me.fx + o.ddz * me.fz) < 0.6;   // (a sidestep, not a dash straight at me)
+        if (lat && this.rnd() < L.stopShort) { this.btn.dash.next = 0; this.btn.dash.until = 0; this.tap('dash', 0.04); this.state = 'stop-short'; this.thinkT = Math.max(this.thinkT, 0.12); }
       }
     }
     // notice the human's habits as they happen
@@ -265,6 +284,10 @@
       if (gap >= 0.45 && gap < 0.62 && canAct && P.st !== 'brace' && this.rnd() < 0.35 + 0.5 * L.aggr) {
         this.dir(nx, nz); this.tap('push'); this.state = 'poke'; return;
       }
+      if (gap < 0.45 && L.throatP && canAct && !(me.throatCD > 0)) {
+        if (me.st === 'brace') { this.dir(nx, nz); this.tap('push'); this.state = 'nodowa'; return; }
+        if (me.st === 'free' && this.rnd() < L.throatP) { this.dir(0, 0); this.hold('dash', 0.12); this.state = 'nodowa-set'; return; }
+      }
       if (gap < 0.45) {
         if (!canAct) { this.dir(nx, nz); return; }
         if (P.st === 'brace' && P.braceT > 0.05) { this.dir(nx, nz); this.tap('grab'); this.state = 'grab-vs-brace'; return; }
@@ -349,7 +372,7 @@
         this.aimHold = null;
       }
       // just been grabbed: counter-grab
-      if (c.b === me && c.t < 0.3 && !c.rear && !this.techTried) { this.techTried = true; if (this.rnd() < L.skill * (0.35 + 0.1 * Math.min(2, HAB.grab))) { this.tap('grab', 0.04); this.state = 'grab-break'; return; } }
+      if (c.b === me && c.t < 0.3 && !c.rear && !this.techTried) { this.techTried = true; if (this.rnd() < (L.grabBreak !== undefined ? L.grabBreak : L.skill * (0.35 + 0.1 * Math.min(2, HAB.grab)))) { this.release('grab'); this.btn.grab.next = 0; this.tap('grab', 0.04); this.state = 'grab-break'; return; } }
       if (c.tech) {
         // their throw has only just started: slip it
         if (c.tech.o === me && c.tech.t < 0.2 && this.escFor !== c.tech) { this.escFor = c.tech; if (this.rnd() < (L.escP !== undefined ? L.escP : L.skill * 0.35)) { this.escape(c); return; } }
@@ -359,14 +382,15 @@
       const oArmed = (o.kArm && o.input && o.input.grab && o.input.grab.held) || (c.swing && c.swing.w === o);
       this.armT = oArmed ? (this.armT || 0) + this.L.think : 0;
       const danger = RR - Math.hypot(me.x, me.z) < 1.6 ? 0.1 : 0;
-      if (oArmed && this.armT > L.react && this.rnd() < L.skill * (0.11 + danger + 0.05 * Math.min(2, HAB.grab))) { this.escape(c); return; }
+      if (L.armEsc !== undefined) { if (!oArmed) this.armRoll = null; else if (this.armT > L.react && this.armRoll == null) { this.armRoll = this.rnd() < L.armEsc; if (this.armRoll) { this.escape(c); return; } } }   // (one roll per wind-up)
+      else if (oArmed && this.armT > L.react && this.rnd() < L.skill * (0.11 + danger + 0.05 * Math.min(2, HAB.grab))) { this.escape(c); return; }
       if (c.lift) {
         if (c.lift.w === me) { const ol = Math.hypot(o.x, o.z) || 1; this.dir(o.x / ol, o.z / ol); this.state = 'carry'; }
         else {
           // lifted: wriggle like a human mashing. Better players mash harder.
           this.dir(this.rnd() - 0.5, this.rnd() - 0.5);
           this.wrig = ((this.wrig || 0) + 1) % 3;
-          if (this.rnd() < 0.35 + 0.6 * L.skill) this.tap(['push', 'grab', 'dash'][this.wrig], 0.03);
+          if (L.anchor || this.rnd() < 0.35 + 0.6 * L.skill) this.tap(['push', 'grab', 'dash'][this.wrig], 0.03);
           this.state = 'struggle';
         }
         return;
@@ -380,7 +404,8 @@
 
       // being driven back toward my edge: use their drive against them, or get off the line
       const drivenBack = c.tow[j] > 0.3 || -s * c.v > 0.3;
-      if (drivenBack && myEdge < 1.6 && myBack > 0.2 && !c.utchariOk(me) && this.rnd() < 0.2 + 0.35 * L.skill) {
+      if (L.anchor && drivenBack && !(myEdge < 1.6 && myBack > 0.2)) { this.rel(c, 1, 0); this.state = 'anchor'; return; }
+      if (drivenBack && myEdge < 1.6 && myBack > 0.2 && !c.utchariOk(me) && (L.anchor || this.rnd() < 0.2 + 0.35 * L.skill)) {
         const sp = c.evalTech(me, 'spin'), th = c.evalTech(me, 'throw');
         const best = sp.ok && sp.sc > 0.55 && sp.sc >= th.sc ? 'spin' : th.ok && th.sc > 0.55 ? 'throw' : null;
         if (best) {
@@ -407,7 +432,7 @@
       const cands = [];
       for (const k of ['throw', 'trip', 'spin', 'lift']) {
         const ev = c.evalTech(me, k);
-        if (ev.ok && ev.sc > thresh) cands.push([k, ev.sc]);
+        if (ev.ok && ev.sc > thresh) cands.push([k, ev.sc + (k === 'trip' && L.tripP ? L.tripP * 0.3 : 0)]);   // (the rematch boss loves a leg trip)
       }
       cands.sort((a, b) => b[1] - a[1]);
       const patience = this.clT > 2.2;

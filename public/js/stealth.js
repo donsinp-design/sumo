@@ -1595,7 +1595,7 @@
     ctxStep() {
       const P = this.P, e = this.el('.st-ctx'); if (!e) return; let L = null;
       const near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r, room = roomAt(P.x, P.z), sub = this.el('.st-sub').style.display === 'block';
-      if (!(this.paused || this.over || this.asleep || this.sf || this.freeze || this.choiceCb || sub || this.jumpOn)) {
+      if (!(this.paused || this.over || this.asleep || this.sf || this.freeze || this.choiceCb || sub || this.jumpOn || this.camFocus || this.bossCut)) {   // (no prompts in a cutscene, dialog or not)
         const V = this.vend;
         if (P.stallHide !== undefined) L = [['move / I', 'come out']];
         else if (P.hidden) L = [['move / I', 'climb out'], ['hold I + direction', 'climb out silently']];
