@@ -105,8 +105,9 @@
       if (L.stopShort && me.st === 'charge' && !me.chargeHit && me.t > 0.08 && o.st === 'dash' && o.t < 0.1 && this.stopFor !== o.dashAt) {
         this.stopFor = o.dashAt;
         const lat = Math.abs(o.ddx * me.fx + o.ddz * me.fz) < 0.6;   // (a sidestep, not a dash straight at me)
-        if (lat && this.rnd() < L.stopShort) { this.btn.dash.next = 0; this.btn.dash.until = 0; this.tap('dash', 0.04); this.state = 'stop-short'; this.thinkT = Math.max(this.thinkT, 0.12); }
+        if (lat && this.rnd() < L.stopShort) { this.stopPend = true; this.release('dash'); this.state = 'stop-short'; this.thinkT = Math.max(this.thinkT, 0.12); }
       }
+      if (this.stopPend && !this.holding('dash')) { this.stopPend = false; if (me.st === 'charge') { this.btn.dash.next = 0; this.tap('dash', 0.04); } }   // (a fresh press: L released first if still down from the fists-down)
     }
     // notice the human's habits as they happen
     watch(o, m) {
@@ -411,7 +412,7 @@
         if (best) {
           const side = this.bestSide(c);
           if (best === 'spin') this.rel(c, -1, 0); else this.rel(c, 0, side);
-          const wind = 0.12 + 0.1 * (1 - L.skill); // no time for a long wind-up with your heels on the straw
+          const wind = Math.max(0.17, 0.12 + 0.1 * (1 - L.skill)); // no time for a long wind-up with your heels on the straw (but K must be held 0.15 s or the move never fires)
           this.hold('grab', wind); this.aimHold = { until: this.time + wind, mx: this.mx, mz: this.mz };
           this.state = 'edge-' + best; return;
         }

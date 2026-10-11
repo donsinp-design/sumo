@@ -84,7 +84,7 @@ void RE_Direct_Flat( const in IncidentLight directLight, const in GeometricConte
     const sun = new THREE.DirectionalLight(0xffffff, 1.0);
     sun.castShadow = true; sun.shadow.mapSize.set(o.map || 2048, o.map || 2048);
     const R = o.r || 20; Object.assign(sun.shadow.camera, { left: -R, right: R, top: R, bottom: -R, near: 1, far: 90 });
-    sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.035; sun.shadow.radius = 4;
+    sun.shadow.bias = -0.004; sun.shadow.normalBias = 0.12;   // (thin wall caps flipped lit/shadowed as the camera moved: a firmer bias) sun.shadow.radius = 4;
     scene.add(sun, sun.target);
     const off = new THREE.Vector3(-7, 17, 9);   // from behind the camera: the sumo's back (what you see most) is lit, shadows fall away up the street
     const ts = 2 * R / (o.map || 2048);   // one shadow texel: the sun moves in whole texels OF ITS OWN VIEW (not world x/z: the sun is at a slant), so shadow edges don't shimmer as the camera glides
