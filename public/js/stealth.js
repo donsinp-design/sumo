@@ -682,7 +682,7 @@
       if (!c.dash.held) this.lRel = true;   // (one charge per press: let go of L before the next, no endless re-charging)
       if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
       let spd = 0;
-      if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 2.6 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : this.wearing && this.keys.KeyI ? 1.2 : (this.wearing ? 3.0 : 3.4);   // (crouched in the box, out of puff: a slow shuffle)
+      if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 6.4 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : this.wearing && this.keys.KeyI ? 1.2 : (this.wearing ? 3.0 : 3.4);   // (crouched in the box, out of puff: a slow shuffle)
       P.chT = P.st === 'charge' ? (P.chT || 0) + dt : 0; if (P.chT > 0.95) { P.st = 'free'; P.t = 0; P.cd = 0.5; P.chT = 0; }   // (a charge can never run on)
       if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur; if (P.t > 0.85) P.t = P.dur + 0.01; }   // (never longer than 0.85 s)
       if (P.st === 'wind' && mag > 0.3) { P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * 8); P.f = P.cdir; }
@@ -1612,10 +1612,12 @@
     drink() {
       const P = this.P, b = P.held; if (!b) return;
       if (!b.soda) { this.think('Empty.', 1); return; }
-      P.held = null; b.state = 'gone'; b.m.visible = false; P.st = 'busy'; P.t = 0; P.dur = 1.1; this.w.hand = 1;
+      P.held = null; b.state = 'drink'; this.drinkB = b; P.st = 'busy'; P.t = 0; P.dur = 1.2; this.w.hand = 1;   // tipped up to his mouth, glugged down, then gone
       this.hits = Math.max(0, (this.hits || 0) - 1); P.stam = 1; P.tired = false;
+      this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ごくごく…', 1.1);
+      this.later(1.15, () => { b.state = 'gone'; b.m.visible = false; if (this.drinkB === b) this.drinkB = null; this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ぷはーっ!', 1.1); });
       this.think((this.hits ? '*glug glug glug* Ahhh... that\'s better. ♥' : '*glug glug glug* AHHH. Good as new! ♥'), 1.6);
-      this.later(1.7, () => { this.think(['*BUUUUURP*', '*BWAAARP!*', '*urrrp*... pardon.'][(this.t * 3 | 0) % 3], 1.6); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'げっぷ', 1.2);
+      this.later(2.4, () => { this.think(['*BUUUUURP*', '*BWAAARP!*', '*urrrp*... pardon.'][(this.t * 3 | 0) % 3], 1.6); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'げっぷ', 1.2);
         if (true) this.noiseS(P.x, P.z, 6, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); });   // (loud enough to turn heads)
     }
     // a big bare footprint (x forward, the big toe on the inside): a sole, wide at the ball, and five toes
@@ -1979,6 +1981,9 @@
         else { v.handWorld(1, ha); v.handWorld(-1, hb); ha.add(hb).multiplyScalar(0.5); b.m.position.set(ha.x, ha.y - H * 0.5, ha.z); }   // gripped by its sides
         b.m.rotation.set(0, -P.f, 0);
       }
+      if (this.drinkB) { const b = this.drinkB, ha = this._ha || (this._ha = new THREE.Vector3()), k = Math.min(1, P.t / 0.25); v.handWorld(1, ha);   // the can up at his mouth, tipped back as he glugs
+        const hx = P.x + Math.cos(P.f) * 0.3 * v.s, hz = P.z + Math.sin(P.f) * 0.3 * v.s, hy = P.y + 1.62 * v.s;
+        b.m.position.set(ha.x + (hx - ha.x) * k, ha.y + (hy - ha.y) * k, ha.z + (hz - ha.z) * k); b.m.rotation.set(0, -P.f, 0); b.m.rotateZ(1.9 * k); }
       this.kdt = Math.min(0.05, dt); this.drawN = (this.drawN || 0) + 1;
       this.bossDraw(dt, T); this.bonusBar(); this.mapDraw(T);
       if (this.drawN % 10 === 1) { this.hudApply(); const o = this.el('.st-obj'), hp = this.el('.st-hp'); if (o && hp) hp.style.setProperty('top', (o.offsetTop + o.offsetHeight + 8) + 'px', 'important'); }   // (a two-line goal pushes the badges down, never over them)

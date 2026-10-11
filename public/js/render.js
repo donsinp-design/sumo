@@ -165,7 +165,7 @@
       const s = this.s = arch.scale;
       this.arch = arch; this.fx = fx; this.scene = scene; this.lo = loadout || S.DEF_EQ;
       this.root = new THREE.Group(); scene.add(this.root);
-      this.body = new THREE.Group(); this.body.rotation.order = 'YXZ'; this.root.add(this.body);
+      this.body = new THREE.Group(); this.body.rotation.order = 'YXZ'; this.root.add(this.body); this.root.rotation.order = 'YXZ';
       const skin = this.skin = toon(arch.skin, { shade: arch.skinShade, rimAmt: 0.6 });
       const belt = this.belt = toon(arch.belt, { shade: arch.beltShade, spec: 0.22, rimAmt: 0.45 });
       const hair = toon(0x2a1e2c, { shade: 0x0e0a14, spec: 0.18, rim: 0x8fa6e8, rimAmt: 0.5 });
@@ -476,7 +476,7 @@
       } else if (this.armband) this.armband.visible = false;
     }
     dispose(scene) {
-      for (const x of [this.ballSpin, this.chick, this.bigFan, this.flopShadow, this.mosaic]) if (x && x.parent) x.parent.remove(x);
+      for (const x of [this.ballSpin, this.chick, this.bigFan, this.flopShadow, this.mosaic, this.streak]) if (x && x.parent) x.parent.remove(x);
       if (this.stars) for (const sp of this.stars) if (sp.parent) sp.parent.remove(sp);
       if (this.jacket && this.jacket.parent === scene) scene.remove(this.jacket);
       scene.remove(this.root); scene.remove(this.shadow);
@@ -568,7 +568,8 @@
           if (w.thrHand > 0 || w.throat) { Rh = [0.1, 1.05, 1.4]; Lh = [-0.5, 0.45, 0.3]; tw = -0.25; } // one hand up at their throat
           break;
         }
-        case 'charge': if (w.torpedo) { c = 0.1; p = 1.45; Rh = [0.25, 0.95, 1.05]; Lh = mir(Rh); hp = -0.5; rate = 30; break; }
+        case 'torpwind': c = 1.0; p = -0.22; Rh = [0.5, 0.3, -0.42]; Lh = mir(Rh); hp = -0.25; rate = 28; break; // TORPEDO: crouched back, arms drawn behind
+        case 'charge': if (w.torpedo) { c = 0.0; p = 0; Rh = [0.26, 1.4, 0.22]; Lh = mir(Rh); hp = -0.75; rate = 40; break; } // stretched out straight, arms past the head (the root lies him flat)
           c = 0.62; p = 0.68; Rh = [0.36, 0.4, 0.78]; Lh = mir(Rh); hp = -0.3; break;
         case 'overrun': c = 0.4; p = 0.85 + 0.12 * Math.sin(T * 25); Rh = [0.78, 0.82, 0.3]; Lh = mir(Rh); rate = 20; break;
         case 'slap':
@@ -713,7 +714,11 @@
 
     update(w, dt, T) {
       const s = this.s, root = this.root, ps = this.ps;
-      root.position.set(w.x, w.y + (w.torpedo ? 0.35 : 0), w.z);
+      // TORPEDO: the wind-up rocks him back; in flight he lies flat out, head first, at belly height, centred on where he is
+      const tl = w.torpedo ? 1.48 : w.st === 'torpwind' ? -0.2 : 0; this.tilt = (this.tilt || 0) + (tl - (this.tilt || 0)) * Math.min(1, dt * (w.torpedo ? 24 : 10));
+      const lay = Math.max(0, Math.sin(this.tilt));
+      root.position.set(w.x - w.fx * lay * 0.55 * s, w.y + lay * 0.62 * s, w.z - w.fz * lay * 0.55 * s); root.rotation.x = this.tilt;
+      this.torpFx(w, dt, lay);
       // LILY PAD: off the pad there is only water. Whoever goes over the edge drops in with a splash and bobs there.
       const offPad = S.curStage === 'lily' && Math.hypot(w.x, w.z) > S.RING_R + 0.75 && w.y < 0.3;
       if (offPad && !this.inWater) {
@@ -836,7 +841,8 @@
         if (this.stompLift > 0 && Lg.sd < 0) foot.lerp(this.v3.set(-0.85 * s, 0.25 * s + 0.75 * s * this.stompLift, 0.12 * s), Math.min(1, this.stompLift * 1.5));
         const pole = this.v3.set(Lg.sd * 0.75, 0.1, 1);
         if (downed) pole.set(Lg.sd * 0.3, 0, 1).transformDirection(this.body.matrix); // knees bend the way the body faces, not the old standing way
-        if (w.st === 'air' || w.torpedo) foot.set(Lg.sd * 0.45 * s, hip.y - 0.6 * s, -0.5 * s);
+        if (w.torpedo) foot.set(Lg.sd * 0.2 * s, hip.y - 0.78 * s, hip.z - 0.1 * s); // legs straight out behind
+        else if (w.st === 'air') foot.set(Lg.sd * 0.45 * s, hip.y - 0.6 * s, -0.5 * s);
         ik(hip, foot, Lg.l1, Lg.l2, pole, this.v4);
         seg(Lg.thigh, hip, this.v4); seg(Lg.calf, this.v4, foot);
         (Lg.hp = Lg.hp || new THREE.Vector3()).copy(hip); (Lg.kn = Lg.kn || new THREE.Vector3()).copy(this.v4); (Lg.ft = Lg.ft || new THREE.Vector3()).copy(foot);
@@ -851,6 +857,28 @@
       this.shadow.scale.set(sc, 1, sc * (1 + ps.drop * 0.6));
       this.shadow.rotation.y = Math.PI / 2 - w.f;
       if (this.soft) S.SoftSumo.drive(this, w);
+    }
+
+    // TORPEDO: a kick of dust at the launch, speed streaks and a dust trail behind him, a splash where he lands
+    torpFx(w, dt, lay) {
+      const s = this.s, fx = w.fx, fz = w.fz;
+      if (w.torpedo && !this.wasTorp) { this.fx.dust(w.x - fx * 0.4, 0.05, w.z - fz * 0.4, 16, 0.3, 1.1, 0.5, -fx * 3, -fz * 3); this.fx.ring(w.x, w.z, 1.5, 0.3); }
+      if (!w.torpedo && this.wasTorp) { this.fx.burst(w.x + fx * 0.5 * s, w.z + fz * 0.5 * s, 10); this.fx.ring(w.x + fx * 0.4 * s, w.z + fz * 0.4 * s, 2.4, 0.4); }
+      this.wasTorp = w.torpedo;
+      if (w.torpedo && Math.random() < 0.85) this.fx.dust(w.x - fx * 0.5 * s, 0.05, w.z - fz * 0.5 * s, 2, 0.2, 0.35, 0.4, -fx * 1.5, -fz * 1.5);
+      if (!this.streak && lay > 0.05) {
+        const g = this.streak = new THREE.Group(), mat = this.streakMat = new THREE.MeshBasicMaterial({ color: 0xfff6e6, transparent: true, opacity: 0, depthWrite: false });
+        for (const [o, y, L] of [[-0.42, 0.75, 2.2], [0.42, 0.75, 2.0], [-0.2, 1.1, 2.8], [0.22, 1.05, 2.5], [0, 0.45, 1.8], [-0.5, 0.35, 1.4], [0.5, 0.4, 1.5]]) {
+          const st = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.07).rotateX(-Math.PI / 2), mat); st.scale.x = L * s; st.position.set(-L * s / 2, y * s, o * s); st.renderOrder = 4; g.add(st);
+        }
+        this.scene.add(g);
+      }
+      if (this.streak) {
+        const on = w.torpedo ? lay : 0; this.streakMat.opacity += (on * 0.85 - this.streakMat.opacity) * Math.min(1, dt * 14);
+        this.streak.visible = this.streakMat.opacity > 0.02 && this.root.visible;
+        this.streak.position.set(w.x - fx * 0.75 * s, 0, w.z - fz * 0.75 * s); this.streak.rotation.y = -w.f;
+        for (const st of this.streak.children) st.position.x = -st.scale.x / 2 - Math.random() * 0.15;
+      }
     }
 
     updateFeet(w, dt, T) {
@@ -1859,6 +1887,19 @@
       });
       return this._cloud;
     }
+    // TRIPLETS: an exact copy of a wrestler's view (same body, size, colours, mask), with a red armband on the upper arm
+    twin(src) {
+      const v = new WrestlerView(this.scene, src.arch, this.fx, src.lo), s = v.s;
+      if (src.maskId && S.CampSkills) { const mk = S.CampSkills.maskMesh(src.maskId); if (mk) { mk.scale.setScalar(s * 1.3); v.head.add(mk); v.maskId = src.maskId; } }
+      if (src.soft && S.SoftSumo) S.SoftSumo.attach(v, { noBlob: true });
+      const band = mesh(new THREE.TorusGeometry(1, 0.26, 8, 24), toon(0xe2242a, { shade: 0x8a1018 }), 0);
+      if (v.soft) { // rides on the soft upper arm bone (its +Y runs down the arm)
+        const b = v.soft.B.upperarml, fo = v.soft.B.forearml, L = fo ? fo.position.length() : 0.3 / v.soft.k;
+        band.scale.setScalar(0.175 * s / v.soft.k); band.rotation.x = Math.PI / 2; band.position.y = L * 0.42; b.add(band);
+      } else { band.scale.setScalar(0.2 * s); band.rotation.x = Math.PI / 2; v.arms[1].up.add(band); }
+      v.cloneBand = band;
+      return v;
+    }
     makeObj(ob) {
       const sc = this.scene;
       let me;
@@ -1873,8 +1914,12 @@
           me.add(sp);
         }
       } else if (ob.type === 'banana') {
-        me = mesh(new THREE.TorusGeometry(0.16, 0.05, 6, 12, Math.PI * 1.2), toon(0xf6d23a, { shade: 0xb08a1a }), 0.014);
-        me.rotation.x = -Math.PI / 2;
+        me = new THREE.Group();
+        const peel = mesh(new THREE.TorusGeometry(0.16, 0.05, 6, 12, Math.PI * 1.2), toon(0xf6d23a, { shade: 0xb08a1a }), 0.014);
+        peel.rotation.x = -Math.PI / 2; me.add(peel);
+        // a pulsing red ring on the floor round it, so you can see where it lies
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.8, depthWrite: false }));
+        ring.position.y = -0.03; ring.renderOrder = 3; me.add(ring); me.userData.ring = ring;
       } else if (ob.type === 'trap') {
         me = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 4, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x1a0e12, transparent: true, opacity: 0.6, depthWrite: false }));
         me.rotation.y = Math.PI / 4; me.renderOrder = 2;
@@ -2047,7 +2092,7 @@
         // two more of the same wrestler, built from the same look
         const v = this.views[ob.owner.idx];
         me = new THREE.Group();
-        me.userData.views = ob.c.map(() => new WrestlerView(this.scene, v.arch, this.fx, v.lo));
+        me.userData.views = ob.c.map(() => this.twin(v));
       } else if (ob.type === 'beartrap') {
         me = new THREE.Group();
         const iron = toon(0x55585e, { shade: 0x23252a, spec: 0.6 });
@@ -2090,7 +2135,10 @@
             const k = sp.userData.s * (0.8 + 0.2 * Math.sin(this.time * 1.5 + sp.position.x));
             sp.scale.set(k, k, 1); sp.material.rotation += dt * 0.2;
           }
-        } else if (ob.type === 'banana') { me.position.set(ob.x, 0.05, ob.z); }
+        } else if (ob.type === 'banana') {
+          me.position.set(ob.x, 0.05, ob.z);
+          const k = 0.5 + 0.5 * Math.sin(this.time * 6), R = me.userData.ring; R.scale.setScalar(0.9 + 0.22 * k); R.material.opacity = 0.45 + 0.45 * k;
+        }
         else if (ob.type === 'trap') {
           me.position.set(ob.x, 0.015, ob.z);
           const mine = viewer === ob.owner.idx;
@@ -2206,7 +2254,7 @@
         } else if (ob.type === 'third') {
           const v = me.userData.views[0], base = m.w[0];
           const p = Object.assign(Object.create(Object.getPrototypeOf(base)), base);
-          Object.assign(p, { a: S.ARCH[ob.arch], x: ob.x, z: ob.z, vx: ob.vx, vz: ob.vz, f: ob.f, st: ob.st === 'stun' ? 'stun' : ob.st, t: 0.25 - Math.max(0, ob.stT), dur: 0.25, hand: ob.hand, clinch: null, swallowed: false, lifted: false, down: false, fxs: {}, y: 0, szCur: 1, squash: 0, gulpI: -1, inShop: false, idx: 2, tx: 0, tz: 0, bal: 1, power: 0, pre: null, crouchT: 0 });
+          Object.assign(p, { a: S.ARCH[ob.arch], x: ob.x, z: ob.z, vx: ob.vx, vz: ob.vz, f: ob.f, st: ob.st === 'stun' ? 'stun' : ob.st, t: 0.25 - Math.max(0, ob.stT), dur: 0.25, hand: ob.hand, clinch: null, swallowed: false, lifted: false, down: false, fxs: {}, y: 0, szCur: 1, squash: 0, gulpI: -1, inShop: false, idx: 2, tx: 0, tz: 0, bal: 1, power: 0, pre: null, crouchT: 0, torpedo: false });
           v.viewer = this.viewer; v.match = m; v.update(p, Math.max(dt, 1e-4), this.animT);
         } else if (ob.type === 'clones') {
           const own = ob.owner;
@@ -2214,7 +2262,7 @@
             const v = me.userData.views[k];
             if (!c.alive) { v.root.visible = false; v.shadow.visible = false; return; }
             const p = Object.assign(Object.create(Object.getPrototypeOf(own)), own);
-            p.x = c.x; p.z = c.z; p.vx = c.vx || 0; p.vz = c.vz || 0; p.f = Math.atan2(own.opp.z - c.z, own.opp.x - c.x); p.clinch = null; p.swallowed = false; p.st = c.kb > 0 ? 'stun' : 'free'; p.t = c.kb > 0 ? 0.8 - c.kb : 0; p.dur = 0.8; p.lifted = false; p.down = false; p.fxs = {};
+            p.x = c.x; p.z = c.z; p.vx = c.vx || 0; p.vz = c.vz || 0; p.f = Math.atan2(own.opp.z - c.z, own.opp.x - c.x); p.clinch = null; p.swallowed = false; p.st = c.kb > 0 ? 'stun' : 'free'; p.t = c.kb > 0 ? 0.8 - c.kb : 0; p.dur = 0.8; p.lifted = false; p.down = false; p.fxs = {}; p.torpedo = false;
             v.viewer = this.viewer; v.match = m; v.update(p, Math.max(dt, 1e-4), this.animT);
             if (v.armband) v.armband.visible = false;
           });

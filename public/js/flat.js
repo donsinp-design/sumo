@@ -87,8 +87,10 @@ void RE_Direct_Flat( const in IncidentLight directLight, const in GeometricConte
     sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.035; sun.shadow.radius = 4;
     scene.add(sun, sun.target);
     const off = new THREE.Vector3(-7, 17, 9);   // from behind the camera: the sumo's back (what you see most) is lit, shadows fall away up the street
-    const ts = 2 * R / (o.map || 2048) * 2;   // shadow texel (x2): the sun moves in whole texels, so shadows don't shimmer as the camera glides
-    return { sun, aim(x, z) { x = Math.round(x / ts) * ts; z = Math.round(z / ts) * ts; sun.position.set(x + off.x, off.y, z + off.z); sun.target.position.set(x, 0, z); sun.target.updateMatrixWorld(); } };
+    const ts = 2 * R / (o.map || 2048);   // one shadow texel: the sun moves in whole texels OF ITS OWN VIEW (not world x/z: the sun is at a slant), so shadow edges don't shimmer as the camera glides
+    const dir = off.clone().negate().normalize(), rt = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize(), up = new THREE.Vector3().crossVectors(rt, dir).normalize(), q = new THREE.Vector3();
+    return { sun, aim(x, z) { q.set(x, 0, z); const a = Math.round(q.dot(rt) / ts) * ts, b = Math.round(q.dot(up) / ts) * ts, c = q.dot(dir);
+      q.copy(rt).multiplyScalar(a).addScaledVector(up, b).addScaledVector(dir, c); sun.position.copy(q).add(off); sun.target.position.copy(q); sun.target.updateMatrixWorld(); } };
   }
   // a model built from the Blender kit (palette texture or flat colours, glTF linear factors): the master material
   function kit(root) {
