@@ -20,7 +20,7 @@
     addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
     cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
   }
-  // the food: the same flat look as the bathhouse props (onigiri, dango, fish cake, manju)
+  // the food: the same flat look as the bathhouse props (onigiri, dango, fish cake)
   const M = (c) => { const m = S.Flat.mat(c); return m; };
   function done(g) { g.traverse((o) => { if (o.isMesh) o.userData.flatDone = true; }); return g; }
   const FOOD = [
@@ -42,12 +42,6 @@
       const g = new THREE.Group();
       const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.14, 12).rotateX(Math.PI / 2), M(0xf8f4ec)); g.add(disc);
       for (const z of [0.072, -0.072]) { const sw = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.04, 6, 24, Math.PI * 1.6), M(0xef7f9e)); sw.position.z = z; g.add(sw); const dot = new THREE.Mesh(new THREE.CircleGeometry(0.05, 12), M(0xef7f9e)); dot.position.z = z * 1.02; if (z < 0) dot.rotation.y = Math.PI; g.add(dot); }
-      return done(g);
-    },
-    function manju() {
-      const g = new THREE.Group();
-      const bun = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 14), M(0xf3e6cf)); bun.scale.y = 0.72; g.add(bun);
-      const mark = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), M(0xc0503e)); mark.position.y = 0.24; mark.scale.y = 0.4; g.add(mark);
       return done(g);
     },
   ];

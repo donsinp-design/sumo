@@ -55,6 +55,10 @@
       this.cam = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 2.0, 120);   // (a tight near/far: no flicker where surfaces meet)
       this.fx = new S.FX(this.scene); this.fx.scene = this.scene; this.fx.noMarks = true;
       this.flat = { lights: S.Flat.lights(this.scene, { r: 22 }) };
+      { // the sun's shadow pinned over the WHOLE bathhouse, never moving: a shadow that follows the camera crawls along thin edges (wall caps, locker tops) as it shifts
+        const L = this.flat.lights, sun = L.sun, R = 60, big = !(S.touch && S.touch.on); sun.shadow.mapSize.set(big ? 4096 : 2048, big ? 4096 : 2048);
+        Object.assign(sun.shadow.camera, { left: -R, right: R, top: R, bottom: -R, near: 1, far: 140 }); sun.shadow.camera.updateProjectionMatrix();
+        const cx = 1, cz = -44; sun.position.set(cx - 7 * 2.2, 17 * 2.2, cz + 9 * 2.2); sun.target.position.set(cx, 0, cz); sun.target.updateMatrixWorld(); L.aim = () => {}; }
       const r = this.R.r; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
       const vg = document.getElementById('vignette'); if (vg) vg.style.display = 'none';
       this.walls = []; this.blockers = []; this.puddles = []; this.buckets = []; this.flying = []; this.grace = 0;
@@ -226,6 +230,42 @@
           for (const w of walls) { if (!yo(w)) continue; const oz = q.z1 > w.z0 && q.z0 < w.z1, ox = q.x1 > w.x0 && q.x0 < w.x1;
             if (oz && Math.abs(q.x0 - w.x1) < 0.005) dx = E; if (oz && Math.abs(q.x1 - w.x0) < 0.005) dx = -E; if (ox && Math.abs(q.z0 - w.z1) < 0.005) dz = E; if (ox && Math.abs(q.z1 - w.z0) < 0.005) dz = -E; }
           if (dx || dz) for (const o of byIdx[i]) { o.position.x += dx; o.position.z += dz; } }); }
+      // the kit's boxes have tiny bevels (2 cm) along every edge, facing half-up / half-out: in the sun they're a bright hairline far thinner than a
+      // pixel, that blinks in and out as the camera moves (wall copings, locker tops). Bevel faces are shaded like the big face they round onto
+      if (!root.userData.bevelFix) { root.userData.bevelFix = true; const sig = (a) => { const q = [Math.abs(a[0]), Math.abs(a[1]), Math.abs(a[2])].sort((x, y) => x - y); return (Math.abs(q[0]) < 0.03 && Math.abs(q[1] - 0.38) < 0.04 && Math.abs(q[2] - 0.92) < 0.03) || (Math.abs(q[0] - 0.28) < 0.04 && Math.abs(q[1] - 0.37) < 0.04 && Math.abs(q[2] - 0.89) < 0.03); };
+        root.traverse((o) => { if (!o.isMesh || !o.geometry.attributes.normal || o.geometry.userData.bevelFix) return; o.geometry.userData.bevelFix = true; const na = o.geometry.attributes.normal; let n = 0;
+          for (let i = 0; i < na.count; i++) { const a = [na.getX(i), na.getY(i), na.getZ(i)]; if (!sig(a)) continue; let k = 0; for (let j = 1; j < 3; j++) if (Math.abs(a[j]) > Math.abs(a[k])) k = j; const b = [0, 0, 0]; b[k] = Math.sign(a[k]); na.setXYZ(i, b[0], b[1], b[2]); n++; }
+          if (n) na.needsUpdate = true; }); }
+      // the kit is coloured from a small palette texture, and some faces' UVs sit exactly on the line between two swatches: the colour flipped
+      // between the two (white / green on the wall copings, brown on the lockers) as the camera moved. Every face samples the middle of its swatch
+      if (!root.userData.uvFix) { root.userData.uvFix = true; root.traverse((o) => { if (!o.isMesh || o.geometry.userData.uvFix) return; const ms = Array.isArray(o.material) ? o.material : [o.material], map = ms[0] && ms[0].map, img = map && map.image;
+        if (!img || !img.width || img.width > 256 || !o.geometry.attributes.uv) return; o.geometry.userData.uvFix = true; const g = o.geometry, ua = g.attributes.uv, W = img.width, H = img.height, ix = g.index;
+        const snap = (u, n) => (Math.min(n - 1, Math.max(0, Math.floor(u * n))) + 0.5) / n, N = ix ? ix.count : ua.count;
+        if (ix) { const tri = ix.array, cu = new Float32Array(ua.count), cv = new Float32Array(ua.count), seen = new Uint8Array(ua.count);
+          for (let t = 0; t < N; t += 3) { const a = tri[t], b = tri[t + 1], c = tri[t + 2], u = (ua.getX(a) + ua.getX(b) + ua.getX(c)) / 3, v = (ua.getY(a) + ua.getY(b) + ua.getY(c)) / 3;
+            for (const q of [a, b, c]) if (!seen[q]) { seen[q] = 1; cu[q] = snap(u, W); cv[q] = snap(v, H); } }
+          for (let i = 0; i < ua.count; i++) if (seen[i]) ua.setXY(i, cu[i], cv[i]); }
+        else for (let t = 0; t < N; t += 3) { const u = (ua.getX(t) + ua.getX(t + 1) + ua.getX(t + 2)) / 3, v = (ua.getY(t) + ua.getY(t + 1) + ua.getY(t + 2)) / 3; for (let k = 0; k < 3; k++) ua.setXY(t + k, snap(u, W), snap(v, H)); }
+        ua.needsUpdate = true; }); }
+      // the building export has hundreds of triangles doubled up exactly (some in two different colours): the pairs fought, and the wall tops and
+      // locker sides blinked between the two colours as the camera moved. Each doubled triangle is kept once
+      if (!root.userData.dupFix) { root.userData.dupFix = true; root.traverse((o) => { if (!o.isMesh || !o.geometry.index || o.geometry.userData.dupFix) return; o.geometry.userData.dupFix = true;
+        const g = o.geometry, pa = g.attributes.position, ix = g.index, a = ix.array, seen = new Set(); let n = 0; const k3 = (i) => pa.getX(i).toFixed(3) + ',' + pa.getY(i).toFixed(3) + ',' + pa.getZ(i).toFixed(3);
+        for (let t = 0; t < ix.count; t += 3) { const key = [k3(a[t]), k3(a[t + 1]), k3(a[t + 2])].sort().join('|'); if (seen.has(key)) { a[t + 1] = a[t + 2] = a[t]; n++; } else seen.add(key); }
+        if (n) ix.needsUpdate = true; }); }
+      // very long thin triangles (a wall coping is one triangle 41 m long and 40 cm wide) don't always rasterize along their whole length: the
+      // coping vanished in odd frames and the wall top below showed through. Long triangles are split into pieces no longer than 2.5 m
+      if (!root.userData.splitFix) { root.userData.splitFix = true; root.traverse((o) => { if (!o.isMesh || !/^MOD_/.test(o.name) || o.geometry.userData.splitFix) return;
+        const g0 = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, names = Object.keys(g0.attributes), src = names.map((n) => g0.attributes[n]), out = names.map(() => []);
+        const P = g0.attributes.position, MAX = 2.5, d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+        const vert = (i) => src.map((A) => { const v = []; for (let k = 0; k < A.itemSize; k++) v.push(A.array[i * A.itemSize + k]); return v; });
+        const mid = (a, b) => a.map((A, j) => A.map((x, k) => (x + b[j][k]) / 2));
+        const emit = (a, b, c, depth) => { const pa = a[0], pb = b[0], pc = c[0], ab = d2(pa, pb), bc = d2(pb, pc), ca = d2(pc, pa), m = Math.max(ab, bc, ca);
+          if (m <= MAX * MAX || depth > 8) { for (const v of [a, b, c]) v.forEach((x, j) => out[j].push(...x)); return; }
+          if (m === ab) { const q = mid(a, b); emit(a, q, c, depth + 1); emit(q, b, c, depth + 1); } else if (m === bc) { const q = mid(b, c); emit(a, b, q, depth + 1); emit(a, q, c, depth + 1); } else { const q = mid(c, a); emit(a, b, q, depth + 1); emit(q, b, c, depth + 1); } };
+        for (let t = 0; t < P.count; t += 3) { const a = vert(t), b = vert(t + 1), c = vert(t + 2); if (d2(a[0], b[0]) < 1e-12 && d2(b[0], c[0]) < 1e-12) continue; emit(a, b, c, 0); }
+        const g = new THREE.BufferGeometry(); names.forEach((n, j) => g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(out[j]), src[j].itemSize)));
+        g.userData = Object.assign({}, o.geometry.userData, { splitFix: true }); g.computeBoundingSphere(); g.computeBoundingBox(); o.geometry = g; }); }
       const get = (n) => root.getObjectByName(n), proto = {};
       for (const n of ['ITEM_STOOL', 'ITEM_OKE', 'ITEM_BUCKET', 'ITEM_WASHB', 'BOX', 'CLOTH_SHIRT', 'CLOTH_SHORTS', 'ITEM_CAN0', 'ITEM_CAN1', 'ITEM_CAN2']) { const o = get(n); if (o) { o.visible = false; proto[n] = o; } }
       this.proto = proto;
@@ -1638,7 +1678,7 @@
       this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ごくごく…', 1.1);
       this.later(1.15, () => { b.state = 'gone'; b.m.visible = false; if (this.drinkB === b) this.drinkB = null; this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ぷはーっ!', 1.1); });
       this.think((this.hits ? '*glug glug glug* Ahhh... that\'s better. ♥' : '*glug glug glug* AHHH. Good as new! ♥'), 1.6);
-      this.later(2.4, () => { this.think(['*BUUUUURP*', '*BWAAARP!*', '*urrrp*... pardon.'][(this.t * 3 | 0) % 3], 1.6); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'げっぷ', 1.2);
+      this.later(2.4, () => { this.think(['*BUUUUURP*', '*BWAAARP!*', '*urrrp*... pardon.'][(this.t * 3 | 0) % 3], 1.6); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'ゲェェップ!!', 1.6, true); this.fx.dust && this.fx.dust(P.x + Math.cos(P.f) * 0.5, P.y + 1.7, P.z + Math.sin(P.f) * 0.5, 6, 0.25, 0.4, 0.25);   // (a big one: you can't miss it)
         if (true) this.noiseS(P.x, P.z, 6, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); });   // (loud enough to turn heads)
     }
     // a big bare footprint (x forward, the big toe on the inside): a sole, wide at the ball, and five toes
@@ -2035,7 +2075,7 @@
       this.camH = (this.camH || 0.64) + ((CF && CF.h ? CF.h : 0.64) - (this.camH || 0.64)) * Math.min(1, dt * 2); const ch = this.camH, cz = Math.sqrt(Math.max(0.05, 1 - ch * ch));
       this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh, this.camT.y + dist * ch, this.camT.z + dist * cz * (CF && CF.flip ? -1 : 1));   // (a cutscene can look from the far side)
       this.cam.lookAt(this.camT.x, this.camT.y + 0.6, this.camT.z); this.cam.updateMatrixWorld();
-      this.flat.lights.aim(this.camT.x, this.camT.z - 3);
+      this.flat.lights.aim(this.camT.x, this.camT.z - 3);   // (a no-op once the shadow is pinned over the whole bathhouse: see start)
       if ((this.cvN = (this.cvN || 0) + 1) % 30 === 1) S.Flat.convert(this.scene, { pastel: 0.6 });
       this.R.r.shadowMap.enabled = true;
       this.R.r.render(this.scene, this.cam);

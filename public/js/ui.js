@@ -107,7 +107,6 @@
       const el = $('vhs-rew'); on = !!on;
       if (this.vhsOn !== on) {
         this.vhsOn = on; el.classList.toggle('on', on); document.body.classList.toggle('vhs-on', on);
-        if (on) { const d = new Date(); el.querySelector('.vr-date').textContent = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][d.getMonth()] + '. ' + d.getDate() + ' 1989'; }
       }
       if (on && ctr && ctr !== this.vhsCtr) { this.vhsCtr = ctr; el.querySelector('.vr-ctr').textContent = ctr; }
     }
