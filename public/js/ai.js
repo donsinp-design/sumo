@@ -107,7 +107,7 @@
         const lat = Math.abs(o.ddx * me.fx + o.ddz * me.fz) < 0.6;   // (a sidestep, not a dash straight at me)
         if (lat && this.rnd() < L.stopShort) { this.stopPend = true; this.release('dash'); this.state = 'stop-short'; this.thinkT = Math.max(this.thinkT, 0.12); }
       }
-      if (this.stopPend && !this.holding('dash')) { this.stopPend = false; if (me.st === 'charge') { this.btn.dash.next = 0; this.tap('dash', 0.04); } }   // (a fresh press: L released first if still down from the fists-down)
+      if (this.stopPend && !this.holding('dash') && !(me.st === 'charge' && me.t <= 0.085)) { this.stopPend = false; if (me.st === 'charge' && !me.chargeHit) { this.btn.dash.next = 0; this.tap('dash', 0.04); } }   // (a fresh press: L released first if still down from the fists-down)
     }
     // notice the human's habits as they happen
     watch(o, m) {
@@ -217,6 +217,11 @@
       }
       if (me.st === 'stumble' || me.st === 'overrun' || (me.st === 'recover' && RR - Math.hypot(me.x, me.z) < 1.2)) { this.steer(nx, nz, 0, 0); this.state = 'recovering'; return; }
 
+      // the rematch boss on the straw, being shoved: dig in (feet planted, braced) or slide off along the rim
+      if (L.anchor && myEdge < 0.9 && gap < 0.7 && canAct && P.st !== 'grab' && (P.st === 'palm' || P.st === 'heavy' || P.st === 'wind' || P.fwd > 0.5)) {
+        if (me.dashCD <= 0 && this.rnd() < 0.35) { let lx = -nz, lz = nx; if (lx * -me.x + lz * -me.z < 0) { lx = -lx; lz = -lz; } this.release('dash'); this.dir(lx - me.x * 0.3, lz - me.z * 0.3); this.tap('dash'); this.state = 'rim-slip'; return; }
+        this.dir(0, 0); this.hold('dash', 0.25); this.state = 'dig-in'; return;
+      }
       // 1. threats: incoming charge / heavy
       const oCharging = P.st === 'charge' || (P.st === 'heavy' && P.t < 0.17) || (oSpeedToMe > 3.4 && P.st !== 'dash');
       if (oCharging && gap < Math.max(0.45, oSpeedToMe * 0.32) && canAct) {
@@ -373,7 +378,7 @@
         this.aimHold = null;
       }
       // just been grabbed: counter-grab
-      if (c.b === me && c.t < 0.3 && !c.rear && !this.techTried) { this.techTried = true; if (this.rnd() < (L.grabBreak !== undefined ? L.grabBreak : L.skill * (0.35 + 0.1 * Math.min(2, HAB.grab)))) { this.release('grab'); this.btn.grab.next = 0; this.tap('grab', 0.04); this.state = 'grab-break'; return; } }
+      if (c.b === me && c.t < 0.3 && !c.rear && !this.techTried) { this.techTried = true; if (this.rnd() < (L.grabBreak !== undefined ? L.grabBreak : L.skill * (0.35 + 0.1 * Math.min(2, HAB.grab)))) { if (L.grabBreak !== undefined) { this.release('grab'); this.btn.grab.next = 0; } this.tap('grab', 0.04); this.state = 'grab-break'; return; } }
       if (c.tech) {
         // their throw has only just started: slip it
         if (c.tech.o === me && c.tech.t < 0.2 && this.escFor !== c.tech) { this.escFor = c.tech; if (this.rnd() < (L.escP !== undefined ? L.escP : L.skill * 0.35)) { this.escape(c); return; } }
