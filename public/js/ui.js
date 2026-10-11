@@ -102,13 +102,13 @@
       el.textContent = text; el.className = 'on' + (big ? ' big' : '');
       this.cbT = setTimeout(() => { el.className = ''; }, big ? 2200 : 900);
     }
-    // REWIND: the VHS screen; ctr is the tape counter, rolling back
+    // REWIND: the VHS screen (REW and SP; no tape counter)
     vhs(on, ctr) {
       const el = $('vhs-rew'); on = !!on;
       if (this.vhsOn !== on) {
         this.vhsOn = on; el.classList.toggle('on', on); document.body.classList.toggle('vhs-on', on);
       }
-      if (on && ctr && ctr !== this.vhsCtr) { this.vhsCtr = ctr; el.querySelector('.vr-ctr').textContent = ctr; }
+      
     }
     training(html) { const el = $('trainPanel'); if (!html) { el.classList.remove('on'); return; } el.innerHTML = html; el.classList.add('on'); }
     blind(on, txt) { $('blindOv').classList.toggle('on', !!on); const t = $('blindTxt'); if (t.classList.contains('on') !== !!txt) t.classList.toggle('on', !!txt); }

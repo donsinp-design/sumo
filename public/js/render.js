@@ -1930,6 +1930,9 @@
           sp.position.set(Math.cos(a) * r, 0.3 + Math.random() * 2.6, Math.sin(a) * r); sp.userData.s = 2.2 + Math.random() * 1.6; sp.renderOrder = 9;
           me.add(sp);
         }
+        // to the opponent it is a wall: a solid core inside the puffs, so nothing shows through the gaps between them
+        if (!mine) { const core = new THREE.Mesh(new THREE.CylinderGeometry(3.1, 3.3, 2.9, 40), new THREE.MeshBasicMaterial({ color: 0x8a8692, transparent: true, depthWrite: false, depthTest: false }));
+          core.position.y = 1.45; core.renderOrder = 8; core.userData.core = true; me.add(core); }
       } else if (ob.type === 'banana') {
         me = new THREE.Group();
         const peel = mesh(new THREE.TorusGeometry(0.16, 0.05, 6, 12, Math.PI * 1.2), toon(0xf6d23a, { shade: 0xb08a1a }), 0.014);
@@ -2148,6 +2151,7 @@
           const fade = Math.min(1, ob.t / 0.3) * Math.min(1, (ob.dur - ob.t) / 0.6);
           const mine = viewer === ob.owner.idx || viewer === -1;
           for (const sp of me.children) {
+            if (sp.userData.core) { sp.material.opacity = fade; sp.visible = !mine; continue; }
             sp.material.opacity = fade * (mine ? 0.22 : 1);
             const k = sp.userData.s * (0.8 + 0.2 * Math.sin(this.time * 1.5 + sp.position.x));
             sp.scale.set(k, k, 1); sp.material.rotation += dt * 0.2;
