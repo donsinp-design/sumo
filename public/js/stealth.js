@@ -268,8 +268,9 @@
         g.userData = Object.assign({}, o.geometry.userData, { splitFix: true }); g.computeBoundingSphere(); g.computeBoundingBox(); o.geometry = g; }); }
       // two faces in the same plane, overlapping, in different colours (a door's glass flush with its frame, a wall face flush with the one behind it,
       // the floor under a cabinet): the depth test can't pick one, so the winner flips frame to frame (z-fighting: a block of colour blinking).
-      // They are pulled 2 mm apart: back-to-back faces each out their own side, and for faces that point the same way the smaller one (the trim,
-      // the detail) comes to the front. Only the static level is touched (never the items, carts or the box, which move)
+      // They are pulled a fraction of a millimetre apart: back-to-back faces each out their own side, and for faces that point the same way the smaller
+      // one (the trim, the detail) comes to the front. Only faces truly in one plane (within 0.4 mm): the kit's own layers (the mural: sky, mountain,
+      // snow, 3 mm apart) are left as they are, and no offset (at most 2.4 mm) can land a face on the next layer. Only the static level is touched (never the items, carts or the box, which move)
       if (!root.userData.zFix) { root.userData.zFix = true; root.updateMatrixWorld(true);
         const isStatic = (o) => { for (let q = o; q && q !== root; q = q.parent) { if (/ITEM_|CART|BOX|CLOTH/.test(q.name)) return false; if (/^(MOD_|FLOORS|SOLID_)/.test(q.name)) return true; } return false; };
         const T = [], meshes = [];
@@ -283,16 +284,16 @@
             T.push({ mi, t, ax, sg: Math.sign(n.getComponent(ax)), d: c[0][ax], ar: ar / 2, col: (U ? U.getX(t).toFixed(3) + ',' + U.getY(t).toFixed(3) : '') + ((matAt(t) || {}).uuid) + (o.geometry.attributes.color ? ',' + o.geometry.attributes.color.getX(t).toFixed(2) + o.geometry.attributes.color.getY(t).toFixed(2) + o.geometry.attributes.color.getZ(t).toFixed(2) : ''),
               b: [Math.min(c[0][o2[0]], c[1][o2[0]], c[2][o2[0]]), Math.max(c[0][o2[0]], c[1][o2[0]], c[2][o2[0]]), Math.min(c[0][o2[1]], c[1][o2[1]], c[2][o2[1]]), Math.max(c[0][o2[1]], c[1][o2[1]], c[2][o2[1]])], off: 0 }); } });
         const grid = new Map();   // plane (axis, depth to 5 mm) and a 1 m cell in the plane
-        T.forEach((q, i) => { const dk = Math.round(q.d * 200); for (let gx = Math.floor(q.b[0]); gx <= Math.floor(q.b[1]); gx++) for (let gy = Math.floor(q.b[2]); gy <= Math.floor(q.b[3]); gy++) { const k = q.ax + ':' + dk + ':' + gx + ':' + gy; let L = grid.get(k); if (!L) grid.set(k, L = []); L.push(i); } });
+        T.forEach((q, i) => { for (const dk of new Set([Math.floor(q.d * 1000), Math.floor(q.d * 1000 + 0.5) + 1e6])) for (let gx = Math.floor(q.b[0]); gx <= Math.floor(q.b[1]); gx++) for (let gy = Math.floor(q.b[2]); gy <= Math.floor(q.b[3]); gy++) { const k = q.ax + ':' + dk + ':' + gx + ':' + gy; let L = grid.get(k); if (!L) grid.set(k, L = []); L.push(i); } });
         for (const L of grid.values()) { if (L.length < 2) continue;
-          for (let x = 0; x < L.length; x++) for (let y = x + 1; y < L.length; y++) { const A = T[L[x]], B = T[L[y]]; if (A.col === B.col || Math.abs(A.d - B.d) > 0.004) continue;
+          for (let x = 0; x < L.length; x++) for (let y = x + 1; y < L.length; y++) { const A = T[L[x]], B = T[L[y]]; if (A.col === B.col || Math.abs(A.d - B.d) > 0.0004) continue;
             const ox = Math.min(A.b[1], B.b[1]) - Math.max(A.b[0], B.b[0]), oy = Math.min(A.b[3], B.b[3]) - Math.max(A.b[2], B.b[2]); if (ox < 0.01 || oy < 0.01) continue;
-            if (A.sg !== B.sg) { A.off = Math.max(A.off, 0.0015); B.off = Math.max(B.off, 0.0015); } else { (A.nb || (A.nb = [])).push(L[y]); (B.nb || (B.nb = [])).push(L[x]); } } }
-        // faces pointing the same way: stacked in layers, the largest at the bottom, each smaller one 1.5 mm above the biggest it overlaps
+            if (A.sg !== B.sg) { A.off = Math.max(A.off, 0.0005); B.off = Math.max(B.off, 0.0005); } else { (A.nb || (A.nb = [])).push(L[y]); (B.nb || (B.nb = [])).push(L[x]); } } }
+        // faces pointing the same way: stacked in layers, the largest at the bottom, each smaller one 0.6 mm above the biggest it overlaps
         // (a cap smaller than the wall top but bigger than the trim on it: wall 0, cap 1, trim 2)
         const big = (i, j) => T[i].ar > T[j].ar || (T[i].ar === T[j].ar && i < j);
         const ord = T.map((q, i) => i).filter((i) => T[i].nb).sort((i, j) => (big(i, j) ? -1 : 1));
-        for (const i of ord) { let lv = 0; for (const j of T[i].nb) if (big(j, i)) lv = Math.max(lv, (T[j].lv || 0) + 1); T[i].lv = Math.min(lv, 6); T[i].off = Math.max(T[i].off, T[i].lv * 0.0015); }
+        for (const i of ord) { let lv = 0; for (const j of T[i].nb) if (big(j, i)) lv = Math.max(lv, (T[j].lv || 0) + 1); T[i].lv = Math.min(lv, 4); T[i].off = Math.max(T[i].off, T[i].lv * 0.0006); }
         const touched = new Set(), inv = new THREE.Matrix3(), w = new THREE.Vector3();
         for (const q of T) { if (!q.off) continue; const o = meshes[q.mi], P = o.geometry.attributes.position; w.set(0, 0, 0).setComponent(q.ax, q.sg * q.off);
           inv.setFromMatrix4(o.matrixWorld).invert(); w.applyMatrix3(inv); for (let j = 0; j < 3; j++) P.setXYZ(q.t + j, P.getX(q.t + j) + w.x, P.getY(q.t + j) + w.y, P.getZ(q.t + j) + w.z); touched.add(o); }
