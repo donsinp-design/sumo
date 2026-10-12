@@ -254,8 +254,9 @@
         for (let t = 0; t < ix.count; t += 3) { const key = [k3(a[t]), k3(a[t + 1]), k3(a[t + 2])].sort().join('|'); if (seen.has(key)) { a[t + 1] = a[t + 2] = a[t]; n++; } else seen.add(key); }
         if (n) ix.needsUpdate = true; }); }
       // very long thin triangles (a wall coping is one triangle 41 m long and 40 cm wide) don't always rasterize along their whole length: the
-      // coping vanished in odd frames and the wall top below showed through. Long triangles are split into pieces no longer than 2.5 m
-      if (!root.userData.splitFix) { root.userData.splitFix = true; root.traverse((o) => { if (!o.isMesh || !/^MOD_/.test(o.name) || o.geometry.userData.splitFix) return;
+      // coping vanished in odd frames and the wall top below showed through; big floor triangles did the same (a stretch of floor, or the genkan
+      // tiles dropping out for a frame). Long triangles in the building and the floors are split into pieces no longer than 2.5 m
+      if (!root.userData.splitFix) { root.userData.splitFix = true; root.traverse((o) => { if (!o.isMesh || !/^(MOD_|FLOORS)/.test(o.name) || o.geometry.userData.splitFix) return;
         const g0 = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, names = Object.keys(g0.attributes), src = names.map((n) => g0.attributes[n]), out = names.map(() => []);
         const P = g0.attributes.position, MAX = 2.5, d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
         const vert = (i) => src.map((A) => { const v = []; for (let k = 0; k < A.itemSize; k++) v.push(A.array[i * A.itemSize + k]); return v; });
