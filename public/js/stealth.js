@@ -2108,19 +2108,25 @@
       this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh, this.camT.y + dist * ch, this.camT.z + dist * cz * (CF && CF.flip ? -1 : 1));   // (a cutscene can look from the far side)
       this.cam.lookAt(this.camT.x, this.camT.y + 0.6, this.camT.z); this.cam.updateMatrixWorld();
       this.flat.lights.aim(this.camT.x, this.camT.z - 3);   // (a no-op once the shadow is pinned over the whole bathhouse: see start)
-      if ((this.cvN = (this.cvN || 0) + 1) % 30 === 1) S.Flat.convert(this.scene, { pastel: 0.6 });
+      if ((this.cvN = (this.cvN || 0) + 1) % 30 === 1) { S.Flat.convert(this.scene, { pastel: 0.6 });
+        // the floors only receive shadows: cast as well, they shadowed themselves in odd frames (whole stretches of floor going grey for a frame)
+        const fl = this.kit && this.kit.getObjectByName('FLOORS'); if (fl) fl.traverse((q) => { if (q.isMesh) q.castShadow = false; }); }
       this.R.r.shadowMap.enabled = true;
       this.R.r.render(this.scene, this.cam);
       this.drawHud(dt);
     }
     drawCone(n) {
       const a = n.a, N = 22, P = this.P, hide = (SAFE[roomAt(P.x, P.z)] && !n.raid) || n.busy || Math.abs(a.y - P.y) > 1.6 || a.st !== 'free';
-      n.cone.visible = !hide; if (hide) return;
-      const range = this.range(n), pos = new Float32Array((N + 2) * 3), y = a.y + 0.06; pos[0] = a.x; pos[1] = y; pos[2] = a.z;
+      // it fades rather than blinks: a state that flips for a frame (busy, a stumble) no longer pops it off and on
+      n.coneV = Math.max(0, Math.min(1, (n.coneV === undefined ? 1 : n.coneV) + (hide ? -1 : 1) * (this.dtR || 1 / 60) * 6));
+      n.cone.visible = n.coneV > 0.01; if (!n.cone.visible) return;
+      // its buffers are made once and refilled each frame (a fresh buffer every frame left stale bindings behind: the cones, puddles and rings
+      // drawn after it dropped out for a frame now and then)
+      const g = n.cone.geometry; if (!g.attributes.position) { g.setAttribute('position', new THREE.BufferAttribute(new Float32Array((N + 2) * 3), 3)); const idx = []; for (let i = 1; i <= N; i++) idx.push(0, i + 1, i); g.setIndex(idx); }
+      const range = this.range(n), pa = g.attributes.position, pos = pa.array, y = a.y + 0.06; pos[0] = a.x; pos[1] = y; pos[2] = a.z;
       for (let i = 0; i <= N; i++) { const t = a.f - n.half + (2 * n.half) * i / N, L = this.reach(a.x, a.z, t, range); pos[(i + 1) * 3] = a.x + Math.cos(t) * L; pos[(i + 1) * 3 + 1] = y; pos[(i + 1) * 3 + 2] = a.z + Math.sin(t) * L; }
-      const idx = []; for (let i = 1; i <= N; i++) idx.push(0, i + 1, i);
-      const g = n.cone.geometry; g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(idx); g.computeBoundingSphere();
-      n.coneK = (n.coneK || 0) + (clamp(n.alarm, 0, 1) - (n.coneK || 0)) * Math.min(1, (this.dtR || 1 / 60) * 5); const k = n.coneK; n.cone.material.color.setRGB(1, 0.81 - 0.5 * k, 0.23 - 0.1 * k); n.cone.material.opacity = 0.36 + 0.24 * k;
+      pa.needsUpdate = true; g.computeBoundingSphere();
+      n.coneK = (n.coneK || 0) + (clamp(n.alarm, 0, 1) - (n.coneK || 0)) * Math.min(1, (this.dtR || 1 / 60) * 5); const k = n.coneK; n.cone.material.color.setRGB(1, 0.81 - 0.5 * k, 0.23 - 0.1 * k); n.cone.material.opacity = (0.36 + 0.24 * k) * n.coneV;
     }
 
     // ============================================================== HUD
