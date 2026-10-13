@@ -9,9 +9,9 @@
 import bpy, bmesh, math, os, sys, random, subprocess
 from mathutils import Vector, Matrix
 
-SP = '/tmp/claude-0/-home-user-sumo/f8028735-3c86-5a27-b070-5e521ee72586/scratchpad'
+SP = os.environ.get('KIT_SP', '/tmp/claude-0/-home-user-sumo/f8028735-3c86-5a27-b070-5e521ee72586/scratchpad')
 OUT = SP + '/bathkit'
-SUMO_GLB = '/home/user/sumo/public/assets/models/sumo_game.glb'
+SUMO_GLB = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'public', 'assets', 'models', 'sumo_game.glb')
 COMP = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kkbc_flat_comp.py')
 NORENDER = 'norender' in sys.argv; LOWRES = 'lowres' in sys.argv
 RNG = random.Random(7)
@@ -1072,6 +1072,22 @@ def build_items():
     m.gbox(-0.15, 0.15, -0.08, 0.08, 0.0, 0.025, 'wood_lt', bev=0.006); m.gbox(-0.11, 0.11, -0.065, 0.065, 0.025, 0.035, 'chrome_dk')
     m.gbox(0.05, 0.1, -0.03, 0.03, 0.025, 0.06, 'yellow')
     obj_from(m, 'ITEM_TRAP', 'ENV_PROTO')
+    m = GB()   # the capsule-toy (gacha) machine by the locker-room door: red cabinet, a glass dome of capsules, the turn knob
+    m.gbox(-0.36, 0.36, -0.31, 0.31, 0.0, 0.1, 'dark', bev=0.03)
+    m.gbox(-0.33, 0.33, -0.28, 0.28, 0.1, 0.8, 'red', bev=0.08, seg=3)
+    m.gbox(-0.25, 0.25, 0.26, 0.31, 0.38, 0.72, 'offwhite', bev=0.03)
+    m.gcyl(-0.06, 0.32, 0.54, 0.105, 0.06, 'chrome', seg=18, bev=0.015, axis='Y')
+    m.gbox(-0.15, 0.03, 0.34, 0.38, 0.52, 0.565, 'offwhite', bev=0.012)
+    m.gbox(0.12, 0.19, 0.31, 0.325, 0.6, 0.66, 'dark', bev=0.006)
+    m.gbox(-0.14, 0.14, 0.25, 0.33, 0.16, 0.32, 'dark', bev=0.03)
+    m.gico(0.04, 0.29, 0.21, 0.05, 'yellow', sq=(1, 1, 0.9))
+    m.gcyl(0, 0, 0.8, 0.31, 0.05, 'chrome', seg=24, bev=0.012)
+    for k in range(16):   # the capsules (two-tone balls) heaped inside the dome
+        a = k * 2.399; r = 0.07 + 0.16 * ((k * 7) % 5) / 4; yy = 0.89 + 0.055 * (k % 3) + (0.06 if r < 0.12 else 0)
+        m.gico(math.cos(a) * r, math.sin(a) * r, yy, 0.062, ['yellow', 'blue', 'pink', 'green', 'orange', 'snow'][k % 6], sub=2)
+    m.lathe([(0.3, 0.85), (0.3, 0.9), (0.28, 0.98), (0.24, 1.05), (0.17, 1.1), (0.08, 1.13), (0.0, 1.135)], 'glass_lt', seg=24)
+    m.gcyl(0, 0, 1.12, 0.09, 0.06, 'red', seg=16, bev=0.02)
+    obj_from(m, 'ITEM_GACHA', 'ENV_PROTO')
     for nm_, col, shp in [('CLOTH_SHIRT', 'pink', 'shirt'), ('CLOTH_SHORTS', 'blue', 'shorts')]:
         m = GB()
         pts = [(-0.09, -0.13), (0.09, -0.13), (0.09, 0.05), (0.16, 0.02), (0.19, 0.08), (0.1, 0.14), (-0.1, 0.14), (-0.19, 0.08), (-0.16, 0.02), (-0.09, 0.05)] if shp == 'shirt' else \
