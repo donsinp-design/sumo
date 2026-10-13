@@ -263,10 +263,10 @@ def mid_skin(phi, c=Vector((0, 0.03, 0.80))):
     return hit(c + d * 0.9, -d, 0.9)
 zf, zb = float(belt_zc(0)) - 0.07, ZB - 0.07
 path = []
-for ph in np.linspace(math.radians(8), math.radians(176), 32):
+for ph in np.linspace(math.radians(8), math.radians(194), 35):   # (to 194: the back end climbs into the band)
     loc, nor = mid_skin(ph)
     if loc is not None: path.append(loc)
-path = [p for p in path if not (p.y < -0.1 and p.z > zf + 0.02) and not (p.y > 0.1 and p.z > zb + 0.04)]
+path = [p for p in path if not (p.y < -0.1 and p.z > zf + 0.02) and not (p.y > 0.1 and p.z > zb + 0.09)]   # (the back end runs on up under the band: no skin between)
 for _ in range(5):
     path = [path[0]] + [(path[i - 1] + 2 * path[i] + path[i + 1]) / 4 for i in range(1, len(path) - 1)] + [path[-1]]
 NP = len(path); P, UV = [], []; L_acc = 0.0
@@ -280,7 +280,8 @@ for i, p in enumerate(path):
     row, uvr = [], []
     for k in range(9):
         g = math.pi + 2 * math.pi * k / 8; cx, cy = math.cos(g), math.sin(g)
-        row.append(p + nn * (0.012 + 0.01 * (sgp(cx, 0.5) + 1)) + side * hw * sgp(cy, 0.5))
+        lift = 0.05 * max(0.0, (f - 0.7) / 0.3) ** 2 if p.y > 0.1 else 0.0   # (bridges the cleft as it rises into the band, so it lies flat)
+        row.append(p + nn * (0.012 + lift + 0.01 * (sgp(cx, 0.5) + 1)) + side * hw * sgp(cy, 0.5))
         uvr.append((L_acc * 3, 0.5 + 0.4 * sgp(cy, 0.5)))
     P.append(row); UV.append(uvr)
 strip = grid_obj('TateMitsu', P, UV, MAW)

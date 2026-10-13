@@ -11,7 +11,7 @@
   S.seedRand = (n) => { seed = (n >>> 0) || 1; };
   S.getSeed = () => seed; S.setSeed = (n) => { seed = n; };
   S.rand = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  S.PRE_DUR = { clap: 0.3, stomp: 0.8, salt: 0.9, spread: 0.8, faceSlap: 0.35, beltSlap: 0.35,
+  S.PRE_DUR = { clapUp: 0.9, clap: 0.3, stomp: 0.8, salt: 0.9, spread: 0.8, faceSlap: 0.35, beltSlap: 0.35,
     x_flex: 0.9, x_point: 0.6, x_drum: 0.8, x_hype: 0.9, x_bow: 0.8, x_neck: 0.6, x_cry: 0.9, x_shimmy: 1.0 };
 
   // technique tag -> kimarite, depending on how the round ended
@@ -156,6 +156,7 @@
               const slots = ['up', 'right', 'down', 'left'];
               for (let k = 0; k < 4; k++) if (arT(slots[k]) && w.extraTaunts[k]) { pre = 'x_' + w.extraTaunts[k]; break; }
             }
+            if (pre === 'stomp') w.stompSd = w.stompSd === 1 ? -1 : 1;   // shiko alternates: left leg, then right
             if (pre) { w.pre = pre; w.preT = 0; w.stomped = false; this.emit(pre === 'stomp' ? 'stompUp' : pre === 'clap' ? 'clap' : 'taunt', { w, kind: pre }); }
           }
           w.pdir = dirs; w.par = Object.assign({}, ar);

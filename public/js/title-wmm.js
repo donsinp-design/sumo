@@ -1,7 +1,7 @@
 'use strict';
 // WHERE'S MY MAWASHI: the kumitegame fork's front end.
 //   boot     straight onto the menu
-//   title    white, the menu on the left; food rains down behind it (onigiri, dango..., in the game's flat look)
+//   title    white, the menu on the left; on the right the sumo from behind on a clay mound, a trophy held up over his head
 //   PLAY     the screen goes white, the bathhouse fades in: the sumo asleep in the bath
 //            (zzz); any key wakes him and the level starts (see Stealth intro)
 // The original Kumite build is untouched (this only runs when window.KUMITE_FORK === 'kumitegame').
@@ -20,7 +20,7 @@
     addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
     cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
   }
-  // the food: the same flat look as the bathhouse props (onigiri, dango, fish cake, manju)
+  // the food: the same flat look as the bathhouse props (onigiri, dango, fish cake)
   const M = (c) => { const m = S.Flat.mat(c); return m; };
   function done(g) { g.traverse((o) => { if (o.isMesh) o.userData.flatDone = true; }); return g; }
   const FOOD = [
@@ -42,12 +42,6 @@
       const g = new THREE.Group();
       const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.14, 12).rotateX(Math.PI / 2), M(0xf8f4ec)); g.add(disc);
       for (const z of [0.072, -0.072]) { const sw = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.04, 6, 24, Math.PI * 1.6), M(0xef7f9e)); sw.position.z = z; g.add(sw); const dot = new THREE.Mesh(new THREE.CircleGeometry(0.05, 12), M(0xef7f9e)); dot.position.z = z * 1.02; if (z < 0) dot.rotation.y = Math.PI; g.add(dot); }
-      return done(g);
-    },
-    function manju() {
-      const g = new THREE.Group();
-      const bun = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 14), M(0xf3e6cf)); bun.scale.y = 0.72; g.add(bun);
-      const mark = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), M(0xc0503e)); mark.position.y = 0.24; mark.scale.y = 0.4; g.add(mark);
       return done(g);
     },
   ];
@@ -79,9 +73,41 @@
     fadeEl.style.transition = 'opacity ' + sec + 's ease'; requestAnimationFrame(() => { fadeEl.style.opacity = to; });
   }
 
+  // ---- the champion: the sumo from behind on a clay mound, a gold trophy held up over his head (in place of the food rain)
+  let champ = null;
+  function trophy() {
+    const g = new THREE.Group(), gold = M(0xf2c14e), dark = M(0xb98a2c), base = M(0x3a2a22);
+    const prof = [[0, 0], [0.22, 0], [0.22, 0.07], [0.1, 0.1], [0.06, 0.2], [0.05, 0.32], [0.12, 0.38], [0.28, 0.5], [0.34, 0.68], [0.36, 0.86], [0.33, 0.88]].map(([x, y]) => new THREE.Vector2(x, y));
+    const cup = new THREE.Mesh(new THREE.LatheGeometry(prof, 24), gold); g.add(cup);
+    for (const sd of [-1, 1]) { const h = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.03, 8, 16, Math.PI * 1.2), dark); h.position.set(sd * 0.36, 0.66, 0); h.rotation.z = sd > 0 ? -Math.PI * 0.6 : Math.PI * 1.6; g.add(h); }
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.4), base); b.position.y = -0.06; g.add(b);
+    return done(g);
+  }
+  function makeChamp(R) {
+    if (!S.SoftSumo || !S.SoftSumo.loaded || !S.Match || !S.WrestlerView) return null;
+    const A = [S.ARCH[0], S.ARCH[1]], m = new S.Match(A), w = m.w[0];
+    m.phase = 'shikiri'; m.phaseT = 9; w.x = 0; w.z = 0; w.f = Math.PI / 2; w.pre = 'trophy'; w.preT = 0;
+    const v = new S.WrestlerView(scene, A[0], R.fx, S.DEF_EQ); S.SoftSumo.attach(v, { noBlob: true });
+    if (v.shadow) v.shadow.visible = false;
+    const clay = M(0xd9b07c), straw = M(0xdcc58c);
+    const mound = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.7, 0.7, 48), clay); mound.position.y = -0.35;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(2.15, 0.11, 8, 64), straw); ring.rotation.x = Math.PI / 2; ring.position.y = 0.03;
+    const tr = trophy(); tr.scale.setScalar(1.65);
+    const G = new THREE.Group(); G.add(done(mound), done(ring)); scene.add(G); scene.add(tr);
+    return { m, w, v, tr, h1: new THREE.Vector3(), h2: new THREE.Vector3() };
+  }
   W.frame = function (dt, R) {
     if (!scene) setup(R);
-    step(Math.min(dt, 0.05));
+    dt = Math.min(dt, 0.05); t += dt;
+    if (!champ) {
+      champ = makeChamp(R);
+      if (champ) { cam.fov = 30; cam.position.set(-1.5, 2.6, 8.6); cam.lookAt(-1.5, 1.3, 0); cam.updateProjectionMatrix(); }
+      else { step(dt); R.r.render(scene, cam); return; }   // (the model is still loading: the food rain for a moment)
+    }
+    if (stars.length) { for (const s of stars) scene.remove(s.m); stars.length = 0; }
+    const c = champ; c.w.preT = 0.2; c.v.match = c.m; c.v.viewer = 0; c.v.update(c.w, dt, t);
+    c.v.handWorld(1, c.h1); c.v.handWorld(-1, c.h2); c.tr.position.copy(c.h1).add(c.h2).multiplyScalar(0.5); c.tr.position.y += 0.12;
+    c.tr.rotation.y = Math.sin(t * 0.8) * 0.25;
     R.r.render(scene, cam);
   };
   // PLAY: a white-out, then the bathhouse fades in (the sumo asleep in the bath)

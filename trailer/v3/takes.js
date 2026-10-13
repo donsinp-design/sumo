@@ -4,7 +4,12 @@ T.HELP=`window.H={
  danger(c,extra){const P=c.P;for(const n of c.npcs){if(n.ko||n.a.st==='down')continue;if(Math.abs(n.a.y-P.y)>1.5)continue;const dx=P.x-n.a.x,dz=P.z-n.a.z,d=Math.hypot(dx,dz);const r=(n.range||6)*1.15+(extra||0);if(d>r)continue;let da=Math.atan2(dz,dx)-n.a.f;da=Math.atan2(Math.sin(da),Math.cos(da));if(Math.abs(da)<(n.half||0.62)+0.45)return n;}return null;},
  go(F,tx,tz,s){const P=F.c.P,dx=tx-P.x,dz=tz-P.z,d=Math.hypot(dx,dz)||1;F.inp.mx=dx/d*(s||1);F.inp.mz=dz/d*(s||1);return d;},
  stop(F){F.inp.mx=0;F.inp.mz=0;},
- pulse(F,t,period){return (Math.floor(t*30/(period||4))%2)===0;}
+ pulse(F,t,period){return (Math.floor(t*30/(period||4))%2)===0;},
+ sgo(F,tk,t,tx,tz,s){const P=F.c.P;if(tk.weave){const ex=tx-P.x,ez=tz-P.z,ed=Math.hypot(ex,ez)||1;if(ed>1.3){const w=(0.28*Math.sin(t*1.7+1)+0.12*Math.sin(t*3.9))*Math.min(1,(ed-1.3)/1.5);tx+=-ez/ed*w;tz+=ex/ed*w;}}const dx=tx-P.x,dz=tz-P.z,d=Math.hypot(dx,dz)||1,want=Math.atan2(dz,dx);const dt=Math.min(0.05,Math.max(0,t-(tk.lt===undefined?t:tk.lt)));tk.lt=t;
+   if(tk.sa===undefined||tk.idle){const v=Math.hypot(P.vx,P.vz);tk.sa=v>0.3?Math.atan2(P.vz,P.vx):P.f;}tk.idle=false;
+   const da=Math.atan2(Math.sin(want-tk.sa),Math.cos(want-tk.sa));tk.da=da;const mx=7.5*dt;tk.sa+=Math.max(-mx,Math.min(mx,da));
+   const sp=(s||1)*(d<0.6?Math.max(0.35,d/0.6):1)*(Math.abs(da)>1.6&&d<1?0.4:1);F.inp.mx=Math.cos(tk.sa)*sp;F.inp.mz=Math.sin(tk.sa)*sp;return d;},
+ sstop(F,tk){F.inp.mx=0;F.inp.mz=0;tk.idle=true;}
 };`;
 const UP=3;
 // 1: the box sneaks across the lobby, freezing whenever a cone could find it
@@ -232,6 +237,36 @@ T.knock2={seed:4,pre:0.4,n:420,
    else if(tk.st===2){H.stop(F);P.f=Math.PI;tk.st=3;}
    else if(tk.st===3){H.stop(F);c.keys.KeyI=true;if(!tk.ip||(!P.hidden&&t-tk.ip>0.2)){c.iPress=true;tk.ip=t;}if(P.hidden)tk.st=4;}
    else{c.keys.KeyI=true;H.stop(F);}}};
+// v5: knock2 with two seconds of lead before the knock, so the attendant's slip is clearly not the knock's doing
+T.knock3={seed:4,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.stage='key';F.at(-1.0,-46.35,-Math.PI/2,0);c.grace=1.5;const tk=F.take;tk.st=0;tk.ct=c.carts[0];
+   const g=c.npcs[1];g.a.x=5.4;g.a.z=-44.4;g.i=1;g.wait=6;g.a.f=0;g.path=null;const th=c.npcs[3];th.a.x=-10.5;th.a.z=-30.5;th.i=0;th.wait=60;th.a.f=-Math.PI/2;th.path=null;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,ct=tk.ct;F.pad();
+   if(tk.st===0){H.stop(F);P.f=-Math.PI/2;if(t>2.8){tk.st=1;tk.k=t;}}
+   else if(tk.st===1){P.f=-Math.PI/2;F.inp.push=(t-tk.k)<0.07;if(t-tk.k>0.42)tk.st=2;}
+   else if(tk.st===2){H.stop(F);P.f=Math.PI;tk.st=3;}
+   else if(tk.st===3){H.stop(F);c.keys.KeyI=true;if(!tk.ip||(!P.hidden&&t-tk.ip>0.2)){c.iPress=true;tk.ip=t;}if(P.hidden)tk.st=4;}
+   else{c.keys.KeyI=true;H.stop(F);}}};
+// v5: knock3 without the puddle by the attendant, so the knock lures him over and nobody slips
+T.knock4={seed:4,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.stage='key';F.at(-1.0,-46.35,-Math.PI/2,0);c.grace=1.5;const tk=F.take;tk.st=0;tk.ct=c.carts[0];
+   const g=c.npcs[1];g.a.x=5.4;g.a.z=-44.4;g.i=1;g.wait=6;g.a.f=0;g.path=null;const th=c.npcs[3];th.a.x=-10.5;th.a.z=-30.5;th.i=0;th.wait=60;th.a.f=-Math.PI/2;th.path=null;c.puddles=c.puddles.filter((q)=>!(q.x>2&&q.z<-40&&q.z>-50));},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,ct=tk.ct;F.pad();
+   if(tk.st===0){H.stop(F);P.f=-Math.PI/2;if(t>2.8){tk.st=1;tk.k=t;}}
+   else if(tk.st===1){P.f=-Math.PI/2;F.inp.push=(t-tk.k)<0.07;if(t-tk.k>0.42)tk.st=2;}
+   else if(tk.st===2){H.stop(F);P.f=Math.PI;tk.st=3;}
+   else if(tk.st===3){H.stop(F);c.keys.KeyI=true;if(!tk.ip||(!P.hidden&&t-tk.ip>0.2)){c.iPress=true;tk.ip=t;}if(P.hidden)tk.st=4;}
+   else{c.keys.KeyI=true;H.stop(F);}}};
+// v5: knock4 with the attendant further off, so he is round the corner before he can see the cart
+T.knock5={seed:4,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.stage='key';F.at(-1.0,-46.35,-Math.PI/2,0);c.grace=1.5;const tk=F.take;tk.st=0;tk.ct=c.carts[0];
+   const g=c.npcs[1];g.a.x=9.0;g.a.z=-44.4;g.i=1;g.wait=6;g.a.f=0;g.path=null;const th=c.npcs[3];th.a.x=-10.5;th.a.z=-30.5;th.i=0;th.wait=60;th.a.f=-Math.PI/2;th.path=null;c.puddles=c.puddles.filter((q)=>!(q.x>2&&q.z<-40&&q.z>-50));},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,ct=tk.ct;F.pad();
+   if(tk.st===0){H.stop(F);P.f=-Math.PI/2;if(t>2.8){tk.st=1;tk.k=t;}}
+   else if(tk.st===1){P.f=-Math.PI/2;F.inp.push=(t-tk.k)<0.07;if(t-tk.k>0.42)tk.st=2;}
+   else if(tk.st===2){H.stop(F);P.f=Math.PI;tk.st=3;}
+   else if(tk.st===3){H.stop(F);c.keys.KeyI=true;if(!tk.ip||(!P.hidden&&t-tk.ip>0.2)){c.iPress=true;tk.ip=t;}if(P.hidden)tk.st=4;}
+   else{c.keys.KeyI=true;H.stop(F);}}};
 
 T.washtest={seed:2,pre:0.3,n:120,
  setup:(F)=>{const c=F.c;c.outOfBath=true;F.at(-4.6,-3,-Math.PI/2,0);c.grace=99;},
@@ -293,4 +328,556 @@ T.wallt4={seed:2,pre:0.3,n:70,
 T.wallt5={seed:2,pre:0.3,n:70,
  setup:(F)=>{const c=F.c;c.outOfBath=true;F.at(-4.5,-8.5,-Math.PI/2,0);c.grace=99;const sh=c.flat.lights.sun.shadow;sh.bias=-0.003;sh.normalBias=0.09;sh.mapSize.set(4096,4096);if(sh.map){sh.map.dispose();sh.map=null;}},
  script:(t,F)=>{F.pad();H.go(F,-4.5,-14.5,0.6);}};
+
+T.knock6={seed:4,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.stage='key';F.at(-1.0,-46.35,-Math.PI/2,0);c.grace=1.5;const tk=F.take;tk.st=0;tk.ct=c.carts[0];
+   const g=c.npcs[1];g.a.x=7.0;g.a.z=-44.4;g.i=1;g.wait=6;g.a.f=0;g.path=null;const th=c.npcs[3];th.a.x=-10.5;th.a.z=-30.5;th.i=0;th.wait=60;th.a.f=-Math.PI/2;th.path=null;c.puddles=c.puddles.filter((q)=>!(q.x>2&&q.z<-40&&q.z>-50));},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,ct=tk.ct;F.pad();
+   if(tk.st===0){H.stop(F);P.f=-Math.PI/2;if(t>2.8){tk.st=1;tk.k=t;}}
+   else if(tk.st===1){P.f=-Math.PI/2;F.inp.push=(t-tk.k)<0.07;if(t-tk.k>0.42)tk.st=2;}
+   else if(tk.st===2){H.stop(F);P.f=Math.PI;tk.st=3;}
+   else if(tk.st===3){H.stop(F);c.keys.KeyI=true;if(!tk.ip||(!P.hidden&&t-tk.ip>0.2)){c.iPress=true;tk.ip=t;}if(P.hidden)tk.st=4;}
+   else{c.keys.KeyI=true;H.stop(F);}}};
+T.knock7={seed:4,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.stage='key';F.at(-1.0,-46.35,-Math.PI/2,0);c.grace=1.5;const tk=F.take;tk.st=0;tk.ct=c.carts[0];
+   const g=c.npcs[1];g.a.x=6.2;g.a.z=-44.4;g.i=1;g.wait=6;g.a.f=0;g.path=null;const th=c.npcs[3];th.a.x=-10.5;th.a.z=-30.5;th.i=0;th.wait=60;th.a.f=-Math.PI/2;th.path=null;c.puddles=c.puddles.filter((q)=>!(q.x>2&&q.z<-40&&q.z>-50));},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,ct=tk.ct;F.pad();
+   if(tk.st===0){H.stop(F);P.f=-Math.PI/2;if(t>2.8){tk.st=1;tk.k=t;}}
+   else if(tk.st===1){P.f=-Math.PI/2;F.inp.push=(t-tk.k)<0.07;if(t-tk.k>0.42)tk.st=2;}
+   else if(tk.st===2){H.stop(F);P.f=Math.PI;tk.st=3;}
+   else if(tk.st===3){H.stop(F);c.keys.KeyI=true;if(!tk.ip||(!P.hidden&&t-tk.ip>0.2)){c.iPress=true;tk.ip=t;}if(P.hidden)tk.st=4;}
+   else{c.keys.KeyI=true;H.stop(F);}}};
+// v5: knock4 with the attendant short-sighted / narrow-eyed, so he comes to look but does not spot him first
+T.knock8={seed:4,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.stage='key';F.at(-1.0,-46.35,-Math.PI/2,0);c.grace=1.5;const tk=F.take;tk.st=0;tk.ct=c.carts[0];
+   const g=c.npcs[1];g.a.x=5.4;g.range=3.0;g.a.z=-44.4;g.i=1;g.wait=6;g.a.f=0;g.path=null;const th=c.npcs[3];th.a.x=-10.5;th.a.z=-30.5;th.i=0;th.wait=60;th.a.f=-Math.PI/2;th.path=null;c.puddles=c.puddles.filter((q)=>!(q.x>2&&q.z<-40&&q.z>-50));},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,ct=tk.ct;F.pad();
+   if(tk.st===0){H.stop(F);P.f=-Math.PI/2;if(t>2.8){tk.st=1;tk.k=t;}}
+   else if(tk.st===1){P.f=-Math.PI/2;F.inp.push=(t-tk.k)<0.07;if(t-tk.k>0.42)tk.st=2;}
+   else if(tk.st===2){H.stop(F);P.f=Math.PI;tk.st=3;}
+   else if(tk.st===3){H.stop(F);c.keys.KeyI=true;if(!tk.ip||(!P.hidden&&t-tk.ip>0.2)){c.iPress=true;tk.ip=t;}if(P.hidden)tk.st=4;}
+   else{c.keys.KeyI=true;H.stop(F);}}};
+// v5: knock4 with the attendant further off, so he is round the corner before he can see the cart
+T.knock5={seed:4,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.stage='key';F.at(-1.0,-46.35,-Math.PI/2,0);c.grace=1.5;const tk=F.take;tk.st=0;tk.ct=c.carts[0];
+   const g=c.npcs[1];g.a.x=9.0;g.a.z=-44.4;g.i=1;g.wait=6;g.a.f=0;g.path=null;const th=c.npcs[3];th.a.x=-10.5;th.a.z=-30.5;th.i=0;th.wait=60;th.a.f=-Math.PI/2;th.path=null;c.puddles=c.puddles.filter((q)=>!(q.x>2&&q.z<-40&&q.z>-50));},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,ct=tk.ct;F.pad();
+   if(tk.st===0){H.stop(F);P.f=-Math.PI/2;if(t>2.8){tk.st=1;tk.k=t;}}
+   else if(tk.st===1){P.f=-Math.PI/2;F.inp.push=(t-tk.k)<0.07;if(t-tk.k>0.42)tk.st=2;}
+   else if(tk.st===2){H.stop(F);P.f=Math.PI;tk.st=3;}
+   else if(tk.st===3){H.stop(F);c.keys.KeyI=true;if(!tk.ip||(!P.hidden&&t-tk.ip>0.2)){c.iPress=true;tk.ip=t;}if(P.hidden)tk.st=4;}
+   else{c.keys.KeyI=true;H.stop(F);}}};
+// v5: knock4 with the attendant short-sighted / narrow-eyed, so he comes to look but does not spot him first
+T.knock9={seed:4,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.stage='key';F.at(-1.0,-46.35,-Math.PI/2,0);c.grace=1.5;const tk=F.take;tk.st=0;tk.ct=c.carts[0];
+   const g=c.npcs[1];g.a.x=5.4;g.half=0.3;g.a.z=-44.4;g.i=1;g.wait=6;g.a.f=0;g.path=null;const th=c.npcs[3];th.a.x=-10.5;th.a.z=-30.5;th.i=0;th.wait=60;th.a.f=-Math.PI/2;th.path=null;c.puddles=c.puddles.filter((q)=>!(q.x>2&&q.z<-40&&q.z>-50));},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,ct=tk.ct;F.pad();
+   if(tk.st===0){H.stop(F);P.f=-Math.PI/2;if(t>2.8){tk.st=1;tk.k=t;}}
+   else if(tk.st===1){P.f=-Math.PI/2;F.inp.push=(t-tk.k)<0.07;if(t-tk.k>0.42)tk.st=2;}
+   else if(tk.st===2){H.stop(F);P.f=Math.PI;tk.st=3;}
+   else if(tk.st===3){H.stop(F);c.keys.KeyI=true;if(!tk.ip||(!P.hidden&&t-tk.ip>0.2)){c.iPress=true;tk.ip=t;}if(P.hidden)tk.st=4;}
+   else{c.keys.KeyI=true;H.stop(F);}}};
+// v5: knock4 with the attendant further off, so he is round the corner before he can see the cart
+T.knock5={seed:4,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.stage='key';F.at(-1.0,-46.35,-Math.PI/2,0);c.grace=1.5;const tk=F.take;tk.st=0;tk.ct=c.carts[0];
+   const g=c.npcs[1];g.a.x=9.0;g.a.z=-44.4;g.i=1;g.wait=6;g.a.f=0;g.path=null;const th=c.npcs[3];th.a.x=-10.5;th.a.z=-30.5;th.i=0;th.wait=60;th.a.f=-Math.PI/2;th.path=null;c.puddles=c.puddles.filter((q)=>!(q.x>2&&q.z<-40&&q.z>-50));},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,ct=tk.ct;F.pad();
+   if(tk.st===0){H.stop(F);P.f=-Math.PI/2;if(t>2.8){tk.st=1;tk.k=t;}}
+   else if(tk.st===1){P.f=-Math.PI/2;F.inp.push=(t-tk.k)<0.07;if(t-tk.k>0.42)tk.st=2;}
+   else if(tk.st===2){H.stop(F);P.f=Math.PI;tk.st=3;}
+   else if(tk.st===3){H.stop(F);c.keys.KeyI=true;if(!tk.ip||(!P.hidden&&t-tk.ip>0.2)){c.iPress=true;tk.ip=t;}if(P.hidden)tk.st=4;}
+   else{c.keys.KeyI=true;H.stop(F);}}};
+// v5: vend3, but he drinks the second can too (J), and stays put for the burp
+T.vend4={seed:8,pre:0.6,n:330,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;F.take.st=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();const cans=()=>c.buckets.filter((b)=>b.kind==='can'&&b.state==='floor'&&b.soda!==undefined);
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||b.soda===undefined)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8<3;if(tk.k>20){b._skip=true;tk.k=0;}}};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.8);if(d<0.15){tk.st=1;tk.t1=t;}}
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>1.2)tk.st=2;}
+   else if(tk.st===2){if(P.held&&P.held.kind==='can'){tk.st=2.5;F.inp.grab=false;}else pick();}
+   else if(tk.st===2.5){const d=H.go(F,5.6,-40.2,1);if(d<0.3){tk.st=3;tk.t3=t;}}
+   else if(tk.st===3){H.stop(F);P.f=0;F.inp.push=t-tk.t3>0.15&&t-tk.t3<0.22;if(!P.held&&t-tk.t3>0.3){tk.st=4;tk.t4=t;tk.k=0;}}
+   else if(tk.st===4){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=5;F.inp.grab=false;}else pick();}
+   else if(tk.st===5){H.stop(F);if(!tk.t5)tk.t5=t;P.f=0;F.inp.push=t-tk.t5>0.3&&t-tk.t5<0.37;if(t-tk.t5>4.5)tk.st=6;}
+   else{H.stop(F);}}};
+// v5: the vending machine. Thump, thump, KRRASH; he grabs a can, and when the attendant comes for him he throws it so it
+// bursts into a soda puddle beside him, steps round behind the puddle, the attendant runs at him and slips; then he drinks
+// a can while they're down, and burps
+T.vend5={seed:8,pre:0.6,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;F.take.st=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const guard=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st==='down'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode==='route'||n.mode==='return')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.8);if(d<0.15){tk.st=1;tk.t1=t;}}
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>1.0)tk.st=2;}
+   else if(tk.st===2){if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;tk.k=0;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=guard();if(g&&g.d<7.5){   // pick a short throw (into a wall close by) roughly across the attendant's line
+       const ga=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);let best=null;
+       for(let a=-Math.PI;a<Math.PI;a+=Math.PI/24){const L=Math.max(1,c.reach(P.x,P.z,a,8)-0.6);if(L<1.0||L>2.6)continue;const lx=P.x+Math.cos(a)*L,lz=P.z+Math.sin(a)*L;
+         const ux=lx-g.n.a.x,uz=lz-g.n.a.z,ul=Math.hypot(ux,uz)||1,tx=lx+ux/ul*1.4,tz=lz+uz/ul*1.4;if(c.inWall(tx,tz)||!c.clear(P.x,P.z,tx,tz))continue;
+         let da=Math.abs(Math.atan2(Math.sin(a-ga),Math.cos(a-ga)));const sc=Math.abs(da-Math.PI/2)+Math.hypot(tx-P.x,tz-P.z)*0.15;if(!best||sc<best.sc)best={a,lx,lz,tx,tz,sc};}
+       if(best){tk.th=best;P.f=best.a;tk.st=4;tk.t4=t;}}}
+   else if(tk.st===4){H.stop(F);P.f=tk.th.a;F.inp.grab=t-tk.t4<0.07;if(!P.held&&t-tk.t4>0.45){tk.st=5;}}
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const d=H.go(F,tk.th.tx,tk.th.tz,1);if(d<0.25){tk.st=6;tk.t6=t;}}
+   else if(tk.st===6){H.stop(F);const g=guard();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(c.npcs.some((n)=>n.a.st==='down'&&n.a.slipFall)||t-tk.t6>4){tk.st=7;tk.k=0;}}
+   else if(tk.st===7){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=8;tk.t8=t;F.inp.grab=false;}else pick();}
+   else if(tk.st===8){H.stop(F);F.inp.push=t-tk.t8>0.1&&t-tk.t8<0.17;if(t-tk.t8>4.5)tk.st=9;}
+   else{H.stop(F);}}};
+// v5: vend5, but the can is thrown onto the route the attendant is about to run, so he hits the soda at speed
+T.vend6={seed:8,pre:0.6,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;F.take.st=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const guard=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st==='down'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode==='route'||n.mode==='return')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.8);if(d<0.15){tk.st=1;tk.t1=t;}}
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>1.0)tk.st=2;}
+   else if(tk.st===2){if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;tk.k=0;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=guard();if(g&&g.d<8&&g.n.path&&g.n.path.length){   // throw it onto the route the attendant is about to run
+       const pts=[[g.n.a.x,g.n.a.z]].concat(g.n.path.slice(g.n.pi||0));let best=null;
+       for(let a=-Math.PI;a<Math.PI;a+=Math.PI/36){const L=Math.max(1,c.reach(P.x,P.z,a,8)-0.6);if(L>5)continue;const lx=P.x+Math.cos(a)*L,lz=P.z+Math.sin(a)*L;
+         let acc=0,bestD=1e9,along=0;for(let q=0;q<pts.length-1;q++){const ax=pts[q][0],az=pts[q][1],bx=pts[q+1][0],bz=pts[q+1][1],sx=bx-ax,sz=bz-az,sl=Math.hypot(sx,sz)||1e-4;let u=((lx-ax)*sx+(lz-az)*sz)/(sl*sl);u=Math.max(0,Math.min(1,u));const d=Math.hypot(ax+sx*u-lx,az+sz*u-lz);if(d<bestD){bestD=d;along=acc+u*sl;}acc+=sl;}
+         if(bestD>0.4||along<1.6)continue;const fly=Math.hypot(g.n.a.x-(P.x+lx)/2,g.n.a.z-(P.z+lz)/2);if(fly<1.0)continue;const sc=bestD+Math.abs(along-2.6)*0.2;if(!best||sc<best.sc)best={a,lx,lz,tx:P.x,tz:P.z,sc};}
+       if(best){tk.th=best;P.f=best.a;tk.st=4;tk.t4=t;}}}
+   else if(tk.st===4){H.stop(F);P.f=tk.th.a;F.inp.grab=t-tk.t4<0.07;if(!P.held&&t-tk.t4>0.45){tk.st=5;}}
+   else if(tk.st===5){H.stop(F);tk.st=6;tk.t6=t;}
+   else if(tk.st===6){H.stop(F);const g=guard();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(c.npcs.some((n)=>n.a.st==='down'&&n.a.slipFall)||t-tk.t6>4){tk.st=7;tk.k=0;}}
+   else if(tk.st===7){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=8;tk.t8=t;F.inp.grab=false;}else pick();}
+   else if(tk.st===8){H.stop(F);F.inp.push=t-tk.t8>0.1&&t-tk.t8<0.17;if(t-tk.t8>4.5)tk.st=9;}
+   else{H.stop(F);}}};
+// v5: vend6, and after the throw he steps behind the puddle so the attendant has to run through it to reach him
+T.vend7={seed:8,pre:0.6,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;F.take.st=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const guard=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st==='down'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode==='route'||n.mode==='return')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.8);if(d<0.15){tk.st=1;tk.t1=t;}}
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>1.0)tk.st=2;}
+   else if(tk.st===2){if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;tk.k=0;}else pick();}
+   else if(tk.st===3){H.stop(F);tk.can=P.held;const g=guard();if(g&&g.d<8&&g.n.path&&g.n.path.length){   // throw it onto the route the attendant is about to run
+       const pts=[[g.n.a.x,g.n.a.z]].concat(g.n.path.slice(g.n.pi||0));let best=null;
+       for(let a=-Math.PI;a<Math.PI;a+=Math.PI/36){const L=Math.max(1,c.reach(P.x,P.z,a,8)-0.6);if(L>5)continue;const lx=P.x+Math.cos(a)*L,lz=P.z+Math.sin(a)*L;
+         let acc=0,bestD=1e9,along=0;for(let q=0;q<pts.length-1;q++){const ax=pts[q][0],az=pts[q][1],bx=pts[q+1][0],bz=pts[q+1][1],sx=bx-ax,sz=bz-az,sl=Math.hypot(sx,sz)||1e-4;let u=((lx-ax)*sx+(lz-az)*sz)/(sl*sl);u=Math.max(0,Math.min(1,u));const d=Math.hypot(ax+sx*u-lx,az+sz*u-lz);if(d<bestD){bestD=d;along=acc+u*sl;}acc+=sl;}
+         if(bestD>0.4||along<1.6)continue;const fly=Math.hypot(g.n.a.x-(P.x+lx)/2,g.n.a.z-(P.z+lz)/2);if(fly<1.0)continue;const sc=bestD+Math.abs(along-2.6)*0.2;if(!best||sc<best.sc)best={a,lx,lz,tx:P.x,tz:P.z,sc};}
+       if(best){tk.th=best;P.f=best.a;tk.st=4;tk.t4=t;}}}
+   else if(tk.st===4){H.stop(F);P.f=tk.th.a;if(tk.n0===undefined)tk.n0=c.puddles.length;F.inp.grab=t-tk.t4<0.07;if(!P.held&&t-tk.t4>0.45){tk.st=5;}}
+   else if(tk.st===5){H.stop(F);const q=c.puddles.length>tk.n0?c.puddles[c.puddles.length-1]:null;if(q){tk.q=q;tk.st=5.5;}else if(t-tk.t4>1.5){tk.st=6;tk.t6=t;}}
+   else if(tk.st===5.5){const g=guard(),q=tk.q;if(P.st!=='free'||!g){H.stop(F);if(!g){tk.st=6;tk.t6=t;}return;}const ux=q.x-g.n.a.x,uz=q.z-g.n.a.z,ul=Math.hypot(ux,uz)||1;let tx=q.x+ux/ul*0.85,tz=q.z+uz/ul*0.85;if(c.inWall(tx,tz)){tx=P.x;tz=P.z;}const d=H.go(F,tx,tz,1);if(d<0.2){H.stop(F);P.f=Math.atan2(-uz,-ux);}if(c.npcs.some((n)=>n.a.st==='down'&&n.a.slipFall)||t-tk.t4>6){tk.st=7;tk.k=0;}}
+   else if(tk.st===6){H.stop(F);const g=guard();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(c.npcs.some((n)=>n.a.st==='down'&&n.a.slipFall)||t-tk.t6>4){tk.st=7;tk.k=0;}}
+   else if(tk.st===7){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=8;tk.t8=t;F.inp.grab=false;}else pick();}
+   else if(tk.st===8){H.stop(F);F.inp.push=t-tk.t8>0.1&&t-tk.t8<0.17;if(t-tk.t8>4.5)tk.st=9;}
+   else{H.stop(F);}}};
+// v5: the vending machine. KRRASH; he grabs a can and throws it across the room; the landing brings the attendant running
+// into the soda and he slips; meanwhile he picks up another can, drinks it, and burps
+T.vend8={seed:8,pre:0.6,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;F.take.st=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const guard=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st==='down'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode==='route'||n.mode==='return')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.8);if(d<0.15){tk.st=1;tk.t1=t;}}
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>1.0)tk.st=2;}
+   else if(tk.st===2){if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;tk.k=0;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=guard();if(g&&g.d<9){   // throw it across the room: the crash brings the attendant running, straight into the soda
+       let best=null;for(let a=-Math.PI;a<Math.PI;a+=Math.PI/36){const L=Math.max(1,c.reach(P.x,P.z,a,8)-0.6);if(L<3.2)continue;const lx=P.x+Math.cos(a)*L,lz=P.z+Math.sin(a)*L;
+         let ok=true;for(const n of c.npcs){if(n.ko)continue;const sx=lx-P.x,sz=lz-P.z,u=Math.max(0,Math.min(1,((n.a.x-P.x)*sx+(n.a.z-P.z)*sz)/(L*L)));if(Math.hypot(P.x+sx*u-n.a.x,P.z+sz*u-n.a.z)<1.3)ok=false;}if(!ok)continue;
+         const gd=Math.hypot(lx-g.n.a.x,lz-g.n.a.z);if(gd<2.2)continue;const sc=Math.abs(gd-3.2);if(!best||sc<best.sc)best={a,lx,lz,sc};}
+       if(best){tk.th=best;P.f=best.a;tk.st=4;tk.t4=t;}}}
+   else if(tk.st===4){H.stop(F);P.f=tk.th.a;F.inp.grab=t-tk.t4<0.07;if(!P.held&&t-tk.t4>0.45){tk.st=6;tk.t6=t;}}
+   else if(tk.st===6){H.stop(F);P.f=Math.atan2(tk.th.lz-P.z,tk.th.lx-P.x);if(c.npcs.some((n)=>n.a.st==='down'&&n.a.slipFall)||t-tk.t6>5){tk.st=7;tk.k=0;}}
+   else if(tk.st===7){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=8;tk.t8=t;F.inp.grab=false;}else pick();}
+   else if(tk.st===8){H.stop(F);F.inp.push=t-tk.t8>0.1&&t-tk.t8<0.17;if(t-tk.t8>4.5)tk.st=9;}
+   else{H.stop(F);}}};
+// v5: the vending machine. KRRASH; he grabs a can, slams it down where the attendant is running to (the crash), steps back;
+// the attendant runs into the soda and slips; meanwhile he picks up another can, drinks it, and burps
+T.vend9={seed:8,pre:0.6,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;F.take.st=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const guard=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st==='down'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode==='route'||n.mode==='return')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.8);if(d<0.15){tk.st=1;tk.t1=t;}}
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>1.0)tk.st=2;}
+   else if(tk.st===2){if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;tk.k=0;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=guard();if(g&&g.n.path&&g.n.path.length){   // where the attendant is running to (the crash), and from which way
+       const p=g.n.path,e=p[p.length-1],q=p.length>1?p[p.length-2]:[g.n.a.x,g.n.a.z];let dx=e[0]-q[0],dz=e[1]-q[1];const l=Math.hypot(dx,dz)||1;dx/=l;dz/=l;
+       tk.e={x:e[0],z:e[1],dx,dz};tk.st=3.5;}}
+   else if(tk.st===3.5){const e=tk.e,sx=e.x+e.dx*1.0,sz=e.z+e.dz*1.0;const d=H.go(F,sx,sz,1);if(d<0.15){H.stop(F);P.f=Math.atan2(-e.dz,-e.dx);tk.st=4;tk.t4=t;}}
+   else if(tk.st===4){H.stop(F);const e=tk.e;P.f=Math.atan2(-e.dz,-e.dx);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.6){tk.st=5;}}   // hold K: slammed down, soda everywhere
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const e=tk.e;const d=H.go(F,e.x+e.dx*2.1,e.z+e.dz*2.1,0.8);if(d<0.15){tk.st=6;tk.t6=t;}}
+   else if(tk.st===6){H.stop(F);const e=tk.e;P.f=Math.atan2(-e.dz,-e.dx);if(c.npcs.some((n)=>n.a.st==='down'&&n.a.slipFall)||t-tk.t6>5){tk.st=7;tk.k=0;}}
+   else if(tk.st===7){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=8;tk.t8=t;F.inp.grab=false;}else pick();}
+   else if(tk.st===8){H.stop(F);F.inp.push=t-tk.t8>0.1&&t-tk.t8<0.17;if(t-tk.t8>4.5)tk.st=9;}
+   else{H.stop(F);}}};
+// v5: the vending machine. KRRASH; he grabs a can, walks off a few steps and, when the attendant comes from the machine,
+// throws it back at them: soda across their path, they slip; then he drinks another can and burps
+T.vend10={seed:8,pre:0.6,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;F.take.st=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const guard=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st==='down'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode==='route'||n.mode==='return')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.8);if(d<0.15){tk.st=1;tk.t1=t;}}
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>1.0)tk.st=2;}
+   else if(tk.st===2){if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;tk.k=0;}else pick();}
+   else if(tk.st===3){const d=H.go(F,5.8,-40.2,1);if(d<0.2){H.stop(F);P.f=0;tk.st=3.5;}}
+   else if(tk.st===3.5){H.stop(F);P.f=0;const g=guard();if(g&&g.n.a.x-P.x>2.0&&g.d<6.5){const L=Math.max(1,c.reach(P.x,P.z,0,8)-0.6);tk.L=L;if(g.d>L+0.6||g.d<2.6){tk.st=4;tk.t4=t;}}}
+   else if(tk.st===4){H.stop(F);P.f=0;F.inp.grab=t-tk.t4<0.07;if(!P.held&&t-tk.t4>0.45){tk.st=6;tk.t6=t;}}
+   else if(tk.st===6){H.stop(F);const g=guard();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(c.npcs.some((n)=>n.a.st==='down'&&n.a.slipFall)||t-tk.t6>5){tk.st=7;tk.k=0;}}
+   else if(tk.st===7){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=8;tk.t8=t;F.inp.grab=false;}else pick();}
+   else if(tk.st===8){H.stop(F);F.inp.push=t-tk.t8>0.1&&t-tk.t8<0.17;if(t-tk.t8>4.5)tk.st=9;}
+   else{H.stop(F);}}};
+// v5: the vending machine. KRRASH; he grabs a can, slams it down in the gap the attendant runs through, steps back;
+// the attendant hits the soda at a run and slips; meanwhile he picks up another can, drinks it, and burps
+T.vend11={seed:8,pre:0.6,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;F.take.st=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const guard=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st==='down'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode==='route'||n.mode==='return')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.8);if(d<0.15){tk.st=1;tk.t1=t;}}
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>1.0)tk.st=2;}
+   else if(tk.st===2){if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;tk.k=0;}else pick();}
+   else if(tk.st===3){const d=H.go(F,9.6,-40.2,0.9);if(d<0.12){H.stop(F);tk.st=4;tk.t4=t;}}
+   else if(tk.st===4){H.stop(F);P.f=-2.13;F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.6){tk.st=5;}}   // hold K: slammed down in the gap they come through
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const d=H.go(F,10.4,-39.0,0.8);if(d<0.15){tk.st=6;tk.t6=t;}}
+   else if(tk.st===6){H.stop(F);const g=guard();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(c.npcs.some((n)=>n.a.st==='down'&&n.a.slipFall)||t-tk.t6>5){tk.st=7;tk.k=0;}}
+   else if(tk.st===7){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=8;tk.t8=t;F.inp.grab=false;}else pick();}
+   else if(tk.st===8){H.stop(F);F.inp.push=t-tk.t8>0.1&&t-tk.t8<0.17;if(t-tk.t8>4.5)tk.st=9;}
+   else{H.stop(F);}}};
+// v5: vend11, drinking the moment the attendant is down
+T.vend12={seed:8,pre:0.6,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;F.take.st=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const guard=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st==='down'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode==='route'||n.mode==='return')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.8);if(d<0.15){tk.st=1;tk.t1=t;}}
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>1.0)tk.st=2;}
+   else if(tk.st===2){if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;tk.k=0;}else pick();}
+   else if(tk.st===3){const d=H.go(F,9.6,-40.2,0.9);if(d<0.12){H.stop(F);tk.st=4;tk.t4=t;}}
+   else if(tk.st===4){H.stop(F);P.f=-2.13;F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.6){tk.st=5;}}   // hold K: slammed down in the gap they come through
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const d=H.go(F,10.4,-39.0,0.8);if(d<0.15){tk.st=6;tk.t6=t;}}
+   else if(tk.st===6){H.stop(F);const g=guard();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(c.npcs.some((n)=>n.a.st==='down'&&!n.ko)||t-tk.t6>5){tk.st=7;tk.k=0;}}
+   else if(tk.st===7){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=8;tk.t8=t;F.inp.grab=false;}else pick();}
+   else if(tk.st===8){H.stop(F);F.inp.push=t-tk.t8>0.1&&t-tk.t8<0.17;if(t-tk.t8>4.5)tk.st=9;}
+   else{H.stop(F);}}};
+// v5c: wake4 steered like a person: the stick turns gradually (no 90 degree snaps), corners are cut, dashes start once he faces the way he means to go
+T.wake5={seed:2,pre:2.0,n:1560,
+ setup:(F)=>{const c=F.c;c.asleep=true;c.el('.st-zzz').style.display='block';const tk=F.take;tk.st=0;tk.i=0;
+   tk.q=[['go',1.0,-1.0,'w'],['go',1.2,0.9,'w'],['dash',-6.5,0.9,1.0],['go',-9.5,-3.2,'w'],['pick',-10.2,-2.5,'oke'],['go',-4.6,-2.6,'w'],['face',-Math.PI/2],['throw'],['wait',0.5],['pud'],['wait',0.3],['dashp',-4.6,-14.0,1.6],['wait',1.2],['go',-4.6,-12.6,'w'],['go',-4.6,-14.5,'w'],['go',0.6,-17.0,'w'],['dash',6.2,-24.6,1.4],['pick',7.6,-23.5,'stool'],['go',6.75,-28.0,'a'],['go',10.2,-28.6,'a'],['face',-Math.PI/2],['throw'],['wait',1.0],['go',1.5,-28.3,'a'],['go',-7.5,-28.3,'a'],['go',-10.6,-29.6,'a'],['go',-10.6,-38.0,'a'],['go',-10.4,-39.6,'a'],['use'],['end']];},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take;F.pad();
+   if(tk.st===0){if(t>5.2){c.wake();tk.st=1;tk.t1=t;}return;}
+   if(tk.st===1){if(t-tk.t1>1.2)tk.st=2;return;}
+   const s=tk.q[tk.i];if(!s||s[0]==='end'){H.stop(F);c.keys.KeyI=false;return;}
+   const nxt=()=>{tk.i++;tk.s0=undefined;tk.k=0;tk.dd=0;};if(tk.s0===undefined)tk.s0=t;const dt=t-tk.s0;
+   if(P.st!=='free'&&s[0]!=='wait'){H.sstop(F,tk);return;}
+   if(s[0]==='go'){let near=false;if(s[3]==='a')for(const n of c.npcs){if(n.ko||Math.abs(n.a.y-P.y)>1.5)continue;if(Math.hypot(n.a.x-P.x,n.a.z-P.z)<4.6)near=true;}
+     c.keys.KeyI=near;if(near&&H.danger(c,-1.5)){H.sstop(F,tk);return;}{const q=tk.q[tk.i+1];if(H.sgo(F,tk,t,s[1],s[2],1)<((q&&q[0]==='go')?0.85:0.35))nxt();}}
+   else if(s[0]==='dashp'){c.keys.KeyI=false;const q=tk.pud;const tx=q?q.x:s[1];H.sgo(F,tk,t,tx,s[2],1);if(!tk.dd&&Math.abs(tk.da)<0.3){F.inp.dash=true;tk.dd=t;}if(tk.dd&&t-tk.dd>s[3])nxt();}
+   else if(s[0]==='dash'){c.keys.KeyI=false;const d=H.sgo(F,tk,t,s[1],s[2],1);if(!tk.dd&&Math.abs(tk.da)<0.3){F.inp.dash=true;tk.dd=t;}if((tk.dd&&t-tk.dd>s[3])||d<0.4)nxt();}
+   else if(s[0]==='pud'){const q=c.puddles[c.puddles.length-1];tk.pud=q;if(q){const back=Math.min(-0.3,q.z+3.0);if(H.sgo(F,tk,t,q.x,back,0.8)<0.3){H.sstop(F,tk);nxt();}}else nxt();}
+   else if(s[0]==='face'){H.sstop(F,tk);const da=Math.atan2(Math.sin(s[1]-P.f),Math.cos(s[1]-P.f));P.f+=Math.max(-0.33,Math.min(0.33,da));if(dt>0.2&&Math.abs(da)<0.05)nxt();}
+   else if(s[0]==='wait'){H.sstop(F,tk);if(dt>s[1])nxt();}
+   else if(s[0]==='throw'){H.sstop(F,tk);F.inp.grab=dt<0.07;if(dt>0.4)nxt();}
+   else if(s[0]==='use'){H.sstop(F,tk);c.keys.KeyI=false;F.inp.grab=dt>0.3&&dt<0.37;if(dt>0.5)nxt();}
+   else if(s[0]==='pick'){c.keys.KeyI=false;let b=null,bd=1e9;for(const q of c.buckets){if(q.state!=='floor'||(s[3]&&q.kind!==s[3]))continue;const d=Math.hypot(q.m.position.x-s[1],q.m.position.z-s[2]);if(d<bd){bd=d;b=q;}}
+     if(P.held){nxt();return;}if(!b){nxt();return;}const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);
+     if(d>0.75&&!s[3])H.sgo(F,tk,t,b.m.position.x,b.m.position.z,0.8);else if(d>0.95)H.sgo(F,tk,t,b.m.position.x,b.m.position.z,0.5);else{H.sstop(F,tk);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8<3;}}}};
+// v5c: shove2, but the attendant shoves the box for a full 2 s; he stands up, they jump back; he slaps them out cold
+T.shove3={seed:5,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;F.box();c.P.st='free';c.P.dur=0;c.noDuck=0;c.P.boxHide=true;c.wasBoxHide=true;c.ballK=1;c.stage='exit';F.at(1.5,-77.4,Math.PI,3);c.grace=3.5;c.keys.KeyI=true;const tk=F.take;tk.st=1;const n=tk.n=c.npcs[9];n.a.x=-2.6;n.a.z=-77.4;n.a.f=0;n.i=1;n.wait=0;n.mode='route';n.path=null;c.goTo(n,9.6,-77.4);},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,n=tk.n;F.pad();
+   if(tk.st===1){H.stop(F);c.keys.KeyI=true;const nd=Math.hypot(n.a.x-P.x,n.a.z-P.z);if((n.pushing2||n.clr)&&nd<1.7){tk.sh=tk.sh||t;if(t-tk.sh>2.0){tk.st=2;tk.up=t;}}}
+   else if(tk.st===2){H.stop(F);c.keys.KeyI=false;if(t-tk.up>0.75){tk.st=3;tk.t3=t;}}
+   else if(tk.st===3){c.keys.KeyI=false;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);P.f=Math.atan2(n.a.z-P.z,n.a.x-P.x);if(d>1.1&&!n.ko)H.go(F,n.a.x,n.a.z,0.8);else{H.stop(F);F.inp.push=!n.ko&&!(tk.sl&&t-tk.sl<0.5);if(F.inp.push)tk.sl=t;}}
+   else{H.stop(F);}}};
+// v5c: the vending machine, as the owner described it. He walks through a puddle to the machine, leaving big wet footprints;
+// an attendant finds the trail and follows it; he thumps the machine (they hear it and hurry over); KRRASH, cans roll out,
+// one splits and sprays; he grabs a can and smashes it on the floor in front of them as they come; they hit the soda and slip.
+T.vend13={seed:8,pre:14,n:420,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-6.6,V.z+0.3,0,0);c.grace=0;
+   c.spill(V.x0-5.4,V.z+0.3,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-11.8,V.z-0.6,Math.PI);n.alarm=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.stopWarm=true;tk.t0=t;tk.n.a.f=0;}}
+   else if(tk.st===0.5){H.stop(F);P.f=0;if(t-tk.t0>2.2){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>0.6)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<3.6){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+// v5c: vend13 with the walk through the puddle on camera (the footprints are drawn by the frame update, not the warm-up)
+T.vend14={seed:8,pre:0.2,n:460,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-6.6,V.z+0.3,0,0);c.grace=0;
+   c.spill(V.x0-5.4,V.z+0.3,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-10.6,V.z-0.6,Math.PI);n.alarm=0;tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.t0=t;const n=tk.n;F.npcAt(n,n.a.x,n.a.z,0);}}
+   else if(tk.st===0.5){H.stop(F);P.f=0;if(t-tk.t0>2.2){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>0.6)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<3.6){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+// v5c: vend14 from the old start spot (the other one was against a bench)
+T.vend15={seed:8,pre:0.2,n:460,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;
+   c.spill(V.x0-3.3,V.z+0.4,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-8.2,V.z-0.6,Math.PI);n.alarm=0;tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.t0=t;const n=tk.n;F.npcAt(n,n.a.x,n.a.z,0);}}
+   else if(tk.st===0.5){H.stop(F);P.f=0;if(t-tk.t0>2.2){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>0.6)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<3.6){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+// v5c: vend15 with the puddle on the line he actually walks
+T.vend16={seed:8,pre:0.2,n:460,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-4.2,V.z+0.4,0,0);c.grace=0;
+   c.spill(V.x0-2.7,V.z-0.55,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-8.2,V.z-0.6,Math.PI);n.alarm=0;tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.t0=t;const n=tk.n;F.npcAt(n,n.a.x,n.a.z,0);}}
+   else if(tk.st===0.5){H.stop(F);P.f=0;if(t-tk.t0>2.2){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>0.6)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<3.6){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+// v5c: vend16 starting further back, so five footprints lead up to the machine
+T.vend17={seed:8,pre:0.2,n:460,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-6.0,V.z-0.6,0,0);c.grace=0;
+   c.spill(V.x0-4.7,V.z-0.6,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-8.2,V.z-0.6,Math.PI);n.alarm=0;tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.t0=t;const n=tk.n;F.npcAt(n,n.a.x,n.a.z,0);}}
+   else if(tk.st===0.5){H.stop(F);P.f=0;if(t-tk.t0>2.2){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>0.6)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<3.6){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+// v5c: vend17 with the attendant further off (back turned while he wades through), and no slip before the smash
+T.vend18={seed:8,pre:0.2,n:460,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-6.0,V.z-0.6,0,0);c.grace=0;
+   c.spill(V.x0-4.7,V.z-0.6,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-10.2,V.z-0.6,Math.PI);n.alarm=0;tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   if(tk.st<4&&tk.n)tk.n.slipCd=Math.max(tk.n.slipCd||0,0.2);   // (he keeps his feet until the can is smashed in front of him)
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.t0=t;const n=tk.n;F.npcAt(n,n.a.x,n.a.z,0);}}
+   else if(tk.st===0.5){H.stop(F);P.f=0;if(t-tk.t0>2.2){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>0.6)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<3.6){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+// v5d: shove3, but the 2 s count only runs while they actually have their shoulder to the box (sweating, ふんっ / 重っ)
+T.shove4={seed:5,pre:0.4,n:420,
+ setup:(F)=>{const c=F.c;F.box();c.P.st='free';c.P.dur=0;c.noDuck=0;c.P.boxHide=true;c.wasBoxHide=true;c.ballK=1;c.stage='exit';F.at(1.5,-77.4,Math.PI,3);c.grace=3.5;c.keys.KeyI=true;const tk=F.take;tk.st=1;const n=tk.n=c.npcs[9];n.a.x=-2.6;n.a.z=-77.4;n.a.f=0;n.i=1;n.wait=0;n.mode='route';n.path=null;c.goTo(n,9.6,-77.4);},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,n=tk.n;F.pad();
+   if(tk.st===1){H.stop(F);c.keys.KeyI=true;const nd=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(n.pushing2&&nd<1.7){tk.pt=(tk.pt||0)+(tk.lt?t-tk.lt:0);}tk.lt=t;if(tk.pt>2.0||(tk.pt>0.8&&!n.clr)){tk.st=2;tk.up=t;}}
+   else if(tk.st===2){H.stop(F);c.keys.KeyI=false;if(t-tk.up>0.75){tk.st=3;tk.t3=t;}}
+   else if(tk.st===3){c.keys.KeyI=false;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);P.f=Math.atan2(n.a.z-P.z,n.a.x-P.x);if(d>1.1&&!n.ko)H.go(F,n.a.x,n.a.z,0.8);else{H.stop(F);F.inp.push=!n.ko&&!(tk.sl&&t-tk.sl<0.5);if(F.inp.push)tk.sl=t;}}
+   else{H.stop(F);}}};
+// v5d: vend18, but he only starts thumping once the attendant has seen the footprints and is following them
+T.vend19={seed:8,pre:0.2,n:460,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-6.0,V.z-0.6,0,0);c.grace=0;
+   c.spill(V.x0-4.7,V.z-0.6,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-9.4,V.z-0.4,Math.PI);n.alarm=0;tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   if(tk.st<4&&tk.n)tk.n.slipCd=Math.max(tk.n.slipCd||0,0.2);   // (he keeps his feet until the can is smashed in front of him)
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.t0=t;const n=tk.n;F.npcAt(n,n.a.x,n.a.z,0);}}
+   else if(tk.st===0.5){H.stop(F);P.f=0;const n=tk.n;if(n.inv&&!tk.seen)tk.seen=t;if((tk.seen&&t-tk.seen>1.0)||t-tk.t0>9){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>0.6)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<3.6){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+// v5d: through the locker room at a charge: two attendants walking away down the long aisle (they haven't seen him)
+// get bowled over one after the other (a charge only flattens someone who hasn't made him out yet)
+T.chargeko={seed:2,pre:0.3,n:200,
+ setup:(F)=>{const c=F.c,tk=F.take;c.outOfBath=true;c.stage='key';F.at(9.6,-28.3,Math.PI,0);c.grace=6;tk.st=0;
+   const A=tk.A=c.npcs[0],B=tk.B=c.npcs[2];
+   for(const [n,x] of [[A,4.6],[B,0.6]]){n.a.x=x;n.a.z=-28.3;n.a.f=Math.PI;n.route=[[x,-28.3,0,Math.PI],[x-9,-28.3,0,Math.PI]];n.i=1;n.wait=0;n.mode='route';n.path=null;n.alarm=0;c.goTo(n,x-9,-28.3);n.mode='route';}
+   F.park([A,B]);tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take;F.pad();c.grace=Math.max(c.grace,0.5);
+   const tgt=[tk.A,tk.B].find((n)=>!n.ko&&n.a.st!=='down');
+   const charge=(n)=>{const dx=n.a.x-P.x,dz=n.a.z-P.z,d=Math.hypot(dx,dz)||1;F.inp.mx=dx/d;F.inp.mz=dz/d;F.inp.dash=P.st==='free'&&P.cd<=0;};
+   if(tk.st===0){H.go(F,P.x-1,-28.3,0.6);if(t>0.7)tk.st=1;}
+   else if(tk.st===1){if(tgt)charge(tgt);else{tk.st=2;tk.t2=t;}}
+   else{H.stop(F);}}};
+// v5d: vend19, tiptoeing through the puddle (silent, still leaves prints) so the attendant finds the trail, not him
+T.vend20={seed:8,pre:0.2,n:460,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-6.0,V.z-0.6,0,0);c.grace=0;
+   c.spill(V.x0-4.7,V.z-0.6,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-9.4,V.z-0.4,Math.PI);n.alarm=0;tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   if(tk.st<4&&tk.n)tk.n.slipCd=Math.max(tk.n.slipCd||0,0.2);   // (he keeps his feet until the can is smashed in front of him)
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){c.keys.KeyI=true;const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.t0=t;const n=tk.n;F.npcAt(n,n.a.x,n.a.z,0);}}
+   else if(tk.st===0.5){c.keys.KeyI=false;H.stop(F);P.f=0;const n=tk.n;if(n.inv&&!tk.seen)tk.seen=t;if((tk.seen&&t-tk.seen>1.0)||t-tk.t0>9){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.75);F.inp.push=((t-tk.t1)%0.75)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>0.6)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<3.6){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+// v5e: wake5 without the walk back after the bucket (he throws it from where he is, towards the door), round the bath in a curve, a slight weave on the stick
+T.wake6={seed:2,pre:2.0,n:1560,
+ setup:(F)=>{const c=F.c;c.asleep=true;c.el('.st-zzz').style.display='block';const tk=F.take;tk.st=0;tk.i=0;
+   tk.weave=true;tk.q=[['go',1.0,-1.0,'w'],['go',0.6,0.9,'w'],['dash',-5.6,0.6,1.0],['go',-8.6,-2.4,'w'],['go',-9.6,-3.4,'w'],['aim',-10.2,-2.45],['grab'],['go',-7.6,-4.6,'w'],['aim',-4.8,-12.6],['throw'],['wait',0.5],['pud'],['wait',0.3],['dashp',-4.6,-14.0,1.6],['wait',1.2],['go',-4.6,-12.6,'w'],['go',-4.6,-14.5,'w'],['go',0.6,-17.0,'w'],['dash',6.2,-24.6,1.4],['pick',7.6,-23.5,'stool'],['go',6.75,-28.0,'a'],['go',10.2,-28.6,'a'],['face',-Math.PI/2],['throw'],['wait',1.0],['go',1.5,-28.3,'a'],['go',-7.5,-28.3,'a'],['go',-10.6,-29.6,'a'],['go',-10.6,-38.0,'a'],['go',-10.4,-39.6,'a'],['use'],['end']];},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take;F.pad();
+   if(tk.st===0){if(t>5.2){c.wake();tk.st=1;tk.t1=t;}return;}
+   if(tk.st===1){if(t-tk.t1>1.2)tk.st=2;return;}
+   const s=tk.q[tk.i];if(!s||s[0]==='end'){H.stop(F);c.keys.KeyI=false;return;}
+   const nxt=()=>{tk.i++;tk.s0=undefined;tk.k=0;tk.dd=0;};if(tk.s0===undefined)tk.s0=t;const dt=t-tk.s0;
+   if(P.st!=='free'&&s[0]!=='wait'){H.sstop(F,tk);return;}
+   if(s[0]==='go'){let near=false;if(s[3]==='a')for(const n of c.npcs){if(n.ko||Math.abs(n.a.y-P.y)>1.5)continue;if(Math.hypot(n.a.x-P.x,n.a.z-P.z)<4.6)near=true;}
+     c.keys.KeyI=near;if(near&&H.danger(c,-1.5)){H.sstop(F,tk);return;}{const q=tk.q[tk.i+1];if(H.sgo(F,tk,t,s[1],s[2],1)<((q&&q[0]==='go')?0.85:0.35))nxt();}}
+   else if(s[0]==='dashp'){c.keys.KeyI=false;const q=tk.pud;const tx=q?q.x:s[1];H.sgo(F,tk,t,tx,s[2],1);if(!tk.dd&&Math.abs(tk.da)<0.3){F.inp.dash=true;tk.dd=t;}if(tk.dd&&t-tk.dd>s[3])nxt();}
+   else if(s[0]==='dash'){c.keys.KeyI=false;const d=H.sgo(F,tk,t,s[1],s[2],1);if(!tk.dd&&Math.abs(tk.da)<0.3){F.inp.dash=true;tk.dd=t;}if((tk.dd&&t-tk.dd>s[3])||d<0.4)nxt();}
+   else if(s[0]==='pud'){const q=c.puddles[c.puddles.length-1];tk.pud=q;if(q){const back=Math.min(-0.3,q.z+3.0);if(H.sgo(F,tk,t,q.x,back,0.8)<0.3){H.sstop(F,tk);nxt();}}else nxt();}
+   else if(s[0]==='grab'){H.sstop(F,tk);F.inp.grab=dt<0.07;if(P.held&&dt>0.2)nxt();else if(dt>1.0)nxt();}
+   else if(s[0]==='aim'){H.sstop(F,tk);const want=Math.atan2(s[2]-P.z,s[1]-P.x),da=Math.atan2(Math.sin(want-P.f),Math.cos(want-P.f));P.f+=Math.max(-0.33,Math.min(0.33,da));if(dt>0.2&&Math.abs(da)<0.05)nxt();}
+   else if(s[0]==='face'){H.sstop(F,tk);const da=Math.atan2(Math.sin(s[1]-P.f),Math.cos(s[1]-P.f));P.f+=Math.max(-0.33,Math.min(0.33,da));if(dt>0.2&&Math.abs(da)<0.05)nxt();}
+   else if(s[0]==='wait'){H.sstop(F,tk);if(dt>s[1])nxt();}
+   else if(s[0]==='throw'){H.sstop(F,tk);F.inp.grab=dt<0.07;if(dt>0.4)nxt();}
+   else if(s[0]==='use'){H.sstop(F,tk);c.keys.KeyI=false;F.inp.grab=dt>0.3&&dt<0.37;if(dt>0.5)nxt();}
+   else if(s[0]==='pick'){c.keys.KeyI=false;let b=null,bd=1e9;for(const q of c.buckets){if(q.state!=='floor'||(s[3]&&q.kind!==s[3]))continue;const d=Math.hypot(q.m.position.x-s[1],q.m.position.z-s[2]);if(d<bd){bd=d;b=q;}}
+     if(P.held){if(s[3]&&P.held.kind!==s[3]){F.inp.grab=false;P.held.state='floor';}nxt();return;}if(!b){nxt();return;}const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);
+     if(d>0.75&&!s[3])H.sgo(F,tk,t,b.m.position.x,b.m.position.z,0.8);else if(d>0.6)H.sgo(F,tk,t,b.m.position.x,b.m.position.z,0.45);else{H.sstop(F,tk);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8<3;}}}};
+// v5e: chargeko with the two attendants close together: one charge bowls over both
+T.chargeko2={seed:2,pre:0.3,n:200,
+ setup:(F)=>{const c=F.c,tk=F.take;c.outOfBath=true;c.stage='key';F.at(9.6,-28.3,Math.PI,0);c.grace=6;tk.st=0;
+   const A=tk.A=c.npcs[0],B=tk.B=c.npcs[2];
+   for(const [n,x] of [[A,6.0],[B,4.5]]){n.a.x=x;n.a.z=-28.3;n.a.f=Math.PI;n.route=[[x,-28.3,0,Math.PI],[x-9,-28.3,0,Math.PI]];n.i=1;n.wait=0;n.mode='route';n.path=null;n.alarm=0;c.goTo(n,x-9,-28.3);n.mode='route';}
+   F.park([A,B]);tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take;F.pad();c.grace=Math.max(c.grace,0.5);
+   const tgt=[tk.A,tk.B].find((n)=>!n.ko&&n.a.st!=='down');
+   const charge=(n)=>{const dx=n.a.x-P.x,dz=n.a.z-P.z,d=Math.hypot(dx,dz)||1;F.inp.mx=dx/d;F.inp.mz=dz/d;F.inp.dash=P.st==='free'&&P.cd<=0;};
+   if(tk.st===0){H.go(F,P.x-1,-28.3,0.6);if(t>0.7)tk.st=1;}
+   else if(tk.st===1){if(tgt)charge(tgt);else{tk.st=2;tk.t2=t;}}
+   else{H.stop(F);}}};
+// v5e: pushes the laundry cart through into the laundry and dives into it on the move: it rolls on with him inside, towels fly out
+T.cartdive={seed:4,pre:0.3,n:200,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const ct=c.carts[1];F.at(ct.x-1.0,ct.z,0,0);c.grace=1.5;const tk=F.take;tk.ct=ct;tk.st=0;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take;F.pad();
+   if(tk.st===0){H.stop(F);P.f=0;F.inp.grab=t>0.5&&t<0.57;if(P.cart){tk.st=1;}}
+   else if(tk.st===1){const w=[[8.8,-49.6],[16,-49.6]][tk.w||0];if(H.go(F,w[0],w[1],1)<0.5)tk.w=(tk.w||0)+1;if(P.x>(+(globalThis.DIVEX||11.5))){tk.st=2;tk.t2=t;}}
+   else if(tk.st===2){H.go(F,16,-49.6,1);c.keys.KeyI=true;if(t-tk.t2<0.05)c.iPress=true;if(P.hidden){tk.st=3;}}
+   else{H.stop(F);c.keys.KeyI=true;}}};
+// v5f (Lotus Eater): wake6 with its big moments held to the beat (sync steps wait until the song time; the startle is 12.85 s)
+T.wake7={seed:2,pre:2.0,n:1560,
+ setup:(F)=>{const c=F.c;c.asleep=true;c.el('.st-zzz').style.display='block';const tk=F.take;tk.st=0;tk.i=0;
+   tk.weave=true;tk.q=[['go',1.0,-1.0,'w'],['go',0.6,0.9,'w'],['sync',16.26],['dash',-5.6,0.6,1.0],['go',-8.6,-2.4,'w'],['go',-9.6,-3.4,'w'],['aim',-10.2,-2.45],['grab'],['go',-7.6,-4.6,'w'],['aim',-4.8,-12.6],['sync',21.59],['throw'],['wait',0.5],['pud'],['wait',0.3],['sync',25.76],['dashp',-4.6,-14.0,1.6],['wait',1.2],['go',-4.6,-12.6,'w'],['go',-4.6,-14.5,'w'],['go',0.6,-17.0,'w'],['sync',31.93],['dash',6.2,-24.6,1.4],['pick',7.6,-23.5,'stool'],['go',6.75,-28.0,'a'],['go',10.2,-28.6,'a'],['face',-Math.PI/2],['sync',38.39],['throw'],['wait',1.0],['go',1.5,-28.3,'a'],['go',-7.5,-28.3,'a'],['go',-10.6,-29.6,'a'],['go',-10.6,-38.0,'a'],['go',-10.4,-39.6,'a'],['sync',54.31],['use'],['end']];},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take;F.pad();
+   if(tk.st===0){if(t>5.2){c.wake();tk.st=1;tk.t1=t;}return;}
+   if(tk.st===1){if(t-tk.t1>1.2)tk.st=2;return;}
+   if(tk.tg===undefined&&P.st==='gasp')tk.tg=t;const s=tk.q[tk.i];if(!s||s[0]==='end'){H.stop(F);c.keys.KeyI=false;return;}
+   const nxt=()=>{tk.i++;tk.s0=undefined;tk.k=0;tk.dd=0;};if(tk.s0===undefined)tk.s0=t;const dt=t-tk.s0;
+   if(P.st!=='free'&&s[0]!=='wait'){H.sstop(F,tk);return;}
+   if(s[0]==='go'){let near=false;if(s[3]==='a')for(const n of c.npcs){if(n.ko||Math.abs(n.a.y-P.y)>1.5)continue;if(Math.hypot(n.a.x-P.x,n.a.z-P.z)<4.6)near=true;}
+     c.keys.KeyI=near;if(near&&H.danger(c,-1.5)){H.sstop(F,tk);return;}{const q=tk.q[tk.i+1];if(H.sgo(F,tk,t,s[1],s[2],1)<((q&&q[0]==='go')?0.85:0.35))nxt();}}
+   else if(s[0]==='dashp'){c.keys.KeyI=false;const q=tk.pud;const tx=q?q.x:s[1];H.sgo(F,tk,t,tx,s[2],1);if(!tk.dd&&Math.abs(tk.da)<0.3){F.inp.dash=true;tk.dd=t;}if(tk.dd&&t-tk.dd>s[3])nxt();}
+   else if(s[0]==='dash'){c.keys.KeyI=false;const d=H.sgo(F,tk,t,s[1],s[2],1);if(!tk.dd&&Math.abs(tk.da)<0.3){F.inp.dash=true;tk.dd=t;}if((tk.dd&&t-tk.dd>s[3])||d<0.4)nxt();}
+   else if(s[0]==='pud'){const q=c.puddles[c.puddles.length-1];tk.pud=q;if(q){const back=Math.min(-0.3,q.z+3.0);if(H.sgo(F,tk,t,q.x,back,0.8)<0.3){H.sstop(F,tk);nxt();}}else nxt();}
+   else if(s[0]==='sync'){H.sstop(F,tk);if(tk.tg!==undefined&&12.85+(t-tk.tg)>=s[1])nxt();}
+   else if(s[0]==='grab'){H.sstop(F,tk);F.inp.grab=dt<0.07;if(P.held&&dt>0.2)nxt();else if(dt>1.0)nxt();}
+   else if(s[0]==='aim'){H.sstop(F,tk);const want=Math.atan2(s[2]-P.z,s[1]-P.x),da=Math.atan2(Math.sin(want-P.f),Math.cos(want-P.f));P.f+=Math.max(-0.33,Math.min(0.33,da));if(dt>0.2&&Math.abs(da)<0.05)nxt();}
+   else if(s[0]==='face'){H.sstop(F,tk);const da=Math.atan2(Math.sin(s[1]-P.f),Math.cos(s[1]-P.f));P.f+=Math.max(-0.33,Math.min(0.33,da));if(dt>0.2&&Math.abs(da)<0.05)nxt();}
+   else if(s[0]==='wait'){H.sstop(F,tk);if(dt>s[1])nxt();}
+   else if(s[0]==='throw'){H.sstop(F,tk);F.inp.grab=dt<0.07;if(dt>0.4)nxt();}
+   else if(s[0]==='use'){H.sstop(F,tk);c.keys.KeyI=false;F.inp.grab=dt>0.3&&dt<0.37;if(dt>0.5)nxt();}
+   else if(s[0]==='pick'){c.keys.KeyI=false;let b=null,bd=1e9;for(const q of c.buckets){if(q.state!=='floor'||(s[3]&&q.kind!==s[3]))continue;const d=Math.hypot(q.m.position.x-s[1],q.m.position.z-s[2]);if(d<bd){bd=d;b=q;}}
+     if(P.held){if(s[3]&&P.held.kind!==s[3]){F.inp.grab=false;P.held.state='floor';}nxt();return;}if(!b){nxt();return;}const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);
+     if(d>0.75&&!s[3])H.sgo(F,tk,t,b.m.position.x,b.m.position.z,0.8);else if(d>0.6)H.sgo(F,tk,t,b.m.position.x,b.m.position.z,0.45);else{H.sstop(F,tk);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8<3;}}}};
+// v5f: vend20 thumping once a beat (0.622 s, Lotus Eater)
+T.vend21={seed:8,pre:0.2,n:460,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-6.0,V.z-0.6,0,0);c.grace=0;
+   c.spill(V.x0-4.7,V.z-0.6,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-9.4,V.z-0.4,Math.PI);n.alarm=0;tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   if(tk.st<4&&tk.n)tk.n.slipCd=Math.max(tk.n.slipCd||0,0.2);   // (he keeps his feet until the can is smashed in front of him)
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){c.keys.KeyI=true;const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.t0=t;const n=tk.n;F.npcAt(n,n.a.x,n.a.z,0);}}
+   else if(tk.st===0.5){c.keys.KeyI=false;H.stop(F);P.f=0;const n=tk.n;if(n.inv&&!tk.seen)tk.seen=t;if((tk.seen&&t-tk.seen>1.0)||t-tk.t0>9){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.622);F.inp.push=((t-tk.t1)%0.622)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>0.6)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<3.6){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+// v5g: vend21 thumping every two beats of Pop Dat Thang (0.872 s)
+T.vend22={seed:8,pre:0.2,n:460,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-6.0,V.z-0.6,0,0);c.grace=0;
+   c.spill(V.x0-4.7,V.z-0.6,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-9.4,V.z-0.4,Math.PI);n.alarm=0;tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.7)H.go(F,b.m.position.x,b.m.position.z,0.6);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%8===1;if(tk.k>40){b._skip=true;tk.k=0;}}};
+   if(tk.st<4&&tk.n)tk.n.slipCd=Math.max(tk.n.slipCd||0,0.2);   // (he keeps his feet until the can is smashed in front of him)
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){c.keys.KeyI=true;const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.t0=t;const n=tk.n;F.npcAt(n,n.a.x,n.a.z,0);}}
+   else if(tk.st===0.5){c.keys.KeyI=false;H.stop(F);P.f=0;const n=tk.n;if(n.inv&&!tk.seen)tk.seen=t;if((tk.seen&&t-tk.seen>1.0)||t-tk.t0>9){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.872);F.inp.push=((t-tk.t1)%0.872)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>0.6)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<3.6){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.45;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+// v5h: vend22 with three spinning cans: he watches them go, then grabs a still can quickly
+T.vend23={seed:8,pre:0.2,n:460,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;const V=c.vend,tk=F.take;tk.st=0;F.at(V.x0-6.0,V.z-0.6,0,0);c.grace=0;
+   c.spill(V.x0-4.7,V.z-0.6,0);const n=tk.n=c.npcs[1];F.npcAt(n,V.x0-9.4,V.z-0.4,Math.PI);n.alarm=0;tk.stopWarm=true;},
+ script:(t,F)=>{const c=F.c,P=c.P,tk=F.take,V=c.vend;F.pad();
+   const nearCan=()=>{let best=null,bd=1e9;for(const b of c.buckets){if(b.kind!=='can'||b.state!=='floor'||b._skip||!b.soda)continue;const d=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(d<bd){bd=d;best=b;}}return best;};
+   const pick=()=>{const b=nearCan();if(!b)return;const bd=Math.hypot(b.m.position.x-P.x,b.m.position.z-P.z);if(bd>0.55)H.go(F,b.m.position.x,b.m.position.z,0.9);else{H.stop(F);P.f=Math.atan2(b.m.position.z-P.z,b.m.position.x-P.x);tk.k=(tk.k||0)+1;F.inp.grab=tk.k%4===1;if(tk.k>24){b._skip=true;tk.k=0;}}};
+   if(tk.st<4&&tk.n)tk.n.slipCd=Math.max(tk.n.slipCd||0,0.2);   // (he keeps his feet until the can is smashed in front of him)
+   const coming=()=>{let g=null,gd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||Math.abs(n.a.y-P.y)>1.5)continue;if(n.mode!=='goto'&&n.mode!=='chase')continue;const d=Math.hypot(n.a.x-P.x,n.a.z-P.z);if(d<gd){gd=d;g=n;}}return g?{n:g,d:gd}:null;};
+   if(tk.st===0){c.keys.KeyI=true;const d=H.go(F,V.x0-0.75,V.z,0.75);if(d<0.15){H.stop(F);tk.st=0.5;tk.t0=t;const n=tk.n;F.npcAt(n,n.a.x,n.a.z,0);}}
+   else if(tk.st===0.5){c.keys.KeyI=false;H.stop(F);P.f=0;const n=tk.n;if(n.inv&&!tk.seen)tk.seen=t;if((tk.seen&&t-tk.seen>1.0)||t-tk.t0>9){tk.st=1;tk.t1=t;}}   // the attendant picks up the trail
+   else if(tk.st===1){H.stop(F);P.f=0;const k=Math.floor((t-tk.t1)/0.872);F.inp.push=((t-tk.t1)%0.872)<0.07&&k<3;if(V.broke&&!tk.br)tk.br=t;if(tk.br&&t-tk.br>1.4)tk.st=2;}
+   else if(tk.st===2){if(P.st!=='free'){H.stop(F);return;}if(P.held&&P.held.kind==='can'){tk.st=3;F.inp.grab=false;}else pick();}
+   else if(tk.st===3){H.stop(F);const g=coming();if(g)P.f=Math.atan2(g.n.a.z-P.z,g.n.a.x-P.x);if(g&&g.d<7){tk.st=4;tk.t4=t;tk.g=g.n;}}
+   else if(tk.st===4){H.stop(F);P.f=Math.atan2(tk.g.a.z-P.z,tk.g.a.x-P.x);F.inp.grab=t-tk.t4<0.37;if(!P.held&&t-tk.t4>0.5){tk.st=5;tk.t5=t;}}   // hold K: smashed on the floor
+   else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
+     if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
+   else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
 module.exports=T;

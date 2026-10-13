@@ -27,3 +27,33 @@ logo2_sharp (2.2 s) -> food rain (3 s, fade in/out) -> wake4 as ONE take (no jum
 -> boss: short highlights only (no 30 s of fighting): dodge, catch, parry, tech, lift, edge save, throws (botrec bouts)
 -> finale facecap: salt, clap, boss stomp, both charge; cut to COMING SOON on a strong beat just before they hit; music ends/fades there naturally.
 Check every frame for flicker/freezes (strobe.py, mcflick.py) before sending.
+
+## Showcase v5: how it was made (Oct 2026, Apple M5, GPU, SS=2)
+- `lib.js` waits for the boot splash before a take starts (on a fast machine it landed mid-take: white frames, then food rain).
+- The edit is `v5b/cut7.py` (cut6.py was the previous pass) -> `v5b/showcase_v5.mp4` (2:12). Frames: `v5/<take>` and the re-recorded `v5b/<take>`.
+- Cuts snap to strong hits in the music (`v5b/onsets.json`). COMING SOON lands on the 2:08.9 hit, the last chord rings, then a short fade.
+- Ring scenes (gacha, boss, finale) use the ring crop at 2x. Room scenes are the whole frame.
+- Takes added: `knock8` (no puddle by the attendant, so the knock makes nobody slip), `vend4` (drinks both cans, burps).
+- `v3/gcap5.js`: gcap2 that can also script the boss (hot potato tag chase, stomp from a distance), shows the CONTROLLER DISCONNECTED pop-up, and takes extra CSS (the rewind date is hidden).
+- `v3/facecap5.js`: the finale with salt/clap/stomp moved 2.4 s later, so the boss's cage is off the ring first.
+- The title overlay uses `v5b/title1280.png` (white under the transparent pixels, so no dark edges when scaled).
+- Fourth pass (v5c): your cloud flicker fixes merged in (not committed), everything re-recorded. Edit: `v5b/cut8.py` -> `v5c/showcase_v5.mp4`.
+  New takes: `wake5` (smoothed steering), `shove3` (2 s shove, pop, slap KO), `vend18` (footprints, smashed can, slip).
+  `gcap5.js` plays `c_*` give each wrestler one skill (SK2 = the boss's; VIEW=1 shows the boss's view, used for the solid smoke).
+  End cards: `v5c/bigger.png` on the 2:08.9 hit, `v5c/soon.png` on the 2:10.6 hit.
+- Fifth pass: `v5b/cut9.py` -> `v5c/showcase_v5.mp4`. New takes: `shove4` (2 s counted only while pushing/sweating), `vend20`
+  (tiptoes through the puddle; thumps only after the attendant is following the prints), `chargeko` (locker aisle charge,
+  two KOs: a charge only flattens staff who haven't spotted him), `c_bumpflop3` (flop throws him into the straw, bumper bounces him back).
+- Sixth pass: `v5b/cut10.py`. `wake6` (no walk back after the bucket, grabs it from a spot where no stool is in reach, weave on the stick),
+  `chargeko2` (one charge, both down), `cartdive` (game change: diving into the cart you push keeps it rolling and throws laundry out),
+  `potato3` (charge and dodge), inhale removed, finale cut on the collision frame.
+- Laundry flies out of any cart he climbs into (stealth.js laundryOut; debris now animates even while he hides: flyStep at the top of step).
+
+## Second showcase: Mura Masa - Lotus Eater
+- `v5b/cut_lotus.py` -> `v5c/showcase_lotus.mp4` (2:12). Same v5c footage; the music is read from the owner's file
+  (`~/Soulseek Downloads/04 Mura Masa - Lotus Eater.mp3`, not copied into the repo). Hits in `v5b/lotus_onsets.json`.
+- 96.8 BPM. Intro: logo, food rain, asleep; startle on the 12.85 s beat; the bath-to-locker take fills the first full section;
+  room scenes (no box-follow) in the break; gacha from the 80.86 s hit; finale collides on 126.07 (BIGGER IS BETTER); COMING SOON 128.81.
+- Beat-locked version: `v5b/cut_lotus2.py` (replaces cut_lotus.py's output). `wake7` = wake6 with `sync` steps (song time, startle at 12.85)
+  so charge-out 16.8, bucket 21.8, slip 26.5, charge 32.3, stool 38.6 and the locker rattle 54.7 land on beats; `vend21` thumps once a beat,
+  crash on the 79.62 drop. Every clip's main event is placed on a beat and every cut is on a beat; nothing from the Vivaldi cut is left out.

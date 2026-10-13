@@ -28,6 +28,7 @@ const PLAY={
  ball:`if(i>=4&&i<7)in_.skill=true;else{go();if(i>20&&gap<2.2&&i%20<2)in_.dash=true;}`,
  potato:`if(m.skills&&m.skills[0]){go();in_.skill=i%6<2&&i>=2;}else{const l=Math.hypot(me.x,me.z)||1;if(gap<1.1){in_.dash=true;}else if(l>1){in_.mx=-me.x/l;in_.mz=-me.z/l;}}`,
  bomb:`const b=m.objs.find((q)=>q.type==='bomb'&&!q.gone);if(!st.f){if(i>=2&&i<5)in_.skill=true;if(b)st.f=i;}else if(b){const ex=b.x-o.x,ez=b.z-o.z,el=Math.hypot(ex,ez)||1,tx=b.x+ex/el*1.05,tz=b.z+ez/el*1.05,qx=tx-me.x,qz=tz-me.z,ql=Math.hypot(qx,qz);if(st.sl&&i-st.sl>3||b.t>4.2){const rx=me.x-b.x,rz=me.z-b.z,rl=Math.hypot(rx,rz)||1;let ax=rx/rl-me.x*0.25,az=rz/rl-me.z*0.25;const al=Math.hypot(ax,az)||1;in_.mx=ax/al;in_.mz=az/al;}else if(ql>0.3){in_.mx=qx/ql;in_.mz=qz/ql;}else{me.f=Math.atan2(-ez,-ex);if(b.t>3.2&&!st.sl){in_.push=true;st.sl=i;}}}`,
+ unplug:`if(i>=4&&i<7)in_.skill=true;else if(i>10){go();if(gap<0.4&&i%10<2)in_.push=true;}`,
  claw:`if(m.skills&&m.skills[0]){in_.skill=i%6<2&&i>=2;}else{const l=Math.hypot(me.x,me.z)||1;if(gap<1.1){in_.dash=true;}else if(l>1){in_.mx=-me.x/l;in_.mz=-me.z/l;}}`,
 };
 (async()=>{const SS=+process.env.SS||1;const p=await L.open(1280,720,SS);if(SS>1)await p.evaluate((SS)=>{const R=S.game.R;R.prMax=SS;R.pr=SS;R.prFail=1e9;R.r.setPixelRatio(SS);R.resize&&R.resize();},SS);await L.boot(p,5);

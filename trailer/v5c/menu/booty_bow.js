@@ -1,0 +1,48 @@
+const L=require('./lib.js');
+(async()=>{const OUT=process.argv[2];const p=await L.open(1920,1080,2);
+await p.evaluate(()=>{const R=S.game.R;R.prMax=2;R.pr=2;R.prFail=1e9;R.r.setPixelRatio(2);R.resize&&R.resize();});
+await p.evaluate(()=>{const g=S.game;window.requestAnimationFrame=()=>0;
+  const st=document.createElement('style');st.textContent='#hud,#overlay,.wmm-wrap,#bnr,#hint,#callouts,#banner,#gacha,#rounds,#roundLbl,#kimarite,#stealthHud,#fx2d,#combo,#yen,#record{display:none!important}';document.head.appendChild(st);
+  g.ui.hide&&g.ui.hide();S.profile.eq=JSON.parse(JSON.stringify(S.DEF_EQ));S.CampSkills.maskMesh=()=>null;g.setupMatch(0,1,'cpu');g.mode='game';g.R.setStage('dohyo');g.match.stage='dohyo';g.last=performance.now();
+  for(let i=0;i<20;i++)g.frame(g.last+33.333);});
+const info=await p.evaluate(()=>{const m=S.game.match;return m.w.map(w=>[w.x.toFixed(2),w.z.toFixed(2),w.f.toFixed(2),m.phase]);});
+console.log(JSON.stringify(info));
+const N=+process.env.N||110,BGC=process.env.BG==='white'?0xf7f5f0:0x0b0a0d;const fs=require('fs');fs.mkdirSync(OUT,{recursive:true});
+await p.evaluate(()=>{const g=S.game,m=g.match;window.VIN={mx:0,mz:0,push:false,grab:false,dash:false,skill:false};g.ctrls[0].src={sample:()=>VIN};g.ais=g.ais.filter(a=>a.me!==m.w[0]);window.LOG=[];window.FR=0;const em=m.emit.bind(m);m.emit=(t,d)=>{if(/stomp|clap|taunt/.test(t))LOG.push(FR+' '+t+' '+(d&&d.w?d.w.idx:''));return em(t,d);};if(m.goAt<20)m.goAt=30;});
+for(let i=0;i<N;i++){
+ await p.evaluate(({i,bg})=>{window.CD=3.9;window.CH=1.3;window.CL=1.1;VIN.grab=false;VIN.mx=(i===30||i===31)?-1:0;
+ {const ww=S.game.match.w[0];if(i===78){ww.pre='x_bow';ww.preT=0;}if(i>78&&ww.pre==='x_bow')ww.preT=Math.min(ww.preT,0.5);if(i%6===0)LOG.push(i+' pre '+ww.pre+' '+(ww.preT||0).toFixed(2)+' '+S.game.match.phase+' '+S.game.match.phaseT.toFixed(2));}
+const g=S.game,R=g.R,m=g.match,w=m.w[0];
+  R.views[1]&&(R.views[1].root.visible=false);R.scene.background.set(bg);
+  // behind wrestler 0, low, looking at the seat and legs
+  const fx=Math.cos(w.f),fz=Math.sin(w.f),D=+(window.CD||3.0),bx=w.x-fx*D,bz=w.z-fz*D;
+  if(!window.CAMF){window.CAMF={p:[bx,+(window.CH||0.75),bz],l:[w.x,+(window.CL||0.6),w.z]};}R.camOverride=CAMF;
+  g.frame(g.last+33.333);FR++;
+  // after the game's own update: hide everything but the ring mound (clay + straw) and him, then draw the frame
+  const keep=new Set([R.dohyoG,R.views[0].root]);
+  for(const o of R.scene.children){if(keep.has(o)){o.visible=true;continue;}if(o.isLight||o.isCamera)continue;o.visible=false;}
+  R.dohyoG.traverse((o)=>{o.visible=true;});
+  // plain clay top: the ring texture's painted lines (ring circle, start lines) painted over in its own clay colour
+  if(!window.CLAYED&&R.ringTex&&R.ringTex.image){const cv=R.ringTex.image,cx=cv.getContext('2d'),Wd=cv.width,px=cx.getImageData(Math.round(Wd*0.5),Math.round(Wd*0.62),1,1).data;
+    const img=cx.getImageData(0,0,Wd,Wd),d=img.data;for(let q=0;q<d.length;q+=4){const lum=d[q]+d[q+1]+d[q+2];if(lum>3*215||Math.abs(d[q]-px[0])+Math.abs(d[q+1]-px[1])+Math.abs(d[q+2]-px[2])>60){d[q]=px[0];d[q+1]=px[1];d[q+2]=px[2];}}
+    cx.putImageData(img,0,0);R.ringTex.needsUpdate=true;window.CLAYED=1;}
+  // no lines on the mound: the ring's straw circle stays, the painted ring line and the two start lines go
+  R.dohyoG.traverse((o)=>{if(!o.isMesh)return;const bb=new THREE.Box3().setFromObject(o),h=bb.max.y-bb.min.y,wx=bb.max.x-bb.min.x,wz=bb.max.z-bb.min.z;
+    if(h<0.03&&bb.min.y>0.004)o.visible=false;            // painted ring line (sits just above the clay)
+    if(h<0.05&&Math.min(wx,wz)<0.2&&Math.max(wx,wz)<1.5)o.visible=false;});   // the shikiri start lines
+  // the bow: the mawashi gives way and drops to his ankles, the censor block pops up
+  {const v=R.views[0];if(i===100&&v.soft){for(const x of v.soft.mats)if(/mawashi/i.test(x.name||''))x.visible=false;v.naked=true;
+     // the mawashi: a slack band of cloth that slides down the legs and crumples into a heap at his ankles
+     const mat=S.Flat?S.Flat.mat(0x2e3f9e):new THREE.MeshLambertMaterial({color:0x2e3f9e});if(mat.side!==undefined)mat.side=THREE.DoubleSide;
+     const G=new THREE.Group();G.position.set(w.x,0,w.z);G.rotation.y=-w.f+Math.PI/2;R.scene.add(G);
+     const band=new THREE.Mesh(new THREE.CylinderGeometry(0.66,0.6,0.3,32,1,true),mat);band.position.y=0.95;G.add(band);
+     const folds=[];for(let q=0;q<9;q++){const a=q/9*6.283+0.3,r=0.5+0.12*Math.sin(q*2.1);const f=new THREE.Mesh(new THREE.SphereGeometry(0.2,12,8),mat);f.position.set(Math.cos(a)*r,0.06,Math.sin(a)*r*0.8);f.scale.set(1.3+0.4*Math.sin(q),0.32,0.9+0.3*Math.cos(q*1.7));f.rotation.y=a;f.visible=false;G.add(f);folds.push(f);}
+     const tail=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.04,0.7),mat);tail.position.set(0,0.03,-0.55);tail.rotation.y=0.2;tail.visible=false;G.add(tail);folds.push(tail);
+     window.MW={G,band,folds,t:0};}
+   if(window.MW){const q=MW;q.G.visible=true;q.t+=1/30;const k=Math.min(1,q.t/0.32);q.band.position.y=0.95-0.82*k*k;
+     if(k>=1){const c=Math.min(1,(q.t-0.32)/0.12);q.band.scale.set(1+0.25*c,1-0.75*c,0.85-0.1*c);q.band.rotation.z=0.12*c;q.band.position.y=0.13-0.06*c;if(c>0.3)for(const f of q.folds)f.visible=true;}}
+   if(i>=100)R.censorStep(v,1/30,true);}
+  R.cam.updateMatrixWorld();
+  if(R.anime&&R.post)R.post.render(R.scene,R.cam,R.time);else R.r.render(R.scene,R.cam);},{i,bg:BGC});
+ await p.screenshot({path:OUT+'/f_'+String(i).padStart(4,'0')+'.jpg',type:'jpeg',quality:92});}
+fs.writeFileSync(OUT+'.log',(await p.evaluate(()=>LOG)).join('\n'));console.log('clip done');process.exit(0);})();

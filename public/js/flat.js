@@ -19,6 +19,10 @@ void RE_Direct_Flat( const in IncidentLight directLight, const in GeometricConte
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Flat`)
+        .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+#if defined( DOUBLE_SIDED ) && !defined( FLAT_SHADED )
+  normal = normalize( vNormal ); normal = dot( normal, vViewPosition ) >= 0.0 ? normal : - normal;   // (the side facing the camera, whatever the winding: long thin faces flipped lit/shade as the camera moved)
+#endif`)
         .replace('#include <output_fragment>', `{
   float s = flatSun / uSunI;
   float L = mix( smoothstep( uLo, uHi, s ), clamp( s, 0.0, 1.0 ), uForm );
@@ -27,7 +31,7 @@ void RE_Direct_Flat( const in IncidentLight directLight, const in GeometricConte
 }
 #include <output_fragment>`);
     };
-    m.customProgramCacheKey = () => 'flat1';
+    m.customProgramCacheKey = () => 'flat2';
     m.userData.flat = true;
     return m;
   }
@@ -99,7 +103,7 @@ void RE_Direct_Flat( const in IncidentLight directLight, const in GeometricConte
       if (done.has(m)) return done.get(m);
       let f;
       // both sides: Blender draws faces either way round, and a few kit pieces export facing down (the pizza's tablecloth)
-      if (m.map) { m.map.encoding = THREE.LinearEncoding; m.map.needsUpdate = true; f = mat(0xffffff, { map: m.map, side: THREE.DoubleSide }); }
+      if (m.map) { m.map.encoding = THREE.LinearEncoding; m.map.minFilter = m.map.magFilter = THREE.NearestFilter; m.map.generateMipmaps = false; m.map.needsUpdate = true;   /* (a palette: blended or mipmapped, faces whose UVs sit near a swatch edge flipped colour as the camera moved) */ f = mat(0xffffff, { map: m.map, side: THREE.DoubleSide }); }
       else f = mat(m.color.clone().convertLinearToSRGB(), { side: THREE.DoubleSide, transparent: m.transparent, opacity: m.opacity });   // (water: see-through over the pond floor)
       done.set(m, f); return f;
     };

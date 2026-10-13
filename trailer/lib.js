@@ -7,6 +7,8 @@ exports.open=async function(w=1280,h=720,dsf=1){
   p.on('pageerror',e=>console.log('PAGEERR',e.message));
   await p.goto('http://127.0.0.1:8896/dist-kumitegame/index.html');
   await p.waitForFunction(()=>window.S&&S.Chars&&S.Chars.ready&&S.SoftSumo&&S.SoftSumo.loaded&&S.loadBathKit,null,{timeout:90000});
+  // v5: the boot splash (white cover, then the title) must be over before a take starts, or it lands mid-take on a fast machine
+  await p.waitForFunction(()=>!document.getElementById('wmmBoot')&&!document.getElementById('bootcover')&&!(S.WMM&&S.WMM.busy),null,{timeout:20000});
   await p.evaluate(async()=>{ await S.loadBathKit(); });
   await p.evaluate(()=>{
     // seeded randomness, so a take can be repeated exactly

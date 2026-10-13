@@ -526,10 +526,19 @@
           else if (w.pre === 'clap' && pt < 0.32) {
             c = 0.55; p = 0.12; hp = 0; rate = 40;
             Rh = pt < 0.1 ? [0.62, 0.7, 0.5] : [0.04, 0.7, 0.62]; Lh = mir(Rh);
+          } else if (w.pre === 'trophy') {   // the title: a trophy held up over his head, pumped on the beat
+            const k = Math.max(0, Math.sin(T * 7.2));
+            c = 0.42; p = -0.08; hp = 0; rate = 30;
+            Rh = [0.5, 1.3 + 0.08 * k, 0.14]; Lh = mir(Rh);
+          } else if (w.pre === 'clapUp' && pt < 0.9) {   // the overhead clap: both arms up, hands slap together above the head, twice
+            const ph = pt % 0.3, shut = ph > 0.12 && ph < 0.24;
+            c = 0.4; p = 0.1; hp = 0; rate = 40;
+            Rh = shut ? [0.06, 1.35, 0.12] : [0.42, 1.25, 0.06]; Lh = mir(Rh);
           } else if (w.pre === 'stomp' && pt < 0.8) {
             const up = pt < 0.5 ? Math.sin(pt / 0.5 * Math.PI / 2) : Math.max(0, 1 - (pt - 0.5) / 0.08);
-            this.stompLift = up; c = 0.35 + 0.4 * (1 - up); p = 0.2; r = -0.32 * up; hp = 0; rate = 30;
-            Rh = [0.5, 0.05, 0.4]; Lh = [-0.75, 0.55 + 0.3 * up, 0.3];
+            const sd = w.stompSd || -1; this.stompSd = sd;   // which leg goes up (alternates, as in real shiko)
+            this.stompLift = up; c = 0.35 + 0.4 * (1 - up); p = 0.2; r = 0.32 * up * sd; hp = 0; rate = 30;
+            if (sd < 0) { Rh = [0.5, 0.05, 0.4]; Lh = [-0.75, 0.55 + 0.3 * up, 0.3]; } else { Lh = [-0.5, 0.05, 0.4]; Rh = [0.75, 0.55 + 0.3 * up, 0.3]; }
           } else if (w.power > 0.05) {
             p = 0.62 + Math.sin(T * 47) * 0.025 * w.power; r = Math.sin(T * 39) * 0.02 * w.power; c = 1;
           }
@@ -632,6 +641,7 @@
         case 'gale': { rate = 14; c = 0.4; const sw = Math.sin(t * 14); p = 0.05 + 0.12 * sw; Rh = [0.18, 1.1 + 0.3 * sw, 0.45 + 0.2 * sw]; Lh = mir(Rh); break; }
         case 'rewinding': { rate = 30; const sw = Math.sin(t * 40); p = -0.15; Rh = [0.5, 0.35 + 0.25 * sw, -0.2]; Lh = [-0.5, 0.35 - 0.25 * sw, -0.2]; tw = 0.15 * sw; break; } // jerky backwards scramble
         case 'bigstomp': { // the big leg lift, then the stamp
+          this.stompSd = -1;
           const up = Math.sin(Math.min(1, t / 0.45) * Math.PI / 2);
           this.stompLift = up; c = 0.35 + 0.3 * (1 - up); p = 0.2; r = -0.36 * up; rate = 30;
           Rh = [0.5, 0.05, 0.4]; Lh = [-0.75, 0.55 + 0.35 * up, 0.3]; break;
@@ -662,7 +672,7 @@
             if (vp === 'fist') { Rh = lerpA(Rh, [0.3, 1.5, 0.15], k); }
             else if (vp === 'bow') { p = 0.75 * k; }
             else if (vp === 'flex') { Rh = lerpA(Rh, [0.78, 0.95, -0.02], k); Lh = mir(Rh); p = -0.15; }
-            else if (vp === 'shiko') { const ph = (t - 0.35) % 1.4; this.stompLift = ph < 0.6 ? Math.sin(ph / 0.6 * Math.PI / 2) : Math.max(0, 1 - (ph - 0.6) / 0.08); c = 0.4 + 0.4 * (1 - this.stompLift); r = -0.3 * this.stompLift; Rh = [0.5, 0.05, 0.4]; Lh = [-0.75, 0.6, 0.3]; }
+            else if (vp === 'shiko') { this.stompSd = -1; const ph = (t - 0.35) % 1.4; this.stompLift = ph < 0.6 ? Math.sin(ph / 0.6 * Math.PI / 2) : Math.max(0, 1 - (ph - 0.6) / 0.08); c = 0.4 + 0.4 * (1 - this.stompLift); r = -0.3 * this.stompLift; Rh = [0.5, 0.05, 0.4]; Lh = [-0.75, 0.6, 0.3]; }
             else if (vp === 'crossed') { Rh = lerpA(Rh, [-0.18, 0.62, 0.48], k); Lh = lerpA(Lh, [0.18, 0.55, 0.44], k); hp = -0.1; }
             else if (vp === 'cool') { this.turnAway = k; }
             break;
@@ -846,7 +856,7 @@
           root.worldToLocal(foot);
         }
         if (this.hook > 0 && Lg.sd > 0) foot.lerp(this.v3.set(0.1 * s, 0.25 * s, 0.75 * s), this.hook);
-        if (this.stompLift > 0 && Lg.sd < 0) foot.lerp(this.v3.set(-0.85 * s, 0.25 * s + 0.75 * s * this.stompLift, 0.12 * s), Math.min(1, this.stompLift * 1.5));
+        if (this.stompLift > 0 && Lg.sd === (this.stompSd || -1)) foot.lerp(this.v3.set(Lg.sd * 0.85 * s, 0.25 * s + 0.75 * s * this.stompLift, 0.12 * s), Math.min(1, this.stompLift * 1.5));
         const pole = this.v3.set(Lg.sd * 0.75, 0.1, 1);
         if (downed) pole.set(Lg.sd * 0.3, 0, 1).transformDirection(this.body.matrix); // knees bend the way the body faces, not the old standing way
         if (w.torpedo) foot.set(Lg.sd * 0.2 * s, hip.y - 0.78 * s, hip.z - 0.1 * s); // legs straight out behind
@@ -1930,6 +1940,9 @@
           sp.position.set(Math.cos(a) * r, 0.3 + Math.random() * 2.6, Math.sin(a) * r); sp.userData.s = 2.2 + Math.random() * 1.6; sp.renderOrder = 9;
           me.add(sp);
         }
+        // to the opponent it is a wall: a solid core inside the puffs, so nothing shows through the gaps between them
+        if (!mine) { const core = new THREE.Mesh(new THREE.CylinderGeometry(3.1, 3.3, 2.9, 40), new THREE.MeshBasicMaterial({ color: 0x8a8692, transparent: true, depthWrite: false, depthTest: false }));
+          core.position.y = 1.45; core.renderOrder = 8; core.userData.core = true; me.add(core); }
       } else if (ob.type === 'banana') {
         me = new THREE.Group();
         const peel = mesh(new THREE.TorusGeometry(0.16, 0.05, 6, 12, Math.PI * 1.2), toon(0xf6d23a, { shade: 0xb08a1a }), 0.014);
@@ -2148,6 +2161,7 @@
           const fade = Math.min(1, ob.t / 0.3) * Math.min(1, (ob.dur - ob.t) / 0.6);
           const mine = viewer === ob.owner.idx || viewer === -1;
           for (const sp of me.children) {
+            if (sp.userData.core) { sp.material.opacity = fade; sp.visible = !mine; continue; }
             sp.material.opacity = fade * (mine ? 0.22 : 1);
             const k = sp.userData.s * (0.8 + 0.2 * Math.sin(this.time * 1.5 + sp.position.x));
             sp.scale.set(k, k, 1); sp.material.rotation += dt * 0.2;

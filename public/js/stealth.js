@@ -55,6 +55,10 @@
       this.cam = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 2.0, 120);   // (a tight near/far: no flicker where surfaces meet)
       this.fx = new S.FX(this.scene); this.fx.scene = this.scene; this.fx.noMarks = true;
       this.flat = { lights: S.Flat.lights(this.scene, { r: 22 }) };
+      { // the sun's shadow pinned over the WHOLE bathhouse, never moving: a shadow that follows the camera crawls along thin edges (wall caps, locker tops) as it shifts
+        const L = this.flat.lights, sun = L.sun, R = 60, big = !(S.touch && S.touch.on); sun.shadow.mapSize.set(big ? 4096 : 2048, big ? 4096 : 2048);
+        Object.assign(sun.shadow.camera, { left: -R, right: R, top: R, bottom: -R, near: 1, far: 140 }); sun.shadow.camera.updateProjectionMatrix();
+        const cx = 1, cz = -44; sun.position.set(cx - 7 * 2.2, 17 * 2.2, cz + 9 * 2.2); sun.target.position.set(cx, 0, cz); sun.target.updateMatrixWorld(); L.aim = () => {}; }
       const r = this.R.r; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
       const vg = document.getElementById('vignette'); if (vg) vg.style.display = 'none';
       this.walls = []; this.blockers = []; this.puddles = []; this.buckets = []; this.flying = []; this.grace = 0;
@@ -186,6 +190,7 @@
         if (Math.abs(c.vx) + Math.abs(c.vz) > 0.05) {   // sent rolling by a charge
           c.off = true; this.cartBox(c); c.x += c.vx * dt; c.z += c.vz * dt; c.vx *= 0.96; c.vz *= 0.96; c.f += (c.spin || 0) * dt;
           const q = { x: c.x, z: c.z }; if (this.collide(q, 0.55)) { c.vx *= -0.4; c.vz *= -0.4; } c.x = q.x; c.z = q.z; c.off = false; this.cartBox(c);
+          if (P.hidden === c) { P.x = c.x; P.z = c.z; }   // (rolling on with him inside)
         }
       }
       if (P.cart) {   // pushing: the cart rolls in front of him; he steers it
@@ -226,6 +231,75 @@
           for (const w of walls) { if (!yo(w)) continue; const oz = q.z1 > w.z0 && q.z0 < w.z1, ox = q.x1 > w.x0 && q.x0 < w.x1;
             if (oz && Math.abs(q.x0 - w.x1) < 0.005) dx = E; if (oz && Math.abs(q.x1 - w.x0) < 0.005) dx = -E; if (ox && Math.abs(q.z0 - w.z1) < 0.005) dz = E; if (ox && Math.abs(q.z1 - w.z0) < 0.005) dz = -E; }
           if (dx || dz) for (const o of byIdx[i]) { o.position.x += dx; o.position.z += dz; } }); }
+      // the kit's boxes have tiny bevels (2 cm) along every edge, facing half-up / half-out: in the sun they're a bright hairline far thinner than a
+      // pixel, that blinks in and out as the camera moves (wall copings, locker tops). Bevel faces are shaded like the big face they round onto
+      if (!root.userData.bevelFix) { root.userData.bevelFix = true; const sig = (a) => { const q = [Math.abs(a[0]), Math.abs(a[1]), Math.abs(a[2])].sort((x, y) => x - y); return (Math.abs(q[0]) < 0.03 && Math.abs(q[1] - 0.38) < 0.04 && Math.abs(q[2] - 0.92) < 0.03) || (Math.abs(q[0] - 0.28) < 0.04 && Math.abs(q[1] - 0.37) < 0.04 && Math.abs(q[2] - 0.89) < 0.03); };
+        root.traverse((o) => { if (!o.isMesh || !o.geometry.attributes.normal || o.geometry.userData.bevelFix) return; o.geometry.userData.bevelFix = true; const na = o.geometry.attributes.normal; let n = 0;
+          for (let i = 0; i < na.count; i++) { const a = [na.getX(i), na.getY(i), na.getZ(i)]; if (!sig(a)) continue; let k = 0; for (let j = 1; j < 3; j++) if (Math.abs(a[j]) > Math.abs(a[k])) k = j; const b = [0, 0, 0]; b[k] = Math.sign(a[k]); na.setXYZ(i, b[0], b[1], b[2]); n++; }
+          if (n) na.needsUpdate = true; }); }
+      // the kit is coloured from a small palette texture, and some faces' UVs sit exactly on the line between two swatches: the colour flipped
+      // between the two (white / green on the wall copings, brown on the lockers) as the camera moved. Every face samples the middle of its swatch
+      if (!root.userData.uvFix) { root.userData.uvFix = true; root.traverse((o) => { if (!o.isMesh || o.geometry.userData.uvFix) return; const ms = Array.isArray(o.material) ? o.material : [o.material], map = ms[0] && ms[0].map, img = map && map.image;
+        if (!img || !img.width || img.width > 256 || !o.geometry.attributes.uv) return; o.geometry.userData.uvFix = true; const g = o.geometry, ua = g.attributes.uv, W = img.width, H = img.height, ix = g.index;
+        const snap = (u, n) => (Math.min(n - 1, Math.max(0, Math.floor(u * n))) + 0.5) / n, N = ix ? ix.count : ua.count;
+        if (ix) { const tri = ix.array, cu = new Float32Array(ua.count), cv = new Float32Array(ua.count), seen = new Uint8Array(ua.count);
+          for (let t = 0; t < N; t += 3) { const a = tri[t], b = tri[t + 1], c = tri[t + 2], u = (ua.getX(a) + ua.getX(b) + ua.getX(c)) / 3, v = (ua.getY(a) + ua.getY(b) + ua.getY(c)) / 3;
+            for (const q of [a, b, c]) if (!seen[q]) { seen[q] = 1; cu[q] = snap(u, W); cv[q] = snap(v, H); } }
+          for (let i = 0; i < ua.count; i++) if (seen[i]) ua.setXY(i, cu[i], cv[i]); }
+        else for (let t = 0; t < N; t += 3) { const u = (ua.getX(t) + ua.getX(t + 1) + ua.getX(t + 2)) / 3, v = (ua.getY(t) + ua.getY(t + 1) + ua.getY(t + 2)) / 3; for (let k = 0; k < 3; k++) ua.setXY(t + k, snap(u, W), snap(v, H)); }
+        ua.needsUpdate = true; }); }
+      // the building export has hundreds of triangles doubled up exactly (some in two different colours): the pairs fought, and the wall tops and
+      // locker sides blinked between the two colours as the camera moved. Each doubled triangle is kept once
+      if (!root.userData.dupFix) { root.userData.dupFix = true; root.traverse((o) => { if (!o.isMesh || !o.geometry.index || o.geometry.userData.dupFix) return; o.geometry.userData.dupFix = true;
+        const g = o.geometry, pa = g.attributes.position, ix = g.index, a = ix.array, seen = new Set(); let n = 0; const k3 = (i) => pa.getX(i).toFixed(3) + ',' + pa.getY(i).toFixed(3) + ',' + pa.getZ(i).toFixed(3);
+        for (let t = 0; t < ix.count; t += 3) { const key = [k3(a[t]), k3(a[t + 1]), k3(a[t + 2])].sort().join('|'); if (seen.has(key)) { a[t + 1] = a[t + 2] = a[t]; n++; } else seen.add(key); }
+        if (n) ix.needsUpdate = true; }); }
+      // very long thin triangles (a wall coping is one triangle 41 m long and 40 cm wide) don't always rasterize along their whole length: the
+      // coping vanished in odd frames and the wall top below showed through; big floor triangles did the same (a stretch of floor, or the genkan
+      // tiles dropping out for a frame). Long triangles in the building and the floors are split into pieces no longer than 2.5 m
+      if (!root.userData.splitFix) { root.userData.splitFix = true; root.traverse((o) => { if (!o.isMesh || !/^(MOD_|FLOORS)/.test(o.name) || o.geometry.userData.splitFix) return;
+        const g0 = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, names = Object.keys(g0.attributes), src = names.map((n) => g0.attributes[n]), out = names.map(() => []);
+        const P = g0.attributes.position, MAX = 2.5, d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+        const vert = (i) => src.map((A) => { const v = []; for (let k = 0; k < A.itemSize; k++) v.push(A.array[i * A.itemSize + k]); return v; });
+        const mid = (a, b) => a.map((A, j) => A.map((x, k) => (x + b[j][k]) / 2));
+        const emit = (a, b, c, depth) => { const pa = a[0], pb = b[0], pc = c[0], ab = d2(pa, pb), bc = d2(pb, pc), ca = d2(pc, pa), m = Math.max(ab, bc, ca);
+          if (m <= MAX * MAX || depth > 8) { for (const v of [a, b, c]) v.forEach((x, j) => out[j].push(...x)); return; }
+          if (m === ab) { const q = mid(a, b); emit(a, q, c, depth + 1); emit(q, b, c, depth + 1); } else if (m === bc) { const q = mid(b, c); emit(a, b, q, depth + 1); emit(a, q, c, depth + 1); } else { const q = mid(c, a); emit(a, b, q, depth + 1); emit(q, b, c, depth + 1); } };
+        for (let t = 0; t < P.count; t += 3) { const a = vert(t), b = vert(t + 1), c = vert(t + 2); if (d2(a[0], b[0]) < 1e-12 && d2(b[0], c[0]) < 1e-12) continue; emit(a, b, c, 0); }
+        const g = new THREE.BufferGeometry(); names.forEach((n, j) => g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(out[j]), src[j].itemSize)));
+        g.userData = Object.assign({}, o.geometry.userData, { splitFix: true }); g.computeBoundingSphere(); g.computeBoundingBox(); o.geometry = g; }); }
+      // two faces in the same plane, overlapping, in different colours (a door's glass flush with its frame, a wall face flush with the one behind it,
+      // the floor under a cabinet): the depth test can't pick one, so the winner flips frame to frame (z-fighting: a block of colour blinking).
+      // They are pulled a fraction of a millimetre apart: back-to-back faces each out their own side, and for faces that point the same way the smaller
+      // one (the trim, the detail) comes to the front. Only faces truly in one plane (within 0.4 mm): the kit's own layers (the mural: sky, mountain,
+      // snow, 3 mm apart) are left as they are, and no offset (at most 2.4 mm) can land a face on the next layer. Only the static level is touched (never the items, carts or the box, which move)
+      if (!root.userData.zFix) { root.userData.zFix = true; root.updateMatrixWorld(true);
+        const isStatic = (o) => { for (let q = o; q && q !== root; q = q.parent) { if (/ITEM_|CART|BOX|CLOTH/.test(q.name)) return false; if (/^(MOD_|FLOORS|SOLID_)/.test(q.name)) return true; } return false; };
+        const T = [], meshes = [];
+        root.traverse((o) => { if (!o.isMesh || o.isSkinnedMesh || !isStatic(o)) return; if (o.geometry.index) { const ud = o.geometry.userData; o.geometry = o.geometry.toNonIndexed(); o.geometry.userData = ud; }
+          const mi = meshes.push(o) - 1, P = o.geometry.attributes.position, U = o.geometry.attributes.uv, M = o.matrixWorld, MS = Array.isArray(o.material) ? o.material : [o.material], GR = o.geometry.groups, v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+          const matAt = (t) => { if (MS.length < 2 || !GR.length) return MS[0]; for (const gr of GR) if (t >= gr.start && t < gr.start + gr.count) return MS[gr.materialIndex]; return MS[0]; };   // (a mesh with several materials: each triangle's own)
+          for (let t = 0; t < P.count; t += 3) { for (let j = 0; j < 3; j++) v[j].fromBufferAttribute(P, t + j).applyMatrix4(M);
+            const e1 = v[1].clone().sub(v[0]), e2 = v[2].clone().sub(v[0]), n = e1.cross(e2), ar = n.length(); if (ar < 1e-7) continue; n.divideScalar(ar);
+            const an = [Math.abs(n.x), Math.abs(n.y), Math.abs(n.z)], ax = an[0] > an[1] ? (an[0] > an[2] ? 0 : 2) : (an[1] > an[2] ? 1 : 2); if (an[ax] < 0.999) continue;
+            const o2 = [0, 1, 2].filter((q) => q !== ax), c = v.map((p) => [p.x, p.y, p.z]);
+            T.push({ mi, t, ax, sg: Math.sign(n.getComponent(ax)), d: c[0][ax], ar: ar / 2, col: (U ? U.getX(t).toFixed(3) + ',' + U.getY(t).toFixed(3) : '') + ((matAt(t) || {}).uuid) + (o.geometry.attributes.color ? ',' + o.geometry.attributes.color.getX(t).toFixed(2) + o.geometry.attributes.color.getY(t).toFixed(2) + o.geometry.attributes.color.getZ(t).toFixed(2) : ''),
+              b: [Math.min(c[0][o2[0]], c[1][o2[0]], c[2][o2[0]]), Math.max(c[0][o2[0]], c[1][o2[0]], c[2][o2[0]]), Math.min(c[0][o2[1]], c[1][o2[1]], c[2][o2[1]]), Math.max(c[0][o2[1]], c[1][o2[1]], c[2][o2[1]])], off: 0 }); } });
+        const grid = new Map();   // plane (axis, depth to 5 mm) and a 1 m cell in the plane
+        T.forEach((q, i) => { for (const dk of new Set([Math.floor(q.d * 1000), Math.floor(q.d * 1000 + 0.5) + 1e6])) for (let gx = Math.floor(q.b[0]); gx <= Math.floor(q.b[1]); gx++) for (let gy = Math.floor(q.b[2]); gy <= Math.floor(q.b[3]); gy++) { const k = q.ax + ':' + dk + ':' + gx + ':' + gy; let L = grid.get(k); if (!L) grid.set(k, L = []); L.push(i); } });
+        for (const L of grid.values()) { if (L.length < 2) continue;
+          for (let x = 0; x < L.length; x++) for (let y = x + 1; y < L.length; y++) { const A = T[L[x]], B = T[L[y]]; if (A.col === B.col || Math.abs(A.d - B.d) > 0.0004) continue;
+            const ox = Math.min(A.b[1], B.b[1]) - Math.max(A.b[0], B.b[0]), oy = Math.min(A.b[3], B.b[3]) - Math.max(A.b[2], B.b[2]); if (ox < 0.01 || oy < 0.01) continue;
+            if (A.sg !== B.sg) { A.off = Math.max(A.off, 0.0005); B.off = Math.max(B.off, 0.0005); } else { (A.nb || (A.nb = [])).push(L[y]); (B.nb || (B.nb = [])).push(L[x]); } } }
+        // faces pointing the same way: stacked in layers, the largest at the bottom, each smaller one 0.6 mm above the biggest it overlaps
+        // (a cap smaller than the wall top but bigger than the trim on it: wall 0, cap 1, trim 2)
+        const big = (i, j) => T[i].ar > T[j].ar || (T[i].ar === T[j].ar && i < j);
+        const ord = T.map((q, i) => i).filter((i) => T[i].nb).sort((i, j) => (big(i, j) ? -1 : 1));
+        for (const i of ord) { let lv = 0; for (const j of T[i].nb) if (big(j, i)) lv = Math.max(lv, (T[j].lv || 0) + 1); T[i].lv = Math.min(lv, 4); T[i].off = Math.max(T[i].off, T[i].lv * 0.0006); }
+        const touched = new Set(), inv = new THREE.Matrix3(), w = new THREE.Vector3();
+        for (const q of T) { if (!q.off) continue; const o = meshes[q.mi], P = o.geometry.attributes.position; w.set(0, 0, 0).setComponent(q.ax, q.sg * q.off);
+          inv.setFromMatrix4(o.matrixWorld).invert(); w.applyMatrix3(inv); for (let j = 0; j < 3; j++) P.setXYZ(q.t + j, P.getX(q.t + j) + w.x, P.getY(q.t + j) + w.y, P.getZ(q.t + j) + w.z); touched.add(o); }
+        for (const o of touched) { o.geometry.attributes.position.needsUpdate = true; o.geometry.computeBoundingSphere(); o.geometry.computeBoundingBox(); } }
       const get = (n) => root.getObjectByName(n), proto = {};
       for (const n of ['ITEM_STOOL', 'ITEM_OKE', 'ITEM_BUCKET', 'ITEM_WASHB', 'BOX', 'CLOTH_SHIRT', 'CLOTH_SHORTS', 'ITEM_CAN0', 'ITEM_CAN1', 'ITEM_CAN2']) { const o = get(n); if (o) { o.visible = false; proto[n] = o; } }
       this.proto = proto;
@@ -637,6 +711,7 @@
       this.draw(dt);
     }
     step(dt) {
+      this.flyStep(dt);
       this.t += dt;
       if (this.sf) { if (this.timers && this.timers.length) { const due = []; this.timers = this.timers.filter((q) => { q.t -= dt; if (q.t <= 0) { due.push(q); return false; } return true; }); for (const q of due) if (this.scene) q.fn(); } this.sfStep(dt); return; }
       if (this.timers && this.timers.length) { const due = []; this.timers = this.timers.filter((q) => { q.t -= dt; if (q.t <= 0) { due.push(q); return false; } return true; }); for (const q of due) if (this.scene) q.fn(); }   // (run after: a timer may set new ones)
@@ -681,7 +756,11 @@
       if ((iPress || walkIn) && !this.hideCd && P.st === 'free' && !wet && !P.held) {   // I next to a cart (walking or not): climb in
         let near = null, nd = 0.3; for (const cc of this.carts) { const w = cc.w, d = Math.hypot(P.x - clamp(P.x, w.x0, w.x1), P.z - clamp(P.z, w.z0, w.z1)) - P.r; if (d < nd && !cc.ret && this.clear(P.x, P.z, cc.x, cc.z) && !this.inWall(cc.x, cc.z, cc.w)) { nd = d; near = cc; } }   // (right up against it; never one through a wall, nor one jammed into one)
         if (P.cart && iPress && this.clear(P.x, P.z, P.cart.x, P.cart.z) && !this.inWall(P.cart.x, P.cart.z, P.cart.w)) near = P.cart;   // (the one he's pushing: straight in)
-        if (near) { this.markWitness(); if (P.cart) P.cart = null; this.noGuard = true; P.hidden = near; P.hideT = 0; near.off = true; this.cartBox(near); P.x = near.x; P.z = near.z; P.vx = P.vz = 0; this.view.root.visible = false; P.tip = 0; this.dropShorts(true);
+        if (near) { this.markWitness();
+          if (P.cart === near) {   // diving into the cart he's pushing: it keeps rolling on with him in it, and some of the laundry flies out
+            const sp = Math.hypot(P.vx, P.vz), f = near.f; if (sp > 0.8) { near.vx = Math.cos(f) * sp * 0.85; near.vz = Math.sin(f) * sp * 0.85; near.spin = 0; } }
+          this.laundryOut(near);   // (any cart he climbs into: some of the laundry is thrown out)
+          if (P.cart) P.cart = null; this.noGuard = true; P.hidden = near; P.hideT = 0; near.off = true; this.cartBox(near); P.x = near.x; P.z = near.z; P.vx = P.vz = 0; this.view.root.visible = false; P.tip = 0; this.dropShorts(true);
           if (!this.saidCart) { this.saidCart = true; this.think('...just a cart of towels. Nothing to see.', 2.0); } return; }
       }
       // I: TIPTOE. Silent, slow, and tiring: about six seconds on his toes, then the heels come down with a thud
@@ -850,11 +929,7 @@
           else { if (pud && this.fx.water) this.fx.water(b.x, b.z, 1.4, b.ty); b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + (b.kind === 'can' ? 0.1 : 0.3); if (b.kind === 'can') b.m.children[0].position.y = -0.085; } if (true) this.noiseS(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think(b.wet ? '*SPLOOSH*' : '*CLATTER*', 1); }
       }
       this.canStep(dt); this.printStep(dt); this.bossStep(dt);
-      for (const f of this.flying) {
-        if (f.t >= f.dur) continue; f.t = Math.min(f.dur, f.t + dt); const k = f.t / f.dur;
-        f.m.position.set(f.sx + (f.tx - f.sx) * k, f.sy + (f.ty - f.sy) * k + Math.sin(Math.PI * k) * f.h, f.sz + (f.tz - f.sz) * k);
-        f.m.rotation.set(f.r0[0] + (f.r1[0] - f.r0[0]) * k, f.r0[1] + (f.r1[1] - f.r0[1]) * k, f.r0[2] + (f.r1[2] - f.r0[2]) * k);
-      }
+      // (flying bits: flyStep, run at the top of step so they still land while he hides)
       // the staff (nobody minds you in the bath or the wash area; just after a restart they get a moment too)
       this.grace = Math.max(0, this.grace - dt);
       const pr = roomAt(P.x, P.z);
@@ -1113,6 +1188,24 @@
         if (!this.saidKnock) { this.saidKnock = true; this.later(1.2, () => this.think('...that\'ll bring someone over to look. Then I go the other way.', 2.6)); } }
     }
     // hold K with something in hand: he slams it down on the floor in front of him (loud; water goes everywhere)
+    flyStep(dt) {   // shards, cans, towels...: thrown up, they arc down and settle where they land
+      for (const f of this.flying) {
+        if (f.t >= f.dur) continue; f.t = Math.min(f.dur, f.t + dt); const k = f.t / f.dur;
+        f.m.position.set(f.sx + (f.tx - f.sx) * k, f.sy + (f.ty - f.sy) * k + Math.sin(Math.PI * k) * f.h, f.sz + (f.tz - f.sz) * k);
+        f.m.rotation.set(f.r0[0] + (f.r1[0] - f.r0[0]) * k, f.r0[1] + (f.r1[1] - f.r0[1]) * k, f.r0[2] + (f.r1[2] - f.r0[2]) * k);
+      }
+    }
+    // a few towels and clothes thrown up out of a cart as he dives in: they flop down on the floor round it
+    laundryOut(c) {
+      if (!this.clothGeo) this.clothGeo = [new THREE.BoxGeometry(0.58, 0.035, 0.42), new THREE.BoxGeometry(0.48, 0.035, 0.32), new THREE.BoxGeometry(0.4, 0.045, 0.5)];
+      const cols = [0xf4f1ea, 0xf2a7b8, 0x8fb8de, 0xf6e27a, 0xffffff, 0x9fd3b5];
+      for (let k = 0; k < 8; k++) { const mat = S.Flat ? S.Flat.mat(cols[k % cols.length]) : new THREE.MeshLambertMaterial({ color: cols[k % cols.length] });
+        const m = new THREE.Mesh(this.clothGeo[k % 3], mat); m.userData.flatDone = true; m.castShadow = true; m.position.set(c.x, 0.9, c.z); this.G.add(m);
+        let tx = c.x, tz = c.z;   // somewhere round the cart on his side of any wall
+        for (let tr = 0; tr < 8; tr++) { const a = Math.random() * 6.28, r = 0.8 + Math.random() * 0.9, x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+          if (this.clear(c.x, c.z, x, z) && !this.inWall(x, z)) { tx = x; tz = z; break; } }
+        this.flying.push({ m, sx: c.x, sy: 0.9, sz: c.z, tx, ty: floorY(tx, tz) + 0.02, tz, h: 0.9 + Math.random() * 0.7, t: 0, dur: 0.5 + Math.random() * 0.3, r0: [0, 0, 0], r1: [Math.PI * 2 * (1 + (k % 2)), Math.random() * 6, 0] }); }   // (one or two flips, landing flat)
+    }
     smashHeld(quiet) {   // (quiet: dropped, not slammed: a small crack, barely heard)
       const P = this.P, b = P.held; if (!b) return; P.held = null; this.waterOff(b);
       const fx = Math.cos(P.f), fz = Math.sin(P.f), L = Math.max(0.3, Math.min(0.7, this.reach(P.x, P.z, P.f, 2) - 0.4)), x = P.x + fx * L, z = P.z + fz * L, y = floorY(x, z);
@@ -1536,7 +1629,7 @@
         this.flying.push({ m: sh, sx: V.x0, sy: 1.3, sz: V.z + (Math.random() - 0.5) * 0.8, tx, ty: 0.012, tz, h: 0.4, t: 0, dur: 0.4 + Math.random() * 0.3, r0: [0, 0, 0], r1: [Math.random() * 6, Math.random() * 6, 0] }); }
       for (let k = 0; k < 10; k++) { const a = Math.PI + (k / 9 - 0.5) * 2.4, sp = 1.8 + Math.random() * 2.2;
         const c = this.makeCan(V.x0 - 0.2, 0.3 + Math.random() * 0.9, V.z + (Math.random() - 0.5) * 0.8, Math.cos(a) * sp, Math.sin(a) * sp);
-        if (k === 4 && c) { c.state = 'jet'; c.jetT = 3.4; c.jetA = a; c.soda = false; } }   // one's split: it hisses and rockets about, spraying
+        if ((k === 2 || k === 4 || k === 7) && c) { c.state = 'jet'; c.jetT = 3.4 + k * 0.15; c.jetA = a; c.soda = false; } }   // three split: they hiss and rocket about, spinning and spraying
     }
     makeCan(x, y, z, vx, vz) {
       const ci = (this.canN = (this.canN || 0) + 1) % 3, o = this.cloneP && this.cloneP('ITEM_CAN' + ci); if (!o) return null;
@@ -1638,7 +1731,7 @@
       this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ごくごく…', 1.1);
       this.later(1.15, () => { b.state = 'gone'; b.m.visible = false; if (this.drinkB === b) this.drinkB = null; this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ぷはーっ!', 1.1); });
       this.think((this.hits ? '*glug glug glug* Ahhh... that\'s better. ♥' : '*glug glug glug* AHHH. Good as new! ♥'), 1.6);
-      this.later(2.4, () => { this.think(['*BUUUUURP*', '*BWAAARP!*', '*urrrp*... pardon.'][(this.t * 3 | 0) % 3], 1.6); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'げっぷ', 1.2);
+      this.later(2.4, () => { this.think(['*BUUUUURP*', '*BWAAARP!*', '*urrrp*... pardon.'][(this.t * 3 | 0) % 3], 1.6); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'ゲェェップ!!', 1.6, true); this.fx.dust && this.fx.dust(P.x + Math.cos(P.f) * 0.5, P.y + 1.7, P.z + Math.sin(P.f) * 0.5, 6, 0.25, 0.4, 0.25);   // (a big one: you can't miss it)
         if (true) this.noiseS(P.x, P.z, 6, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); });   // (loud enough to turn heads)
     }
     // a big bare footprint (x forward, the big toe on the inside): a sole, wide at the ball, and five toes
@@ -2035,20 +2128,26 @@
       this.camH = (this.camH || 0.64) + ((CF && CF.h ? CF.h : 0.64) - (this.camH || 0.64)) * Math.min(1, dt * 2); const ch = this.camH, cz = Math.sqrt(Math.max(0.05, 1 - ch * ch));
       this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh, this.camT.y + dist * ch, this.camT.z + dist * cz * (CF && CF.flip ? -1 : 1));   // (a cutscene can look from the far side)
       this.cam.lookAt(this.camT.x, this.camT.y + 0.6, this.camT.z); this.cam.updateMatrixWorld();
-      this.flat.lights.aim(this.camT.x, this.camT.z - 3);
-      if ((this.cvN = (this.cvN || 0) + 1) % 30 === 1) S.Flat.convert(this.scene, { pastel: 0.6 });
+      this.flat.lights.aim(this.camT.x, this.camT.z - 3);   // (a no-op once the shadow is pinned over the whole bathhouse: see start)
+      if ((this.cvN = (this.cvN || 0) + 1) % 30 === 1) { S.Flat.convert(this.scene, { pastel: 0.6 });
+        // the floors only receive shadows: cast as well, they shadowed themselves in odd frames (whole stretches of floor going grey for a frame)
+        const fl = this.kit && this.kit.getObjectByName('FLOORS'); if (fl) fl.traverse((q) => { if (q.isMesh) q.castShadow = false; }); }
       this.R.r.shadowMap.enabled = true;
       this.R.r.render(this.scene, this.cam);
       this.drawHud(dt);
     }
     drawCone(n) {
       const a = n.a, N = 22, P = this.P, hide = (SAFE[roomAt(P.x, P.z)] && !n.raid) || n.busy || Math.abs(a.y - P.y) > 1.6 || a.st !== 'free';
-      n.cone.visible = !hide; if (hide) return;
-      const range = this.range(n), pos = new Float32Array((N + 2) * 3), y = a.y + 0.06; pos[0] = a.x; pos[1] = y; pos[2] = a.z;
+      // it fades rather than blinks: a state that flips for a frame (busy, a stumble) no longer pops it off and on
+      n.coneV = Math.max(0, Math.min(1, (n.coneV === undefined ? 1 : n.coneV) + (hide ? -1 : 1) * (this.dtR || 1 / 60) * 6));
+      n.cone.visible = n.coneV > 0.01; if (!n.cone.visible) return;
+      // its buffers are made once and refilled each frame (a fresh buffer every frame left stale bindings behind: the cones, puddles and rings
+      // drawn after it dropped out for a frame now and then)
+      const g = n.cone.geometry; if (!g.attributes.position) { g.setAttribute('position', new THREE.BufferAttribute(new Float32Array((N + 2) * 3), 3)); const idx = []; for (let i = 1; i <= N; i++) idx.push(0, i + 1, i); g.setIndex(idx); }
+      const range = this.range(n), pa = g.attributes.position, pos = pa.array, y = a.y + 0.06; pos[0] = a.x; pos[1] = y; pos[2] = a.z;
       for (let i = 0; i <= N; i++) { const t = a.f - n.half + (2 * n.half) * i / N, L = this.reach(a.x, a.z, t, range); pos[(i + 1) * 3] = a.x + Math.cos(t) * L; pos[(i + 1) * 3 + 1] = y; pos[(i + 1) * 3 + 2] = a.z + Math.sin(t) * L; }
-      const idx = []; for (let i = 1; i <= N; i++) idx.push(0, i + 1, i);
-      const g = n.cone.geometry; g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(idx); g.computeBoundingSphere();
-      n.coneK = (n.coneK || 0) + (clamp(n.alarm, 0, 1) - (n.coneK || 0)) * Math.min(1, (this.dtR || 1 / 60) * 5); const k = n.coneK; n.cone.material.color.setRGB(1, 0.81 - 0.5 * k, 0.23 - 0.1 * k); n.cone.material.opacity = 0.36 + 0.24 * k;
+      pa.needsUpdate = true; g.computeBoundingSphere();
+      n.coneK = (n.coneK || 0) + (clamp(n.alarm, 0, 1) - (n.coneK || 0)) * Math.min(1, (this.dtR || 1 / 60) * 5); const k = n.coneK; n.cone.material.color.setRGB(1, 0.81 - 0.5 * k, 0.23 - 0.1 * k); n.cone.material.opacity = (0.36 + 0.24 * k) * n.coneV;
     }
 
     // ============================================================== HUD
