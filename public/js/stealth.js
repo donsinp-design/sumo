@@ -1426,7 +1426,7 @@
       a.st = 'act'; a.atk = 'jab'; a.t = 0; a.dur = 0.45; a.f = Math.atan2(P.z - a.z, P.x - a.x);
       const dx = P.x - a.x, dz = P.z - a.z, d = Math.hypot(dx, dz) || 1;
       this.shove = { x: dx / d * 5.5, z: dz / d * 5.5, t: 0.3 }; this.lRel = false; P.st = 'busy'; P.t = 0; P.dur = 0.45; P.vx = P.vz = 0;
-      this.flash = this.hits >= 2 ? 0.45 : 0.18; if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6);   // (one: a small shake; two: a bigger one, red at the edges)
+      this.flash = this.hits >= 2 ? 0.45 : 0.18; this.shake = Math.max(this.shake || 0, this.hits >= 2 ? 0.6 : 0.35); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6);   // (one: a small shake; two: a bigger one, red at the edges)
       if (this.hits >= 3) {   // out cold: one clean card, no pile of speech bubbles
         this.catcher = n; this.freeze = 2.2; this.P.vx = this.P.vz = 0; this.clearPops(); this.el('.st-think').classList.remove('on'); this.thinkT = 0;
         const k = this.el('.st-ko'); k.textContent = 'KNOCKED OUT';
@@ -2535,7 +2535,9 @@
       this.camD = (this.camD || 15) + ((CF && CF.dist ? CF.dist : this.over ? 9 : 15) - (this.camD || 15)) * Math.min(1, dt * 2); const dist = this.camD, sh = this.flash ? this.flash * 0.25 : 0; this.flash = Math.max(0, (this.flash || 0) - dt * 2);
       this.camH = (this.camH || 0.64) + ((CF && CF.h ? CF.h : 0.64) - (this.camH || 0.64)) * Math.min(1, dt * 2); const ch = this.camH, cz = Math.sqrt(Math.max(0.05, 1 - ch * ch));
       this.cam.position.set(this.camT.x + (Math.random() - 0.5) * sh, this.camT.y + dist * ch, this.camT.z + dist * cz * (CF && CF.flip ? -1 : 1));   // (a cutscene can look from the far side)
-      this.cam.lookAt(this.camT.x, this.camT.y + 0.6, this.camT.z); this.cam.updateMatrixWorld();
+      const sk = this.shake || 0, sx = sk ? (Math.random() - 0.5) * 2 * sk : 0, sy = sk ? (Math.random() - 0.5) * 1.2 * sk : 0, sz = sk ? (Math.random() - 0.5) * 2 * sk : 0; this.shake = Math.max(0, sk - dt * 1.3);   // a hit: the whole view jolts (camera and where it looks, together)
+      this.cam.position.x += sx; this.cam.position.y += sy; this.cam.position.z += sz;
+      this.cam.lookAt(this.camT.x + sx, this.camT.y + 0.6 + sy, this.camT.z + sz); this.cam.updateMatrixWorld();
       this.flat.lights.aim(this.camT.x, this.camT.z - 3);   // (a no-op once the shadow is pinned over the whole bathhouse: see start)
       if ((this.cvN = (this.cvN || 0) + 1) % 30 === 1) { S.Flat.convert(this.scene, { pastel: 0.6 });
         // the floors only receive shadows: cast as well, they shadowed themselves in odd frames (whole stretches of floor going grey for a frame)
