@@ -38,14 +38,14 @@
   const SAFE = { bath: 1, shower: 1 };
   const HIT_WIN = 4;   // seconds: a second hit inside this turns the edges red, a third knocks him out; after it, he's fine again
   // the gacha machine by the locker-room door: one pull, one skill for this level, used once with SPACE
-  const GACHA_POOL = ['smoke', 'vanish', 'timedrag', 'sleepdart', 'trapdoor', 'rewind', 'phantom', 'torpedo', 'daruma', 'giant', 'stomp', 'hands', 'consume', 'bomb', 'flop'];   // (the owner picks which; until then the machine says so)
+  const GACHA_POOL = ['smoke', 'vanish', 'timedrag', 'sleepdart', 'trapdoor', 'rewind', 'phantom', 'torpedo', 'daruma', 'giant', 'stomp', 'hands', 'bomb'];   // (consume and belly flop: built, not in the campaign)   // (the owner picks which; until then the machine says so)
   const GACHA = {   // (each one is g_<id> below)
     smoke: { name: 'SMOKE BOMB', desc: 'A thick cloud. Nobody sees into it, out of it, or through it.' },
     vanish: { name: 'VANISH', desc: 'Invisible for 7 seconds.' },
     timedrag: { name: 'TIME DRAG', desc: 'Everyone else in slow motion for 7 seconds.' },
     sleepdart: { name: 'SLEEP DART', desc: 'The one you face falls asleep. Silently.' },
     trapdoor: { name: 'TRAP DOOR', desc: 'Opens where you stand. Whoever follows you over it drops through.' },
-    rewind: { name: 'REWIND', desc: 'Back four seconds. Them too.' },
+    rewind: { name: 'REWIND', desc: 'It saves you once: knocked out, or slipping, and time runs back four seconds.' },
     phantom: { name: 'PHANTOM DASH', desc: 'Straight through them in a blink. They all go down.' },
     torpedo: { name: 'TORPEDO', desc: 'Belly first, flat out. Steer it.' },
     daruma: { name: 'DARUMA ROLL', desc: 'Roll up and bowl them over. Steer it.' },
@@ -685,7 +685,7 @@
       if (this.slipCheck(n)) return;
       // a colleague out cold: anyone who sees them goes over; whoever gets there shakes them awake
       if ((n.kChk = (n.kChk || 0) - dt) <= 0) { n.kChk = 0.3;
-        for (const m of this.npcs) if (m !== n && m.ko && m.a.st === 'down' && Math.abs(m.a.y - a.y) < 1) {
+        for (const m of this.npcs) if (m !== n && m.ko && m.a.st === 'down' && m.a.t > 3 && Math.abs(m.a.y - a.y) < 1) {   // (out cold a few seconds before anyone can shake them awake)
           const d = Math.hypot(m.a.x - a.x, m.a.z - a.z);
           if (d < 1.5) { m.a.t = m.a.dur; n.mode = 'search'; n.wait = 3; n.path = null; this.popAt(a, ['おい!起きろ!', '大丈夫か!?', 'しっかりしろ!'][(this.t * 3 | 0) % 3], 1.5); break; }
           if (n.mode !== 'goto' && d < 9 && this.sees(n, m.a.x, m.a.z, 9)) { this.goTo(n, m.a.x, m.a.z); n.mode = 'goto'; n.inv = false; n.noiseAt = [m.a.x, m.a.z]; this.popAt(a, '!?', 1.2); break; }
@@ -881,6 +881,7 @@
       // puddles: walking over them is fine; RUNNING (the charge) over one, you slip
       if (P.st === 'charge') for (const q of this.puddles) if (((P.x - q.x) / q.rx) ** 2 + ((P.z - q.z) / q.rz) ** 2 < 1) {
         P.st = 'slip'; P.t = 0; P.dur = 1.3; P.fall = Math.atan2(P.vz, P.vx); P.vx *= 0.6; P.vz *= 0.6;
+        if (this.gSkill === 'rewind') this.later(0.75, () => this.autoRewind());   // (REWIND: the fall, then time runs back)
         this.think(['WHOA—!', 'Waaah!', 'Slippery!!'][(this.t * 3 | 0) % 3], 1.2); this.fx.water && this.fx.water(P.x, P.z, 5);
         if (true) this.noiseS(P.x, P.z, 7, '?!');
         break;
@@ -1067,10 +1068,11 @@
       const id = GACHA_POOL.length ? GACHA_POOL[(Math.random() * GACHA_POOL.length) | 0] : null; this.gSkill = id;
       if (this.g.audio && this.g.audio.blip) this.g.audio.blip(true);
       this.popAt({ x: gm.x, z: gm.z, y: 1.2 }, 'ガチャ!', 1.0);
-      this.later(0.55, () => { const G = GACHA[id]; if (G) this.tip([G.name, G.desc, '#SPACE: use it (once, this level only)'], { now: true }); });
+      this.later(0.55, () => { const G = GACHA[id]; if (G) this.tip([G.name, G.desc, id === 'rewind' ? '#It works by itself (once, this level only)' : '#SPACE: use it (once, this level only)'], { now: true }); });
     }
     useGacha() {
-      const id = this.gSkill, f = this['g_' + id]; this.gSkill = null; if (!f || this.rew) return;
+      const id = this.gSkill, f = this['g_' + id]; if (id === 'rewind') { this.think('It kicks in by itself, if I go down.', 1.6); return; }   // (REWIND: automatic, see autoRewind)
+      this.gSkill = null; if (!f || this.rew) return;
       if (f.call(this) === false) this.gSkill = id;   // (nothing to use it on: kept for later)
     }
     gachaStep(dt) {
@@ -1112,7 +1114,7 @@
       const g = this.gs; if (g) { g.t += dt; if (g.tick) g.tick(dt, g); if (this.gs === g && g.dur && g.t >= g.dur) this.gsEnd(); }
       this.smokeStep(dt); this.bombStep(dt); this.dartStep(dt); this.trapStep(dt); this.projStep(dt); this.recStep(dt);
     }
-    gsMove(dt, mx, mz, mag) { const g = this.gs; if (g && g.move) g.move(dt, mx, mz, mag, g); else this.P.st = 'free'; }
+    gsMove(dt, mx, mz, mag) { const g = this.gs; if (g && typeof g.move === 'function') g.move(dt, mx, mz, mag, g); else if (!g || !g.move) this.P.st = 'free'; }   // (REWIND: driven by rewStep)
     gReset() {   // a restart or a KO: every skill effect stops, anyone swallowed or down the trap door is back
       this.gsEnd(true); this.rew = null; this.hist = []; this.gfx('');
       if (this.smoke) { this.G.remove(this.smoke.g); this.smoke = null; }
@@ -1188,7 +1190,7 @@
 
     // TIME DRAG: everyone else in slow motion
     g_timedrag() {
-      this.gsStart('timedrag', { dur: 7, meter: true, col: '#78aed6', slow: 0.18, end: () => { this.gfx(''); this.sfx('whoosh', 0.4); } });
+      this.gsStart('timedrag', { dur: 7, meter: true, col: '#78aed6', slow: 0.4, end: () => { this.gfx(''); this.sfx('whoosh', 0.4); } });
       this.gfx('radial-gradient(ellipse at center, rgba(120,170,225,0.06) 45%, rgba(80,130,210,0.42) 100%)');
       this.sfx('whoosh', 1.0); this.think('Sloooow... mooootion...', 1.6);
     }
@@ -1198,9 +1200,11 @@
       const P = this.P, t = this.nearFront(15, 0.75, (n) => this.upright(n) && this.clear(P.x, P.z, n.a.x, n.a.z))[0];
       if (!t) { this.think('Nobody in front of me to dart...', 1.4); return false; }
       P.f = Math.atan2(t.a.z - P.z, t.a.x - P.x); P.st = 'busy'; P.t = 0; P.dur = 0.35;
-      const m = new THREE.Group(), body = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.32, 6).rotateZ(Math.PI / 2), S.Flat.mat(0xe8d9b0)), tail = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 6).rotateZ(Math.PI / 2), S.Flat.mat(0xd8473a));
-      tail.position.x = -0.18; m.add(body, tail); this.G.add(m);
-      const d = Math.hypot(t.a.x - P.x, t.a.z - P.z); this.dart = { n: t, t: 0, dur: Math.max(0.12, d / 32), x0: P.x + Math.cos(P.f) * 0.5, z0: P.z + Math.sin(P.f) * 0.5, y0: P.y + 1.45, m };
+      const m = new THREE.Group(), body = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 8).rotateZ(Math.PI / 2), S.Flat.mat(0xf3ead2)), tail = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 8).rotateZ(Math.PI / 2), S.Flat.mat(0xd8473a));
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.12, 6).rotateZ(-Math.PI / 2), S.Flat.mat(0x8a8494)); tip.position.x = 0.31;
+      const trail = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.03, 0.03), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false })); trail.position.x = -0.85;
+      tail.position.x = -0.28; m.add(body, tail, tip, trail); this.G.add(m);
+      const d = Math.hypot(t.a.x - P.x, t.a.z - P.z); this.dart = { n: t, t: 0, dur: Math.max(0.2, d / 16), x0: P.x + Math.cos(P.f) * 0.5, z0: P.z + Math.sin(P.f) * 0.5, y0: P.y + 1.45, m };
       this.sfx('whoosh', 0.15); this.popAt({ x: P.x, z: P.z, y: P.y }, 'フッ', 0.7);
     }
     dartStep(dt) {
@@ -1254,6 +1258,7 @@
           last: n.last && n.last.slice(), lostT: n.lostT, inv: n.inv, noiseAt: n.noiseAt, shock: n.shock, pit: n.pit, pitT: n.pitT, zzz: n.zzz }; }) });
       if (H.length > 41) H.shift();
     }
+    autoRewind() { if (this.gSkill !== 'rewind' || this.rew || !this.hist || this.hist.length < 6) return false; this.gSkill = null; this.g_rewind(); return true; }
     g_rewind() {
       const H = this.hist; if (!H || H.length < 6) { this.think('Nothing to rewind yet...', 1.4); return false; }
       this.rew = { L: H.slice().reverse(), t: 0, dur: 1.2 }; this.hist = [];
@@ -1427,6 +1432,7 @@
       const dx = P.x - a.x, dz = P.z - a.z, d = Math.hypot(dx, dz) || 1;
       this.shove = { x: dx / d * 5.5, z: dz / d * 5.5, t: 0.3 }; this.lRel = false; P.st = 'busy'; P.t = 0; P.dur = 0.45; P.vx = P.vz = 0;
       this.flash = this.hits >= 2 ? 0.45 : 0.18; this.shake = Math.max(this.shake || 0, this.hits >= 2 ? 0.6 : 0.35); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6);   // (one: a small shake; two: a bigger one, red at the edges)
+      if (this.hits >= 3 && this.gSkill === 'rewind' && this.hist && this.hist.length >= 6) { this.popAt(a, 'バシッ!', 0.8); this.later(0.35, () => this.autoRewind()); return; }   // (REWIND: no KO, time runs back)
       if (this.hits >= 3) {   // out cold: one clean card, no pile of speech bubbles
         this.catcher = n; this.freeze = 2.2; this.P.vx = this.P.vz = 0; this.clearPops(); this.el('.st-think').classList.remove('on'); this.thinkT = 0;
         const k = this.el('.st-ko'); k.textContent = 'KNOCKED OUT';
@@ -2641,7 +2647,7 @@
       if (gs && gs.meter && !this.over) { const q = this.project(P.x, P.y + 2.55 * s * (gs.sz || 1), P.z); gb.style.display = 'block'; gb.style.left = q.x + 'px'; gb.style.top = (q.y - (sb.style.display === 'block' ? 14 : 0)) + 'px';
         gb.firstChild.style.width = (Math.max(0, 1 - gs.t / gs.dur) * 100) + '%'; gb.firstChild.style.background = gs.col || '#a48fd6'; }
       else gb.style.display = 'none';
-      const bd = this.el('.st-gbadge'), G = this.gSkill && GACHA[this.gSkill]; bd.style.display = G && !this.over && !this.sf ? 'block' : 'none'; if (G && bd._t !== G.name) { bd._t = G.name; bd.innerHTML = '<b>SPACE</b> ' + G.name; }
+      const bd = this.el('.st-gbadge'), G = this.gSkill && GACHA[this.gSkill]; bd.style.display = G && !this.over && !this.sf ? 'block' : 'none'; if (G && bd._t !== G.name) { bd._t = G.name; bd.innerHTML = '<b>' + (this.gSkill === 'rewind' ? 'AUTO' : 'SPACE') + '</b> ' + G.name; }
       this.chaseGoal(); const hp = this.el('.st-hp'), ch = this.chasing(), hits = this.hits || 0;   // three hits and he's out: ♥♥♥
       hp.style.display = 'none';   // (no hearts: the screen tells him how he's doing) hp.textContent = '♥'.repeat(3 - Math.min(3, hits)) + '♡'.repeat(Math.min(3, hits)); hp.classList.toggle('chase', ch);
       const sf = this.el('.st-safe'), hunt = this.stage === 'bathhide';

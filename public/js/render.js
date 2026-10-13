@@ -2492,8 +2492,9 @@
       cs.fx += (fx - cs.fx) * k; cs.fz += (fz - cs.fz) * k; cs.tight += (tight - cs.tight) * (1 - Math.exp(-dt * 4));
       cs.kick *= Math.exp(-dt * 7); cs.shake *= Math.exp(-dt * 6);
       const fovV = cam.fov * Math.PI / 180;
-      const ext = 6.0;
-      const dV = ext / Math.tan(fovV / 2) * 1.02, dH = ext / (Math.tan(fovV / 2) * cam.aspect) * 1.3;
+      // framed on the ring (radius RING_R) with a little room for wrestlers at its far edge, not a wide band of floor
+      const extV = S.RING_R * 1.18, extH = S.RING_R + 0.7;
+      const dV = extV / Math.tan(fovV / 2), dH = extH / (Math.tan(fovV / 2) * cam.aspect);
       let dist = Math.max(dV, dH) * (1 - cs.tight - cs.kick);
       let pitch = 0.8, yaw = 0;
       if (game.mode === 'title') { cs.yaw += dt * 0.07; yaw = Math.sin(cs.yaw) * 0.5; pitch = 0.72; dist *= 0.88; }
@@ -2501,7 +2502,7 @@
       const sh = cs.shake;
       const sx = (Math.sin(T * 31) + Math.sin(T * 17.3)) * 0.5 * sh, sy = (Math.sin(T * 27.1) + Math.sin(T * 13.7)) * 0.5 * sh;
       cam.position.set(cs.fx + Math.sin(yaw) * Math.cos(pitch) * dist + sx * 0.3, Math.sin(pitch) * dist + sy * 0.3, cs.fz + Math.cos(yaw) * Math.cos(pitch) * dist);
-      cam.lookAt(cs.fx + sx * 0.08, 0.2 + sy * 0.08, cs.fz - 0.15);
+      cam.lookAt(cs.fx + sx * 0.08, 0.2 + sy * 0.08, cs.fz + (game.mode === 'title' ? -0.15 : 1.05));   // (a touch towards the near edge: it sits lower on screen)
       if (this.camOverride) { const o = this.camOverride; cam.position.set(o.p[0], o.p[1], o.p[2]); cam.lookAt(o.l[0], o.l[1], o.l[2]); }
       cam.updateMatrixWorld();
     }

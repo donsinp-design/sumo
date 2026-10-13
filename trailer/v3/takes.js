@@ -9,7 +9,12 @@ T.HELP=`window.H={
    if(tk.sa===undefined||tk.idle){const v=Math.hypot(P.vx,P.vz);tk.sa=v>0.3?Math.atan2(P.vz,P.vx):P.f;}tk.idle=false;
    const da=Math.atan2(Math.sin(want-tk.sa),Math.cos(want-tk.sa));tk.da=da;const mx=7.5*dt;tk.sa+=Math.max(-mx,Math.min(mx,da));
    const sp=(s||1)*(d<0.6?Math.max(0.35,d/0.6):1)*(Math.abs(da)>1.6&&d<1?0.4:1);F.inp.mx=Math.cos(tk.sa)*sp;F.inp.mz=Math.sin(tk.sa)*sp;return d;},
- sstop(F,tk){F.inp.mx=0;F.inp.mz=0;tk.idle=true;}
+ sstop(F,tk){F.inp.mx=0;F.inp.mz=0;tk.idle=true;},
+ gcam(F){const P=F.c.P,tk=F.take;F.cam(P.x,P.z-1.0,0,9.5,0.62);tk.camN=(tk.camN||0)+1;if(tk.camN<4){F.c.camT.set(P.x,0,P.z-1.0);F.c.camD=9.5;}},   // (no pan in from the runner's default camera)
+ gcap(F,t){const c=F.c,tk=F.take,N={smoke:'SMOKE BOMB!',vanish:'VANISH!',timedrag:'TIME DRAG!',sleepdart:'SLEEP DART!',trapdoor:'TRAP DOOR!',rewind:'REWIND!',phantom:'PHANTOM DASH!',torpedo:'TORPEDO!',daruma:'DARUMA ROLL!',giant:'GIANT!',stomp:'STOMP!',hands:'THOUSAND HANDS!',consume:'CONSUME!',bomb:'BOMB!',flop:'BELLY FLOP!'};
+   if(c.gSkill&&c.gSkill!=='spit')tk.gid=c.gSkill;if(tk.gid&&!c.gSkill&&tk.capT===undefined)tk.capT=t;if(c.gSkill==='spit'&&tk.capT!==undefined&&!tk.sp0)tk.sp0=1;if(tk.sp0===1&&!c.gSkill){tk.sp0=2;tk.capT=t;tk.gid='spit';N.spit='SPIT!';}N.spit='SPIT!';
+   if(c.gm&&c.gm.used&&tk.pullT===undefined&&!tk.gid)tk.pullT=t;if(tk.pullT!==undefined&&t-tk.pullT<1.4){F.cap('GACHA!');return;}
+   F.cap(tk.capT!==undefined&&t-tk.capT<1.4?N[tk.gid]:'');}
 };`;
 const UP=3;
 // 1: the box sneaks across the lobby, freezing whenever a cone could find it
@@ -880,4 +885,60 @@ T.vend23={seed:8,pre:0.2,n:460,
    else if(tk.st===5){if(P.st!=='free'){H.stop(F);return;}const g=tk.g,ux=P.x-g.a.x,uz=P.z-g.a.z,ul=Math.hypot(ux,uz)||1;if(!tk.bk){tk.bk=[P.x+ux/ul*0.9,P.z+uz/ul*0.9];if(c.inWall(tk.bk[0],tk.bk[1]))tk.bk=[P.x,P.z];}
      if(H.go(F,tk.bk[0],tk.bk[1],0.9)<0.15||t-tk.t5>1.2){H.stop(F);tk.st=6;}}
    else{H.stop(F);const g=tk.g;if(g)P.f=Math.atan2(g.a.z-P.z,g.a.x-P.x);}}};
+
+// ---- campaign gachas (stealth level): the locker-room aisle (x 0..10, z -33.9); the staff come at him (a chase), nothing staged in a ring.
+// The camera follows him close (H.gcam); no gacha HUD badge (hidden); c.hitCd held up so a take isn't cut short by a KO.
+T.G={};
+H_G=`H.gcam=(F)=>{const P=F.c.P,tk=F.take;F.cam(P.x,P.z-1.0,0,9.5,0.62);tk.camN=(tk.camN||0)+1;if(tk.camN<4){F.c.camT.set(P.x,0,P.z-1.0);F.c.camD=9.5;}const b=F.c.el('.st-gbadge');if(b)b.style.visibility='hidden';};
+ H.chase=(F,list)=>{const c=F.c;c.puddles=c.puddles.filter((q)=>!(Math.abs(q.x-9.8)<0.01&&Math.abs(q.z+33.6)<0.01));const N=list.map((q)=>c.npcs[q[0]]);N.forEach((n,k)=>F.npcAt(n,list[k][1],list[k][2],list[k][3]||0));F.park(N);N.forEach((n)=>c.startChase(n));return N;};
+ H.near=(F)=>{const c=F.c,P=c.P;let bd=1e9;for(const n of c.npcs){if(n.ko||n.a.st!=='free'||n.a.x<-50)continue;bd=Math.min(bd,Math.hypot(n.a.x-P.x,n.a.z-P.z));}return bd;};`;
+const G0=(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;};
+T.gpull={seed:8,pre:0.1,n:190,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;F.at(5.4,-24.4,0,0);c.grace=99;F.park([]);F.take.stopWarm=true;F.c.camD=9.5;},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;F.pad();if(!tk.st){const d=H.go(F,8.45,-26.0,0.8);if(d<0.12){tk.st=1;tk.t1=t;}}else{H.stop(F);P.f=0;F.inp.grab=t-tk.t1>0.5&&t-tk.t1<0.6;}}};
+T.gvanish={seed:8,pre:0.1,n:200,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;F.at(0.6,-33.5,0,0);c.grace=0;const n=c.npcs[1];F.npcAt(n,5.4,-35.0,Math.PI/2+0.4);F.park([n]);c.gSkill='vanish';F.take.stopWarm=true;F.c.camD=9.5;},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c;F.pad();F.inp.skill=t>0.25&&t<0.3;if(t>0.6)H.go(F,10.5,-33.4,0.85);}};
+T.gsmoke={seed:8,pre:0.1,n:230,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(3.2,-33.9,0,0);c.grace=0;H.chase(F,[[1,-3.0,-33.6],[2,-3.8,-34.4]]);c.gSkill='smoke';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c;c.hitCd=9;F.pad();F.inp.skill=H.near(F)<3.4&&!F.take.u&&(F.take.u=1);if(!F.take.u)H.go(F,5,-33.9,0.6);else if(!F.take.t2){F.take.t2=t;}else if(t-F.take.t2<1.0)H.stop(F);else{c.keys.KeyI=true;H.go(F,10.5,-32.6,0.7);}}};
+T.gtimedrag={seed:8,pre:0.1,n:230,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(8.4,-33.9,Math.PI,0);H.chase(F,[[1,1.2,-34.4,0],[2,0.4,-33.5,0]]);c.gSkill='timedrag';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();
+   if(!tk.u){H.stop(F);P.f=Math.PI;if(H.near(F)<3.6){F.inp.skill=true;tk.u=t;}return;}
+   if(t-tk.u<0.25){H.stop(F);return;}
+   if(!tk.w){const d=H.go(F,4.4,-32.3,1);if(d<0.4)tk.w=1;}else if(tk.w===1){const d=H.go(F,0.5,-32.3,1);if(d<0.4)tk.w=2;}else H.go(F,-5,-33.6,1);}};
+T.gsleepdart={seed:8,pre:0.1,n:180,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;F.at(2.0,-33.9,0,0);c.grace=0;const n=c.npcs[1];F.npcAt(n,6.6,-34.1,0);F.park([n]);c.gSkill='sleepdart';F.take.stopWarm=true;F.c.camD=9.5;},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c;F.pad();F.inp.skill=t>0.5&&t<0.55;if(t>1.6){c.keys.KeyI=true;H.go(F,10.5,-32.7,0.8);}}};
+T.gtrapdoor={seed:8,pre:0.1,n:210,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(3.0,-33.9,0,0);H.chase(F,[[1,-3.6,-33.9]]);c.gSkill='trapdoor';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P;c.hitCd=9;F.pad();F.inp.skill=t>0.15&&t<0.2;if(t<0.4)return;if(t<1.2)H.go(F,6.4,-33.9,1);else{H.stop(F);P.f=Math.PI;}}};
+T.grewind={seed:8,pre:0.1,n:260,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(1.0,-33.9,0,0);c.spill(5.2,-33.9,0);H.chase(F,[[1,-4.0,-33.9]]);c.gSkill='rewind';c.hist=[];c.recT=0;},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();
+   if(!tk.r){if(c.rew)tk.r=1;if(t>0.5&&!tk.ch){F.inp.mx=1;F.inp.dash=P.st==='free';if(P.st==='charge'||P.st==='slip')tk.ch=1;}return;}
+   if(c.rew)return;const d=tk.a?0:H.go(F,4.2,-32.5,0.9);if(!tk.a&&d<0.4)tk.a=1;if(tk.a)H.go(F,10,-32.6,0.9);}};
+T.gphantom={seed:8,pre:0.1,n:150,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(1.0,-33.9,0,0);H.chase(F,[[1,9.5,-33.6,Math.PI],[2,10.6,-34.3,Math.PI],[3,11.8,-33.8,Math.PI]]);c.gSkill='phantom';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();if(!tk.u){P.f=0;if(H.near(F)<3.2){F.inp.skill=true;tk.u=1;}}}};
+T.gtorpedo={seed:8,pre:0.1,n:150,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(-0.5,-33.9,0,0);H.chase(F,[[1,9.0,-33.5,Math.PI],[2,10.2,-34.4,Math.PI],[3,11.5,-33.9,Math.PI]]);c.gSkill='torpedo';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();if(!tk.u){P.f=0;if(H.near(F)<5.5){F.inp.skill=true;tk.u=1;}}else H.go(F,10,-33.9,1);}};
+T.gdaruma={seed:8,pre:0.1,n:200,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(3.4,-33.9,0,0);F.take.N=H.chase(F,[[1,10.2,-33.4,Math.PI],[2,11.0,-34.6,Math.PI],[3,-3.0,-33.5,0],[4,-3.8,-34.4,0]]);c.gSkill='daruma';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();if(!tk.u){P.f=0;if(H.near(F)<3.4){F.inp.skill=true;tk.u=1;}return;}const n=tk.N.filter((q)=>q.a.st==='free'&&!q.ko).sort((a,b)=>Math.hypot(a.a.x-P.x,a.a.z-P.z)-Math.hypot(b.a.x-P.x,b.a.z-P.z))[0];if(n)H.go(F,n.a.x,n.a.z,1);}};
+T.ggiant={seed:8,pre:0.1,n:220,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(3.0,-33.9,0,0);F.take.N=H.chase(F,[[1,9.8,-33.5,Math.PI],[2,10.8,-34.4,Math.PI],[3,-3.4,-33.8,0]]);c.gSkill='giant';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();F.inp.skill=t>0.3&&t<0.35;if(t<1.2){H.stop(F);return;}const n=tk.N.filter((q)=>q.a.st==='free'&&!q.ko).sort((a,b)=>Math.hypot(a.a.x-P.x,a.a.z-P.z)-Math.hypot(b.a.x-P.x,b.a.z-P.z))[0];if(n)H.go(F,n.a.x,n.a.z,0.7);else H.stop(F);}};
+T.gstomp={seed:8,pre:0.1,n:160,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(4.6,-33.9,Math.PI/2,0);H.chase(F,[[1,-1.2,-33.5,0],[2,-2.0,-34.4,0],[3,10.6,-33.4,Math.PI],[4,11.4,-34.5,Math.PI],[5,12.2,-33.9,Math.PI]]);c.gSkill='stomp';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,tk=F.take;c.hitCd=9;F.pad();if(!tk.u&&H.near(F)<2.4){F.inp.skill=true;tk.u=1;}}};
+T.ghands={seed:8,pre:0.1,n:150,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(2.4,-33.9,0,0);H.chase(F,[[1,8.6,-33.5,Math.PI],[2,9.2,-34.3,Math.PI],[3,10.4,-33.9,Math.PI]]);c.gSkill='hands';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();P.f=0;if(!tk.u&&H.near(F)<2.2){F.inp.skill=true;tk.u=1;}}};
+T.gbomb={seed:8,pre:0.1,n:210,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.c.camD=9.5;F.c.camH=0.62;F.at(6.0,-33.9,Math.PI,0);H.chase(F,[[1,-3.4,-33.0,0],[2,-4.2,-34.8,0],[3,-5.0,-33.2,0]]);c.gSkill='bomb';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();if(!tk.u){H.stop(F);P.f=Math.PI;if(H.near(F)<9.3){F.inp.skill=true;tk.u=t;}return;}if(t-tk.u<0.4){H.stop(F);P.f=Math.PI;return;}const d=H.go(F,9.4,-33.2,1);if(d<0.3){H.stop(F);P.f=Math.PI;}}};
+T.HELP=T.HELP+H_G;
 module.exports=T;
