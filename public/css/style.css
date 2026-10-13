@@ -566,7 +566,7 @@ html.touch #campHud .ch-yen { top: auto; bottom: 10px; right: 12px; }
 
 /* ---------- Where's my Mawashi (kumitegame fork): the white title with the ninja ---------- */
 body.wmm #screen.title { background: transparent !important; justify-content: center; align-items: flex-start; }
-body.wmm .wmm-logo { position: absolute; left: 7vw; top: 6vh; font: 400 clamp(44px, 6.2vw, 92px)/0.92 'Dela Gothic One', sans-serif; color: #2f2a38; letter-spacing: 0.01em; text-shadow: 5px 5px 0 #f2b732; pointer-events: none; }
+body.wmm .wmm-logo { position: absolute; left: 7vw; top: 6vh; font: 400 clamp(44px, 6.2vw, 92px)/0.92 'Dela Gothic One', sans-serif; color: #2f2a38; letter-spacing: 0.01em; pointer-events: none; }
 body.wmm .wmm-logo span { display: block; font-size: 0.66em; }
 body.wmm .wmm-wrap { position: absolute; left: 7vw; top: 50%; transform: translateY(-50%); }
 body.wmm .wmm-wrap .menu { gap: 8px; margin-top: 0; }

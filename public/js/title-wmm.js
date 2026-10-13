@@ -101,12 +101,12 @@
     dt = Math.min(dt, 0.05); t += dt;
     if (!champ) {
       champ = makeChamp(R);
-      if (champ) { cam.fov = 30; cam.position.set(-1.5, 2.6, 8.6); cam.lookAt(-1.5, 1.3, 0); cam.updateProjectionMatrix(); }
+      if (champ) { cam.fov = 30; cam.position.set(-1.6, 2.9, 10.2); cam.lookAt(-1.6, 1.75, 0); cam.updateProjectionMatrix(); }
       else { step(dt); R.r.render(scene, cam); return; }   // (the model is still loading: the food rain for a moment)
     }
     if (stars.length) { for (const s of stars) scene.remove(s.m); stars.length = 0; }
     const c = champ; c.w.preT = 0.2; c.v.match = c.m; c.v.viewer = 0; c.v.update(c.w, dt, t);
-    c.v.handWorld(1, c.h1); c.v.handWorld(-1, c.h2); c.tr.position.copy(c.h1).add(c.h2).multiplyScalar(0.5); c.tr.position.y += 0.12;
+    c.v.handWorld(1, c.h1); c.v.handWorld(-1, c.h2); c.tr.position.copy(c.h1).add(c.h2).multiplyScalar(0.5); c.tr.position.y += 0.12 + Math.max(0, Math.sin(t * 3.2)) * 0.06;   // (a gentle lift of the cup)
     c.tr.rotation.y = Math.sin(t * 0.8) * 0.25;
     R.r.render(scene, cam);
   };

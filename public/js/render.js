@@ -527,9 +527,8 @@
             c = 0.55; p = 0.12; hp = 0; rate = 40;
             Rh = pt < 0.1 ? [0.62, 0.7, 0.5] : [0.04, 0.7, 0.62]; Lh = mir(Rh);
           } else if (w.pre === 'trophy') {   // the title: a trophy held up over his head, pumped on the beat
-            const k = 0.5 + 0.5 * Math.sin(T * 7.2);   // (a small smooth lift, arms kept near straight: lower down the elbows folded in and it sat on his head)
-            c = 0.42; p = -0.08; hp = 0; rate = 30;
-            Rh = [0.5, 1.38 + 0.05 * k, 0.12]; Lh = mir(Rh);
+            c = 0.42; p = -0.08; hp = 0; rate = 30;   // (arms held still and near straight: pumped, the elbows folded in or the arm solver twitched at full reach)
+            Rh = [0.5, 1.38, 0.12]; Lh = mir(Rh);
           } else if (w.pre === 'clapUp' && pt < 0.9) {   // the overhead clap: both arms up, hands slap together above the head, twice
             const ph = pt % 0.3, shut = ph > 0.12 && ph < 0.24;
             c = 0.4; p = 0.1; hp = 0; rate = 40;
