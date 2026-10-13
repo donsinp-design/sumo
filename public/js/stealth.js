@@ -346,9 +346,11 @@
       this.lkDoors = [0, 1, 2, 3, 4].map((k) => get('LKDOOR_' + k)).filter(Boolean);
       // everything but the walls breaks under a charge (his own locker only dents: see the charge)
       const pad = (i) => String(i).padStart(2, '0'); this.breakables = [];
-      const vi = LY.solids.findIndex((q) => q.k === 'vending' && !q.f);
-      if (vi >= 0) { const q = LY.solids[vi], o = get('SOLID_' + pad(vi) + '_0'); this.vend = { o, x0: q.x0, x1: q.x1, z0: q.z0, z1: q.z1, z: (q.z0 + q.z1) / 2, hits: 0, broke: false, shake: 0, cd: 0 }; }
-      LY.solids.forEach((sd, i) => { if (!sd.brk || i === vi) return;
+      // the vending machines (the locker room's, and the lounge's upstairs): thump one and a drink may fall out. this.vend is whichever is nearest on his floor
+      const vis = LY.solids.map((q, i) => (q.k === 'vending' ? i : -1)).filter((i) => i >= 0);
+      this.vends = vis.map((vi) => { const q = LY.solids[vi], o = get('SOLID_' + pad(vi) + '_0'); return { o, x0: q.x0, x1: q.x1, z0: q.z0, z1: q.z1, z: (q.z0 + q.z1) / 2, y: q.f ? UP : 0, hits: 0, broke: false, shake: 0, cd: 0 }; });
+      this.vend = this.vends.find((V) => !V.y) || this.vends[0] || null;
+      LY.solids.forEach((sd, i) => { if (!sd.brk || vis.includes(i)) return;
         for (let k = 0; k < sd.n; k++) { const o = get('SOLID_' + pad(i) + '_' + k), w = this.solidW[i][k]; if (!o) continue;
           this.breakables.push({ o, w, s: { k: sd.k, x0: w.x0, x1: w.x1, z0: w.z0, z1: w.z1, h: sd.h, f: sd.f } }); } });
       LY.blockers.forEach((b, i) => { const o = get('PLANT_' + pad(i)); if (o) this.breakables.push({ o, bl: this.blockerB[i], s: { k: 'plant', x0: b.x - b.r * 0.6, x1: b.x + b.r * 0.6, z0: b.z - b.r * 0.6, z1: b.z + b.r * 0.6, h: 1.4 * (b.s || 1), f: b.f } }); });
@@ -828,8 +830,9 @@
         const dx = n.a.x - P.x, dz = n.a.z - P.z, d = Math.hypot(dx, dz);
         if (d < P.r + 0.55 && (dx * Math.cos(P.f) + dz * Math.sin(P.f)) / (d || 1) > 0.2) this.knockOut(n, Math.cos(P.f), Math.sin(P.f), ['ドーン!', 'ドスン!'][(this.t * 3 | 0) % 2], 4.5);
       }
-      if (this.vend) { const V = this.vend; V.cd = Math.max(0, V.cd - dt);
-        if (power && !V.broke && !V.cd && P.y < 1 && P.x > V.x0 - P.r - 0.2 && P.z > V.z0 - 0.3 && P.z < V.z1 + 0.3) { V.cd = 0.6; this.hitVend(); P.t = P.dur + 0.01; P.vx *= -0.3; P.vz *= -0.3; } }
+      if (this.vends && this.vends.length) { let bd = 1e9; for (const V of this.vends) { V.cd = Math.max(0, V.cd - dt); const d = Math.hypot(P.x - V.x0, P.z - V.z) + (Math.abs(P.y - V.y) < 1 ? 0 : 1e4); if (d < bd) { bd = d; this.vend = V; } } }
+      if (this.vend) { const V = this.vend;
+        if (power && !V.broke && !V.cd && Math.abs(P.y - V.y) < 1 && P.x > V.x0 - P.r - 0.2 && P.z > V.z0 - 0.3 && P.z < V.z1 + 0.3) { V.cd = 0.6; this.hitVend(); P.t = P.dur + 0.01; P.vx *= -0.3; P.vz *= -0.3; } }
       P.brkCd = Math.max(0, (P.brkCd || 0) - dt); this.runupCd = Math.max(0, (this.runupCd || 0) - dt);
       if (P.st === 'charge' && !power && this.breakables && !this.runupCd && this.breakables.some((B) => !B.done && Math.abs((B.s.f ? UP : 0) - P.y) < 1.2 && Math.hypot(P.x - clamp(P.x, B.s.x0, B.s.x1), P.z - clamp(P.z, B.s.z0, B.s.z1)) < P.r + 0.15)) {
         this.runupCd = 8; this.think('Too close... I need a RUN-UP to smash through that!', 2); }   // (from right up against it he only bumps it)
@@ -1552,7 +1555,7 @@
         else if (!this.saidItem) { this.saidItem = true; this.think('If I throw this (K), whoever hears it will go and look...', 2.4); }
         return;
       }
-      const V = this.vend; if (V && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.0 && Math.abs(P.z - V.z) < 1.3) {
+      const V = this.vend; if (V && Math.abs(P.y - V.y) < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.0 && Math.abs(P.z - V.z) < 1.3) {
         this.think(V.broke ? 'It\'s had it.' : ['No money. Not ONE yen... I\'m naked. (J: give it a thump?)', 'Still no coins. Maybe a good THUMP... (J)'][this.vendAsk = ((this.vendAsk || 0) + 1) % 2], 2.6); return; }
     }
     leaveBath() {
@@ -1570,7 +1573,7 @@
       const P = this.P, fx = Math.cos(P.f), fz = Math.sin(P.f); P.st = 'busy'; P.t = 0; P.dur = 0.35; this.w.hand = 1;
       const inFront = (x, z, r) => { const dx = x - P.x, dz = z - P.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.3; };
       const Bm = this.bomb; if (Bm && inFront(Bm.x, Bm.z, 1.8)) { Bm.vx = fx * 8; Bm.vz = fz * 8; Bm.kicked = true; this.popAt({ x: Bm.x, z: Bm.z, y: P.y }, 'ポーン!', 0.8); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); return; }   // (the gacha bomb: kicked away)
-      const V = this.vend; if (V && !V.broke && P.y < 1 && inFront(V.x0 - 0.1, clamp(P.z, V.z0, V.z1), 1.5)) { this.hitVend(); return; }
+      const V = this.vend; if (V && !V.broke && Math.abs(P.y - V.y) < 1 && inFront(V.x0 - 0.1, clamp(P.z, V.z0, V.z1), 1.5)) { this.hitVend(); return; }
       for (const n of this.npcs) if (n.a.st === 'free' && Math.abs(n.a.y - P.y) < 1 && inFront(n.a.x, n.a.z, 1.7)) {
         // J: a slap that knocks them out cold. Out for ten seconds, or until someone comes and shakes them awake.
         // The thud is heard: anyone near comes running to look
@@ -2025,27 +2028,26 @@
       const V = this.vend, P = this.P; if (!V || V.broke) return; V.hits++; V.shake = 0.45; this.flash = 0.15;
       const fx = V.x0 - 0.25, nz = () => V.z + (Math.random() - 0.5) * 0.4;
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(7); this.noise(V.x0 - 0.5, V.z, 11, '?!');
-      if (V.hits < 3) { this.makeCan(fx, 0.35, nz(), -1.6 - Math.random() * 0.8, (Math.random() - 0.5) * 1.2);
+      if (V.hits < 3) { this.makeCan(fx, V.y + 0.35, nz(), -1.6 - Math.random() * 0.8, (Math.random() - 0.5) * 1.2);
         this.think(V.hits === 1 ? '*THUNK* ...oh! A free one!' : '*KA-CHUNK* Another! One more thump...', 2); return; }
-      V.broke = true; this.bonusLose('broke', 'the vending machine'); if (this.spVend) this.spVend.visible = false; this.think('*KRRRASH!!* ...oops.', 2); this.noise(V.x0 - 0.5, V.z, 16, '?!'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(10);
+      V.broke = true; this.bonusLose('broke', 'the vending machine'); if (this.spVend && !V.y) this.spVend.visible = false; this.think('*KRRRASH!!* ...oops.', 2); this.noise(V.x0 - 0.5, V.z, 16, '?!'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(10);
       // it pitches forward onto its face a little, the front glass bursts, and out comes everything
-      if (V.o) { const piv = new THREE.Group(); piv.position.set(V.x0, 0, V.z); this.scene.add(piv); piv.attach(V.o); V.piv = piv; V.tilt = 0; }
+      if (V.o) { const piv = new THREE.Group(); piv.position.set(V.x0, V.y, V.z); this.scene.add(piv); piv.attach(V.o); V.piv = piv; V.tilt = 0; }
       if (S.Flat) for (let k = 0; k < 8; k++) { const sh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.02, 0.12), S.Flat.mat(k % 3 ? 0xc4dde8 : 0xf2ede4)); sh.userData.flatDone = true; this.G.add(sh);
         const a = Math.PI + (Math.random() - 0.5) * 2.2, r = 0.6 + Math.random() * 1.4, tx = V.x0 + Math.cos(a) * r, tz = V.z + Math.sin(a) * r;
-        this.flying.push({ m: sh, sx: V.x0, sy: 1.3, sz: V.z + (Math.random() - 0.5) * 0.8, tx, ty: 0.012, tz, h: 0.4, t: 0, dur: 0.4 + Math.random() * 0.3, r0: [0, 0, 0], r1: [Math.random() * 6, Math.random() * 6, 0] }); }
+        this.flying.push({ m: sh, sx: V.x0, sy: V.y + 1.3, sz: V.z + (Math.random() - 0.5) * 0.8, tx, ty: V.y + 0.012, tz, h: 0.4, t: 0, dur: 0.4 + Math.random() * 0.3, r0: [0, 0, 0], r1: [Math.random() * 6, Math.random() * 6, 0] }); }
       for (let k = 0; k < 10; k++) { const a = Math.PI + (k / 9 - 0.5) * 2.4, sp = 1.8 + Math.random() * 2.2;
-        const c = this.makeCan(V.x0 - 0.2, 0.3 + Math.random() * 0.9, V.z + (Math.random() - 0.5) * 0.8, Math.cos(a) * sp, Math.sin(a) * sp);
+        const c = this.makeCan(V.x0 - 0.2, V.y + 0.3 + Math.random() * 0.9, V.z + (Math.random() - 0.5) * 0.8, Math.cos(a) * sp, Math.sin(a) * sp);
         if ((k === 2 || k === 4 || k === 7) && c) { c.state = 'jet'; c.jetT = 3.4 + k * 0.15; c.jetA = a; c.soda = false; } }   // three split: they hiss and rocket about, spinning and spraying
     }
     makeCan(x, y, z, vx, vz) {
       const ci = (this.canN = (this.canN || 0) + 1) % 3, o = this.cloneP && this.cloneP('ITEM_CAN' + ci); if (!o) return null;
       const m = new THREE.Group(); m.add(o); m.position.set(x, y, z); m.scale.setScalar(1.7); this.G.add(m);   // (sumo-sized: big enough to read)
-      const b = { m, kind: 'can', col: [0x5a8fd0, 0xef9a4c, 0x84b5ad][ci], x, z, y: 0, state: 'roll', x0: x, z0: z, base: 0, soda: true, vx, vz, vy: 0.5, roll: 0, yaw: Math.atan2(vz, vx) + Math.PI / 2 };
+      const fy = y > UP - 0.5 ? UP : 0, b = { m, kind: 'can', col: [0x5a8fd0, 0xef9a4c, 0x84b5ad][ci], x, z, y: fy, state: 'roll', x0: x, z0: z, base: fy, soda: true, vx, vz, vy: 0.5, roll: 0, yaw: Math.atan2(vz, vx) + Math.PI / 2 };
       this.buckets.push(b); return b;
     }
     canStep(dt) {
-      const V = this.vend;
-      if (V) { if (V.shake > 0) { V.shake -= dt; if (V.o && !V.piv) V.o.position.x = Math.sin(V.shake * 70) * 0.03 * V.shake / 0.45; }
+      for (const V of this.vends || []) { if (V.shake > 0) { V.shake -= dt; if (V.o && !V.piv) V.o.position.x = Math.sin(V.shake * 70) * 0.03 * V.shake / 0.45; }
         if (V.piv && V.tilt < 0.2) { V.tilt = Math.min(0.2, V.tilt + dt * 1.6); V.piv.rotation.z = V.tilt; } }
       const qY = this._qY || (this._qY = new THREE.Quaternion()), qL = this._qL || (this._qL = new THREE.Quaternion()), qR = this._qR || (this._qR = new THREE.Quaternion()), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
       for (const b of this.buckets) if (b.kind === 'can' && (b.state === 'roll' || b.state === 'jet')) {
@@ -2053,11 +2055,11 @@
         if (b.state === 'jet') {   // the split can: hissing, spinning, shooting about the floor, spraying as it goes
           b.jetT -= dt; b.jetA += (Math.sin(this.t * 7 + b.x0) * 4 + (Math.random() - 0.5) * 6) * dt; const sp = 4.2 * Math.min(1, b.jetT);
           b.vx = Math.cos(b.jetA) * sp; b.vz = Math.sin(b.jetA) * sp; b.yaw += dt * 22;
-          if ((b.sprayT = (b.sprayT || 0) - dt) <= 0) { b.sprayT = 0.09; if (this.fx.water) this.fx.water(p.x, p.z, 0.7, 0.15); }
-          if ((b.dripT = (b.dripT || 0) - dt) <= 0) { b.dripT = 1.1; this.spill(p.x, p.z, 0, 'soda'); }
+          if ((b.sprayT = (b.sprayT || 0) - dt) <= 0) { b.sprayT = 0.09; if (this.fx.water) this.fx.water(p.x, p.z, 0.7, b.base + 0.15); }
+          if ((b.dripT = (b.dripT || 0) - dt) <= 0) { b.dripT = 1.1; this.spill(p.x, p.z, b.base, 'soda'); }
           if (b.jetT <= 0) { b.state = 'roll'; b.vx *= 0.3; b.vz *= 0.3; }
         }
-        b.vy -= 9 * dt; p.y = Math.max(0.1, p.y + b.vy * dt); if (p.y <= 0.1) { b.vy = Math.abs(b.vy) > 1 ? -b.vy * 0.3 : 0; }
+        b.vy -= 9 * dt; p.y = Math.max(b.base + 0.1, p.y + b.vy * dt); if (p.y <= b.base + 0.1) { b.vy = Math.abs(b.vy) > 1 ? -b.vy * 0.3 : 0; }
         const ox = p.x, oz = p.z, q = { x: p.x + b.vx * dt, z: p.z + b.vz * dt }; this.collide(q, 0.1);
         const ex = q.x - (p.x + b.vx * dt), ez = q.z - (p.z + b.vz * dt), el = Math.hypot(ex, ez);
         if (el > 1e-4) { const nx = ex / el, nz = ez / el, d = b.vx * nx + b.vz * nz; if (d < 0) { b.vx -= 1.6 * d * nx; b.vz -= 1.6 * d * nz; if (b.state === 'jet') b.jetA = Math.atan2(b.vz, b.vx); } }
@@ -2067,7 +2069,7 @@
         // lying on its side, rolling about its own axis (across the way it's going)
         qY.setFromAxisAngle(Y, -b.yaw); qL.setFromAxisAngle(Z, Math.PI / 2); qR.setFromAxisAngle(Y, b.roll); b.m.quaternion.copy(qY).multiply(qL).multiply(qR);
         b.m.children[0].position.y = -0.085;
-        if (b.state === 'roll' && spd < 0.15 && p.y <= 0.101) { b.state = 'floor'; b.vx = b.vz = 0; b.x = p.x; b.z = p.z; }
+        if (b.state === 'roll' && spd < 0.15 && p.y <= b.base + 0.101) { b.state = 'floor'; b.vx = b.vz = 0; b.x = p.x; b.z = p.z; }
       }
     }
     // J with something in hand: puts it back down at his feet (a cancel: nothing breaks, nobody hears)
@@ -2101,7 +2103,7 @@
         else if (P.cart) L = [['K', 'let go'], ['I', 'hop inside and hide']];
         else if (P.held) L = P.held.kind === 'can' && P.held.soda ? [['J', 'drink it'], ['K', 'throw'], ['hold K', 'smash (loud)']] : [['K', 'throw'], ['hold K', 'smash (loud)'], ['J', 'put it down']];
         else if (this.wearing) L = [['hold I (standing still)', 'squat in the box and hide'], ['hold I + move', 'tiptoe quietly']];
-        else if (V && !V.broke && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) L = [['J', 'thump the machine (a drink may fall out)'], ['K', 'look']];
+        else if (V && !V.broke && Math.abs(P.y - V.y) < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) L = [['J', 'thump the machine (a drink may fall out)'], ['K', 'look']];
         else if (this.stage === 'locker' && near(this.locker.x, this.locker.z, 2.6)) L = [['K', 'open your locker']];
         else if (this.stage === 'box' && this.boxSpot && near(this.boxSpot.x, this.boxSpot.z, 2.6)) L = [['K', 'put on the box']];
         else if (this.carts.some((cc) => near(cc.x, cc.z, 2.4))) L = [['K', 'push the cart'], ['I', 'hop inside and hide']];
@@ -2121,7 +2123,7 @@
       const room = roomAt(P.x, P.z);
       if (!this.tipBon && (room === 'shower' || room === 'lock')) { this.tipBon = true; this.tip(['BONUS ICONS ABOVE THE MINIMAP', '#EYE: UNSEEN. Nobody ever spots you.', '#FIST: NO ONE HARMED. Nobody is knocked out.', '#HAND: UNTOUCHED. Nobody lays a hand on you.', '#VASE: NO DAMAGE. Leave the bathhouse in one piece (lockers, benches, plants, the vending machine). Throwing or smashing buckets is fine.', 'Lose a bonus and its icon is crossed out.']); }
       if (!this.tipDuck && !this.outOfBath && !q.length && this.t > 8 && P.y < -0.2) { this.tipDuck = true; this.tip(['I: DUCK UNDER', 'In the bath, hold I to go under the water. Nobody can see you.', 'You can only hold your breath for a few seconds.'], { until: () => this.outOfBath }); }
-      const V = this.vend; if (!this.tipVend && V && !V.broke && this.outOfBath && !P.held && P.y < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) { this.tipVend = true; this.tip(['J: THUMP THE VENDING MACHINE', 'You have no money, but a good whack might shake a drink loose.', '#K: LOOK AT IT']); }
+      const V = this.vend; if (!this.tipVend && V && !V.broke && this.outOfBath && !P.held && Math.abs(P.y - V.y) < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) { this.tipVend = true; this.tip(['J: THUMP THE VENDING MACHINE', 'You have no money, but a good whack might shake a drink loose.', '#K: LOOK AT IT']); }
       if (!this.tipCart && this.outOfBath && !P.held && !P.cart && this.carts.some((cc) => near(cc.x, cc.z, 2.6))) { this.tipCart = true; this.tip(['K: PUSH THE CART', 'Press K again to let go.', '#I next to it: HIDE INSIDE', 'Hide while nobody can see you. If they see you climb in, they will look inside.'], { until: () => !!P.cart }); }
       if (!this.tipSneak && room === 'lock') { this.tipSneak = true;
         this.tip(['I: SNEAK', 'People can hear you coming. HOLD I to move quietly.', 'You are a big boy, so sneaking tires you out. Stand still and you recover.', '#I: HIDE', 'I also lets you hide in carts and toilet stalls. Hide while nobody can see you. If they see you hide, they will find you.']);
