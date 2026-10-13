@@ -1059,7 +1059,7 @@
       this.gm = { x, z, g, w, used: false, fade: 0 }; this.gSkill = null;
       S.loadGachaKit().then((root) => { const p = root && root.getObjectByName('ITEM_GACHA'); if (!p || !this.gm || this.gm.g !== g) return;
         const o = p.clone(true); o.position.set(0, 0, 0); o.visible = true; o.traverse((q) => { if (q.isMesh) { q.castShadow = true; q.receiveShadow = true;
-          if (/_\d+$/.test(q.name)) { q.material = q.material.clone(); q.material.transparent = true; q.material.opacity = 0.22; q.material.depthWrite = false; q.castShadow = false; q.renderOrder = 2; } } });   // (the clear windows: the capsules show through)
+          if (/_\d+$/.test(q.name)) { q.material = S.Flat.patch(q.material.clone()); q.material.transparent = true; q.material.opacity = 0.22; q.material.depthWrite = false; q.castShadow = false; q.renderOrder = 2; } } });   // (the clear windows: the capsules show through)
         g.add(o); });
     }
     pullGacha() {   // the knob turns, a capsule drops, the machine fades away
@@ -1085,7 +1085,7 @@
       }
       if (!gm.fade) return; gm.g.scale.setScalar(1.2);
       gm.fade += dt; const k = Math.max(0, 1 - (gm.fade - 0.4) / 0.8);   // (a beat for the capsule, then it fades)
-      if (!gm.own) { gm.own = true; gm.g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.userData.op0 = o.material.opacity; } }); }
+      if (!gm.own) { gm.own = true; gm.g.traverse((o) => { if (o.isMesh) { o.material = S.Flat.patch(o.material.clone()); o.material.transparent = true; o.material.userData.op0 = o.material.opacity; } }); }
       gm.g.traverse((o) => { if (o.isMesh) { o.material.opacity = k * o.material.userData.op0; o.castShadow = k > 0.5; } });
       gm.g.position.y = (1 - k) * 0.15;
       if (k <= 0) { this.G.remove(gm.g); const i = this.walls.indexOf(gm.w); if (i >= 0) this.walls.splice(i, 1); this.buildNav(); gm.fade = 0; gm.gone = true; }
