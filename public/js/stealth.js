@@ -2103,6 +2103,7 @@
         else if (P.cart) L = [['K', 'let go'], ['I', 'hop inside and hide']];
         else if (P.held) L = P.held.kind === 'can' && P.held.soda ? [['J', 'drink it'], ['K', 'throw'], ['hold K', 'smash (loud)']] : [['K', 'throw'], ['hold K', 'smash (loud)'], ['J', 'put it down']];
         else if (this.wearing) L = [['hold I (standing still)', 'squat in the box and hide'], ['hold I + move', 'tiptoe quietly']];
+        else if (this.gm && !this.gm.used && !P.held && P.y < 1 && near(this.gm.x, this.gm.z, 1.6)) L = [['K', 'turn the gacha (one prize, this level only)']];
         else if (V && !V.broke && Math.abs(P.y - V.y) < 1 && Math.hypot(P.x - (V.x0 - 0.6), P.z - clamp(P.z, V.z0, V.z1)) < 1.8) L = [['J', 'thump the machine (a drink may fall out)'], ['K', 'look']];
         else if (this.stage === 'locker' && near(this.locker.x, this.locker.z, 2.6)) L = [['K', 'open your locker']];
         else if (this.stage === 'box' && this.boxSpot && near(this.boxSpot.x, this.boxSpot.z, 2.6)) L = [['K', 'put on the box']];
