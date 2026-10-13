@@ -9,9 +9,10 @@
     normal: { react: 0.19, think: 0.10, skill: 0.72, dodge: 0.45, tricky: 0.18, aggr: 0.6 },
     hard:   { react: 0.12, think: 0.06, skill: 0.94, dodge: 0.6, tricky: 0.28, aggr: 0.72 },
     boss:   { react: 0.5, think: 0.26, skill: 0.225, escP: 0.5, parryP: 0.5, dodge: 0.08, tricky: 0, aggr: 0.36 },
-    // the rematch: no more going easy. Breaks grabs and slips throws, spins and lifts 9 times in 10, parries hands on reflex,
-    // charges (and pulls up short when you sidestep), throat-pushes, trips, and saves himself at the straw 9 times in 10
-    bossRematch: { react: 0.1, think: 0.06, skill: 0.95, escP: 0.92, parryP: 0.85, edgeSave: 0.92, grabBreak: 0.88, armEsc: 0.9, stopShort: 0.9, throatP: 0.35, tripP: 0.5, anchor: true, dodge: 0.5, tricky: 0.45, aggr: 0.8 },
+    // the rematch: no more going easy, but beatable. Breaks grabs and slips throws, spins and lifts about two times in three,
+    // parries most hands, charges (and usually pulls up short when you sidestep), throat-pushes, trips, and saves himself at the
+    // straw three times in four. (At 9 in 10 everywhere he teched almost everything: the only wins were his own run-outs.)
+    bossRematch: { react: 0.13, think: 0.07, skill: 0.92, escP: 0.65, parryP: 0.65, edgeSave: 0.75, grabBreak: 0.6, armEsc: 0.62, stopShort: 0.75, throatP: 0.35, tripP: 0.5, anchor: true, dodge: 0.45, tricky: 0.45, aggr: 0.8 },
     // (the bathhouse owner, first time: a patient old champion, for casual players; he goes easier after each round you lose)
   };
   // remembers how the human opens, across rounds and matches
