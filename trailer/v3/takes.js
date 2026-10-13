@@ -937,8 +937,10 @@ T.gstomp={seed:8,pre:0.1,n:160,
 T.ghands={seed:8,pre:0.1,n:150,
  setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.at(2.4,-33.9,0,0);H.chase(F,[[1,8.6,-33.5,Math.PI],[2,9.2,-34.3,Math.PI],[3,10.4,-33.9,Math.PI]]);c.gSkill='hands';},
  script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();P.f=0;if(!tk.u&&H.near(F)<2.2){F.inp.skill=true;tk.u=1;}}};
-T.gbomb={seed:8,pre:0.1,n:210,
- setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.at(6.0,-33.9,Math.PI,0);H.chase(F,[[1,-3.4,-33.0,0],[2,-4.2,-34.8,0],[3,-5.0,-33.2,0]]);c.gSkill='bomb';},
- script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();if(!tk.u){H.stop(F);P.f=Math.PI;if(H.near(F)<9.3){F.inp.skill=true;tk.u=t;}return;}if(t-tk.u<0.4){H.stop(F);P.f=Math.PI;return;}const d=H.go(F,9.4,-33.2,1);if(d<0.3){H.stop(F);P.f=Math.PI;}}};
+T.gbomb={seed:8,pre:0.1,n:200,
+ setup:(F)=>{const c=F.c;c.outOfBath=true;c.grace=0;F.take.stopWarm=true;F.at(6.0,-33.9,Math.PI,0);H.chase(F,[[1,-3.4,-33.6,0],[2,-4.2,-34.4,0],[3,-5.0,-33.8,0]]);c.gSkill='bomb';},
+ script:(t,F)=>{t-=0.6;H.gcam(F);const c=F.c,P=c.P,tk=F.take;c.hitCd=9;F.pad();H.stop(F);P.f=Math.PI;
+   if(!tk.u){if(H.near(F)<8.6){F.inp.skill=true;tk.u=t;}return;}
+   if(!tk.k&&t-tk.u>0.3&&H.near(F)<6.2){F.inp.push=true;tk.k=1;}}};   // drop it as they come, then slap it at them
 T.HELP=T.HELP+H_G;
 module.exports=T;

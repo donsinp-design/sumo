@@ -53,7 +53,7 @@
     stomp: { name: 'STOMP', desc: 'Shakes the whole room. Everyone on screen goes down.' },
     hands: { name: 'THOUSAND HANDS', desc: 'A blur of slaps. Everyone in front goes down.' },
     consume: { name: 'CONSUME', desc: 'Swallow whoever is in front of you. SPACE again spits them out at the others.' },
-    bomb: { name: 'BOMB', desc: 'Goes off in 3 seconds. Slap it (J) to kick it.' },
+    bomb: { name: 'BOMB', desc: 'Goes off in 3 seconds. Slap it (J) to kick it: it goes off on whoever it hits.' },
     flop: { name: 'BELLY FLOP', desc: 'Leap, steer in the air, land on them.' },
     spit: { name: 'SPIT', desc: 'Spit them out at someone.' },
   };
@@ -1396,6 +1396,7 @@
       const sp = Math.hypot(B.vx, B.vz); B.x = q.x; B.z = q.z; B.g.position.set(B.x, floorY(B.x, B.z), B.z); if (sp > 0.05) { B.g.rotation.y = -Math.atan2(B.vz, B.vx); B.body.rotation.z -= sp * dt / 0.24; }
       B.spark.scale.setScalar(0.7 + Math.random() * 0.8); B.body.scale.setScalar(1 + (B.t < 1 ? Math.max(0, Math.sin(this.t * 30)) * 0.08 : 0));
       if ((B.bT -= dt) <= 0) { B.bT = B.t > 1.5 ? 0.5 : B.t > 0.7 ? 0.25 : 0.12; this.sfx('tick'); }
+      if (B.kicked && sp > 0.5 && this.npcs.some((n) => this.upright(n) && Math.abs(n.a.y - floorY(B.x, B.z)) < 1.2 && Math.hypot(n.a.x - B.x, n.a.z - B.z) < 0.75)) B.t = 0;   // (kicked into someone: it goes off on them)
       if (B.t > 0) return;
       this.G.remove(B.g); this.bomb = null; const y = floorY(B.x, B.z), P = this.P;
       this.fx.burst(B.x, B.z, 2.6); this.fx.ring(B.x, B.z, 4, 0.5); this.fx.ring(B.x, B.z, 2.2, 0.3); this.fx.dust(B.x, y + 0.3, B.z, 30, 1.2, 1.4, 0.8); this.fx.spark && this.fx.spark(B.x, y + 0.6, B.z, 2.4);
@@ -1568,7 +1569,7 @@
     slap() {
       const P = this.P, fx = Math.cos(P.f), fz = Math.sin(P.f); P.st = 'busy'; P.t = 0; P.dur = 0.35; this.w.hand = 1;
       const inFront = (x, z, r) => { const dx = x - P.x, dz = z - P.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.3; };
-      const Bm = this.bomb; if (Bm && inFront(Bm.x, Bm.z, 1.8)) { Bm.vx = fx * 8; Bm.vz = fz * 8; this.popAt({ x: Bm.x, z: Bm.z, y: P.y }, 'ポーン!', 0.8); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); return; }   // (the gacha bomb: kicked away)
+      const Bm = this.bomb; if (Bm && inFront(Bm.x, Bm.z, 1.8)) { Bm.vx = fx * 8; Bm.vz = fz * 8; Bm.kicked = true; this.popAt({ x: Bm.x, z: Bm.z, y: P.y }, 'ポーン!', 0.8); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); return; }   // (the gacha bomb: kicked away)
       const V = this.vend; if (V && !V.broke && P.y < 1 && inFront(V.x0 - 0.1, clamp(P.z, V.z0, V.z1), 1.5)) { this.hitVend(); return; }
       for (const n of this.npcs) if (n.a.st === 'free' && Math.abs(n.a.y - P.y) < 1 && inFront(n.a.x, n.a.z, 1.7)) {
         // J: a slap that knocks them out cold. Out for ten seconds, or until someone comes and shakes them awake.

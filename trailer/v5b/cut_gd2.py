@@ -73,20 +73,15 @@ G5 = [('gtrapdoor', knock('gtrapdoor'), 1.2, 0.6, 1.0, 'trap door: the one chasi
       ('ggiant', knock('ggiant'), 1.4, 0.8, 1.2, 'giant: they bounce off him'),
       ('gstomp', knock('gstomp'), 1.2, 0.8, 1.0, 'stomp as they close in from both sides'),
       ('ghands', knock('ghands'), 0.7, 1.0, 0.6, 'thousand hands'),
-      ('gbomb', knock('gbomb'), 2.0, 0.9, 1.8, 'bomb: dropped, and they run into it')]
+      ('gbomb', knock('gbomb'), 1.8, 0.9, 1.6, 'bomb: dropped, slapped at the chasers, it goes off on them')]
 G6 = [('fb1', gev('fb1', 'perfectDodge'), 0.9, 2.8, 0.8, 'a perfect dodge (held after it, so you see him come round)'),
       ('fb4', gev('fb4', 'throw 1'), 0.9, 0.6, 0.6, 'the boss throws him'),
-      ('g5_c_smokespin', gev('c_smokespin', 'skillUse 1'), 0.4, 1.4, 0.2, 'smoke on a spinning ring'),
       ('g5_unplug', gev('unplug', 'skillUse'), 0.2, 1.2, 0.1, 'controller disconnected'),
       ('g5_train', gev('train', 'trainHit'), 0.8, 0.5, 0.6, 'shinkansen'),
-      ('g5_c_tripball', gev('c_tripball', 'ballHit'), 0.8, 0.6, 0.6, 'triplets vs daruma'),
-      ('g5_c_shockcyc', gev('c_shockcyc', 'bigStomp'), 0.5, 1.2, 0.4, 'stomp vs cyclone'),
       ('g5_banana', gev('banana', ' slip '), 0.6, 0.4, 0.5, 'banana'),
-      ('g5_c_giantchick', gev('c_giantchick', 'skillUse 0'), 0.8, 1.0, 0.6, 'giant, then chicken'),
       ('g5_claw', gev('claw', 'clawDrop'), 1.6, 0.4, 1.4, 'the claw'),
       ('g5_potato3', gev('potato3', 'boom 1'), 1.0, 0.5, 5.0, 'hot potato: passed back and forth, then BOOM'),
-      ('fb8', gev('fb8', 'throw 0'), 0.9, 0.6, 0.6, 'he catches the charge and throws the boss'),
-      ('g5_c_torprew', gev('c_torprew', 'rewind 0'), 0.8, 0.7, 0.6, 'torpedo, rewind')]
+      ('fb8', gev('fb8', 'throw 0'), 0.9, 0.6, 0.6, 'he catches the charge and throws the boss')]
 VS = lambda d: d.startswith('g5_') or d.startswith('fb') or d == 'fin'   # the sumo fights: zoomed in on the ring (see ZOOM)
 ZOOM = 1.4
 FL = open(os.path.join(V5C, 'fin.log')).read().split('\n'); CONTACT = next(int(l.split()[1]) for l in FL if l.startswith('CONTACT'))
