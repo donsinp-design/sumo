@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // BIG BOOTY SUMO: the same build as the kumitegame fork, also served at looktwicestudio.com/bigbootysumo/ (and /bigboysumo/)
+  // Same server code as the main game, its own online rooms and ratings.
+  // Its files are built into dist-kumitegame/ by tools/build-fork.js.
+  "name": "bigbootysumo",
+  "main": "server/worker.mjs",
+  "compatibility_date": "2026-09-15",
+  "assets": { "directory": "./dist-kumitegame", "binding": "ASSETS" },
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "looktwicestudio.com/bigbootysumo", "zone_name": "looktwicestudio.com" },
+    { "pattern": "looktwicestudio.com/bigbootysumo/*", "zone_name": "looktwicestudio.com" }
+  ],
+  "vars": { "BASE_PATH": "/bigbootysumo", "SITE_TITLE": "Big Booty Sumo" },
+  "durable_objects": { "bindings": [ { "name": "ROOMS", "class_name": "Room" }, { "name": "MM", "class_name": "Matchmaker" } ] },
+  "migrations": [ { "tag": "v1", "new_sqlite_classes": ["Room"] }, { "tag": "v2", "new_sqlite_classes": ["Matchmaker"] } ]
+}
