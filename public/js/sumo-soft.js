@@ -80,8 +80,9 @@
       if (!q.isSkinnedMesh || !/^(Skin|Mawashi)/.test((q.material && q.material.name) || '')) return;
       q.geometry = q.geometry.clone(); const P = q.geometry.attributes.position, b = o.booty;
       for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (z > 0.1) continue;
-        const wy = Math.exp(-(((y - 0.8) / 0.21) ** 2)), wx = Math.max(Math.exp(-(((x - 0.21) / 0.19) ** 2)), Math.exp(-(((x + 0.21) / 0.19) ** 2))), wz = Math.min(1, (0.1 - z) / 0.32), w = wy * wx * wz * b;
-        P.setXYZ(i, x * (1 + w * 0.14), y - w * 0.05, z - w * 0.22); }
+        const g = 1 + 0.12 * Math.max(0, b - 1), cy = 0.8 - 0.03 * Math.max(0, b - 1);   // (bigger: each cheek wider and a little lower, as well as further out)
+        const wy = Math.exp(-(((y - cy) / (0.21 * g)) ** 2)), wx = Math.max(Math.exp(-(((x - 0.21) / (0.19 * g)) ** 2)), Math.exp(-(((x + 0.21) / (0.19 * g)) ** 2))), wz = Math.min(1, (0.1 - z) / 0.32), w = wy * wx * wz;
+        P.setXYZ(i, x * (1 + w * 0.14 * b), y - w * 0.05 * b, z - w * 0.22 * b); }
       P.needsUpdate = true; q.geometry.computeVertexNormals(); q.geometry.computeBoundingSphere();
     });
     view.soft = { M, B, k, mats, tq: new THREE.Quaternion(), q: new THREE.Quaternion(), wq: {}, bodyQ: new THREE.Quaternion(), headQ: new THREE.Quaternion(),

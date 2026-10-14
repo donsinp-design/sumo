@@ -527,7 +527,7 @@
             c = 0.55; p = 0.12; hp = 0; rate = 40;
             Rh = pt < 0.1 ? [0.62, 0.7, 0.5] : [0.04, 0.7, 0.62]; Lh = mir(Rh);
           } else if (w.pre === 'trophy') {   // the title: a trophy held up over his head, pumped on the beat
-            c = 0.42; p = -0.08; hp = 0; rate = 30;   // (arms held still and near straight: pumped, the elbows folded in or the arm solver twitched at full reach)
+            c = 0.14; p = 0.12; hp = 0; rate = 30;   // (standing tall, leaning a touch forward: the booty up and out. Arms held still and near straight: pumped, the elbows folded in or the arm solver twitched at full reach)
             Rh = [0.5, 1.38, 0.12]; Lh = mir(Rh);
           } else if (w.pre === 'clapUp' && pt < 0.9) {   // the overhead clap: both arms up, hands slap together above the head, twice
             const ph = pt % 0.3, shut = ph > 0.12 && ph < 0.24;

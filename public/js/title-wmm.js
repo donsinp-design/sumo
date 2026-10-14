@@ -86,8 +86,8 @@
   function makeChamp(R) {
     if (!S.SoftSumo || !S.SoftSumo.loaded || !S.Match || !S.WrestlerView) return null;
     const A = [S.ARCH[0], S.ARCH[1]], m = new S.Match(A), w = m.w[0];
-    m.phase = 'shikiri'; m.phaseT = 9; w.x = 0; w.z = 0; w.f = -Math.PI / 2; w.pre = 'trophy';   // (his back to us: the booty, the trophy up over his head) w.preT = 0;
-    const v = new S.WrestlerView(scene, A[0], R.fx, S.DEF_EQ); S.SoftSumo.attach(v, { noBlob: true, booty: 1.6 });
+    m.phase = 'shikiri'; m.phaseT = 9; w.x = 0; w.z = 0; w.f = -Math.PI / 2 + 0.6; w.pre = 'trophy';   // (his back to us: the booty, the trophy up over his head) w.preT = 0;
+    const v = new S.WrestlerView(scene, A[0], R.fx, S.DEF_EQ); S.SoftSumo.attach(v, { noBlob: true, booty: 5 });
     if (v.shadow) v.shadow.visible = false;
     const clay = M(0xd9b07c), straw = M(0xdcc58c);
     const mound = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.7, 0.7, 48), clay); mound.position.y = -0.35;
@@ -101,7 +101,7 @@
     dt = Math.min(dt, 0.05); t += dt;
     if (!champ) {
       champ = makeChamp(R);
-      if (champ) { cam.fov = 48; cam.position.set(-1.3, 0.55, 4.7); cam.lookAt(-1.3, 2.15, 0); cam.updateProjectionMatrix(); }   // (low, looking up past the booty at the trophy)
+      if (champ) { cam.fov = 50; cam.position.set(-1.3, 0.5, 5.4); cam.lookAt(-1.3, 1.75, 0); cam.updateProjectionMatrix(); }   // (low, looking up past the booty at the trophy)
       else { step(dt); R.r.render(scene, cam); return; }   // (the model is still loading: the food rain for a moment)
     }
     if (stars.length) { for (const s of stars) scene.remove(s.m); stars.length = 0; }
