@@ -1184,6 +1184,7 @@
     }
     // sand kicked up off the clay (dohyo only, fx.sandy): grains fly, land, lie there a moment and fade
     sand(x, z, n, dx, dz, up) {
+      return;   // (no brown grains kicked up: the white puffs do that job)
       if (!this.sandy) return;
       if (!this.sPts) {
         const N = this.sN = 400, g = new THREE.BufferGeometry();
@@ -1280,6 +1281,7 @@
     }
     dust(x, y, z, n, spread, up, size, dx, dz) {
       if (S.curStage === 'lily' && Math.hypot(x, z) > S.RING_R + 0.75) { if (this.water) this.water(x, z, Math.min(6, 1 + n * 0.3)); return; } // no dust on a pond
+      this.puff(x, Math.max(0, y - 0.05), z, Math.min(0.55, Math.max(0.18, 0.14 + (spread || 0.3) * 0.45 + (size || 0.4) * 0.12)), Math.max(5, Math.min(10, Math.round(n / 2)))); return;   // (never brown dust: a small white smoke-bomb puff)
       for (let k = 0; k < n; k++) {
         const i = this.next; this.next = (this.next + 1) % this.N;
         const a = Math.random() * Math.PI * 2, r = Math.random() * spread;
@@ -1291,10 +1293,24 @@
         this.shade[i] = Math.random();
       }
     }
+    puff(x, y, z, sz, N) {   // a little smoke bomb: a ring of white clouds bursting out round the spot, swelling and fading
+      const geo = this.puffGeo || (this.puffGeo = new THREE.IcosahedronGeometry(1, 1)), pool = this.puffMats || (this.puffMats = []), list = this.puffs || (this.puffs = []);
+      const mat = pool.pop() || (S.Flat ? S.Flat.mat(0xf6f3ee, { transparent: true, opacity: 0.9 }) : new THREE.MeshBasicMaterial({ color: 0xf6f3ee, transparent: true, opacity: 0.9, depthWrite: false }));
+      if (list.length >= 14) { const o = list.shift(); this.scene.remove(o.g); pool.push(o.mat); }
+      const g = new THREE.Group(); g.scale.setScalar(sz);
+      for (let k = 0; k < N; k++) { const m = new THREE.Mesh(geo, mat); m.userData = { a: k / N * Math.PI * 2 + Math.random() * 0.4, v: 1.2 + Math.random() * 0.7, s: 0.12 + Math.random() * 0.08 }; g.add(m); }
+      g.position.set(x, y, z); this.scene.add(g); list.push({ g, mat, t: 0, dur: 0.7 });
+    }
+    puffStep(dt) {
+      if (!this.puffs || !this.puffs.length) return;
+      this.puffs = this.puffs.filter((P0) => { P0.t += dt; const k = Math.min(1, P0.t / P0.dur), e = 1 - (1 - k) * (1 - k);
+        for (const m of P0.g.children) { const u = m.userData, r = 0.45 + u.v * 0.55 * e; m.position.set(Math.cos(u.a) * r, 0.08 + 0.35 * e, Math.sin(u.a) * r); m.scale.setScalar(u.s * (1 + 1.8 * e)); }
+        P0.mat.opacity = 0.9 * (1 - k * k);
+        if (k >= 1) { this.scene.remove(P0.g); this.puffMats.push(P0.mat); return false; } return true; });
+    }
     burst(x, z, power) {
       const p = Math.min(1.6, power / 6);
       this.dust(x, 0.05, z, Math.round(8 + p * 18), 0.25 + p * 0.3, 1.0 + p * 1.4, 0.42 + p * 0.25);
-      this.sand(x, z, Math.round(10 + p * 30), 0, 0, 1 + p * 0.5);
     }
     ring(x, z, size, dur) {
       const r = this.rings.find((o) => o.t >= o.max) || this.rings[0];
@@ -1305,6 +1321,7 @@
       s.t = 0; s.max = 0.13; s.size = size; s.sp.position.set(x, y, z); s.sp.visible = true; s.sp.material.rotation = Math.random() * 6.28;
     }
     update(dt) {
+      this.puffStep(dt);
       for (let i = 0; i < this.N; i++) {
         if (this.life[i] >= this.max[i]) { this.alpha[i] = 0; this.size[i] = 0; this.pos[i * 3 + 1] = -50; continue; }
         this.life[i] += dt;
