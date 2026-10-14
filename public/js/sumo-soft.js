@@ -79,6 +79,7 @@
     if (o.booty) M.traverse((q) => {   // BIG BOOTY: two round, plump cheeks either side of a cleft; the mawashi drawn up at the back into a thong (this sumo's own copy of the shape)
       if (!q.isSkinnedMesh || !/^(Skin|Mawashi)/.test((q.material && q.material.name) || '')) return;
       q.geometry = q.geometry.clone(); const P = q.geometry.attributes.position, b = o.booty, isBelt = /^Mawashi/.test(q.material.name);
+      q.geometry.setAttribute('tatPos', P.clone());   // (the shape before the booty: anything painted onto the skin, the tattoo, stays where it was drawn)
       const swell = (x, y, z) => { let dx = 0, dy = 0, dz = 0;   // each cheek swells out round from its own middle, like a balloon, plus a little further back
         for (const cx of [-0.21, 0.21]) { const ox = x - cx, oy = y - 0.8, oz = z + 0.12, d = Math.hypot(ox * 1.1, oy, oz) || 1e-6;
           const w = Math.exp(-((d / 0.3) ** 2)) * Math.min(1, Math.max(0, (0.12 - z) / 0.3)); if (w < 1e-3) continue;

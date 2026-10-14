@@ -49,7 +49,8 @@
     regrab: 1.6,                                 // up again after a slap, a fall or a throw: this long before they can grab again
     wallStun: 1.4,                               // charged into a wall: the ones still hanging on are stunned this long
     skinCol: 0xf3c4a0,                           // (the stand-in booty, in a cart or out of the shut box: his skin colour, no texture)
-    jiggle: 0.2,                                 // charging: how far each cheek bounces up and down
+    jiggle: 0.34,                                // charging: how far each cheek bounces up and down
+    propJig: 0.09,                               // the stand-in booty out of the box or the cart: how high each cheek bounces
     boxFwd: 0.3,                                 // the box he wears sits this far forward on him, so his booty pokes out through the hole in its back
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
@@ -2560,10 +2561,13 @@
     // the box he wears: built here (the same size and card as the storage-room box) so its two flaps can fold shut over him
     bootyProp() {   // his booty, on its own: sticking out of the box's back, or up out of a cart of towels
       const v = this.view, skin = S.Flat.mat(DOG.skinCol), belt = S.Flat.mat(0x2f3a6e), g = new THREE.Group();
-      for (const sd of [-1, 1]) { const c = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 14), skin); c.position.set(sd * 0.2, 0, -0.04); c.scale.set(1, 0.95, 0.9); c.castShadow = true; g.add(c); }
+      const ch = []; for (const sd of [-1, 1]) { const c = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 14), skin); c.position.set(sd * 0.2, 0, -0.04); c.scale.set(1, 0.95, 0.9); c.castShadow = true; g.add(c); ch.push(c); }
       const strip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.06), belt); strip.position.set(0, -0.02, -0.25); strip.rotation.x = 0.12;
       const band = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.07, 0.08), belt); band.position.set(0, 0.24, -0.12);
-      g.add(strip, band); g.userData = { strip, band }; return g;
+      g.add(strip, band); g.userData = { strip, band, ch }; return g;
+    }
+    bootyWobble(g, T, amp) {   // the stand-in's cheeks bounce in turn, each up and down by itself (and squash a little as they land)
+      const [a, b] = g.userData.ch; for (const [c, ph] of [[a, 0], [b, Math.PI]]) { const u = Math.max(0, Math.sin(T * 11 + ph)); c.position.y = amp * u; c.scale.set(1 + 0.08 * (1 - u) * amp / 0.1, 0.95 - 0.08 * (1 - u) * amp / 0.1, 0.9); }
     }
     bootyDress(g) { if (!g) return; const on = !!this.gotMawashi; g.userData.strip.visible = g.userData.band.visible = on; }   // (bare without the mawashi: a backside needs no censoring)
     makeBox() {
@@ -2631,7 +2635,7 @@
       skin.onBeforeCompile = (sh, r) => {
         if (prev) prev.call(skin, sh, r);
         sh.uniforms.tatMap = { value: tex };
-        sh.vertexShader = 'varying vec3 vTat;\nvarying vec3 vTatN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTat = position; vTatN = normal;');
+        const tp = !!(v.jig && v.jig.length); sh.vertexShader = (tp ? 'attribute vec3 tatPos;\n' : '') + 'varying vec3 vTat;\nvarying vec3 vTatN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTat = ' + (tp ? 'tatPos' : 'position') + '; vTatN = normal;');   // (the body before the booty was added: the ink never slides down onto his backside)
         const ink = `{ vec2 tu = vec2((vTat.x - ${T.x.toFixed(3)}) / ${T.w.toFixed(3)} + 0.5, (vTat.y - ${T.y.toFixed(3)}) / ${T.h.toFixed(3)} + 0.5);
           if (vTatN.z < -0.15 && tu.x > 0.0 && tu.x < 1.0 && tu.y > 0.0 && tu.y < 1.0) { float a = texture2D(tatMap, vec2(1.0 - tu.x, tu.y)).a; diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.2, 0.38), a * 0.88); } }`;
         let f = 'uniform sampler2D tatMap;\nvarying vec3 vTat;\nvarying vec3 vTatN;\n' + sh.fragmentShader;
@@ -2639,7 +2643,7 @@
         sh.fragmentShader = f; this.tatOk = f.includes('tatMap, vec2');
       };
       const ck = skin.customProgramCacheKey ? skin.customProgramCacheKey.bind(skin) : () => '';
-      skin.customProgramCacheKey = () => ck() + '|tattoo'; skin.needsUpdate = true;
+      skin.customProgramCacheKey = () => ck() + '|tattoo2'; skin.needsUpdate = true;
     }
     // out of the towel cart: somebody's shorts draped over his shoulder. Three steps and they slide off onto the floor
     // borrowed towel-cart trunks, draped over his right shoulder like a towel: one leg down his front, the waistband down
@@ -2772,12 +2776,12 @@
         if (bw.setOpen) bw.setOpen(this.boxDown || boxTip ? Math.max(0, 1 - (this.ballK || 0) * 1.3) : 1);   // the flaps fold shut over him
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)
         { let bb = bw.booty; if (!bb) { bb = bw.booty = this.bootyProp(); bb.position.set(0, 0.4, -0.66); bw.add(bb); }   // (...and his booty out through the hole in its back)
-          bb.visible = this.boxDown && !v.root.visible; if (bb.visible) { const j = Math.sin(T * 3) * 0.03; bb.scale.set(1 + j, 1 - j, 1); this.bootyDress(bb); } }
+          bb.visible = this.boxDown && !v.root.visible; if (bb.visible) { this.bootyDress(bb); this.bootyWobble(bb, T, DOG.propJig * (Math.hypot(P.vx, P.vz) > 0.2 ? 1.6 : 1)); } }   // (more as he shuffles along)
       }
       v.root.rotation.z = 0;   // (no rocking on tiptoe)
       { const hc = P.hidden, cb = this.cartBooty;   // hiding in a cart: the booty sticks up out of the towels (and wobbles a little)
         if (hc) { let g = cb; if (!g) { g = this.cartBooty = this.bootyProp(); g.scale.setScalar(0.9 * v.s); }
-          if (g.parent !== hc.m) hc.m.add(g); g.visible = true; g.position.set(0.05, DOG.cartBootyY, 0); g.rotation.set(-Math.PI / 2 + 0.25, 0, Math.sin(T * 2.2) * 0.06); this.bootyDress(g); }
+          if (g.parent !== hc.m) hc.m.add(g); g.visible = true; g.position.set(0.05, DOG.cartBootyY, 0); g.rotation.set(-Math.PI / 2 + 0.25, 0, Math.sin(T * 2.2) * 0.06); this.bootyDress(g); this.bootyWobble(g, T, DOG.propJig); }
         else if (cb) cb.visible = false; }
       if (v.soft) { const want = P.st === 'charge' && !P.ball ? DOG.jiggle : P.st === 'busy' && this.stompDone - this.t > DOG.slamLand * 0.3 ? 0.14 : 0; this.jigA = (this.jigA || 0) + (want - (this.jigA || 0)) * Math.min(1, dt * 20);   // charging: left and right cheeks bounce up and down in turn   // (and after a booty slam: a big wobble)
         if (this.jigA > 0.002 || this.jigOn) { const ph = T * 22, bo = (x) => Math.max(0, Math.sin(x)) * 1.6 - 0.3; S.SoftSumo.jiggle(v, this.jigA * bo(ph), this.jigA * bo(ph + Math.PI)); this.jigOn = this.jigA > 0.002; } }   // (each cheek bounces up in turn)
