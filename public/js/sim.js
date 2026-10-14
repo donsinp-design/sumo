@@ -258,7 +258,7 @@
           break;
         case 'brace':
           if (!I.dash.held) w.set('free');
-          else if (pr('push') && !(w.throatCD > 0) && Math.hypot(w.opp.x - w.x, w.opp.z - w.z) - w.r - w.opp.r < 0.5) { // feet planted, up close: hand to the throat
+          else if (pr('push') && !w.booty && !(w.throatCD > 0) && Math.hypot(w.opp.x - w.x, w.opp.z - w.z) - w.r - w.opp.r < 0.5) { // feet planted, up close: hand to the throat
             w.throat = true; w.throatCD = 2; w.windPow = 0.3; w.set('heavy', 0.5); w.stam = Math.max(0, w.stam - 0.08);
             this.emit('heavyGo', { w, throat: true });
           }
@@ -290,7 +290,7 @@
             if (I.dash.held && w.stam > 0.02 && !w.chargeHit && w.t < 1.6) { w.dur = Math.max(w.dur, w.t + 0.08); w.stam = Math.max(0, w.stam - dt * 0.32); }
             if (!I.dash.held) w.dur = Math.min(w.dur, w.t + 0.05);
           }
-          if (pr('push') && !w.chargeHit && !w.hariteUsed) w.hariteQ = true; // J again mid-charge: slap the face as you hit
+          if (pr('push') && !w.booty && !w.chargeHit && !w.hariteUsed) w.hariteQ = true; // J again mid-charge: slap the face as you hit
           if (pr('dash') && w.t > 0.08 && !w.chargeHit) { // pull up short: counter to an expected sidestep
             w.set('brace'); w.braceT = 0.3; w.vx *= 0.35; w.vz *= 0.35;
             this.hurt(w, 0.08, w.fx, w.fz, true);
@@ -302,6 +302,21 @@
             this.hurt(w, dodged ? 0.14 : 0.08, w.fx, w.fz, true);
             this.emit('whiff', { w });
           }
+          break;
+        case 'bjwait':   // J down: let go quick for the booty bump, keep holding for the booty slam
+          if (!I.push.held) { w.windPow = 0.6; w.set('bootyBump', 0.5); w.stam = Math.max(0, w.stam - 0.05); this.emit('heavyGo', { w }); }
+          else if (I.push.t > 0.2) { w.set('bootySlam', 0.95); w.stam = Math.max(0, w.stam - 0.1); }
+          else if (pr('dash') && w.dashCD <= 0 && mag > 0.35) this.startDash(w, ix / mag, iz / mag);
+          break;
+        case 'bootyBump':   // spins round, the booty slams into whoever's in front of him, spins back
+          if (w.t >= 0.16 && w.t < 0.3) this.hitCheck(w, 'heavy', 0.65);
+          if (w.t >= w.dur) w.set('free');
+          break;
+        case 'bootySlam':   // up he goes... and down on his booty: the shock knocks back anyone close, whichever side
+          if (w.t >= 0.57 && !w.slamDone) { w.slamDone = true; const o = w.opp, dx2 = o.x - w.x, dz2 = o.z - w.z, d2 = Math.hypot(dx2, dz2) || 1e-4;
+            this.emit('slamLand', { w, x: w.x, z: w.z });
+            if (o.st !== 'fall' && !o.down && d2 < w.r + o.r + 1.0) { w.windPow = 1; this.applyHit(w, o, 'heavy', dx2 / d2, dz2 / d2); } }
+          if (w.t >= w.dur) { w.slamDone = false; w.set('free'); }
           break;
         case 'slap':
           if (w.t >= 0.06 && w.t < 0.24 && !w.hitDone) this.slapCheck(w);
@@ -347,6 +362,9 @@
           turnK = 0.15; rec = 0.1; break;
         case 'charge': vdx = w.fx * w.cspd; vdz = w.fz * w.cspd; F = a.moveForce * 2.6; turnK = 0.12; rec = 0.05; break;
         case 'overrun': { const sp = w.spd; vdx = w.vx * 0.75; vdz = w.vz * 0.75; if (sp < 0.1) { vdx = vdz = 0; } F = a.moveForce * 0.28; turnK = 0.15; rec = 0.05; break; }
+        case 'bjwait': mv(0.3); turnK = 0.6; break;
+        case 'bootyBump': mv(0.1); turnK = 0.1; rec = 0.2; break;
+        case 'bootySlam': vdx = 0; vdz = 0; turnK = 0; rec = 0.1; break;
         case 'slap':
           if (w.t < 0.13) { vdx = -w.fx * 3.0; vdz = -w.fz * 3.0; F = a.moveForce * 1.5; } else mv(0.2);
           turnK = 0.5; rec = 0.2; break;
@@ -469,7 +487,7 @@
       const ms = w.a.maxSpeed;
       const vf = w.vx * w.fx + w.vz * w.fz;
       w.chargeHit = false; w.dodged = false;
-      if (w.fwdIn < -0.55 && w.inMag > 0.5) { w.set('slap', 0.45); this.emit('slapGo', { w }); return; }
+      if (w.fwdIn < -0.55 && w.inMag > 0.5 && !w.booty) { w.set('slap', 0.45); this.emit('slapGo', { w }); return; }
       if (this.sinceGo < 0.85 && !w.tachiai && w.fwdIn > -0.5) { // the opening charge: generous window after the call
         w.tachiai = true; w.cspd = ms * 1.45 * (1 + 0.15 * w.tachiPow); w.set('charge', 0.36);
         w.stam = Math.max(0, w.stam - 0.12);
@@ -481,6 +499,7 @@
         w.stam = Math.max(0, w.stam - 0.12);
         this.emit('charge', { w }); return;
       }
+      if (w.booty) { w.set('bjwait'); return; }   // (no hands: the booty does it)
       w.set('palm'); w.hand ^= 1; this.palmCost(w, true);
       this.emit('palm', { w });
     }

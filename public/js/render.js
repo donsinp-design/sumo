@@ -486,7 +486,7 @@
       const t = w.t;
       let c = 0.42, p = 0.18, r = 0, tw = 0, hp = 0, rate = 14, drop = 0;
       const G = [0.52, 0.62, 0.7];
-      this.stompLift = 0; this.hyT = 0; this.turnAway = 0; this.clipArms = 0;
+      this.stompLift = 0; this.hyT = 0; this.turnAway = 0; this.clipArms = 0; this.slamLift = 0; this.slamSit = false;
       let Rh = G, Lh = mir(G);
       this.hook = 0;
       if (w.fxs && w.fxs.cyclone > 0) { const A = [1.02, 0.95, 0.0]; return { c: 0.32, p: -0.05, r: 0, tw: 0, hp: -0.05, Rh: A, Lh: mir(A), rate: 22, drop: 0 }; } // CYCLONE: arms straight out
@@ -640,6 +640,12 @@
         }
         case 'gale': { rate = 14; c = 0.4; const sw = Math.sin(t * 14); p = 0.05 + 0.12 * sw; Rh = [0.18, 1.1 + 0.3 * sw, 0.45 + 0.2 * sw]; Lh = mir(Rh); break; }
         case 'rewinding': { rate = 30; const sw = Math.sin(t * 40); p = -0.15; Rh = [0.5, 0.35 + 0.25 * sw, -0.2]; Lh = [-0.5, 0.35 - 0.25 * sw, -0.2]; tw = 0.15 * sw; break; } // jerky backwards scramble
+        case 'bjwait': c = 0.88; p = 0.32; Rh = [0.45, 0.32, 0.58]; Lh = mir(Rh); break;
+        case 'bootyBump': { const e = (k) => k * k * (3 - 2 * k), a = Math.min(1, t / 0.15), b = clamp((t - 0.3) / 0.15, 0, 1); this.turnAway = e(a) - e(b); c = 0.88; p = 0.32; Rh = [0.45, 0.32, 0.58]; Lh = mir(Rh); rate = 30; break; }   // the booty bump: round to his back, the booty out, round again
+        case 'bootySlam': { const u = t / (w.dur || 0.95);   // the booty slam: a crouch, up he springs (sat in the air), down on his booty, up again
+          if (u < 0.3) { c = 0.88; p = 0.32; Rh = [0.45, 0.32, 0.58]; Lh = mir(Rh); break; }
+          const air = u < 0.6; this.slamSit = true; this.slamLift = air ? 1.0 * Math.sin(Math.PI * Math.pow((u - 0.3) / 0.3, 0.7)) : -0.42 * Math.min(1, (1 - u) / 0.15);
+          c = 0.9; p = -0.28; hp = -0.2; Rh = air ? [0.8, 1.15, 0.25] : [0.75, -0.1, 0.3]; Lh = mir(Rh); rate = 30; break; }
         case 'bslam': c = 0.9; p = -0.28; hp = -0.2; Rh = w.slamAir ? [0.8, 1.15, 0.25] : [0.75, -0.1, 0.3]; Lh = mir(Rh); rate = 30; break;   // the booty slam: sat in the air, legs out in front, arms flung up; then sat on the floor, hands down by his sides
         case 'bigstomp': { // the big leg lift, then the stamp
           this.stompSd = -1;
@@ -755,7 +761,7 @@
       root.scale.setScalar((w.szCur || 1) * (w.gulpI >= 0 ? 1.22 + Math.sin(T * 9) * 0.03 : w.st === 'inhale' ? 1.06 : 1));
       const frozen = w.fxs && w.fxs.frozen > 0;
       if (frozen) dt = 1e-5; // ice: hold the pose
-      const tp = this.targetPose(w, T);
+      const tp = this.targetPose(w, T); if (this.slamLift) root.position.y += this.slamLift * s;
       if (w.hunch > 0) { tp.p += w.hunch * 0.3; tp.c += w.hunch * 0.16; tp.hp += w.hunch * 0.22; } // campaign: badly hurt, he hunches over
       root.rotation.y = Math.PI / 2 - w.f + (this.turnAway || 0) * Math.PI;
       this.head.rotation.y = this.hyT || 0;
@@ -863,12 +869,12 @@
         if (downed) pole.set(Lg.sd * 0.3, 0, 1).transformDirection(this.body.matrix); // knees bend the way the body faces, not the old standing way
         if (w.torpedo) foot.set(Lg.sd * 0.2 * s, hip.y - 0.78 * s, hip.z - 0.1 * s); // legs straight out behind
         else if (w.st === 'air') foot.set(Lg.sd * 0.45 * s, hip.y - 0.6 * s, -0.5 * s);
-        else if (w.st === 'bslam') foot.set(Lg.sd * 0.42 * s, hip.y - 0.22 * s, hip.z + 0.72 * s);   // (sitting: legs straight out in front)
+        else if (w.st === 'bslam' || this.slamSit) foot.set(Lg.sd * 0.42 * s, hip.y - 0.22 * s, hip.z + 0.72 * s);   // (sitting: legs straight out in front)
         else if (w.st === 'tuck') foot.set(Lg.sd * 0.24 * s, hip.y - 0.3 * s, hip.z + 0.4 * s);   // (tucked: feet drawn up under him, knees to his chest)
         ik(hip, foot, Lg.l1, Lg.l2, pole, this.v4);
         seg(Lg.thigh, hip, this.v4); seg(Lg.calf, this.v4, foot);
         (Lg.hp = Lg.hp || new THREE.Vector3()).copy(hip); (Lg.kn = Lg.kn || new THREE.Vector3()).copy(this.v4); (Lg.ft = Lg.ft || new THREE.Vector3()).copy(foot);
-        Lg.foot.position.set(foot.x, Math.max(foot.y - 0.02 * s, 0.05 * s + (w.y > 0.12 || w.st === 'tuck' || w.st === 'bslam' ? -1 : 0)), foot.z + 0.08 * s);
+        Lg.foot.position.set(foot.x, Math.max(foot.y - 0.02 * s, 0.05 * s + (w.y > 0.12 || w.st === 'tuck' || w.st === 'bslam' || this.slamSit ? -1 : 0)), foot.z + 0.08 * s);
         Lg.foot.rotation.y = Lg.sd * 0.4;
       }
       // shadow

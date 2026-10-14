@@ -105,6 +105,7 @@
       }
       const P = S.profile;
       const human = (k) => kind === 'pvp' || ((kind === 'cpu' || kind === 'boss' || kind === 'tutorial' || kind === 'showcase' || kind === 'training') && k === 0);
+      for (let k = 0; k < 2; k++) m.w[k].booty = kind !== 'tutorial' && (kind === 'online' || human(k));   // (a player's sumo: no hands, J is the booty bump, held the booty slam. The CPU keeps its slaps)
       this.loadouts = kind === 'online' ? [0, 1].map((k) => (this.netMatch.los[k] || JSON.parse(JSON.stringify(S.DEF_EQ)))) : [0, 1].map((k) => (k === 0 && human(0) ? P.loadout() : kind === 'pvp' ? JSON.parse(JSON.stringify(S.DEF_EQ)) : P.randomLoadout()));
       this.names = [kind === 'boss' ? 'YOU' : human(0) ? P.names[0] : 'CPU', kind === 'pvp' ? P.names[1] : kind === 'boss' ? 'YUNOFUJI' : kind === 'tutorial' || kind === 'training' ? 'PARTNER' : 'CPU'];
       this.viewerIdx = kind === 'pvp' ? -1 : kind === 'attract' ? -1 : 0;
@@ -716,6 +717,7 @@
           }
           case 'palm': A.whoosh(0.1); break;
           case 'heavyGo': A.whoosh(0.2); break;
+          case 'slamLand': this.R.shake(0.3); A.thump && A.thump(12); this.R.fx.ring && this.R.fx.ring(e.x, e.z, 1.6, 0.4); break;   // (the booty slam lands)
           case 'slapGo': A.whoosh(0.15); break;
           case 'dash': fx.dust(e.w.x, 0.05, e.w.z, 5, 0.3, 0.6, 0.3, -e.w.ddx * 2, -e.w.ddz * 2); A.scuff(); break;
           case 'brace': fx.dust(e.w.x, 0.05, e.w.z, 4, 0.5, 0.3, 0.3); A.scuff(); break;
