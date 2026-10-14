@@ -85,7 +85,9 @@
           const w = Math.exp(-((d / 0.3) ** 2)) * Math.min(1, Math.max(0, (0.12 - z) / 0.3)); if (w < 1e-3) continue;
           const k = w * 0.075 * b; dx += ox / d * k; dy += oy / d * k * 0.8; dz += oz / d * k - w * 0.05 * b; }
         const cleft = Math.min(1, Math.abs(x) / 0.09) ** 1.5; return [dx, dy, dz * (0.35 + 0.65 * cleft)]; };   // (less push right in the middle: the cleft)
+      const swW = new Float32Array(P.count * 2);   // how much each cheek's swell moved each vertex (the jiggle moves only what the booty made)
       for (let i = 0; i < P.count; i++) { let x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (z > 0.12) continue;
+        for (let k = 0; k < 2; k++) { const cx = k ? 0.21 : -0.21; swW[i * 2 + k] = Math.exp(-((Math.hypot((x - cx) * 1.1, y - 0.8, z + 0.12) / 0.3) ** 2)) * Math.min(1, Math.max(0, (0.12 - z) / 0.3)); }
         if (isBelt && z < -0.05 && Math.abs(x) > 0.08 && y < 0.95) y = 0.95 + (y - 0.95) * 0.22;   // the back of the mawashi gathered up into a band over his hips (the strip in the middle stays)
         const [dx, dy, dz] = swell(x, y, z), out = isBelt ? 0.018 : 0;
         P.setXYZ(i, x + dx, y + dy, z + dz - out); }
@@ -93,10 +95,10 @@
       // which vertices belong to each cheek (for the jiggle): weights from the rest shape
       const idx = [], wl = [], wr = [], base = [];
       for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (z > 0.05) continue;
-        const sm = (e0, e1, v) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); }, lo = sm(0.98, 0.86, y) * sm(0.5, 0.62, y), f = (cx) => lo * sm(0.36, 0.16, Math.hypot((x - cx) * 1.2, y - 0.78, (z + 0.2) * 0.7)), a = f(-0.21), c = f(0.21);   // (each cheek moves as one round lump; nothing above the hips or down the legs moves) if (a + c < 0.03) continue;
+        const sm = (e0, e1, v) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); }, a = sm(0.32, 0.75, swW[i * 2]), c = sm(0.32, 0.75, swW[i * 2 + 1]); if (a + c < 0.01) continue;   // (the round of each cheek, as one lump: not the thighs, not his back)
         idx.push(i); wl.push(a); wr.push(c); base.push(x, y, z); }
       { const mx = Math.max(...wl, ...wr) || 1; for (let n = 0; n < wl.length; n++) { wl[n] /= mx; wr[n] /= mx; } }   // (the middle of each cheek moves the full amount)
-      (view.jig || (view.jig = [])).push({ P, idx, wl, wr, base });
+      (view.jig || (view.jig = [])).push({ P, idx, wl, wr, base, mesh: q });
     });
     view.soft = { M, B, k, mats, tq: new THREE.Quaternion(), q: new THREE.Quaternion(), wq: {}, bodyQ: new THREE.Quaternion(), headQ: new THREE.Quaternion(),
       v: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), m: new THREE.Matrix4() };
@@ -186,11 +188,15 @@
     view.head.position.copy(centre).sub(S_.v.set(0, 0.17 * s * view.head.scale.y, -0.02 * s).applyQuaternion(view.head.quaternion));   // the topknot lifts the box: masks sit on the face, not the brow
   }
   // the booty jiggle: each cheek bobs on its own (aL, aR: how far up, in model units)
-  function jiggle(view, aL, aR) {   // each cheek bounces up, out the back and a little to its side by its own amount (seen from above as well as from the side)
+  const JM = new THREE.Matrix4(), JV = new THREE.Vector3();
+  function jiggle(view, aL, aR) {   // each cheek bounces by its own amount, straight UP in the world (however far he leans: never out behind him like a leg)
     if (!view.jig) return;
-    for (const J of view.jig) { const P = J.P, a = P.array, B = J.base;
-      for (let n = 0; n < J.idx.length; n++) { const i = J.idx[n] * 3, dl = J.wl[n] * aL, dr = J.wr[n] * aR, d = dl + dr;
-        a[i] = B[n * 3]; a[i + 1] = B[n * 3 + 1] + d; a[i + 2] = B[n * 3 + 2] - d * 0.3; }
+    for (const J of view.jig) { const P = J.P, a = P.array, B = J.base, m = J.mesh, sk = m && m.skeleton, hb = view.soft && view.soft.B && view.soft.B.hips;
+      let ux = 0, uy = 1, uz = 0;
+      if (sk && hb) { const bi = J.hi !== undefined ? J.hi : (J.hi = sk.bones.indexOf(hb));
+        if (bi >= 0) { JM.copy(m.matrixWorld).multiply(m.bindMatrixInverse).multiply(hb.matrixWorld).multiply(sk.boneInverses[bi]).multiply(m.bindMatrix).invert(); JV.set(0, 1, 0).transformDirection(JM); ux = JV.x; uy = JV.y; uz = JV.z; } }
+      for (let n = 0; n < J.idx.length; n++) { const i = J.idx[n] * 3, d = J.wl[n] * aL + J.wr[n] * aR;
+        a[i] = B[n * 3] + ux * d; a[i + 1] = B[n * 3 + 1] + uy * d; a[i + 2] = B[n * 3 + 2] + uz * d; }
       P.needsUpdate = true; }
   }
   S.SoftSumo = { ready, attach, drive, jiggle, get loaded() { return !!tpl; } };
