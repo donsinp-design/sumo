@@ -128,7 +128,7 @@
     // gacha rules: every round, both players draw a fresh random skill (unused ones are lost)
     skillFor(k) {   // a capsule for wrestler k: a player's sumo has no hands, so never a slap skill
       const w = this.match && this.match.w[k], HANDS = ['dizzySlap', 'turnSlap', 'hundred', 'thief'];
-      const bad = (id) => (w && w.booty && HANDS.includes(id)) || ((this.kind === 'cpu' || this.kind === 'boss') && id === 'smoke');   // (the CPU pays no mind to a smoke bomb: no use against it)
+      const bad = (id) => (w && w.booty && HANDS.includes(id)) || ((this.kind === 'cpu' || this.kind === 'boss') && id === 'smoke') || (this.kind === 'boss' && id === 'peek');   // (the boss holds no skill: nothing to peek at)   // (the CPU pays no mind to a smoke bomb: no use against it)
       let id = S.Skills.random(); for (let n = 0; n < 30 && bad(id); n++) id = S.Skills.random(); return id;
     }
     dealSkills() {
