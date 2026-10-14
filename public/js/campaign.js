@@ -1630,10 +1630,17 @@
         if (a.cling === 'ride') {   // sitting on his shoulders: thighs over them, shins down his chest, both hands over his eyes
           for (let i = 1; i <= 3; i++) out[i].z += 0.07;
           out[9].copy(V(-0.11, 0, 0)); out[12].copy(V(0.11, 0, 0));
-          out[10].copy(V(-0.27, 0.02, 0.3)); out[13].copy(V(0.27, 0.02, 0.3));
-          out[11].copy(V(-0.27, -0.4, 0.4 + sw * 0.05)); out[14].copy(V(0.27, -0.4, 0.4 + sw2 * 0.05));
-          out[4].copy(V(-0.24, 0.42, 0.26)); out[7].copy(V(0.24, 0.42, 0.26));
-          out[5].copy(V(-0.07, 0.34, 0.5)); out[8].copy(V(0.07, 0.34, 0.5));
+          out[10].copy(V(-0.36, 0.06, 0.36)); out[13].copy(V(0.36, 0.06, 0.36));
+          out[11].copy(V(-0.36, -0.4, 0.46 + sw * 0.05)); out[14].copy(V(0.36, -0.4, 0.46 + sw2 * 0.05));
+          out[4].copy(V(-0.32, 0.26, 0.44)); out[7].copy(V(0.32, 0.26, 0.44));
+          out[5].copy(V(-0.08, -0.13, 0.82)); out[8].copy(V(0.08, -0.13, 0.82));   // (round in front of his face, flat over his eyes)
+        } else if (a.cling === 'back') {   // a piggyback: chest against his back, arms round his chest, legs round his waist
+          for (let i = 1; i <= 3; i++) out[i].z += 0.1;
+          out[9].copy(V(-0.12, 0, 0)); out[12].copy(V(0.12, 0, 0));
+          out[10].copy(V(-0.4, -0.02, 0.3 + sw * 0.03)); out[13].copy(V(0.4, -0.02, 0.3 + sw2 * 0.03));
+          out[11].copy(V(-0.36, -0.34, 0.5)); out[14].copy(V(0.36, -0.34, 0.5));
+          out[4].copy(V(-0.42, 0.42, 0.2)); out[7].copy(V(0.42, 0.42, 0.2));
+          out[5].copy(V(-0.3, 0.44, 0.56)); out[8].copy(V(0.3, 0.44, 0.56));
         } else if (a.cling === 'arm') {   // both arms wrapped round his arm, hanging off it, legs kicking
           const nk = out[1].clone();
           out[5].set(nk.x - 0.05, nk.y + 0.14, nk.z + 0.3); out[8].set(nk.x + 0.05, nk.y + 0.1, nk.z + 0.3);

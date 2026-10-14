@@ -122,9 +122,11 @@
       root.scale.set(BASE * BIG * (fat ? 1.3 : 1), BASE * BIG, BASE * BIG * (fat ? 1.22 : 1));
       this.meshes = []; this.mats = []; this.face = null;
       const shirt = K.shirt, pants = kind === 'commander' || kind === 'ninja' ? 0x1a1a22 : 0x2a2e44;
+      this.aprons = [];
       root.traverse((o) => {
         if (!o.isSkinnedMesh) return;
         o.frustumCulled = false;
+        if (/Apron|Skirt/i.test((o.material && o.material.name) || '')) this.aprons.push(o);   // (hidden when they ride on the sumo's shoulders: it would hang over his face)
         if (SOFT && S.Flat) { // flat colours per material, the role's colours on shirt, trousers and boots
           const nm = o.material.name || '', base = o.material.color ? o.material.color.clone().convertLinearToSRGB() : new THREE.Color(1, 1, 1);
           let col = /Tops/.test(nm) ? new THREE.Color(kind === 'commander' ? 0xc8231d : shirt) : /Bottoms/.test(nm) ? new THREE.Color(pants === 0x2a2e44 ? 0x4a5068 : 0x34343e)

@@ -52,6 +52,7 @@
     slapDown: 2.2, stumbleDown: 1.8, bumpDown: 1.6, flungDown: 2.4, thrownDown: 2.6,   // seconds on the floor before they get up
     pickR: 1.5, liftT: 0.45, throwSp: 9, carryMax: 5, carrySpeed: 0.8,                  // picking one up (a heave), the throw, how long they let him hold them
     captureT: 1.4, fadeT: 0.35,                  // caught: the pile, then the fade to the checkpoint
+    rideScale: 0.65,                             // the one on his shoulders is drawn smaller (a full-size one hides his whole head)
   };
   const HIT_WIN = 4;   // seconds: a second hit inside this turns the edges red, a third knocks him out; after it, he's fine again
   // the gacha machine by the locker-room door: one pull, one skill for this level, used once with SPACE
@@ -1472,7 +1473,7 @@
     }
     pickSlot(n) {   // which part of him they go for: whatever's nearest them (round the back: onto his shoulders)
       const P = this.P, ang0 = ang(Math.atan2(n.a.z - P.z, n.a.x - P.x) - P.f), A = this.att, free = (k) => !A[k];
-      const pref = Math.abs(ang0) > 2.1 ? [4, ang0 > 0 ? 2 : 3, ang0 > 0 ? 0 : 1] : ang0 > 0 ? [0, 2, 4] : [1, 3, 4];
+      const pref = Math.abs(ang0) > 2.1 ? [4, 0, ang0 > 0 ? 2 : 3] : ang0 > 0 ? [2, 0, 1, 4] : [1, 3, 0, 4];   // (from behind: onto his shoulders or his back; from the side: an arm or a leg)
       for (const k of pref.concat([0, 1, 2, 3, 4])) if (free(k)) return k;
       return -1;
     }
@@ -1481,17 +1482,18 @@
       this.att[k] = n; n.lunge = { t: 0, k, x0: n.a.x, z0: n.a.z, y0: n.a.y }; n.a.st = 'hold'; n.a.t = 0; n.path = null;
       this.popAt(n.a, ['捕まえた!', 'とりゃ!', 'つかまえろ!'][(this.t * 3 | 0) % 3], 0.9);
     }
-    slotPos(k) {   // where a hanger-on is, on his real joints: 0/1 his arms (hugging one, hanging off it), 2/3 his legs (sat on the floor hugging one, dragged along), 4 his shoulders (both hands over his eyes)
+    slotPos(k) {   // where a hanger-on is, on his real joints: 0 on his back (a piggyback), 1 hugging his arm, 2/3 sat on the floor hugging a leg, 4 on his shoulders (hands over his eyes)
       const P = this.P, v = this.view, s = v.s, fx = Math.cos(P.f), fz = Math.sin(P.f), T = this.t, mv = Math.min(1, Math.hypot(P.vx, P.vz) / 2), Q = this._sq || (this._sq = new THREE.Vector3());
-      const n = this.att[k], mo = n && n.v.mo && n.v.mo.out, pelY = mo ? mo[0].y : 0.95, nkY = mo ? mo[1].y : 1.45;
-      if (k === 4) { v.head.getWorldPosition(Q); const py = Q.y - 0.3 * s;
-        return { x: Q.x - fx * 0.2 * s, z: Q.z - fz * 0.2 * s, y: py - pelY + Math.abs(Math.sin(T * 8)) * 0.06 * (0.3 + mv), f: P.f + Math.sin(T * 5) * 0.12, st: 'held', cling: 'ride' }; }
-      if (k < 2) { v.handWorld(k === 0 ? -1 : 1, Q); let ox = Q.x - P.x, oz = Q.z - P.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;
-        const sw = Math.sin(T * 6 + k) * 0.05 * (0.4 + mv), x = Q.x + ox * 0.3 - oz * sw, z = Q.z + oz * 0.3 + ox * sw;
-        return { x, z, y: Math.max(P.y, Q.y + 0.35 * s - nkY - 0.12), f: Math.atan2(-oz, -ox), st: 'held', cling: 'arm' }; }
+      const n = this.att[k], mo = n && n.v.mo && n.v.mo.out, pelY = mo ? mo[0].y : 0.95, nkY = mo ? mo[1].y : 1.45, bob = Math.abs(Math.sin(T * 8 + k)) * 0.05 * (0.3 + mv);
+      if (k === 4) { v.head.getWorldPosition(Q);   // astride the back of his neck: thighs either side of his head (the apron behind it), hands round onto his eyes
+        return { x: Q.x - fx * 0.3 * s, z: Q.z - fz * 0.3 * s, y: Q.y - 0.22 * s - pelY * DOG.rideScale + bob, f: P.f + Math.sin(T * 5) * 0.1, st: 'held', cling: 'ride' }; }
+      if (k === 0) return { x: P.x - fx * 0.6 * s, z: P.z - fz * 0.6 * s, y: P.y + 0.92 * s - pelY + bob, f: P.f + Math.sin(T * 4) * 0.08, st: 'held', cling: 'back' };   // chest to his back
+      if (k === 1) { v.handWorld(1, Q); let ox = Q.x - P.x, oz = Q.z - P.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;   // tight against his side, wrapped round his arm
+        const x = Q.x + ox * 0.16, z = Q.z + oz * 0.16;
+        return { x, z, y: Math.max(P.y, Q.y + 0.5 * s - nkY - 0.14) + bob, f: Math.atan2(-oz, -ox), st: 'held', cling: 'arm' }; }
       const sd = k === 2 ? -1 : 1, sx = -fz * sd, sz = fx * sd, lx = P.x + (sx * 0.36 - fx * 0.05) * s, lz = P.z + (sz * 0.36 - fz * 0.05) * s;
       let ox = sx * 0.8 - fx * 0.6, oz = sz * 0.8 - fz * 0.6; const ol = Math.hypot(ox, oz); ox /= ol; oz /= ol;
-      return { x: lx + ox * 0.36, z: lz + oz * 0.36, y: P.y, f: Math.atan2(-oz, -ox), st: 'held', cling: 'hug' };
+      return { x: lx + ox * 0.34, z: lz + oz * 0.34, y: P.y, f: Math.atan2(-oz, -ox), st: 'held', cling: 'hug' };
     }
     latchStep(n, dt) {   // the jump at him (true while it lasts)
       const L = n.lunge, a = n.a; L.t += dt; const k = Math.min(1, L.t / DOG.lunge), q = this.slotPos(L.k);
@@ -2717,7 +2719,7 @@
       this.bossDraw(dt, T); this.bonusBar(); this.mapDraw(T);
       if (this.drawN % 10 === 1) { this.hudApply(); const o = this.el('.st-obj'), hp = this.el('.st-hp'); if (o && hp) hp.style.setProperty('top', (o.offsetTop + o.offsetHeight + 8) + 'px', 'important'); }   // (a two-line goal pushes the badges down, never over them)
       this.attDraw(dt);
-      this.dtR = dt; const nK = this.npcK(); for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt * nK, 1e-4), T); if (n.shrink !== undefined) n.v.root.scale.multiplyScalar(n.shrink); n.v.root.visible = !n.inside && !(n.pit > 0 && n.pitT > 0.6); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }
+      this.dtR = dt; const nK = this.npcK(); for (const n of this.npcs) { n.a.push = !!n.pushing2; { const want = n.a.cling === 'ride' ? DOG.rideScale : 1; n.rideK = (n.rideK || 1) + (want - (n.rideK || 1)) * Math.min(1, dt * 10); const k = n.rideK * (n.shrink !== undefined ? n.shrink : 1); n.v.root.scale.setScalar(k); if (n.v.body) { n.v.body.wrap.scale.setScalar(k); for (const m of n.v.body.aprons || []) m.visible = n.a.cling !== 'ride'; } } n.v.update(n.a, Math.max(dt * nK, 1e-4), T); n.v.root.visible = !n.inside && !(n.pit > 0 && n.pitT > 0.6); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }   // (the rider's scale: set, not multiplied, since the view never resets it)
       this.sweatStep(dt);
       this.tipStep(dt); this.ctxStep();
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
