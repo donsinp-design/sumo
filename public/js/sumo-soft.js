@@ -76,6 +76,14 @@
     for (const b of view.baseMeshes || []) b.visible = false;      // the primitive body goes
     if (o.noBlob && view.shadow) view.shadow.material.opacity = 0;
     view.head.scale.setScalar(rest.headR * k / (0.25 * s));
+    if (o.booty) M.traverse((q) => {   // BIG BOOTY: two rounder, fuller cheeks pushed out behind (on this sumo's own copy of the shape)
+      if (!q.isSkinnedMesh || !/^(Skin|Mawashi)/.test((q.material && q.material.name) || '')) return;
+      q.geometry = q.geometry.clone(); const P = q.geometry.attributes.position, b = o.booty;
+      for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (z > 0.1) continue;
+        const wy = Math.exp(-(((y - 0.8) / 0.21) ** 2)), wx = Math.max(Math.exp(-(((x - 0.21) / 0.19) ** 2)), Math.exp(-(((x + 0.21) / 0.19) ** 2))), wz = Math.min(1, (0.1 - z) / 0.32), w = wy * wx * wz * b;
+        P.setXYZ(i, x * (1 + w * 0.14), y - w * 0.05, z - w * 0.22); }
+      P.needsUpdate = true; q.geometry.computeVertexNormals(); q.geometry.computeBoundingSphere();
+    });
     view.soft = { M, B, k, mats, tq: new THREE.Quaternion(), q: new THREE.Quaternion(), wq: {}, bodyQ: new THREE.Quaternion(), headQ: new THREE.Quaternion(),
       v: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), m: new THREE.Matrix4() };
     return true;
