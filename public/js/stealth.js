@@ -36,6 +36,22 @@
     if (z > -86) return 'up'; return x > 4 ? 'store' : 'up';
   }
   const SAFE = { bath: 1, shower: 1 };
+  // THE DOGPILE: staff don't punch, they grab him and hang on; five on him and he's caught. All the numbers, to tune:
+  const DOG = {
+    maxAtt: 5,                                   // hanging on at once (the fifth: caught)
+    speed: [1, 0.78, 0.58, 0.4, 0.22, 0],        // his walk with 0..5 on him
+    charge: [1, 0.85, 0.7, 0.55, 0.4],           // how far a charge carries with 0..4 on him (the burst itself is the same)
+    stompWind: [0.5, 0.6, 0.8, 1.0, 1.2],        // hold J: the stomp's wind-up with 0..4 on him (fixed when it starts)
+    holdJ: 0.22,                                 // J held this long becomes the stomp (a tap slaps at once, no wait)
+    grabR: 1.45, lunge: 0.3,                     // they jump at him from this close; the jump takes this long
+    regrab: 1.6,                                 // up again after a slap, a fall or a throw: this long before they can grab again
+    wallStun: 1.4,                               // charged into a wall: the ones still hanging on are stunned this long
+    stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
+    slapFront: 7, slapRear: 5, spinT: 1.5,       // a slap: knocked back / stumbling forward (speeds), spun round (seconds)
+    slapDown: 2.2, stumbleDown: 1.8, bumpDown: 1.6, flungDown: 2.4, thrownDown: 2.6,   // seconds on the floor before they get up
+    pickR: 1.5, liftT: 0.45, throwSp: 9, carryMax: 5, carrySpeed: 0.8,                  // picking one up (a heave), the throw, how long they let him hold them
+    captureT: 1.4, fadeT: 0.35,                  // caught: the pile, then the fade to the checkpoint
+  };
   const HIT_WIN = 4;   // seconds: a second hit inside this turns the edges red, a third knocks him out; after it, he's fine again
   // the gacha machine by the locker-room door: one pull, one skill for this level, used once with SPACE
   const GACHA_POOL = ['smoke', 'vanish', 'timedrag', 'sleepdart', 'trapdoor', 'rewind', 'phantom', 'torpedo', 'daruma', 'giant', 'stomp', 'hands', 'bomb'];   // (consume and belly flop: built, not in the campaign)   // (the owner picks which; until then the machine says so)
@@ -101,7 +117,7 @@
         const bw = Object.assign({}, this.w, { a: bA, idx: 1, fxs: {}, carry: null });
         this.boss = { v: bv, w: bw, x: 3, z: -7, y: -2.6, f: Math.PI / 2, on: false, hold: false, st: 'free', t: 0, belt: arch.belt }; }
       this.mosaic = this.makeMosaic();
-      this.npcs = this.makeNpcs();
+      this.npcs = this.makeNpcs(); this.att = [null, null, null, null, null];
       this.stage = 'locker'; this.cp = { x: 1.2, z: 0.2, f: Math.PI / 2 }; this.room = 'bath';
       this.camT = new THREE.Vector3(this.P.x * 0.8, 0, this.P.z - 2.6);
       this.buildHud();
@@ -593,6 +609,11 @@
       const a = n.a; a.t += dt; n.slipCd = Math.max(0, (n.slipCd || 0) - dt);
       if (n.eaten) return;   // (swallowed, or flying: moved by the skill)
       if (n.pit > 0) { this.pitStep(n, dt); return; }   // down the trap door
+      if (n.lunge) { this.latchStep(n, dt); return; }   // jumping at him
+      if (n.att !== undefined) { a.vx = a.vz = 0; if (n.attStun > 0) n.attStun -= dt; return; }   // hanging on (placed on him in attDraw)
+      if (n.carried) return;   // held up by him (carryStep)
+      if (a.st === 'thrown') { this.flyStep2(n, dt); return; }   // flying
+      if (n.spin) { this.spinStep(n, dt); return; }   // spun round by a slap
       if (n.onigiri) {
         if (n.ckAway > 0) n.ckAway -= dt;
         if (this.stage === 'onigiri' && (n.mode === 'route' || n.mode === 'cook') && !(n.ckAway > 0)) { if (this.cook(n, dt)) return; }
@@ -615,6 +636,7 @@
       if (a.st === 'down' || a.st === 'getup') {
         a.vx *= 0.9; a.vz *= 0.9; a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4);
         if (a.st === 'down' && a.t >= a.dur) { a.st = 'getup'; a.t = 0; a.dur = 1.2; }
+        else if (a.st === 'getup' && a.t >= a.dur && n.recover) { n.recover = false; this.recoverAI(n); }
         else if (a.st === 'getup' && a.t >= a.dur && n.ko) { n.ko = false; n.mode = 'search'; n.wait = 4; n.path = null; this.popAt(a, '誰だ…殴ったのは!?', 1.6); }
         else if (a.st === 'getup' && a.t >= a.dur) { a.st = 'free'; a.t = 0; a.slipFall = false; }
         return;
@@ -750,7 +772,7 @@
       // in a toilet stall, door shut: nobody sees him. Any move and he comes out
       if (P.stallHide !== undefined) { P.vx = P.vz = 0; P.hideT = (P.hideT || 0) + dt; P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false;
         if ((mag > 0.5 || iPress) && P.hideT > 0.3) this.stallOut(); else { this.npcsOnly(dt); return; } }
-      if (iPress && !this.hideCd && P.st === 'free' && !P.held && !P.cart && roomAt(P.x, P.z) === 'toilet') {
+      if (iPress && !this.hideCd && P.st === 'free' && !P.held && !P.cart && !P.carryN && !this.attN() && roomAt(P.x, P.z) === 'toilet') {
         const k = LY.stalls.findIndex((q) => Math.abs(P.z - q.z) < 1.0 && P.x < q.x + 2.6 && P.x > q.x - 0.5);
         if (k >= 0) { const q = LY.stalls[k], D = this.stallDoors && this.stallDoors[k]; this.markWitness(); P.stallHide = k; P.inStall = true; P.hideT = 0; P.x = q.x + 0.2; P.z = q.z; P.f = 0; P.vx = P.vz = 0; P.tip = 0; if (D) D.rotation.y = 0; this.dropShorts(true);
           if (!this.saidStallHide) { this.saidStallHide = true; this.think('Occupied! ...nobody checks an occupied stall.', 2.2); } return; } }
@@ -780,7 +802,7 @@
       if (!iPress && this.keys.KeyI && mag > 0.5 && !this.hideCd && P.st === 'free' && !wet && !P.held && !P.cart)
         for (const cc of this.carts) { const w = cc.w, ex = clamp(P.x, w.x0, w.x1), ez = clamp(P.z, w.z0, w.z1), d = Math.hypot(P.x - ex, P.z - ez) - P.r;
           if (d < 0.12 && !cc.ret && ((ex - P.x) * mx + (ez - P.z) * mz) / (Math.hypot(ex - P.x, ez - P.z) || 1) > 0.5) { walkIn = true; break; } }
-      if ((iPress || walkIn) && !this.hideCd && P.st === 'free' && !wet && !P.held) {   // I next to a cart (walking or not): climb in
+      if ((iPress || walkIn) && !this.hideCd && P.st === 'free' && !wet && !P.held && !P.carryN && !this.attN()) {   // I next to a cart (walking or not): climb in
         let near = null, nd = 0.3; for (const cc of this.carts) { const w = cc.w, d = Math.hypot(P.x - clamp(P.x, w.x0, w.x1), P.z - clamp(P.z, w.z0, w.z1)) - P.r; if (d < nd && !cc.ret && this.clear(P.x, P.z, cc.x, cc.z) && !this.inWall(cc.x, cc.z, cc.w)) { nd = d; near = cc; } }   // (right up against it; never one through a wall, nor one jammed into one)
         if (P.cart && iPress && this.clear(P.x, P.z, P.cart.x, P.cart.z) && !this.inWall(P.cart.x, P.cart.z, P.cart.w)) near = P.cart;   // (the one he's pushing: straight in)
         if (near) { this.markWitness();
@@ -804,21 +826,23 @@
       else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
       if (!c.dash.held) this.lRel = true;   // (one charge per press: let go of L before the next, no endless re-charging)
-      if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
+      if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart && !P.carryN) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
       let spd = 0;
       if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 6.4 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : this.wearing && this.keys.KeyI ? 1.2 : (this.wearing ? 3.0 : 3.4);   // (crouched in the box, out of puff: a slow shuffle)
-      P.chT = P.st === 'charge' ? (P.chT || 0) + dt : 0; if (P.chT > 0.95) { P.st = 'free'; P.t = 0; P.cd = 0.5; P.chT = 0; }   // (a charge can never run on)
-      if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur; if (P.t > 0.85) P.t = P.dur + 0.01; }   // (never longer than 0.85 s)
+      if (P.st === 'free') spd *= DOG.speed[Math.min(DOG.maxAtt, this.attN())] * (P.carryN ? DOG.carrySpeed : 1);   // the dogpile weighs him down
+      P.chT = P.st === 'charge' ? (P.chT || 0) + dt : 0; if (P.chT > 0.95 * this.chargeK()) { P.st = 'free'; P.t = 0; P.cd = 0.5; P.chT = 0; }   // (a charge can never run on)
+      if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur; if (P.t > 0.85 * this.chargeK()) P.t = P.dur + 0.01; }   // (never longer than 0.85 s)
       if (P.st === 'wind' && mag > 0.3) { P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * 8); P.f = P.cdir; }
       const power = P.st === 'charge' && P.run > 1.0;   // it needs a run-up: from right next to something he just bumps it
       const dir = P.st === 'charge' || mag > 0.3;
       P.vx += ((dir ? mx : 0) * spd - P.vx) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10)); P.vz += ((dir ? mz : 0) * spd - P.vz) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10));
       if (P.st === 'slip' || P.st === 'busy' || P.st === 'wear' || P.st === 'wind') { P.vx *= 0.85; P.vz *= 0.85; }
       if (mag > 0.3 && P.st === 'free') P.f = lerpA(P.f, Math.atan2(mz, mx), dt * (P.cart ? 4 : 12));
-      if (P.st === 'skill') this.gsMove(dt, mx, mz, mag);   // a gacha skill drives him (torpedo, roll, flop...)
+      if (P.st === 'skill') this.gsMove(dt, mx, mz, mag);
+      if (P.st === 'stompW' && this.stompW) { P.vx = P.vz = 0; this.stompW.t += dt; if (this.stompW.t >= this.stompW.W) this.doStomp(); }   // (planted: the stomp winds up)   // a gacha skill drives him (torpedo, roll, flop...)
       P.x += P.vx * dt; P.z += P.vz * dt;
       if (!P.hidden && !P.boxHide && P.st !== 'skill') for (const n of this.npcs) {   // bodies: he bumps into people (a charge bowls them over: see below)
-        const a = n.a; if (a.st === 'down' || Math.abs(a.y - P.y) > 1) continue;
+        const a = n.a; if (a.st === 'down' || Math.abs(a.y - P.y) > 1 || n.att !== undefined || n.lunge || n.carried || a.st === 'thrown') continue;
         const dx = P.x - a.x, dz = P.z - a.z, d = Math.hypot(dx, dz), R2 = P.r * 0.8 + 0.4;
         if (d < R2 && d > 1e-4 && !(P.st === 'charge' && n.mode !== 'chase' && n.alarm < 1 && a.st === 'free')) { P.x = a.x + dx / d * R2; P.z = a.z + dz / d * R2; if (P.st === 'charge') { P.t = P.dur + 0.01; P.vx *= -0.2; P.vz *= -0.2; } }
       }
@@ -878,9 +902,9 @@
       if (wet !== this.wasWet) { if (this.wasWet !== undefined) this.fx.water && this.fx.water(P.x, P.z, 1.6, POOL.water); this.wasWet = wet; }
       if (P.st === 'charge') {
         if (power && this.stage === 'smash' && !this.chasing() && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.25) { this.hitLocker(); P.st = 'busy'; P.t = 0; P.dur = 0.5; }
-        else if (hit) { P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.fx.dust && this.fx.dust(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (true) this.noiseS(P.x, P.z, 5, '?'); }
+        else if (hit) { this.chargeWall(); P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.fx.dust && this.fx.dust(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (true) this.noiseS(P.x, P.z, 5, '?'); }
       }
-      if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = was === 'wind' ? 'charge' : 'free'; P.t = 0; if (was === 'wind') { P.dur = 0.85; P.run = 0; } if (was === 'charge') P.cd = 0.5; if (was === 'wear') this.putOnBox(); }
+      if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = was === 'wind' ? 'charge' : 'free'; P.t = 0; if (was === 'wind') { P.dur = 0.85 * this.chargeK(); P.run = 0; } if (was === 'charge') P.cd = 0.5; if (was === 'wear') this.putOnBox(); }
       // puddles: walking over them is fine; RUNNING (the charge) over one, you slip
       if (P.st === 'charge') for (const q of this.puddles) if (((P.x - q.x) / q.rx) ** 2 + ((P.z - q.z) / q.rz) ** 2 < 1) {
         P.st = 'slip'; P.t = 0; P.dur = 1.3; P.fall = Math.atan2(P.vz, P.vx); P.vx *= 0.6; P.vz *= 0.6;
@@ -915,7 +939,7 @@
       const BD = LY.backdoor;
       if (this.stage === 'escape' && P.x < BD.x - 0.3 && P.z < BD.z1 && P.z > BD.z0) { this.win(); return; }
       // in the box, hold I standing still: he squats right down inside it. Just a box
-      P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet && !(this.noDuck > 0); this.noDuck = Math.max(0, (this.noDuck || 0) - dt);
+      P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet && !(this.noDuck > 0) && !this.attN(); this.noDuck = Math.max(0, (this.noDuck || 0) - dt);
       if (!this.boxW) { this.boxW = { x0: 1e4, x1: 1e4, z0: 1e4, z1: 1e4, tall: false, box: true }; this.walls.push(this.boxW); }
       if (P.boxHide && !this.wasBoxHide) this.markWitness();
       // the box stands UP (I let go): only then does anyone jump, and only someone shoving it or actually looking at it (tiptoeing along in it isn't standing up)
@@ -933,12 +957,15 @@
       }
       // J: a slap. Rats go flying; things get knocked about; hitting a person is NOT allowed
       if (c.skill && c.skill.pressed && this.gSkill && P.st === 'free' && !P.hidden) this.useGacha();
-      if (c.push.pressed && P.st === 'free' && !P.held && !P.cart) this.slap();
+      if (c.push.pressed && P.st === 'free' && !P.held && !P.cart && !P.carryN) { this.slap(); this.jHold = true; }   // tap J: a slap, at once
+      if (!c.push.held) this.jHold = false;
+      if (this.jHold && c.push.held && c.push.t > DOG.holdJ && (P.st === 'free' || P.st === 'busy') && !P.held && !P.cart && !P.carryN && this.attN() < DOG.maxAtt) { this.jHold = false; this.startStomp(); }   // hold J: the stomp
       else if (c.push.pressed && P.st === 'free' && P.held && P.held.kind === 'can' && P.held.soda) this.drink();
       else if (c.push.pressed && P.st === 'free' && P.held) this.drop();
       // K: use (locker, wash bucket, pick up / throw, put on the box)
       // (holding something: tap K to throw it, hold K to smash it down at your feet)
-      if (c.grab.pressed && P.st === 'free') { if (P.held) this.kArm = true; else this.use(); }
+      if (c.grab.pressed && P.st === 'free') { if (P.held) this.kArm = true; else if (P.carryN) this.kArmN = true; else if (!this.grabEnemy()) this.use(); }
+      if (this.kArmN) { if (!P.carryN || P.st !== 'free') this.kArmN = false; else if (c.grab.held && c.grab.t > 0.32) { this.kArmN = false; this.throwEnemy(true); } else if (!c.grab.held) { this.kArmN = false; this.throwEnemy(false); } }   // tap K: throw them; hold K: slam them down
       if (this.kArm) { if (!P.held || P.st !== 'free') this.kArm = false; else if (c.grab.held && c.grab.t > 0.32) { this.kArm = false; this.smashHeld(); } else if (!c.grab.held) { this.kArm = false; this.use(); } }
       // a charge is loud: heavy running footsteps carry round the room
       // footsteps: walking is heard by anyone close by (they come and look), the charge further; tiptoe is silent
@@ -960,7 +987,7 @@
           if (b.wet) { this.fx.water && (this.fx.water(b.x, b.z, 2.4, POOL.water), this.fx.water(b.x + 0.2, b.z - 0.1, 1.4, POOL.water)); b.m.rotation.set(0.3, 0.4, 0.2); b.m.position.y = b.ty; }
           else { if (pud && this.fx.water) this.fx.water(b.x, b.z, 1.4, b.ty); b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + (b.kind === 'can' ? 0.1 : 0.3); if (b.kind === 'can') b.m.children[0].position.y = -0.085; } if (true) this.noiseS(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think(b.wet ? '*SPLOOSH*' : '*CLATTER*', 1); }
       }
-      this.canStep(dt); this.printStep(dt); this.bossStep(dt); this.gachaStep(dt); this.gsStep(dt); this.hurtStep(dt);
+      this.canStep(dt); this.printStep(dt); this.bossStep(dt); this.gachaStep(dt); this.gsStep(dt); this.carryStep(dt); this.hurtStep(dt);
       // (flying bits: flyStep, run at the top of step so they still land while he hides)
       // the staff (nobody minds you in the bath or the wash area; just after a restart they get a moment too)
       this.grace = Math.max(0, this.grace - dt);
@@ -1055,7 +1082,8 @@
       if (a.st === 'free' && dd > 0.2) { const sp = 3.2; a.vx = dx / dd * sp; a.vz = dz / dd * sp; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 9); } else { a.vx *= 0.8; a.vz *= 0.8; }
       const cx0 = a.x, cz0 = a.z; a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4); a.y = floorY(a.x, a.z);
       n.stk = a.st === 'free' && dd > 0.5 && Math.hypot(a.x - cx0, a.z - cz0) < 0.4 * dt ? (n.stk || 0) + dt : 0; if (n.stk > 3) { n.stk = 0; this.unstick(n); n.rp = 0; }
-      if (seen && d < 1.3 && !(this.hitCd > 0) && a.st === 'free' && P.st !== 'charge' && P.st !== 'skill') this.hitBy(n);
+      if (seen && d < DOG.grabR && a.st === 'free' && this.canGrab(n)) this.lunge(n);   // close enough: they jump on him (no punches)
+      else if (seen && d < 1.3 && !(this.hitCd > 0) && a.st === 'free' && this.gs && this.gs.id === 'giant') this.hitBy(n);   // (GIANT: they bounce off)
     }
     buildGacha() {   // the capsule-toy bank (gachapon) (tools/blender/gacha_kit.py: the bathhouse kit's palette and shapes), by the locker-room door
       const x = 9.7, z = -26.4, g = new THREE.Group(); g.position.set(x, 0, z); this.G.add(g);
@@ -1097,8 +1125,7 @@
     }
     hurtStep(dt) {   // red at the screen's edges after a second hit, fading as he shakes it off
       let e = this.hurtEl; if (!e) { e = this.hurtEl = document.createElement('div'); e.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:40;opacity:0;background:radial-gradient(ellipse at center, rgba(200,30,30,0) 55%, rgba(200,30,30,0.55) 100%)'; this.hud.appendChild(e); }
-      const left = HIT_WIN - (this.t - (this.lastHitT || -99)), on = (this.hits || 0) >= 2 && !this.over && left > 0;
-      const want = on ? Math.min(1, left / 1.2) * (0.85 + 0.15 * Math.sin(this.t * 9)) : 0;
+      const nA = this.attN ? this.attN() : 0, want = nA >= 3 && !this.over ? (0.35 + 0.22 * (nA - 3)) * (0.85 + 0.15 * Math.sin(this.t * 9)) : 0;   // (red at the edges: three or more on him)
       this.hurtO = (this.hurtO || 0) + (want - (this.hurtO || 0)) * Math.min(1, dt * 10); e.style.opacity = this.hurtO.toFixed(3);
     }
     // ============================================================== the gacha skills (one per level, SPACE)
@@ -1126,7 +1153,8 @@
       if (this.dart) { this.G.remove(this.dart.m); this.dart = null; }
       if (this.flopSh) this.flopSh.visible = false;
       this.proj = null; this.gulp = null; if (this.gSkill === 'spit') this.gSkill = null;
-      for (const n of this.npcs) { n.eaten = false; n.inside = false; n.pit = 0; n.shrink = undefined; n.zzz = 0; n.v.root.visible = true; }
+      for (const n of this.npcs) { n.eaten = false; n.inside = false; n.pit = 0; n.shrink = undefined; n.zzz = 0; n.v.root.visible = true; n.spin = null; n.recover = false; n.carried = false; n.lunge = null; n.att = undefined; n.attStun = 0; n.noGrab = 0; }
+      if (this.att) this.att.fill(null); this.cap = null; this.stompW = null; if (this.P.carryN) this.P.carryN = null; this.kArmN = false; this.jHold = false;
     }
     gfx(bg, txt) {   // a full-screen tint for a skill (time drag, rewind); '' clears it
       let e = this.gfxEl; if (!e) { e = this.gfxEl = document.createElement('div'); e.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:39;display:none;transition:opacity .25s'; this.hud.appendChild(e); }
@@ -1149,7 +1177,8 @@
         const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz); if (d < r && (d < 0.5 || (dx * fx + dz * fz) / d > cosMin)) out.push({ n, d }); }
       return out.sort((p, q) => p.d - q.d).map((p) => p.n);
     }
-    upright(n) { return !n.eaten && !(n.pit > 0) && n.a.st !== 'down' && n.a.st !== 'getup'; }
+    upright(n) { return !n.eaten && !(n.pit > 0) && n.a.st !== 'down' && n.a.st !== 'getup' && n.att === undefined && !n.lunge && !n.carried && n.a.st !== 'thrown'; }
+    chargeK() { return DOG.charge[Math.min(DOG.charge.length - 1, this.attN())]; }
     bowl(r, pow, sfx) {   // whoever he runs into goes flying
       const P = this.P;
       for (const n of this.npcs) { const a = n.a; if (!this.upright(n) || Math.abs(a.y - P.y) > 1.2) continue;
@@ -1264,6 +1293,7 @@
     autoRewind() { if (this.gSkill !== 'rewind' || this.rew || !this.hist || this.hist.length < 6) return false; this.gSkill = null; this.g_rewind(); return true; }
     g_rewind() {
       const H = this.hist; if (!H || H.length < 6) { this.think('Nothing to rewind yet...', 1.4); return false; }
+      this.detachAll('drop'); if (this.P.carryN) { const n = this.P.carryN; this.P.carryN = null; n.carried = false; }
       this.rew = { L: H.slice().reverse(), t: 0, dur: 1.2 }; this.hist = [];
       this.gsStart('rewind', { move: true, pose: 'rewinding' }); this.gfx('repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 2px, rgba(0,0,0,0.05) 2px 4px), rgba(70,60,90,0.18)', '◀◀');
       this.sfx('whoosh', 1.2);
@@ -1275,7 +1305,7 @@
       this.npcs.forEach((n, j) => { const a = n.a, p = A.n[j], q = B.n[j]; if (!p || !q || n.eaten) return; a.x = lr(p.x, q.x); a.z = lr(p.z, q.z); a.y = lr(p.y, q.y); a.f = q.f; a.vx = (p.x - q.x) * 3; a.vz = (p.z - q.z) * 3; if (n.pit > 0 && !(q.pit > 0)) n.pit = 0; });
       if (k < 1) return;
       const E = L[L.length - 1]; P.x = E.P.x; P.z = E.P.z; P.y = E.P.y; P.f = E.P.f; this.hits = E.hits; this.lastHitT = E.lastHitT === undefined ? -99 : E.lastHitT - 0;   // (the hits taken since are undone too)
-      this.npcs.forEach((n, j) => { const s = E.n[j]; if (!s || n.eaten) return; const a = n.a; Object.assign(a, { x: s.x, z: s.z, y: s.y, f: s.f, st: s.st, t: s.t, dur: s.dur, fallX: s.fallX, fallZ: s.fallZ, vx: 0, vz: 0, shock: 0 });
+      this.npcs.forEach((n, j) => { const s = E.n[j]; if (!s || n.eaten) return; const a = n.a; Object.assign(a, { x: s.x, z: s.z, y: s.y, f: s.f, st: ['free', 'down', 'getup'].includes(s.st) ? s.st : 'free', t: s.t, dur: s.dur, fallX: s.fallX, fallZ: s.fallZ, vx: 0, vz: 0, shock: 0 });
         Object.assign(n, { mode: s.mode, alarm: s.alarm, path: s.path, pi: s.pi, wait: s.wait, i: s.i, ko: s.ko, last: s.last, lostT: s.lostT, inv: s.inv, noiseAt: s.noiseAt, shock: s.shock, pit: s.pit || 0, pitT: s.pitT, zzz: s.zzz, pullOut: false }); });
       this.rew = null; this.gsEnd(true); this.gfx(''); this.flash = 0.2; this.think('...where was I?', 1.4);
     }
@@ -1428,6 +1458,165 @@
         end: () => { sh.visible = false; } });
       this.sfx('whoosh', 0.6); this.popAt({ x: P.x, z: P.z, y: P.y }, 'とうっ!', 0.8);
     }
+    // ============================================================== the dogpile: staff grab and hang on; he slaps, stomps, charges and throws them off
+    // (all the numbers: DOG at the top of the file)
+    attN() { let k = 0; for (const n of this.att) if (n && n.att !== undefined) k++; return k; }
+    canGrab(n) {
+      const P = this.P, g = this.gs;
+      return !this.cap && !n.carried && this.t >= (n.noGrab || 0) && P.st !== 'charge' && P.st !== 'wind' && P.st !== 'skill' && P.st !== 'captured'
+        && !P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.unseen() && Math.abs(n.a.y - P.y) < 1 && this.att.some((q) => !q) && !(g && g.id === 'giant');
+    }
+    pickSlot(n) {   // which part of him they go for: whatever's nearest them (round the back: onto his shoulders)
+      const P = this.P, ang0 = ang(Math.atan2(n.a.z - P.z, n.a.x - P.x) - P.f), A = this.att, free = (k) => !A[k];
+      const pref = Math.abs(ang0) > 2.1 ? [4, ang0 > 0 ? 2 : 3, ang0 > 0 ? 0 : 1] : ang0 > 0 ? [0, 2, 4] : [1, 3, 4];
+      for (const k of pref.concat([0, 1, 2, 3, 4])) if (free(k)) return k;
+      return -1;
+    }
+    lunge(n) {   // a run and a jump at him; latched on if they get there
+      const k = this.pickSlot(n); if (k < 0) return;
+      this.att[k] = n; n.lunge = { t: 0, k, x0: n.a.x, z0: n.a.z, y0: n.a.y }; n.a.st = 'hold'; n.a.t = 0; n.path = null;
+      this.popAt(n.a, ['捕まえた!', 'とりゃ!', 'つかまえろ!'][(this.t * 3 | 0) % 3], 0.9);
+    }
+    slotPos(k) {   // where a hanger-on is, and how: 0 left arm (dangling), 1 right arm (pulling), 2/3 legs (dragged behind), 4 on his back (hands over his eyes)
+      const P = this.P, s = this.view.s, fx = Math.cos(P.f), fz = Math.sin(P.f), sx = -fz, sz = fx, T = this.t, mv = Math.min(1, Math.hypot(P.vx, P.vz) / 2);
+      const o = [[1.2, 0.1, 0.3], [-1.25, 0.05, 0], [0.6, -1.25, 0], [-0.6, -1.25, 0], [0, -0.55, 0.95]][k], ph = k * 1.7;
+      const sw = Math.sin(T * 7 + ph) * 0.06 * (0.3 + mv), x = P.x + (sx * o[0] + fx * o[1]) * s + sx * sw, z = P.z + (sz * o[0] + fz * o[1]) * s + sz * sw;
+      let y = P.y + o[2] * s, f, st;
+      if (k === 0) { f = Math.atan2(-sz, -sx); st = 'held'; y += Math.abs(Math.sin(T * 6 + ph)) * 0.05; }
+      else if (k === 1) { f = Math.atan2(sz, sx) + 0.2; st = 'hold'; }
+      else if (k === 4) { f = P.f + Math.sin(T * 5) * 0.18; st = 'held'; y += Math.abs(Math.sin(T * 8)) * 0.1 * (0.3 + mv); }   // (riding his back, legs dangling, hands over his eyes)
+      else { f = P.f; st = 'down'; }
+      return { x, z, y, f, st };
+    }
+    latchStep(n, dt) {   // the jump at him (true while it lasts)
+      const L = n.lunge, a = n.a; L.t += dt; const k = Math.min(1, L.t / DOG.lunge), q = this.slotPos(L.k);
+      a.x = L.x0 + (q.x - L.x0) * k; a.z = L.z0 + (q.z - L.z0) * k; a.y = L.y0 + (q.y - L.y0) * k + Math.sin(Math.PI * k) * 0.45; a.f = Math.atan2(this.P.z - a.z, this.P.x - a.x); a.st = 'hold'; a.vx = a.vz = 0;
+      if (k < 1) return true;
+      n.lunge = null; const P = this.P;
+      if (this.att[L.k] !== n || this.cap || P.st === 'charge' || P.st === 'wind' || P.st === 'skill' || P.hidden || P.boxHide || P.inStall || this.unseen() || (this.gs && this.gs.id === 'giant')) { if (this.att[L.k] === n) this.att[L.k] = null; a.st = 'free'; n.noGrab = this.t + 1; return true; }   // (he charged off, hid, vanished...: they miss)
+      n.att = L.k; n.attStun = 0; a.st = q.st; if (q.st === 'down') { a.t = 0; a.dur = 1e9; a.fallX = Math.cos(P.f); a.fallZ = Math.sin(P.f); a.slipFall = false; }
+      this.flash = Math.max(this.flash || 0, 0.12); this.sfx('thump', 3); if (this.g.audio && this.g.audio.grab) this.g.audio.grab();
+      if (!this.saidGrab) { this.saidGrab = true; this.think('Get OFF me! (hold J: stomp them off · charge them into a wall)', 2.6); }
+      if (this.attN() >= DOG.maxAtt) this.capture();
+      return true;
+    }
+    unattach(n) { if (n.att !== undefined && this.att[n.att] === n) this.att[n.att] = null; if (n.lunge && this.att[n.lunge.k] === n) this.att[n.lunge.k] = null; n.att = undefined; n.lunge = null; n.attStun = 0; }
+    launch(n, vx, vz, vy, downT, by) {   // sent flying (slapped, flung off, thrown): a rag doll through the air, down a while where they land
+      this.unattach(n); if (n.carried) { n.carried = false; if (this.P.carryN === n) this.P.carryN = null; }
+      const a = n.a; a.st = 'thrown'; a.t = 0; a.vx = vx; a.vz = vz; a.vy = vy; a.y = Math.max(a.y, floorY(a.x, a.z) + 0.6); n.thrDown = downT; n.thrBy = by || null; n.shock = 0; a.shock = 0; n.spin = null;
+      n.path = null; n.hold = 0; n.pushing2 = false; n.tug = 0; n.clr = null; n.alarm = 0; n.zzz = 0;
+      if (n.pushing) { const c = this.carts.find((cc) => cc.ret && cc.ret.n === n); if (c) c.ret.n = null; n.pushing = false; }
+    }
+    flyStep2(n, dt) {   // (npcStep) in the air: walls bounce them, they bowl over whoever they hit, and land in a heap
+      const a = n.a; a.vy -= 18 * dt; a.y += a.vy * dt; a.x += a.vx * dt; a.z += a.vz * dt;
+      if (this.collide(a, 0.35)) { a.vx *= -0.35; a.vz *= -0.35; if (!n.wallHit) { n.wallHit = true; this.sfx('thump', 5); this.fx.dust(a.x, a.y + 0.5, a.z, 5, 0.3, 0.4, 0.4); } }
+      const fy = floorY(a.x, a.z), sp = Math.hypot(a.vx, a.vz);
+      if (sp > 2) for (const m of this.npcs) if (m !== n && this.upright(m) && Math.abs(m.a.y - fy) < 1.2 && a.y < fy + 1.6 && Math.hypot(m.a.x - a.x, m.a.z - a.z) < 0.8) {
+        this.launch(m, a.vx * 0.55, a.vz * 0.55, 2.2, DOG.bumpDown); this.popAt(m.a, ['ドカッ!', 'うわっ!', 'ぎゃっ!'][(this.t * 7 | 0) % 3], 0.9); a.vx *= 0.7; a.vz *= 0.7; }
+      if (a.y <= fy && a.vy < 0) { a.y = fy; a.st = 'down'; a.t = 0; a.dur = n.thrDown || 2; a.slipFall = false; a.fallX = a.vx; a.fallZ = a.vz; a.vx *= 0.35; a.vz *= 0.35; n.wallHit = false;
+        n.recover = true; n.noGrab = this.t + a.dur + 1.2 + DOG.regrab; this.fx.dust(a.x, fy + 0.05, a.z, 6, 0.35, 0.4, 0.4); this.sfx('thump', 4); }
+    }
+    recoverAI(n) {   // back on their feet after a slap, a spin or a flight: after him again if they can see him, else a look round
+      const a = n.a, P = this.P; a.st = 'free'; a.t = 0; n.noGrab = Math.max(n.noGrab || 0, this.t + DOG.regrab);
+      if (!this.unseen() && !P.hidden && !P.boxHide && !P.inStall && Math.abs(a.y - P.y) < 1.5 && Math.hypot(P.x - a.x, P.z - a.z) < 12 && this.clear(a.x, a.z, P.x, P.z)) this.startChase(n);
+      else { n.mode = 'search'; n.wait = 3; n.path = null; }
+    }
+    slapHit(n, fx, fz) {   // the slap's result depends on where it lands: their front (knocked flying back), their side (spun round), their back (stumbling forward)
+      const a = n.a, P = this.P; if (n.lunge) this.unattach(n);
+      const ex = P.x - a.x, ez = P.z - a.z, el = Math.hypot(ex, ez) || 1, face = (Math.cos(a.f) * ex + Math.sin(a.f) * ez) / el; this.bonusLose('ko');
+      if (face > 0.45) { this.launch(n, fx * DOG.slapFront, fz * DOG.slapFront, 2.8, DOG.slapDown); this.popAt(a, ['バシッ!', 'パーン!'][(this.t * 5 | 0) % 2], 0.9); }
+      else if (face < -0.45) { this.launch(n, fx * DOG.slapRear, fz * DOG.slapRear, 1.4, DOG.stumbleDown); this.popAt(a, 'おっとっと!', 1.0); }
+      else { const sd = (ex * fz - ez * fx) > 0 ? 1 : -1; n.spin = { t: DOG.spinT, w: 22 * sd }; a.st = 'dazed'; a.t = 0; a.vx = fx * 2.2; a.vz = fz * 2.2; n.path = null; this.popAt(a, 'ぐるぐる〜', 1.2); }
+      this.flash = Math.max(this.flash || 0, 0.15); this.sfx('thump', 5); if (this.g.audio && this.g.audio.slap) this.g.audio.slap(5);
+      this.noise(a.x, a.z, 9, '!?');
+    }
+    spinStep(n, dt) {   // (npcStep) spun round by a slap to the side: twirling, drifting, bumping into whoever's there, then back to it
+      const S0 = n.spin, a = n.a; S0.t -= dt; const k = Math.max(0, S0.t / DOG.spinT);
+      a.f += S0.w * dt * k; a.x += a.vx * dt; a.z += a.vz * dt; a.vx *= 0.94; a.vz *= 0.94; this.collide(a, 0.4); a.y = floorY(a.x, a.z); a.st = 'dazed';
+      for (const m of this.npcs) if (m !== n && this.upright(m) && Math.hypot(m.a.x - a.x, m.a.z - a.z) < 0.75 && Math.hypot(a.vx, a.vz) > 0.6) { this.launch(m, a.vx * 1.4, a.vz * 1.4, 1.8, DOG.bumpDown); a.vx *= 0.4; a.vz *= 0.4; }
+      if (S0.t <= 0) { n.spin = null; this.recoverAI(n); }
+    }
+    detachAll(how) {   // 'stomp': everyone flies off; 'drop': let go where they are; 'reset': just forgotten (a restart puts everyone back)
+      const P = this.P;
+      for (let k = 0; k < this.att.length; k++) { const n = this.att[k]; if (!n) continue; this.att[k] = null; const was = n.att !== undefined; n.att = undefined; n.lunge = null; n.attStun = 0;
+        if (how === 'reset') continue;
+        const a = n.a; let dx = a.x - P.x, dz = a.z - P.z; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+        if (how === 'stomp') this.launch(n, dx * DOG.stompFling * (0.85 + Math.random() * 0.3), dz * DOG.stompFling * (0.85 + Math.random() * 0.3), 4.2 + (k === 4 ? 1.5 : 0), DOG.flungDown);
+        else if (was) this.launch(n, dx * 1.5, dz * 1.5, 1.2, DOG.flungDown);
+        else { a.st = 'free'; n.noGrab = this.t + 1; } }
+    }
+    startStomp() {   // hold J: feet planted, the leg comes up... (its time is set now: more hanging on doesn't make it longer)
+      const P = this.P, k = Math.min(DOG.stompWind.length - 1, this.attN());
+      this.stompW = { t: 0, W: DOG.stompWind[k] }; P.st = 'stompW'; P.t = 0; P.dur = 1e9; P.vx = P.vz = 0;
+    }
+    doStomp() {   // ...STAMP: everyone hanging on flies off, and anyone near is thrown back by the shock
+      const P = this.P; this.stompW = null; P.st = 'busy'; P.t = 0; P.dur = 0.35; this.stompDone = this.t + 0.35;
+      this.detachAll('stomp');
+      for (const n of this.npcs) { const a = n.a; if (!this.upright(n) || Math.abs(a.y - P.y) > 1.2) continue; const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz) || 1; if (d > DOG.stompR) continue;
+        const k = 1 - d / DOG.stompR; this.launch(n, dx / d * (3 + 4 * k), dz / d * (3 + 4 * k), 2 + 2 * k, DOG.bumpDown); }
+      this.flash = Math.max(this.flash || 0, 0.7); this.shake = Math.max(this.shake || 0, 0.35); this.sfx('thump', 9); this.fx.ring(P.x, P.z, DOG.stompR, 0.45); this.fx.ring(P.x, P.z, DOG.stompR * 0.55, 0.3);
+      this.fx.dust(P.x, P.y + 0.05, P.z, 20, 1.2, 0.6, 0.6); this.popAt({ x: P.x, z: P.z, y: P.y }, 'ドスン!!', 1.0, true); this.noise(P.x, P.z, 10, '!?');
+    }
+    chargeWall() {   // charging into a wall with them hanging on: everyone's rattled (still holding on, stunned), and one is flung off for good
+      const P = this.P, on = this.att.filter((n) => n && n.att !== undefined); if (!on.length) return;
+      const off = on[(Math.random() * on.length) | 0], bx = -Math.cos(P.cdir), bz = -Math.sin(P.cdir);
+      this.launch(off, bx * 5 + (Math.random() - 0.5) * 3, bz * 5 + (Math.random() - 0.5) * 3, 4.5, DOG.flungDown); this.popAt(off.a, 'うわああ!', 1.0);
+      for (const n of on) if (n !== off) n.attStun = DOG.wallStun;
+      this.flash = Math.max(this.flash || 0, 0.55); this.shake = Math.max(this.shake || 0, 0.3); this.sfx('thump', 9);
+    }
+    carryStep(dt) {   // carrying someone: held up in front of him by the collar, kicking; they wriggle free after a while
+      const P = this.P, n = P.carryN; if (!n) return; const a = n.a, s = this.view.s;
+      n.carryT = (n.carryT || 0) + dt; a.st = 'held'; a.vx = a.vz = 0;
+      a.x = P.x + Math.cos(P.f) * (0.95 * s); a.z = P.z + Math.sin(P.f) * (0.95 * s); a.y = P.y + 0.55 * s; a.f = P.f + Math.PI;
+      if (n.carryT > DOG.carryMax) { P.carryN = null; n.carried = false; a.y = floorY(a.x, a.z); this.collide(a, 0.4); this.popAt(a, 'はなせっ!', 1.0); this.recoverAI(n); }
+    }
+    grabEnemy() {   // K beside one of them: picked up (a heave: slower than a slap)
+      const P = this.P, fx = Math.cos(P.f), fz = Math.sin(P.f);
+      let best = null, bd = DOG.pickR; for (const n of this.npcs) { const a = n.a; if (n.att !== undefined || n.lunge || n.carried || n.eaten || n.pit > 0 || a.st === 'thrown' || Math.abs(a.y - P.y) > 1) continue;
+        const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (d < 0.6 || (dx * fx + dz * fz) / d > 0.35)) { bd = d; best = n; } }
+      if (!best) return false;
+      const n = best, a = n.a; this.unattach(n); n.spin = null; n.shock = 0; a.shock = 0; n.ko = false; n.recover = false; n.carried = true; n.carryT = 0; n.path = null; n.mode = 'chase'; n.alarm = 0; n.zzz = 0;
+      P.carryN = n; P.st = 'busy'; P.t = 0; P.dur = DOG.liftT; this.bonusLose('ko');
+      this.popAt(a, ['うわっ!?', 'おろせ!', 'ひえっ!'][(this.t * 3 | 0) % 3], 1.0); if (this.g.audio && this.g.audio.grab) this.g.audio.grab(); this.noise(P.x, P.z, 6, '!?');
+      return true;
+    }
+    throwEnemy(slam) {   // tap K: thrown the way he faces (or pushes); hold K: slammed down at his feet
+      const P = this.P, n = P.carryN, c = this.ctrl; if (!n) return; P.carryN = null; n.carried = false;
+      const mag = Math.hypot(c.mx, c.mz), d = mag > 0.3 ? Math.atan2(c.mz, c.mx) : P.f, fx = Math.cos(d), fz = Math.sin(d); P.f = d;
+      if (slam) { this.launch(n, fx * 0.6, fz * 0.6, -6, DOG.thrownDown + 0.6); this.flash = Math.max(this.flash || 0, 0.4); this.sfx('thump', 8); this.fx.ring(P.x + fx, P.z + fz, 1.6, 0.3);
+        for (const m of this.npcs) if (m !== n && this.upright(m) && Math.abs(m.a.y - P.y) < 1 && Math.hypot(m.a.x - n.a.x, m.a.z - n.a.z) < 1.7) { const dx = m.a.x - n.a.x, dz = m.a.z - n.a.z, dl = Math.hypot(dx, dz) || 1; this.launch(m, dx / dl * 3.5, dz / dl * 3.5, 2, DOG.bumpDown); } }
+      else { this.launch(n, fx * DOG.throwSp, fz * DOG.throwSp, 3.4, DOG.thrownDown); n.a.y = P.y + 0.9; this.sfx('whoosh', 0.4); }
+      P.st = 'busy'; P.t = 0; P.dur = 0.35; this.noise(P.x, P.z, 9, '!?');
+    }
+    capture() {   // the fifth one on: down he goes under the pile, a moment, a fade, and back to the checkpoint
+      if (this.cap) return; const P = this.P;
+      if (this.gSkill === 'rewind' && this.hist && this.hist.length >= 6) { this.detachAll('drop'); this.autoRewind(); return; }   // (REWIND: saved)
+      this.stompW = null; this.cap = { t: 0 }; P.st = 'captured'; P.t = 0; P.dur = 1e9; P.vx = P.vz = 0; P.fall = P.f + Math.PI; this.shove = null;
+      if (P.carryN) { const n = P.carryN; P.carryN = null; n.carried = false; }
+      this.flash = 0.6; this.sfx('thump', 9); this.clearPops(); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, '確保ーっ!!', 1.6, true);
+      this.freeze = DOG.captureT + DOG.fadeT + 0.15; this.catcher = this.att.find((n) => n) || null;
+    }
+    attDraw(dt) {   // (draw) the hangers-on, placed on him every frame, after his pose; under the pile when he's caught
+      const P = this.P;
+      for (let k = 0; k < this.att.length; k++) { const n = this.att[k]; if (!n || n.att === undefined) continue; const a = n.a;
+        if (this.cap) { const t = this.cap.t, s = this.view.s, u = Math.min(1, t / 0.5), px = P.x + Math.cos(k * 1.3) * 0.35 * s, pz = P.z + Math.sin(k * 1.3) * 0.35 * s;
+          a.x += (px - a.x) * u * 0.3; a.z += (pz - a.z) * u * 0.3; a.y = P.y + (0.35 + 0.32 * k) * s * u + Math.abs(Math.sin(t * 10 + k)) * 0.06; a.st = k % 2 ? 'down' : 'hold'; a.dur = 1e9; continue; }
+        const q = this.slotPos(k); a.x = q.x; a.z = q.z; a.y = q.y; a.f = q.f;
+        if (n.attStun > 0) { a.st = q.st === 'down' ? 'down' : 'hurt'; if (q.st !== 'down') { a.f += Math.sin(this.t * 20) * 0.3; a.y -= 0.1; } }
+        else a.st = q.st;
+        if (a.st === 'down') a.dur = 1e9;
+      }
+    }
+    dogHud(dt) {   // the hand over his eyes (a dark ring round him, wobbling), and the fade when he's caught
+      const P = this.P; let e = this.capEl; if (!e) { e = this.capEl = document.createElement('div'); e.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:45;background:#120d16;opacity:0'; this.hud.appendChild(e); }
+      this.capO = this.cap ? clamp((this.cap.t - DOG.captureT) / DOG.fadeT, 0, 1) : Math.max(0, (this.capO || 0) - dt * 2.5); e.style.opacity = this.capO.toFixed(3);
+      let b = this.blindEl; if (!b) { b = this.blindEl = document.createElement('div'); b.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:38;opacity:0'; this.hud.appendChild(b); }
+      const hn = this.att && this.att[4], on = hn && hn.att !== undefined && !(hn.attStun > 0) && !this.cap;
+      this.blindO = (this.blindO || 0) + ((on ? 1 : 0) - (this.blindO || 0)) * Math.min(1, dt * 6);
+      if (this.blindO > 0.01) { const q = this.project(P.x, P.y + 1.2 * this.view.s, P.z), r0 = innerHeight * (0.17 + Math.sin(this.t * 7) * 0.015), r1 = r0 + innerHeight * 0.3;
+        b.style.background = 'radial-gradient(circle at ' + (q.x | 0) + 'px ' + (q.y | 0) + 'px, rgba(24,16,28,0) ' + (r0 | 0) + 'px, rgba(24,16,28,0.62) ' + (r1 | 0) + 'px)'; }
+      b.style.opacity = this.blindO.toFixed(3);
+    }
     hitBy(n) {   // a shove and a slap: he staggers back. Three and he's out cold
       const P = this.P, a = n.a;
       if (this.gs && this.gs.id === 'giant') { const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz) || 1; this.hitCd = 0.5; this.knockOut(n, dx / d, dz / d, 'ボヨン!', 5); return; }   // (GIANT: they bounce off him) this.hitCd = 1.1; if (this.t - (this.lastHitT === undefined ? -99 : this.lastHitT) > HIT_WIN) this.hits = 0;
@@ -1460,7 +1649,7 @@
     sepNpcs() {   // people don't walk through each other: nudge apart anyone overlapping
       const N = this.npcs;
       for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) {
-        const a = N[i].a, b = N[j].a; if (Math.abs(a.y - b.y) > 1 || N[i].eaten || N[j].eaten || N[i].pit > 0 || N[j].pit > 0) continue;
+        const a = N[i].a, b = N[j].a, off = (q) => q.eaten || q.pit > 0 || q.att !== undefined || q.lunge || q.carried || q.a.st === 'thrown'; if (Math.abs(a.y - b.y) > 1 || off(N[i]) || off(N[j])) continue;
         const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
         if (d < 0.8 && d > 1e-4) { const k = (0.8 - d) / 2 / d; a.x -= dx * k; a.z -= dz * k; b.x += dx * k; b.z += dz * k; this.collide(a, 0.4); this.collide(b, 0.4); }
       }
@@ -1574,11 +1763,7 @@
       const inFront = (x, z, r) => { const dx = x - P.x, dz = z - P.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.3; };
       const Bm = this.bomb; if (Bm && inFront(Bm.x, Bm.z, 1.8)) { Bm.vx = fx * 8; Bm.vz = fz * 8; Bm.kicked = true; this.popAt({ x: Bm.x, z: Bm.z, y: P.y }, 'ポーン!', 0.8); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); return; }   // (the gacha bomb: kicked away)
       const V = this.vend; if (V && !V.broke && Math.abs(P.y - V.y) < 1 && inFront(V.x0 - 0.1, clamp(P.z, V.z0, V.z1), 1.5)) { this.hitVend(); return; }
-      for (const n of this.npcs) if (n.a.st === 'free' && Math.abs(n.a.y - P.y) < 1 && inFront(n.a.x, n.a.z, 1.7)) {
-        // J: a slap that knocks them out cold. Out for ten seconds, or until someone comes and shakes them awake.
-        // The thud is heard: anyone near comes running to look
-        this.knockOut(n, fx, fz, ['バシッ!', 'ゴツン!', 'パーン!'][(this.t * 5 | 0) % 3]); return;
-      }
+      for (const n of this.npcs) if ((n.a.st === 'free' || n.a.st === 'dazed' || n.lunge) && n.att === undefined && !n.carried && Math.abs(n.a.y - P.y) < 1 && inFront(n.a.x, n.a.z, 1.7)) { this.slapHit(n, fx, fz); return; }   // J: an open-hand slap (see slapHit)
       for (const r of this.rats) if (r.st !== 'home' && r.st !== 'fly' && inFront(r.x, r.z, 1.6)) {
         if (r.carry) { r.carry = false; this.oni.n = Math.min(4, this.oni.n + 1); this.oniDraw(); }
         r.st = 'fly'; r.t = 0.6; r.vx = (r.x - P.x) * 4; r.vz = (r.z - P.z) * 4; this.popAt({ x: r.x, z: r.z, y: 0 }, 'チュー!', 1.0);
@@ -1758,6 +1943,7 @@
     }
     sfFighter(x, dir) { return { x, dir, hp: 100, st: 'idle', t: 0, done: false, stun: 0, inv: 0, vx: 0, ai: 0, mv: 0, blockT: 0 }; }
     sfStart() {
+      if (this.att) this.detachAll('drop'); if (this.P.carryN) { const n = this.P.carryN; this.P.carryN = null; n.carried = false; this.recoverAI(n); }   // (into the boss bout: nobody hanging on)
       const P = this.P, B = this.boss, bn = S.Banners;
       const go = () => { this.hud.classList.add('sf'); this.stage = 'bossfight'; this.camD = 10.5; this.camH = 0.27; this.camT.set(7, 1.1, -0.9); this.sfHide(true); this.sf = { round: 1, wins: [0, 0], ph: 'none', t: 0, you: this.sfFighter(5.2, 1), boss: this.sfFighter(8.8, -1), timer: 60, pose: null, shake: 0 };
         B.on = true; B.hold = false; B.sink = undefined; B.rise = B.rise || { t: 9, gone: true }; if (this.mawM) this.mawM.visible = false; this.sfHud(true); this.sfReset(); };
@@ -2098,7 +2284,9 @@
       const near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r, room = roomAt(P.x, P.z), sub = this.el('.st-sub').style.display === 'block';
       if (!(this.paused || this.over || this.asleep || this.sf || this.freeze || this.choiceCb || sub || this.jumpOn || this.camFocus || this.bossCut)) {   // (no prompts in a cutscene, dialog or not)
         const V = this.vend;
-        if (P.stallHide !== undefined) L = [['move / I', 'come out']];
+        if (this.attN && this.attN()) L = [['hold J', 'stomp them all off'], ['L into a wall', 'shake one off']];
+        else if (P.carryN) L = [['K', 'throw'], ['hold K', 'slam down']];
+        else if (P.stallHide !== undefined) L = [['move / I', 'come out']];
         else if (P.hidden) L = [['move / I', 'climb out'], ['hold I + direction', 'climb out silently']];
         else if (P.cart) L = [['K', 'let go'], ['I', 'hop inside and hide']];
         else if (P.held) L = P.held.kind === 'can' && P.held.soda ? [['J', 'drink it'], ['K', 'throw'], ['hold K', 'smash (loud)']] : [['K', 'throw'], ['hold K', 'smash (loud)'], ['J', 'put it down']];
@@ -2168,6 +2356,7 @@
     }
     // out cold (a slap, or bowled over by a charge before they'd made him out): ten seconds, or till a colleague wakes them
     knockOut(n, fx, fz, sfx, pow) {
+      this.unattach(n); n.spin = null; n.recover = false; if (n.carried) { n.carried = false; if (this.P.carryN === n) this.P.carryN = null; }
       this.bonusLose('ko');
       const a = n.a; if (n.raid && n.mode === 'raid') n.raid = false;
       if (n.pushing) { const c = this.carts.find((cc) => cc.ret && cc.ret.n === n); if (c) c.ret.n = null; n.pushing = false; }
@@ -2470,12 +2659,13 @@
           q.m.position.set(q.sx + (mx - q.sx) * e - fz * sw, q.sy + (hy - q.sy) * e + sw * 0.4, q.sz + (mz - q.sz) * e + fx * sw); q.m.rotation.y += dt * 18; q.m.rotation.x += dt * 9; q.m.scale.setScalar(1.3 * (1 - 0.7 * e)); q.m.visible = k < 1; }
         if (E.t > E.dur) { for (const q of E.pieces) if (q.m) this.G.remove(q.m); this.eatAnim = null; }
       }
-      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
+      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? 'bigstomp' : P.st === 'busy' && this.stompDone > this.t ? 'free' : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (P.st === 'skill' && g && g.wt !== undefined) w.t = g.wt;
+      if (P.st === 'stompW' && this.stompW) w.t = 0.45 * Math.min(1, this.stompW.t / this.stompW.W); if (this.cap) { this.cap.t += dt; w.t = this.cap.t; }
       w.torpedo = !!(P.st === 'skill' && g && g.torp); w.szCur = g && g.sz ? g.sz : 1; w.gulpI = this.gulp ? 0 : -1; if (g && g.wdur) w.dur = g.wdur;
-      if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.t > 0.3 && P.t < 1.0; } else w.down = false;
-      w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0); w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : null;
+      if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.st === 'captured' ? !!(this.cap && this.cap.t > 0.3) : P.t > 0.3 && P.t < 1.0; } else w.down = false;
+      w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0, Math.min(0.9, this.attN() * 0.2));   // (bowed under the dogpile) w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : P.carryN ? {} : null;
       if (this.freeze) w.fxs.dizzy = 1;
       if (P.st === 'skill' && g && g.ball) { w.fxs.ball = 1; w.ballRoll = g.roll; }
       if (g && g.id === 'hands' && P.st === 'skill') w.hand = g.sd;
@@ -2517,6 +2707,7 @@
       this.kdt = Math.min(0.05, dt); this.drawN = (this.drawN || 0) + 1;
       this.bossDraw(dt, T); this.bonusBar(); this.mapDraw(T);
       if (this.drawN % 10 === 1) { this.hudApply(); const o = this.el('.st-obj'), hp = this.el('.st-hp'); if (o && hp) hp.style.setProperty('top', (o.offsetTop + o.offsetHeight + 8) + 'px', 'important'); }   // (a two-line goal pushes the badges down, never over them)
+      this.attDraw(dt);
       this.dtR = dt; const nK = this.npcK(); for (const n of this.npcs) { n.a.push = !!n.pushing2; n.v.update(n.a, Math.max(dt * nK, 1e-4), T); if (n.shrink !== undefined) n.v.root.scale.multiplyScalar(n.shrink); n.v.root.visible = !n.inside && !(n.pit > 0 && n.pitT > 0.6); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }
       this.sweatStep(dt);
       this.tipStep(dt); this.ctxStep();
@@ -2619,7 +2810,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · J punch (knocks them out) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · take a run-up to smash things) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J slap (to the face: knocked flying · the side: spun round · the back: stumbles) · hold J stomp (throws off anyone hanging on) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · a run-up smashes things · into a wall shakes one hanger-on off) · K use / pick up / throw / push a cart / pick up a person (tap K throw, hold K slam) · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="settings">SETTINGS</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
@@ -2652,6 +2843,7 @@
         gb.firstChild.style.width = (Math.max(0, 1 - gs.t / gs.dur) * 100) + '%'; gb.firstChild.style.background = gs.col || '#a48fd6'; }
       else gb.style.display = 'none';
       const bd = this.el('.st-gbadge'), G = this.gSkill && GACHA[this.gSkill]; bd.style.display = G && !this.over && !this.sf ? 'block' : 'none'; if (G && bd._t !== G.name) { bd._t = G.name; bd.innerHTML = '<b>' + (this.gSkill === 'rewind' ? 'AUTO' : 'SPACE') + '</b> ' + G.name; }
+      this.dogHud(dt);
       this.chaseGoal(); const hp = this.el('.st-hp'), ch = this.chasing(), hits = this.hits || 0;   // three hits and he's out: ♥♥♥
       hp.style.display = 'none';   // (no hearts: the screen tells him how he's doing) hp.textContent = '♥'.repeat(3 - Math.min(3, hits)) + '♡'.repeat(Math.min(3, hits)); hp.classList.toggle('chase', ch);
       const sf = this.el('.st-safe'), hunt = this.stage === 'bathhide';
