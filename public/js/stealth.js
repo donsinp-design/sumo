@@ -42,7 +42,7 @@
     speed: [1, 0.78, 0.58, 0.4, 0.22, 0],        // his walk with 0..5 on him
     charge: [1, 0.85, 0.7, 0.55, 0.4],           // how far a charge carries with 0..4 on him (the burst itself is the same)
     stompWind: [0.5, 0.6, 0.8, 1.0, 1.2],
-    ballSpeed: 8.4, ballMax: 1.2, ballTurn: 3.0, tuckC: 0.62, tuckLift: 0.12,   // (the tucked roll turns about this height; lifted a little so it rolls on its back, not its feet)  // I mid-charge: rolled up into a daruma (faster than the charge's 7.2), rolls on while L is held, up to this long        // hold J: the stomp's wind-up with 0..4 on him (fixed when it starts)
+    ballSpeed: 8.4, ballMax: 2.4, ballTurn: 3.0, tuckC: 0.62, tuckLift: 0.12,   // (the tucked roll turns about this height; lifted a little so it rolls on its back, not its feet)  // I mid-charge: rolled up into a daruma (faster than the charge's 7.2), rolls on while L is held, up to this long        // hold J: the stomp's wind-up with 0..4 on him (fixed when it starts)
     holdJ: 0.22,                                 // J held this long becomes the stomp (a tap slaps at once, no wait)
     grabR: 1.45, lunge: 0.3,                     // they jump at him from this close; the jump takes this long
     regrab: 1.6,                                 // up again after a slap, a fall or a throw: this long before they can grab again
@@ -637,6 +637,7 @@
       // down on a puddle: slide to a stop, lie there a moment, get up, carry on (and see nothing meanwhile)
       if (a.st === 'down' || a.st === 'getup') {
         a.vx *= 0.9; a.vz *= 0.9; a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4);
+        { const fy = floorY(a.x, a.z); if (a.y > fy + 0.01) { n.fvy = (n.fvy || 0) + 18 * dt; a.y = Math.max(fy, a.y - n.fvy * dt); } else n.fvy = 0; }   // (dropping off him: falls to the floor)
         if (a.st === 'down' && a.t >= a.dur) { a.st = 'getup'; a.t = 0; a.dur = 1.2; }
         else if (a.st === 'getup' && a.t >= a.dur && n.recover) { n.recover = false; this.recoverAI(n); }
         else if (a.st === 'getup' && a.t >= a.dur && n.ko) { n.ko = false; n.mode = 'search'; n.wait = 4; n.path = null; this.popAt(a, '誰だ…殴ったのは!?', 1.6); }
@@ -815,7 +816,8 @@
           if (!this.saidCart) { this.saidCart = true; this.think('...just a cart of towels. Nothing to see.', 2.0); } return; }
       }
       // I: TIPTOE. Silent, slow, and tiring: about six seconds on his toes, then the heels come down with a thud
-      const tipOn = !!this.keys.KeyI && P.st === 'free' && !wet && !P.tired && !P.cart;
+      if (P.ball && P.st !== 'charge') this.iLock = true; if (!this.keys.KeyI) this.iLock = false;   // (the roll's I: not a tiptoe once it ends)
+      const tipOn = !!this.keys.KeyI && !this.iLock && P.st === 'free' && !wet && !P.tired && !P.cart;
       // in the bath, I: duck right under (just bubbles on the water)
       P.sub = wet && !!this.keys.KeyI && P.st === 'free' && !P.tired;
       if (P.sub) { P.stam -= dt / 8; if (P.stam <= 0) { P.stam = 0; P.tired = true; P.sub = false; this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'ぷはっ!', 1.2); this.fx.water && this.fx.water(P.x, P.z, 3, POOL.water); this.noise(P.x, P.z, 9, '!?'); this.think('*gasp* ...can\'t hold my breath that long!', 1.8); } }
@@ -908,6 +910,7 @@
       if (wet !== this.wasWet) { if (this.wasWet !== undefined) this.fx.water && this.fx.water(P.x, P.z, 1.6, POOL.water); this.wasWet = wet; }
       if (P.st === 'charge') {
         if (power && this.stage === 'smash' && !this.chasing() && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.25) { this.chargeWall(); this.hitLocker(); P.st = 'busy'; P.t = 0; P.dur = 0.5; }
+        else if (hit && P.ball && this.pN) { const nx = this.pN[0], nz = this.pN[1], vx = Math.cos(P.cdir), vz = Math.sin(P.cdir), d = vx * nx + vz * nz; P.cdir = Math.atan2(vz - 2 * d * nz, vx - 2 * d * nx); P.f = P.cdir; P.vx *= 0.6; P.vz *= 0.6; this.sfx('thump', 5); this.fx.dust(P.x, P.y + 0.3, P.z, 5, 0.3, 0.4, 0.4); this.noiseS(P.x, P.z, 6, '?'); }   // (rolled up: it bounces off and rolls on)
         else if (hit) { this.chargeWall(); P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.fx.dust && this.fx.dust(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (true) this.noiseS(P.x, P.z, 5, '?'); }
       }
       if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = was === 'wind' ? 'charge' : 'free'; P.t = 0; if (was === 'wind') { P.dur = 0.85 * this.chargeK(); P.run = 0; this.chargeOne(); } if (was === 'charge') P.cd = 0.5; if (was === 'wear') this.putOnBox(); }
@@ -1567,7 +1570,7 @@
       for (let k = 0; k < this.att.length; k++) { const n = this.att[k]; if (!n) continue; this.att[k] = null; const was = n.att !== undefined; n.att = undefined; n.lunge = null; n.attStun = 0; n.a.cling = null;
         if (how === 'reset') continue;
         const a = n.a; let dx = a.x - P.x, dz = a.z - P.z; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
-        if (how === 'stomp') this.launch(n, dx * DOG.stompFling * (0.85 + Math.random() * 0.3), dz * DOG.stompFling * (0.85 + Math.random() * 0.3), 4.2 + (k === 4 ? 1.5 : 0), DOG.flungDown);
+        if (how === 'stomp') this.dropOff(n, dx, dz);
         else if (was) this.launch(n, dx * 1.5, dz * 1.5, 1.2, DOG.flungDown);
         else { a.st = 'free'; n.noGrab = this.t + 1; } }
     }
@@ -1579,18 +1582,23 @@
       const P = this.P; this.stompW = null; P.st = 'busy'; P.t = 0; P.dur = 0.35; this.stompDone = this.t + 0.35;
       this.detachAll('stomp');
       for (const n of this.npcs) { const a = n.a; if (!this.upright(n) || Math.abs(a.y - P.y) > 1.2) continue; const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz) || 1; if (d > DOG.stompR) continue;
-        const k = 1 - d / DOG.stompR; this.launch(n, dx / d * (3 + 4 * k), dz / d * (3 + 4 * k), 2 + 2 * k, DOG.bumpDown); }
+        this.dropOff(n, dx, dz, DOG.bumpDown); }   // (the shock knocks them off their feet)
       this.flash = Math.max(this.flash || 0, 0.7); this.shake = Math.max(this.shake || 0, 0.35); this.sfx('thump', 9); this.fx.ring(P.x, P.z, DOG.stompR, 0.45); this.fx.ring(P.x, P.z, DOG.stompR * 0.55, 0.3);
       this.fx.dust(P.x, P.y + 0.05, P.z, 20, 1.2, 0.6, 0.6); this.popAt({ x: P.x, z: P.z, y: P.y }, 'ドスン!!', 1.0, true); this.noise(P.x, P.z, 10, '!?');
+    }
+    dropOff(n, dx, dz, downT) {   // shaken off: they just let go and fall down where they are (a little push away from him), no flying
+      this.unattach(n); n.spin = null; n.shock = 0; n.a.shock = 0; n.ko = false; n.path = null; n.hold = 0; n.alarm = 0;
+      const a = n.a, l = Math.hypot(dx, dz) || 1; a.cling = null; a.st = 'down'; a.t = 0; a.dur = downT || DOG.flungDown; a.slipFall = false; a.fallX = dx / l; a.fallZ = dz / l;
+      a.vx = dx / l * 1.3; a.vz = dz / l * 1.3; n.fvy = 0; n.recover = true; n.noGrab = this.t + a.dur + 1.2 + DOG.regrab;
     }
     chargeOne() {   // a charge sets off: the jolt flings one of them off
       const P = this.P, on = this.att.filter((n) => n && n.att !== undefined); if (!on.length) return;
       const off = on[(Math.random() * on.length) | 0], bx = -Math.cos(P.cdir), bz = -Math.sin(P.cdir);
-      this.launch(off, bx * 4.5 + (Math.random() - 0.5) * 3, bz * 4.5 + (Math.random() - 0.5) * 3, 3.8, DOG.flungDown); this.popAt(off.a, 'うわああ!', 1.0); this.sfx('whoosh', 0.4);
+      this.dropOff(off, off.a.x - P.x, off.a.z - P.z); this.popAt(off.a, 'うわっ!', 1.0); this.sfx('thump', 4);
     }
     chargeWall() {   // charging into a wall, or smashing through something: every one of them is thrown off
       const P = this.P, on = this.att.filter((n) => n && n.att !== undefined); if (!on.length) return;
-      for (const n of on) { const a = (Math.random() - 0.5) * 2.2, d = Math.atan2(-Math.sin(P.cdir), -Math.cos(P.cdir)) + a; this.launch(n, Math.cos(d) * 5, Math.sin(d) * 5, 4 + Math.random() * 1.5, DOG.flungDown); }
+      for (const n of on) this.dropOff(n, n.a.x - P.x, n.a.z - P.z);
       this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'ドカーン!!', 1.0, true);
       this.flash = Math.max(this.flash || 0, 0.55); this.shake = Math.max(this.shake || 0, 0.3); this.sfx('thump', 9);
     }

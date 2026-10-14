@@ -562,7 +562,7 @@
           }
           break;
         case 'brace': c = 0.88; p = 0.32; Rh = [0.45, 0.32, 0.58]; Lh = mir(Rh); break;
-        case 'tuck': c = 0.55; p = 0.95; hp = 0.6; Rh = [0.26, 0.12, 0.55]; Lh = mir(Rh); rate = 30; break;   // (the bathhouse's rolling charge) a cannonball: knees to his chest, arms round them, face down on his knees
+        case 'tuck': c = 0.55; p = 1.0; hp = 0.7; Rh = [0.24, 0.1, 0.5]; Lh = mir(Rh); rate = 70; break;   // (the bathhouse's rolling charge) a cannonball: knees to his chest, arms round them, face down on his knees
         case 'palm': {
           const e = t < 0.05 ? t / 0.05 : t < 0.11 ? 1 : Math.max(0, 1 - (t - 0.11) / 0.09);
           const act = [0.14, 0.62, 1.25], idle = [0.45, 0.5, 0.32];
