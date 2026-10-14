@@ -499,7 +499,7 @@
         w.stam = Math.max(0, w.stam - 0.12);
         this.emit('charge', { w }); return;
       }
-      if (w.booty) { w.set('bjwait'); return; }   // (no hands: the booty does it)
+      if (w.booty) { w.windPow = 0; w.set('wind'); this.emit('wind', { w }); return; }   // (the player's sumo: no palm flurry. J is a two-handed push, a tap a quick shove, held a big one)
       w.set('palm'); w.hand ^= 1; this.palmCost(w, true);
       this.emit('palm', { w });
     }
@@ -1421,7 +1421,7 @@
       o.slideT = 0.35;
       this.m.tag(o, w, 'rear');
       this.m.hurt(o, 0.3, s * nx, s * nz);
-      w.set('recover', 0.2); if (w.booty) { w.set('bootyBump', 0.5); w.hitDone = true; }   // (no hands: the booty sends them off)
+      w.set('recover', 0.2);
       this.m.emit('hit', { kind: 'heavy', x: o.x, z: o.z, nx: s * nx, nz: s * nz, power: imp, zone: 'rear', w, o, big: true });
     }
 
@@ -1440,8 +1440,7 @@
         this.m.tag(o, w, 'break');
         this.m.hurt(o, esc ? 0.03 : 0.1, s * nx, s * nz);
         w.set('recover', esc ? 0.2 : 0.16); o.set('recover', esc ? 0.14 : 0.2);
-        if (w.booty) { w.set('bootyBump', 0.5); w.hitDone = true; }   // (no hands: out of the grip with a bump of the booty)
-        this.m.emit('hit', { kind: w.booty ? 'heavy' : 'palm', x: (w.x + o.x) / 2, z: (w.z + o.z) / 2, nx: s * nx, nz: s * nz, power: imp, zone: 'front', w, o });
+        this.m.emit('hit', { kind: 'palm', x: (w.x + o.x) / 2, z: (w.z + o.z) / 2, nx: s * nx, nz: s * nz, power: imp, zone: 'front', w, o });
       }
       void i; void j;
     }

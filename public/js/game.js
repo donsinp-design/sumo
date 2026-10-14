@@ -81,7 +81,7 @@
       let archs = [S.ARCH[i1], S.ARCH[i2]];
       if (kind === 'boss') { const A = S.ARCH[0]; i2 = 0; archs = [Object.assign({}, S.ARCH[i1], { name: 'YOU', kanji: 'あなた' }),   // the bathhouse owner: regular size, grey topknot, his own dark mawashi, a gentler build
         Object.assign({}, A, { name: 'YUNOFUJI', kanji: '湯乃富士', belt: 0x3b3346, hair: 0xc9c6c0, accent: '#8a7aa8' }, this.campSaved && this.campSaved.bossWon1
-          ? { mass: 1.3, stability: 1.45, moveForce: A.moveForce * 1.2, pushForce: A.pushForce * 1.28, power: A.power * 1.6, grip: A.grip * 1.15, tech: 1.15, recovery: 1.25 }   // the rematch: the real champion, low and heavy (hard to shove, lift or stand up), and his hands hit like a door
+          ? { mass: 1.12, stability: 1.15, moveForce: A.moveForce * 1.05, pushForce: A.pushForce * 1.05, power: A.power * 1.15, grip: A.grip * 1.02, tech: 1.05, recovery: 1.08 }   // the rematch: the real champion, heavier and stronger than the first time (but beatable)
           : { moveForce: A.moveForce * 0.82, pushForce: A.pushForce * 0.72, power: A.power * 0.75, dashSpeed: A.dashSpeed * 0.82, grip: A.grip * 0.9, stability: A.stability * 0.92 })]; }
       this.kind = kind; this.archIdx = [i1, i2];
       const m = this.match = new S.Match(archs);
@@ -105,7 +105,7 @@
       }
       const P = S.profile;
       const human = (k) => kind === 'pvp' || ((kind === 'cpu' || kind === 'boss' || kind === 'tutorial' || kind === 'showcase' || kind === 'training') && k === 0);
-      for (let k = 0; k < 2; k++) m.w[k].booty = kind !== 'tutorial' && (kind === 'online' || human(k));   // (a player's sumo: no hands, J is the booty bump, held the booty slam. The CPU keeps its slaps)
+      for (let k = 0; k < 2; k++) m.w[k].booty = kind !== 'tutorial' && (kind === 'online' || human(k));   // (a player's sumo: J pushes two-handed, never a palm flurry or a slap. The CPU keeps its slaps)
       this.loadouts = kind === 'online' ? [0, 1].map((k) => (this.netMatch.los[k] || JSON.parse(JSON.stringify(S.DEF_EQ)))) : [0, 1].map((k) => (k === 0 && human(0) ? P.loadout() : kind === 'pvp' ? JSON.parse(JSON.stringify(S.DEF_EQ)) : P.randomLoadout()));
       this.names = [kind === 'boss' ? 'YOU' : human(0) ? P.names[0] : 'CPU', kind === 'pvp' ? P.names[1] : kind === 'boss' ? 'YUNOFUJI' : kind === 'tutorial' || kind === 'training' ? 'PARTNER' : 'CPU'];
       this.viewerIdx = kind === 'pvp' ? -1 : kind === 'attract' ? -1 : 0;
@@ -328,15 +328,15 @@
     counterTip(m, me) {
       const o = me.opp, J = '<kbd>J</kbd>', K = '<kbd>K</kbd>', Lk = '<kbd>L</kbd>';
       if (me.st === 'teeter') return '<b>TEETERING!</b> Hold toward the <b>middle</b> of the ring to stay in';
-      const BB = me.booty;   // (a player's sumo has no hands: every hint is the booty)
-      if (o.st === 'teeter') return '<b>THEY ARE TEETERING!</b> ' + (BB ? 'Booty bump them ' : 'Give them a push ') + J + ' before they recover';
+      const BB = me.booty;   // (the player's sumo: pushes, never slaps)
+      if (o.st === 'teeter') return '<b>THEY ARE TEETERING!</b> Give them a push ' + J + ' before they recover';
       const dx = o.x - me.x, dz = o.z - me.z, d = Math.hypot(dx, dz) || 1, gap = d - me.r - o.r;
       const toMe = -(o.vx * dx + o.vz * dz) / d;
       if (o.fxs && (o.fxs.chicken > 0 || o.fxs.ball > 0)) return null;
-      if ((o.st === 'charge' || (o.st === 'dash' && toMe > 3)) && gap < 3) return '<b>CHARGE!</b> ' + (BB ? J + ' booty bump' : 'Hold away + ' + J + ' slap down') + ' &nbsp;·&nbsp; side + ' + Lk + ' dodge';
-      if (o.st === 'palm' && (o.flurry || 0) >= 3 && gap < 1) return '<b>FLURRY!</b> ' + Lk + ' (no direction) parry &nbsp;·&nbsp; ' + (BB ? J + ' booty bump' : 'away + ' + J + ' slap down');
+      if ((o.st === 'charge' || (o.st === 'dash' && toMe > 3)) && gap < 3) return '<b>CHARGE!</b> ' + (BB ? '' : 'Hold away + ' + J + ' slap down &nbsp;·&nbsp; ') + 'side + ' + Lk + ' dodge';
+      if (o.st === 'palm' && (o.flurry || 0) >= 3 && gap < 1) return '<b>FLURRY!</b> ' + Lk + ' (no direction) parry' + (BB ? '' : ' &nbsp;·&nbsp; away + ' + J + ' slap down');
       if (o.st === 'wind' && gap < 1.2) return '<b>WIND-UP!</b> ' + J + ' now to interrupt';
-      if (['recover', 'overrun', 'stun', 'stumble'].includes(o.st) && gap < 1.4) return '<b>OPEN!</b> ' + J + (BB ? ' booty bump' : ' push') + ' &nbsp;·&nbsp; ' + K + ' grab';
+      if (['recover', 'overrun', 'stun', 'stumble'].includes(o.st) && gap < 1.4) return '<b>OPEN!</b> ' + J + ' push &nbsp;·&nbsp; ' + K + ' grab';
       const edge = S.RING_R - Math.hypot(me.x, me.z);
       if (edge < 1.0 && o.contact && o.fwdIn > 0.5) return '<b>ON THE EDGE!</b> Side + ' + Lk + ' to slip out';
       return null;
@@ -352,7 +352,7 @@
         return '<b>Point anywhere</b> to swing them round you · let go of ' + K + ' to throw';
       }
       if (c.lift) { const left = Math.max(0, c.lift.w.stam); const bar = '<span class="wbar"><i style="width:' + Math.round(left * 100) + '%"></i></span>'; return c.lift.w === me ? 'Walk them out of the ring · ' + K + ' slam them down ' + bar : '<b>WRIGGLE!</b> Mash any button to break free ' + bar; }
-      if (c.rear === me) return 'You are behind them! ' + J + (me.booty ? ' booty bump them out' : ' shove them out');
+      if (c.rear === me) return 'You are behind them! ' + J + ' shove them out';
       if (c.rear) return 'They are behind you! Hold any direction to turn around';
       // being grabbed: how to get out, first
       // only when they are really aiming a move (K held and pointing) or already swinging you
@@ -360,7 +360,7 @@
       const swinging = c.swing && c.swing.w === o && c.swing.swept > 0.15;
       if (swinging || (oAim && (Math.abs(oAim[0]) > 0.35 || Math.abs(oAim[1]) > 0.35))) {
         const what = swinging || !oAim || Math.abs(oAim[1]) > 0.35 || oAim[0] < -0.35 ? 'THROW' : 'LEG TRIP';
-        return '<b>' + what + ' COMING!</b> ' + Lk + ' slip out &nbsp;·&nbsp; ' + J + (me.booty ? ' bump off' : ' shove off');
+        return '<b>' + what + ' COMING!</b> ' + Lk + ' slip out &nbsp;·&nbsp; ' + J + ' shove off';
       }
       if (c.b === me && c.t < (this.match.techWin || 0.38)) return '<b>GRABBED!</b> Tap ' + K + ' now to break the grip';
       const myEdge = S.RING_R - Math.hypot(me.x, me.z), oEdge = S.RING_R - Math.hypot(o.x, o.z);
@@ -922,7 +922,7 @@
       const matchGoesOn = m && !this.matchEnd(m);
       if (matchGoesOn && this.kind === 'boss' && W.idx === 1) {
         if (this.bossBox) { this.bossBox = false; if (this.R.bossG) this.R.bossG.box = false; }   // (the box bursts; from here on he's bare)
-        const L = this.ais[0] && this.ais[0].L; if (L && !(this.campSaved && this.campSaved.bossWon1)) { this.bossSoft = (this.bossSoft || 0) + 1; const k = this.bossSoft; L.react += 0.1; L.think += 0.06; L.aggr = Math.max(0.15, L.aggr - 0.06 * k); L.skill = Math.max(0.04, L.skill * 0.6); L.escP = Math.max(0.15, L.escP * 0.75); L.parryP = Math.max(0.15, L.parryP * 0.75); L.dodge = Math.max(0.02, L.dodge * 0.6); }   // (a lost round: he goes easier still)
+        const L = this.ais[0] && this.ais[0].L; if (L) { this.bossSoft = (this.bossSoft || 0) + 1; const k = this.bossSoft; L.react += 0.1; L.think += 0.06; L.aggr = Math.max(0.15, L.aggr - 0.06 * k); L.skill = Math.max(0.04, L.skill * 0.6); L.escP = Math.max(0.15, L.escP * 0.75); L.parryP = Math.max(0.15, L.parryP * 0.75); L.dodge = Math.max(0.02, L.dodge * 0.6); }   // (a lost round: he goes easier still)
         m.skills = [null, null]; this.refreshSkills(); this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1500;
         setTimeout(() => { if (this.match === m && this.awaitGacha) this.dealBossGacha(); }, 900);
       }

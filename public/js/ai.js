@@ -12,7 +12,7 @@
     // the rematch: no more going easy, but beatable. Breaks grabs and slips throws, spins and lifts about two times in three,
     // parries most hands, charges (and usually pulls up short when you sidestep), throat-pushes, trips, and saves himself at the
     // straw three times in four. (At 9 in 10 everywhere he teched almost everything: the only wins were his own run-outs.)
-    bossRematch: { react: 0.13, think: 0.07, skill: 0.92, escP: 0.65, parryP: 0.65, edgeSave: 0.75, grabBreak: 0.6, armEsc: 0.62, stopShort: 0.75, throatP: 0.35, tripP: 0.5, anchor: true, dodge: 0.45, tricky: 0.45, aggr: 0.8 },
+    bossRematch: { react: 0.24, think: 0.14, skill: 0.6, escP: 0.5, parryP: 0.42, edgeSave: 0.55, grabBreak: 0.42, armEsc: 0.42, stopShort: 0.5, throatP: 0.2, tripP: 0.3, anchor: true, dodge: 0.22, tricky: 0.25, aggr: 0.6 },   // (between the first bout and hard: it was too hard)
     // (the bathhouse owner, first time: a patient old champion, for casual players; he goes easier after each round you lose)
   };
   // remembers how the human opens, across rounds and matches
