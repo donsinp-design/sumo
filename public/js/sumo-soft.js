@@ -95,10 +95,11 @@
       // which vertices belong to each cheek (for the jiggle): weights from the rest shape
       const idx = [], wl = [], wr = [], base = [];
       for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (z > 0.05) continue;
-        const sm = (e0, e1, v) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); }, a = sm(0.32, 0.75, swW[i * 2]), c = sm(0.32, 0.75, swW[i * 2 + 1]); if (a + c < 0.01) continue;   // (the round of each cheek, as one lump: not the thighs, not his back)
+        const sm = (e0, e1, v) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); }, a = sm(0.42, 0.85, swW[i * 2]), c = sm(0.42, 0.85, swW[i * 2 + 1]); if (a + c < 0.01) continue;   // (the round of each cheek, as one lump: not the thighs, not his back)
         idx.push(i); wl.push(a); wr.push(c); base.push(x, y, z); }
       { const mx = Math.max(...wl, ...wr) || 1; for (let n = 0; n < wl.length; n++) { wl[n] /= mx; wr[n] /= mx; } }   // (the middle of each cheek moves the full amount)
-      (view.jig || (view.jig = [])).push({ P, idx, wl, wr, base, mesh: q });
+      const cen = [0, 1].map((k) => { const W = k ? wr : wl, c = [0, 0, 0]; let t = 0; for (let n = 0; n < W.length; n++) { const w = W[n] ** 3; t += w; for (let e = 0; e < 3; e++) c[e] += base[n * 3 + e] * w; } return c.map((v) => v / (t || 1)); });   // (each cheek's middle)
+      (view.jig || (view.jig = [])).push({ P, idx, wl, wr, base, cen, mesh: q });
     });
     view.soft = { M, B, k, mats, tq: new THREE.Quaternion(), q: new THREE.Quaternion(), wq: {}, bodyQ: new THREE.Quaternion(), headQ: new THREE.Quaternion(),
       v: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), m: new THREE.Matrix4() };
@@ -195,8 +196,9 @@
       let ux = 0, uy = 1, uz = 0;
       if (sk && hb) { const bi = J.hi !== undefined ? J.hi : (J.hi = sk.bones.indexOf(hb));
         if (bi >= 0) { JM.copy(m.matrixWorld).multiply(m.bindMatrixInverse).multiply(hb.matrixWorld).multiply(sk.boneInverses[bi]).multiply(m.bindMatrix).invert(); JV.set(0, 1, 0).transformDirection(JM); ux = JV.x; uy = JV.y; uz = JV.z; } }
-      for (let n = 0; n < J.idx.length; n++) { const i = J.idx[n] * 3, d = J.wl[n] * aL + J.wr[n] * aR;
-        a[i] = B[n * 3] + ux * d; a[i + 1] = B[n * 3 + 1] + uy * d; a[i + 2] = B[n * 3 + 2] + uz * d; }
+      const [cl, cr] = J.cen;
+      for (let n = 0; n < J.idx.length; n++) { const i = J.idx[n] * 3, gl = J.wl[n] * aL, gr = J.wr[n] * aR, up = (gl + gr) * 0.3;   // (swelling round from its own middle and lifting a little: a bounce, never stretched out long)
+        for (let e = 0; e < 3; e++) a[i + e] = B[n * 3 + e] + (B[n * 3 + e] - cl[e]) * gl * 0.9 + (B[n * 3 + e] - cr[e]) * gr * 0.9 + (e === 0 ? ux : e === 1 ? uy : uz) * up; }
       P.needsUpdate = true; }
   }
   S.SoftSumo = { ready, attach, drive, jiggle, get loaded() { return !!tpl; } };
