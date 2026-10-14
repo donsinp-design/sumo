@@ -42,7 +42,7 @@
     speed: [1, 0.78, 0.58, 0.4, 0.22, 0],        // his walk with 0..5 on him
     charge: [1, 0.85, 0.7, 0.55, 0.4],           // how far a charge carries with 0..4 on him (the burst itself is the same)
     stompWind: [0.5, 0.6, 0.8, 1.0, 1.2],
-    ballSpeed: 8.4, ballMax: 1.2, ballTurn: 3.0,  // I mid-charge: rolled up into a daruma (faster than the charge's 7.2), rolls on while L is held, up to this long        // hold J: the stomp's wind-up with 0..4 on him (fixed when it starts)
+    ballSpeed: 8.4, ballMax: 1.2, ballTurn: 3.0, tuckC: 0.62, tuckLift: 0.12,   // (the tucked roll turns about this height; lifted a little so it rolls on its back, not its feet)  // I mid-charge: rolled up into a daruma (faster than the charge's 7.2), rolls on while L is held, up to this long        // hold J: the stomp's wind-up with 0..4 on him (fixed when it starts)
     holdJ: 0.22,                                 // J held this long becomes the stomp (a tap slaps at once, no wait)
     grabR: 1.45, lunge: 0.3,                     // they jump at him from this close; the jump takes this long
     regrab: 1.6,                                 // up again after a slap, a fall or a throw: this long before they can grab again
@@ -2673,7 +2673,7 @@
           q.m.position.set(q.sx + (mx - q.sx) * e - fz * sw, q.sy + (hy - q.sy) * e + sw * 0.4, q.sz + (mz - q.sz) * e + fx * sw); q.m.rotation.y += dt * 18; q.m.rotation.x += dt * 9; q.m.scale.setScalar(1.3 * (1 - 0.7 * e)); q.m.visible = k < 1; }
         if (E.t > E.dur) { for (const q of E.pieces) if (q.m) this.G.remove(q.m); this.eatAnim = null; }
       }
-      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? 'bigstomp' : P.st === 'busy' && this.stompDone > this.t ? 'free' : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
+      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : P.st === 'charge' && P.ball ? 'tuck' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? 'bigstomp' : P.st === 'busy' && this.stompDone > this.t ? 'free' : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (P.st === 'skill' && g && g.wt !== undefined) w.t = g.wt;
       if (P.st === 'stompW' && this.stompW) w.t = 0.45 * Math.min(1, this.stompW.t / this.stompW.W); if (this.cap) { this.cap.t += dt; w.t = this.cap.t; }
@@ -2689,7 +2689,7 @@
       if (v.ballSpin && v.ballSpin.visible) v.ballSpin.position.y += P.y;   // (the daruma: on the floor he's on)
       const gk = (w.szCur || 1) * (this.gulp ? 1.22 + Math.sin(T * 9) * 0.03 : 1);   // GIANT, or someone swallowed
       const boxTip = this.wearing && !!this.keys.KeyI && P.st === 'free' && !P.sub && !P.hidden;   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
-      const rolling = !!(P.ball && P.st === 'charge'), ball = rolling || P.boxHide || boxTip || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
+      const rolling = !!(P.ball && P.st === 'charge'), ball = P.boxHide || boxTip || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
       this.ballK = (this.ballK || 0) + ((ball ? 1 : 0) - (this.ballK || 0)) * Math.min(1, dt * 10);
       if (this.ballK > 0.01) { const k = this.ballK; v.root.position.y -= (P.boxHide || boxTip ? 0.8 : 0.06) * v.s * k; v.root.scale.set(v.s * gk * (1 - 0.1 * k), v.s * gk * (1 - 0.32 * k), v.s * gk * (1 - 0.1 * k)); } else v.root.scale.setScalar(v.s * gk);
       // ducking in the box: the same box stays where it stood on the floor and he sinks down into it (no second box)
@@ -2707,18 +2707,10 @@
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)
       }
       v.root.rotation.z = 0;   // (no rocking on tiptoe)
-      if (rolling) {   // the charge, rolled up: a round sumo ball (skin, his mawashi round it, the topknot) turning over and over as it goes
-        let B = this.sumoBall; if (!B) { const g = new THREE.Group(), inner = new THREE.Group(), R = 0.78;
-          const skin = S.Flat.mat(0xefc09c), belt = S.Flat.mat(0x2f3a6e), hair = S.Flat.mat(0x1f1a22);
-          const body = new THREE.Mesh(new THREE.SphereGeometry(R, 24, 18), skin); body.castShadow = true; inner.add(body);
-          const band = new THREE.Mesh(new THREE.TorusGeometry(R * 1.0, R * 0.12, 8, 32), belt); band.rotation.x = Math.PI / 2; inner.add(band);
-          const cap = new THREE.Mesh(new THREE.SphereGeometry(R * 0.42, 14, 10), hair); cap.position.set(0, R * 0.78, R * 0.18); cap.scale.set(1, 0.55, 1); inner.add(cap);
-          const knot = new THREE.Mesh(new THREE.SphereGeometry(R * 0.14, 10, 8), hair); knot.position.set(0, R * 1.02, -R * 0.08); inner.add(knot);
-          for (const sd of [-1, 1]) { const h = new THREE.Mesh(new THREE.SphereGeometry(R * 0.2, 10, 8), skin); h.position.set(sd * R * 0.55, R * 0.1, R * 0.72); inner.add(h); }   // (hands tucked in)
-          g.add(inner); g.userData.R = R; this.G.add(g); B = this.sumoBall = g; }
-        const R = B.userData.R * v.s; B.visible = true; B.scale.setScalar(v.s); B.position.set(P.x, P.y + R, P.z);
-        B.rotation.set(0, Math.PI / 2 - P.f, 0); B.children[0].rotation.set(P.ballRoll, 0, 0); v.root.visible = false;
-      } else if (this.sumoBall) this.sumoBall.visible = false;
+      if (rolling) {   // the charge, tucked into a cannonball (knees to his chest, arms round them, face on his knees), turning over and over about his middle
+        const ax = this._rax || (this._rax = new THREE.Vector3()), q = this._rq || (this._rq = new THREE.Quaternion()), cc = this._rc || (this._rc = new THREE.Vector3());
+        ax.set(Math.sin(P.f), 0, -Math.cos(P.f)); q.setFromAxisAngle(ax, P.ballRoll); cc.set(P.x, P.y + DOG.tuckC * v.s, P.z);
+        v.root.position.y += DOG.tuckLift * v.s; v.root.position.sub(cc).applyQuaternion(q).add(cc); v.root.quaternion.premultiply(q); }
       v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       this.shortsStep(dt); this.tattooStep(v); this.stinkStep(T, v);
       if (P.held && P.held.state === 'held') {

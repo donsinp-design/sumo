@@ -562,6 +562,7 @@
           }
           break;
         case 'brace': c = 0.88; p = 0.32; Rh = [0.45, 0.32, 0.58]; Lh = mir(Rh); break;
+        case 'tuck': c = 0.55; p = 0.95; hp = 0.6; Rh = [0.26, 0.12, 0.55]; Lh = mir(Rh); rate = 30; break;   // (the bathhouse's rolling charge) a cannonball: knees to his chest, arms round them, face down on his knees
         case 'palm': {
           const e = t < 0.05 ? t / 0.05 : t < 0.11 ? 1 : Math.max(0, 1 - (t - 0.11) / 0.09);
           const act = [0.14, 0.62, 1.25], idle = [0.45, 0.5, 0.32];
@@ -862,10 +863,11 @@
         if (downed) pole.set(Lg.sd * 0.3, 0, 1).transformDirection(this.body.matrix); // knees bend the way the body faces, not the old standing way
         if (w.torpedo) foot.set(Lg.sd * 0.2 * s, hip.y - 0.78 * s, hip.z - 0.1 * s); // legs straight out behind
         else if (w.st === 'air') foot.set(Lg.sd * 0.45 * s, hip.y - 0.6 * s, -0.5 * s);
+        else if (w.st === 'tuck') foot.set(Lg.sd * 0.24 * s, hip.y - 0.3 * s, hip.z + 0.4 * s);   // (tucked: feet drawn up under him, knees to his chest)
         ik(hip, foot, Lg.l1, Lg.l2, pole, this.v4);
         seg(Lg.thigh, hip, this.v4); seg(Lg.calf, this.v4, foot);
         (Lg.hp = Lg.hp || new THREE.Vector3()).copy(hip); (Lg.kn = Lg.kn || new THREE.Vector3()).copy(this.v4); (Lg.ft = Lg.ft || new THREE.Vector3()).copy(foot);
-        Lg.foot.position.set(foot.x, Math.max(foot.y - 0.02 * s, 0.05 * s + (w.y > 0.12 ? -1 : 0)), foot.z + 0.08 * s);
+        Lg.foot.position.set(foot.x, Math.max(foot.y - 0.02 * s, 0.05 * s + (w.y > 0.12 || w.st === 'tuck' ? -1 : 0)), foot.z + 0.08 * s);
         Lg.foot.rotation.y = Lg.sd * 0.4;
       }
       // shadow
