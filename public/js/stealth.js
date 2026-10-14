@@ -2608,19 +2608,16 @@
       if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.4);
       this.flash = 1;
     }
-    // the stink: wavy green lines rising off him, three flies round his head
+    // the stink: three flies buzzing round his head (no stink lines)
     stinkStep(T, v) {
       if (!this.stinky) { if (this.stinkG) this.stinkG.visible = false; return; }
       if (!this.stinkG) {
         const g = this.stinkG = new THREE.Group(); this.G.add(g); g.lines = []; g.flies = [];
-        for (let i = 0; i < 3; i++) { const pts = []; for (let k = 0; k <= 14; k++) { const y = k / 14 * 0.55; pts.push(new THREE.Vector3(Math.sin(y * 13 + i) * 0.06, y, 0)); }
-          const l = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.018, 5), new THREE.MeshBasicMaterial({ color: 0x8fa04a, transparent: true, opacity: 0.8, depthWrite: false })); l.userData.flatDone = true; g.add(l); g.lines.push(l); }
         const fm = new THREE.MeshBasicMaterial({ color: 0x23202a });
         for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 4), fm); f.userData.flatDone = true; g.add(f); g.flies.push(f); }
       }
       const g = this.stinkG, P = this.P, s = v.s; g.visible = v.root.visible || !!P.hidden || !!this.boxDown;
       g.position.set(P.x, P.y, P.z);
-      g.lines.forEach((l, i) => { const h = (T * 0.55 + i / 3) % 1, a = i * 2.1 + 0.4; l.position.set(Math.cos(a) * 0.42 * s, (1.3 + h * 0.9) * s, Math.sin(a) * 0.42 * s); l.rotation.y = -a; l.material.opacity = Math.sin(h * Math.PI) * 0.85; });
       g.flies.forEach((f, i) => { f.position.set(Math.cos(T * 7 + i * 2.1) * 0.5 * s, (2.05 + Math.sin(T * 11 + i) * 0.12) * s, Math.sin(T * 6 + i * 2.1) * 0.5 * s); });
     }
     // his tattoo, across his BACK. He asked for 無敵, "INVINCIBLE". The parlour gave him 半額豆腐: "HALF-PRICE TOFU".
