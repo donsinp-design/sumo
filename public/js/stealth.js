@@ -54,6 +54,7 @@
     boxFwd: 0.1,                                 // the box he wears sits this far forward on him, so his booty pokes out through the hole in its back
     boxDeep: 0.72,                               // ...and that much as deep as the box on the floor (snug round his belly, the back through his booty)
     sfBump: [0.15, 0.3, 0.5], sfSlam: [0.62, 0.72, 1.2],   // the boss fight: the booty bump's and booty slam's timing (hits from / to, done at)
+    ringDepth: -1.75,                            // the boss's ring, sunk under the bath floor until it rises
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
     slapFront: 7, slapRear: 5, spinT: 1.5,       // a slap: knocked back / stumbling forward (speeds), spun round (seconds)
@@ -1933,6 +1934,7 @@
     }
     // ---- testing: jump straight to any goal (set up the way the story would have left things)
     jumpTo(k) {
+      this.ringUp = false; this.ringCut = null; this.waterDrop = 0; if (this.dohyoM) this.dohyoM.visible = false;   // (the bath full again, no ring in it)
       const P = this.P, B = this.boss, at = (x, z, y, f) => { P.x = x; P.z = z; P.y = y || 0; P.f = f === undefined ? 0 : f; P.vx = P.vz = 0; P.st = 'free'; P.t = 0; P.dur = 0; this.noGuard = true; this.camT.set(Math.max(-18, Math.min(18, x * 0.8)), P.y, z - 2.6); };
       // clean slate
       this.sf && this.sfHide(false); this.sf = null; this.hud.classList.remove('sf'); this.camFocus = null; this.camD = 15; this.camH = 0.64; this.choiceCb = null; this.el('.st-choice').classList.remove('on'); this.el('.st-sub').style.display = 'none';
@@ -1980,19 +1982,19 @@
       this.say(q, () => this.choice('稽古?', 'TRAINING?', ['YES: learn to play', 'NO: just fight'], (i) => {
         if (i === 0) { this.say([{ who: '親方', jp: 'よし。ついてこい。', en: 'Good. Follow me.', t: 1.8 }], () => this.g.startBossTraining(this)); }
         else if (n === 0) this.bossAsk(1);
-        else this.say([{ who: '親方', jp: '…よかろう。相撲で勝負だ!', en: '...Very well. Let\'s settle it in the ring!', t: 2.8 }], () => this.g.startBossBout(this));
+        else this.say([{ who: '親方', jp: '…よかろう。相撲で勝負だ!', en: '...Very well. Let\'s settle it in the ring!', t: 2.8 }], () => this.bossBout());
       }));
     }
     // back from the versus screen (a sumo bout, or the training)
     resumeFromBoss(res) {
       this.keys = {}; this.over = false; this.paused = false; this.acc = 0;
       if (res === 'quit') { this.g.endCampaign(); return; }
-      if (res === 'trained') { this.say([{ who: '親方', jp: 'どうだ、わかったか。…では、いくぞ。', en: 'There. Understood? ...Then let\'s begin.', t: 3.0 }], () => this.g.startBossBout(this)); return; }
+      if (res === 'trained') { this.say([{ who: '親方', jp: 'どうだ、わかったか。…では、いくぞ。', en: 'There. Understood? ...Then let\'s begin.', t: 3.0 }], () => this.bossBout()); return; }
       if (res === 'lost' || res === 'won') { const B = this.boss; B.on = true; B.hold = false; B.holdSet = true; B.sink = undefined; B.x = 1.8; B.z = -4.6; B.y = -0.12; B.f = Math.atan2(this.P.z - B.z, this.P.x - B.x); if (this.mawM) this.mawM.visible = false; B.w.throatT = 0; }
-      if (res === 'lost') { this.say([{ who: '親方', jp: 'まだまだ青いな。もう一番!', en: 'Still green. Again!', t: 2.6 }], () => this.g.startBossBout(this)); return; }
+      if (res === 'lost') { this.say([{ who: '親方', jp: 'まだまだ青いな。もう一番!', en: 'Still green. Again!', t: 2.6 }], () => this.bossBout()); return; }
       // the first win is not enough: he was going easy, so there's a rematch (bare this time: the box is gone)
       if (!this.bossWon1) { this.bossWon1 = true; this.g.bossBox = false;
-        this.say([{ who: '親方', jp: '…ほう。やるじゃないか。', en: '...Oh? Not bad at all.', t: 2.4 }, { who: '親方', jp: 'だが、今のは手加減してやったんだ。もう一番!', en: 'But I was going easy on you. Once more!', t: 3.2 }], () => this.g.startBossBout(this)); return; }
+        this.say([{ who: '親方', jp: '…ほう。やるじゃないか。', en: '...Oh? Not bad at all.', t: 2.4 }, { who: '親方', jp: 'だが、今のは手加減してやったんだ。もう一番!', en: 'But I was going easy on you. Once more!', t: 3.2 }], () => this.bossBout()); return; }
       // won the rematch: the mawashi comes back
       this.boss.on = true; this.boss.y = -0.12; this.boss.hold = false;
       this.say([
@@ -2002,6 +2004,34 @@
         { who: '親方', jp: 'まあいい。持っていけ。だが、その刺青を見られる前に出ていくんだぞ。', en: 'Never mind. Take it. But get out before anyone sees that tattoo.', t: 4.0 },
       ], () => { this.P.st = 'free'; this.P.t = 0; this.P.dur = 0; this.P.vx = this.P.vz = 0; this.keys = {}; this.gotMawashi = true; this.boss.sink = 0; if (this.wearing) { this.wearing = false; this.boxDown = false; if (this.boxWorn) { this.boxWorn.parent && this.boxWorn.parent.remove(this.boxWorn); this.boxWorn = null; } this.pantsBox.visible = false; this.spExit && (this.spExit.visible = false); }   // (he takes off the box: the mawashi is back on)
          this.think('My MAWASHI! ...still can\'t go out the front door like this.', 2.8); this.escapeStage(); });
+    }
+    // ---- "sumo rules": the bath drains, a dohyo rises up out of it, the camera settles on the ring; then the bout
+    bossBout() { this.ringRise(() => this.g.startBossBout(this)); }
+    ringRise(cb) {
+      if (this.ringUp) { cb(); return; }
+      this.ringUp = true; this.ringCut = { t: 0, cb }; const P = this.P; P.st = 'busy'; P.t = 0; P.dur = 99; P.vx = P.vz = 0;
+      if (!this.dohyoM) this.dohyoM = this.makeDohyo(); this.dohyoM.visible = true; this.dohyoM.position.y = DOG.ringDepth;
+      this.sfx('whoosh', 0.8);
+    }
+    makeDohyo() {   // the bath's dohyo: a square clay mound, the straw ring, the two start lines (the bathhouse's flat colours)
+      const g = new THREE.Group(), clay = S.Flat.mat(0xd3a96e), clayDk = S.Flat.mat(0xb98c52), straw = S.Flat.mat(0xd8d3a0), white = S.Flat.mat(0xf2ede4), T0 = 3.9, B0 = 4.3, H = 1.4;
+      const add = (geo, mat, x, y, z, ry) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.y = ry || 0; o.castShadow = o.receiveShadow = true; o.userData.flatDone = true; g.add(o); return o; };
+      add(new THREE.CylinderGeometry(T0 * Math.SQRT2, B0 * Math.SQRT2, H, 4, 1), clayDk, 0, -H / 2, 0, Math.PI / 4);
+      add(new THREE.PlaneGeometry(T0 * 2 - 0.06, T0 * 2 - 0.06).rotateX(-Math.PI / 2), clay, 0, 0.004, 0);
+      for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2, r = 3.1 + (i % 5 === 0 ? 0.24 : 0); add(new THREE.BoxGeometry(0.92, 0.17, 0.24), straw, Math.cos(a) * r, 0.085, Math.sin(a) * r, -a - Math.PI / 2); }
+      for (const x of [-0.6, 0.6]) add(new THREE.BoxGeometry(0.09, 0.012, 0.9), white, x, 0.006, 0);
+      g.position.set((POOL.x0 + POOL.x1) / 2, DOG.ringDepth, (POOL.z0 + POOL.z1) / 2); this.G.add(g); return g;
+    }
+    ringStep(dt) {
+      const R = this.ringCut; if (!R) return; R.t += dt; const t = R.t, e = (k) => k * k * (3 - 2 * k), c = (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+      const cx = (POOL.x0 + POOL.x1) / 2, cz = (POOL.z0 + POOL.z1) / 2;
+      this.waterDrop = (POOL.water + 0.75) * e(c(0.4, 2.6));   // the water drains away...
+      if (t > 0.4 && t < 2.6 && Math.random() < dt * 8 && this.fx.water) this.fx.water(POOL.x0 + 1 + Math.random() * (POOL.x1 - POOL.x0 - 2), POOL.z0 + 1 + Math.random() * (POOL.z1 - POOL.z0 - 2), 1.2, POOL.water - this.waterDrop);
+      const r = e(c(2.3, 4.2)); this.dohyoM.position.y = DOG.ringDepth * (1 - r);   // ...and up comes the ring
+      if (t > 2.3 && t < 4.2) this.shake = Math.max(this.shake || 0, 0.06);
+      if (!R.landed && t > 4.15) { R.landed = true; this.shake = 0.3; this.sfx('thump', 9); for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) this.miniPuff(cx + dx * 4.2, -0.5, cz + dz * 4.2, 0.6, 9); }
+      this.camFocus = t < 2.3 ? { x: cx, z: cz + 1.5, y: 0, dist: 16, h: 0.6 } : { x: cx, z: cz, y: 0.3, dist: 12, h: 0.42 };   // (the bath, then in on the ring, square in the middle)
+      if (t > 5.6) { this.ringCut = null; this.camFocus = null; this.P.st = 'free'; this.P.dur = 0; R.cb(); }
     }
     // ---- stage 1: a Street Fighter style bout in front of the Mt Fuji mural (best of three rounds)
     sfHide(on) {   // potted plants and the like out of the arena while they fight
@@ -2109,7 +2139,7 @@
         if (won) this.say([
           { who: '親方', jp: '…ぐっ。やるじゃないか。', en: '...Gh. Not bad at all.', t: 2.6 },
           { who: '親方', jp: 'いや、待て待て。相撲のルールでやろう!', en: 'Nah, nah, hold on. Let\'s play by SUMO rules!', t: 3.2 },
-        ], () => this.g.startBossBout(this));
+        ], () => this.bossBout());
         else this.say([{ who: '親方', jp: 'まだまだだな。もう一度!', en: 'Not yet. Once more!', t: 2.4 }], () => this.sfStart()); };
       if (bn && !bn.busy) bn.flood({ hold: 0.12, speed: 1.4, onCovered: back }); else back();
     }
@@ -2834,7 +2864,7 @@
       }
       for (const sp of this.marks) if (sp.visible) { const u = sp.userData, k = (T * 0.9) % 1;
         u.ar.position.y = 2.3 + Math.abs(Math.sin(T * 3.2)) * 0.22; u.ring.scale.setScalar(0.8 + 0.35 * k); u.ring.material.opacity = 0.85 * (1 - k * k); }
-      if (this.water) this.water.position.y = Math.sin(T * 1.3) * 0.01;
+      this.ringStep(dt); if (this.water) this.water.position.y = Math.sin(T * 1.3) * 0.01 - (this.waterDrop || 0);   // (drained for the boss's ring)
       for (const b of this.buckets) if (b.wet && b.state === 'floor') { b.m.position.y = b.ty + Math.sin(T * 1.6 + b.x) * 0.03; b.m.rotation.z = 0.2 + Math.sin(T * 1.1 + b.z) * 0.08; }
       this.fx.update(dt); this.fx.updateWater && this.fx.updateWater(dt);
       // camera: high, behind, following (as in the campaign), up the stairs with him; closer for the ending
