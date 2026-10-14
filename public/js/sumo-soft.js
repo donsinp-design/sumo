@@ -94,6 +94,7 @@
       for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (z > 0.05) continue;
         const f = (cx) => Math.exp(-((Math.hypot(x - cx, y - 0.78, (z + 0.2) * 0.8) / 0.32) ** 2)), a = f(-0.21), c = f(0.21); if (a + c < 0.03) continue;
         idx.push(i); wl.push(a); wr.push(c); base.push(y, z); }
+      { const mx = Math.max(...wl, ...wr) || 1; for (let n = 0; n < wl.length; n++) { wl[n] /= mx; wr[n] /= mx; } }   // (the middle of each cheek moves the full amount)
       (view.jig || (view.jig = [])).push({ P, idx, wl, wr, base });
     });
     view.soft = { M, B, k, mats, tq: new THREE.Quaternion(), q: new THREE.Quaternion(), wq: {}, bodyQ: new THREE.Quaternion(), headQ: new THREE.Quaternion(),

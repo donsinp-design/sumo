@@ -48,7 +48,8 @@
     grabR: 1.45, lunge: 0.3,                     // they jump at him from this close; the jump takes this long
     regrab: 1.6,                                 // up again after a slap, a fall or a throw: this long before they can grab again
     wallStun: 1.4,                               // charged into a wall: the ones still hanging on are stunned this long
-    jiggle: 0.32,                                // charging: how far each cheek bounces up and down
+    jiggle: 0.6,                                 // charging: how far each cheek bounces up and down
+    boxFwd: 0.3,                                 // the box he wears sits this far forward on him, so his booty pokes out through the hole in its back
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
     slapFront: 7, slapRear: 5, spinT: 1.5,       // a slap: knocked back / stumbling forward (speeds), spun round (seconds)
@@ -2561,14 +2562,16 @@
       for (const sd of [-1, 1]) { const c = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 14), skin); c.position.set(sd * 0.2, 0, -0.04); c.scale.set(1, 0.95, 0.9); c.castShadow = true; g.add(c); }
       const strip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.06), belt); strip.position.set(0, -0.02, -0.25); strip.rotation.x = 0.12;
       const band = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.07, 0.08), belt); band.position.set(0, 0.24, -0.12);
-      const cen = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.mosaic.s.material.map, transparent: true })); cen.position.set(0, -0.02, -0.38); cen.scale.set(0.42, 0.42, 1); cen.renderOrder = 5;
-      g.add(strip, band, cen); g.userData = { strip, band, cen }; return g;
+      g.add(strip, band); g.userData = { strip, band }; return g;
     }
-    bootyDress(g) { if (!g) return; const on = !!this.gotMawashi; g.userData.strip.visible = g.userData.band.visible = on; g.userData.cen.visible = !on; }
+    bootyDress(g) { if (!g) return; const on = !!this.gotMawashi; g.userData.strip.visible = g.userData.band.visible = on; }   // (bare without the mawashi: a backside needs no censoring)
     makeBox() {
       const g = new THREE.Group(), C = S.Flat.mat(0xd3a96e), Cd = S.Flat.mat(0xb98c52), Bd = S.Flat.mat(0xe6cfa4), W = 1.6, H = 0.8, D = 1.4, t = 0.04;
       const bx = (w, h, d, x, y, z, m) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = true; o.userData.flatDone = true; g.add(o); return o; };
-      bx(W, H, t, 0, H / 2, -D / 2 + t / 2, C); bx(W, H, t, 0, H / 2, D / 2 - t / 2, C); bx(t, H, D, -W / 2 + t / 2, H / 2, 0, Cd); bx(t, H, D, W / 2 - t / 2, H / 2, 0, Cd); bx(W, t, D, 0, t / 2, 0, Cd);
+      { const sh = new THREE.Shape(); sh.moveTo(-W / 2, 0); sh.lineTo(W / 2, 0); sh.lineTo(W / 2, H); sh.lineTo(-W / 2, H); sh.lineTo(-W / 2, 0);   // the back: a big ragged hole burst through it, and his own booty out through it
+        const ho = new THREE.Path(), N = 22, rag = (k) => 1 + ((k * 7) % 5 - 2) * 0.05; for (let k = 0; k <= N; k++) { const a = -k / N * Math.PI * 2, r = rag(k % N); ho[k ? 'lineTo' : 'moveTo'](Math.cos(a) * 0.5 * r, H * 0.5 + Math.sin(a) * 0.33 * r); } sh.holes.push(ho);
+        const o = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: t, bevelEnabled: false }), C); o.position.z = -D / 2; o.castShadow = true; o.userData.flatDone = true; g.add(o); g.backHole = o; }
+      bx(W, H, t, 0, H / 2, D / 2 - t / 2, C); bx(t, H, D, -W / 2 + t / 2, H / 2, 0, Cd); bx(t, H, D, W / 2 - t / 2, H / 2, 0, Cd); bx(W, t, D, 0, t / 2, 0, Cd);
       bx(0.32, H - 0.07, 0.01, 0, H / 2, D / 2 + 0.005, Bd);   // the shipping label
       g.flaps = [1, -1].map((sd) => { const p = new THREE.Group(); p.position.set(0, H, sd * D / 2); g.add(p); const f = new THREE.Mesh(new THREE.BoxGeometry(W - 0.03, 0.025, D / 2), C); f.position.set(0, 0.013, -sd * D / 4); f.castShadow = true; f.userData.flatDone = true; p.add(f); p.sd = sd; return p; });
       g.setOpen = (k) => { for (const p of g.flaps) p.rotation.x = p.sd * (Math.PI - 0.55) * k; };
@@ -2576,11 +2579,8 @@
     }
     wearBox() {
       if (!this.proto || !this.proto.BOX) return;
-      const b = this.makeBox(); b.visible = true; b.scale.setScalar(0.95); b.position.set(0, -0.62 * this.view.s, 0.02 * this.view.s); this.view.body.add(b); this.boxWorn = b; b.burst = this.t;
-      { const H = 0.8, D = 1.4, dark = S.Flat.mat(0x3a2a1c), torn = S.Flat.mat(0xe6cfa4);   // too much booty for one box: it's burst a hole in the back, and out it pokes
-        const rip = new THREE.Mesh(new THREE.CircleGeometry(0.5, 11), torn); rip.scale.set(1.08, 0.72, 1); rip.position.set(0, H * 0.52, -D / 2 - 0.006); rip.rotation.y = Math.PI; b.add(rip);
-        const hole = new THREE.Mesh(new THREE.CircleGeometry(0.44, 11), dark); hole.scale.set(1.05, 0.66, 1); hole.position.set(0, H * 0.52, -D / 2 - 0.01); hole.rotation.y = Math.PI; b.add(hole);
-        const bp = this.bootyProp(); bp.position.set(0, H * 0.5, -D / 2 + 0.06); b.add(bp); b.booty = bp; b.torn = [rip, hole]; }   // (the box on the floor is whole: it bursts as he gets in)
+      const b = this.makeBox(); b.visible = true; b.scale.setScalar(0.95); b.position.set(0, -0.62 * this.view.s, DOG.boxFwd * this.view.s); this.view.body.add(b); this.boxWorn = b; b.burst = this.t;
+      b.torn = true;   // (the box on the floor is whole: it bursts as he gets in)
     }
     boxBurst(b) {   // getting into the box: too much booty for it, the back rips open and out it pops
       b.burst = this.t;
@@ -2749,7 +2749,8 @@
       if (this.asleep && v.soft) for (const m of v.soft.mats) m.emissive.setRGB(0, 0, 0);   // (asleep: the pose, not the versus sleep-skill's blue tint)
       v.root.position.y += P.y + 0.04 * v.s * P.tip + (this.gsY || 0);
       if (P.st === 'stompW' && this.stompW) { const u = this.stompW.t / this.stompW.W, c0 = DOG.slamCrouch; if (u > c0) v.root.position.y += DOG.slamH * v.s * Math.sin(Math.PI * Math.pow((u - c0) / (1 - c0), 0.7)); }   // the booty slam: up he goes, and down
-      else if (P.st === 'busy' && this.stompDone > this.t) { const r = (this.stompDone - this.t) / DOG.slamLand; v.root.position.y -= DOG.slamSit * v.s * Math.min(1, r / 0.35); }   // (sat down hard on his booty, then up he gets) v.root.visible = !P.hidden && !(w.fxs.ball > 0);
+      else if (P.st === 'busy' && this.stompDone > this.t) { const r = (this.stompDone - this.t) / DOG.slamLand; v.root.position.y -= DOG.slamSit * v.s * Math.min(1, r / 0.35); }
+      v.root.visible = !P.hidden && !(w.fxs.ball > 0);   // (in a cart, or the daruma: not drawn)
       if (v.ballSpin && v.ballSpin.visible) v.ballSpin.position.y += P.y;   // (the daruma: on the floor he's on)
       const gk = (w.szCur || 1) * (this.gulp ? 1.22 + Math.sin(T * 9) * 0.03 : 1);   // GIANT, or someone swallowed
       const boxTip = this.wearing && !!this.keys.KeyI && P.st === 'free' && !P.sub && !P.hidden;   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
@@ -2763,11 +2764,10 @@
       if (bw) {
         if (duck && !this.boxDown) { this.boxDown = true; this.scene.attach(bw);   // let go of it where it is: it stays standing on the floor, its own size, level
           const e = new THREE.Euler().setFromQuaternion(bw.quaternion, 'YXZ'); bw.rotation.set(0, e.y, 0); bw.scale.setScalar(0.95 * v.s); bw.position.y = P.y; this.boxYawOff = e.y + P.f; }
-        else if (!duck && this.boxDown) { this.boxDown = false; v.body.attach(bw); bw.position.set(0, -0.62 * v.s, 0.02 * v.s); bw.rotation.set(0, 0, 0); bw.scale.setScalar(0.95); }
+        else if (!duck && this.boxDown) { this.boxDown = false; v.body.attach(bw); bw.position.set(0, -0.62 * v.s, DOG.boxFwd * v.s); bw.rotation.set(0, 0, 0); bw.scale.setScalar(0.95); }
         if (this.boxDown) { bw.position.x = P.x; bw.position.z = P.z; bw.position.y = P.y;   // (up the stairs too: it rides each step with him, never left sunk in them)
           if (boxTip && !P.boxHide && this.boxYawOff !== undefined) bw.rotation.y = this.boxYawOff - P.f;   // (tiptoeing along: the closed box turns the way he goes)
           if (this.boxYaw !== undefined && this.npcs.some((n) => n.pushing2)) { const q = Math.PI / 2, want = -this.boxYaw, d = ((want - bw.rotation.y) % q + q * 1.5) % q - q / 2; bw.rotation.y += d * Math.min(1, dt * 2.5); } }   // (shoved square-on: the box swings round flat to them)
-        if (bw.booty) { const bb = bw.booty; bb.visible = true; if (bb.visible) { const k = Math.min(1, (this.t - bw.burst) / 0.3); bb.scale.setScalar(0.35 + 0.65 * k + 0.25 * Math.sin(k * Math.PI)); } this.bootyDress(bb); }   // (popping out through the hole)
         if (bw.setOpen) bw.setOpen(this.boxDown || boxTip ? Math.max(0, 1 - (this.ballK || 0) * 1.3) : 1);   // the flaps fold shut over him
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)
       }
@@ -2777,7 +2777,7 @@
           if (g.parent !== hc.m) hc.m.add(g); g.visible = true; g.position.set(0.05, DOG.cartBootyY, 0); g.rotation.set(-Math.PI / 2 + 0.25, 0, Math.sin(T * 2.2) * 0.06); this.bootyDress(g); }
         else if (cb) cb.visible = false; }
       if (v.soft) { const want = P.st === 'charge' && !P.ball ? DOG.jiggle : P.st === 'busy' && this.stompDone - this.t > DOG.slamLand * 0.3 ? 0.14 : 0;   // (and after a booty slam: a big wobble) this.jigA = (this.jigA || 0) + (want - (this.jigA || 0)) * Math.min(1, dt * 8);   // charging: left and right cheeks bounce up and down in turn
-        if (this.jigA > 0.002 || this.jigOn) { const ph = T * 15; S.SoftSumo.jiggle(v, this.jigA * Math.sin(ph), this.jigA * Math.sin(ph + Math.PI)); this.jigOn = this.jigA > 0.002; } }
+        if (this.jigA > 0.002 || this.jigOn) { const ph = T * 13, bo = (x) => Math.max(0, Math.sin(x)) * 1.6 - 0.3; S.SoftSumo.jiggle(v, this.jigA * bo(ph), this.jigA * bo(ph + Math.PI)); this.jigOn = this.jigA > 0.002; } }   // (each cheek bounces up in turn)
       if (rolling) {   // the charge, tucked into a cannonball (knees to his chest, arms round them, face on his knees), turning over and over about his middle
         const ax = this._rax || (this._rax = new THREE.Vector3()), q = this._rq || (this._rq = new THREE.Quaternion()), cc = this._rc || (this._rc = new THREE.Vector3());
         ax.set(Math.sin(P.f), 0, -Math.cos(P.f)); q.setFromAxisAngle(ax, P.ballRoll); cc.set(P.x, P.y + DOG.tuckC * v.s, P.z);
