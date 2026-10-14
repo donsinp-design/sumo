@@ -969,7 +969,7 @@
       else if (c.push.pressed && P.st === 'free' && P.held) this.drop();
       // K: use (locker, wash bucket, pick up / throw, put on the box)
       // (holding something: tap K to throw it, hold K to smash it down at your feet)
-      if (c.grab.pressed && P.st === 'free') { if (P.held) this.kArm = true; else if (P.carryN) this.kArmN = true; else if (!this.grabEnemy()) this.use(); }
+      if (c.grab.pressed && P.st === 'free') { if (P.held) this.kArm = true; else this.use(); }   // (people can't be picked up)
       if (this.kArmN) { if (!P.carryN || P.st !== 'free') this.kArmN = false; else if (c.grab.held && c.grab.t > 0.32) { this.kArmN = false; this.throwEnemy(true); } else if (!c.grab.held) { this.kArmN = false; this.throwEnemy(false); } }   // tap K: throw them; hold K: slam them down
       if (this.kArm) { if (!P.held || P.st !== 'free') this.kArm = false; else if (c.grab.held && c.grab.t > 0.32) { this.kArm = false; this.smashHeld(); } else if (!c.grab.held) { this.kArm = false; this.use(); } }
       // a charge is loud: heavy running footsteps carry round the room
@@ -1159,6 +1159,7 @@
       if (this.flopSh) this.flopSh.visible = false;
       this.proj = null; this.gulp = null; if (this.gSkill === 'spit') this.gSkill = null;
       for (const n of this.npcs) { n.eaten = false; n.inside = false; n.pit = 0; n.shrink = undefined; n.zzz = 0; n.v.root.visible = true; n.spin = null; n.recover = false; n.carried = false; n.lunge = null; n.att = undefined; n.attStun = 0; n.noGrab = 0; n.a.cling = null; }
+      for (const n of this.npcs) n.capFell = false;
       if (this.att) this.att.fill(null); this.cap = null; this.stompW = null; if (this.P.carryN) this.P.carryN = null; this.kArmN = false; this.jHold = false;
     }
     gfx(bg, txt) {   // a full-screen tint for a skill (time drag, rewind); '' clears it
@@ -1490,9 +1491,9 @@
       const n = this.att[k], mo = n && n.v.mo && n.v.mo.out, pelY = mo ? mo[0].y : 0.95, nkY = mo ? mo[1].y : 1.45, bob = Math.abs(Math.sin(T * 8 + k)) * 0.05 * (0.3 + mv);
       if (k === 4) { v.head.getWorldPosition(Q);   // astride the back of his neck: thighs either side of his head, hands round onto his eyes
         return { x: Q.x - fx * 0.4 * s, z: Q.z - fz * 0.4 * s, y: Q.y - 0.2 * s - pelY + bob, f: P.f + Math.sin(T * 5) * 0.1, st: 'held', cling: 'ride' }; }
-      if (k < 2) { v.handWorld(k === 0 ? -1 : 1, Q); let ox = Q.x - P.x, oz = Q.z - P.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;   // tight against his side, wrapped round his arm
-        const x = Q.x + ox * 0.16, z = Q.z + oz * 0.16;
-        return { x, z, y: Math.max(P.y, Q.y + 0.5 * s - nkY - 0.14) + bob, f: Math.atan2(-oz, -ox), st: 'held', cling: 'arm' }; }
+      if (k < 2) { v.handWorld(k === 0 ? -1 : 1, Q); let ox = Q.x - P.x, oz = Q.z - P.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;   // on their feet beside his held-out arm, hugging it at their chest
+        const x = Q.x + ox * 0.34, z = Q.z + oz * 0.34;
+        return { x, z, y: P.y, f: Math.atan2(-oz, -ox) + Math.sin(T * 6 + k) * 0.06, st: 'held', cling: 'arm', clingY: Q.y - P.y }; }
       const sd = k === 2 ? -1 : 1, sx = -fz * sd, sz = fx * sd, lx = P.x + (sx * 0.36 - fx * 0.05) * s, lz = P.z + (sz * 0.36 - fz * 0.05) * s;
       let ox = sx * 0.8 - fx * 0.6, oz = sz * 0.8 - fz * 0.6; const ol = Math.hypot(ox, oz); ox /= ol; oz /= ol;
       return { x: lx + ox * 0.34, z: lz + oz * 0.34, y: P.y, f: Math.atan2(-oz, -ox), st: 'held', cling: 'hug' };
@@ -1611,10 +1612,11 @@
     }
     attDraw(dt) {   // (draw) the hangers-on, placed on him every frame, after his pose; under the pile when he's caught
       const P = this.P;
+      { const r = this.att[4]; if (r && r.att !== undefined && !this.cap && !(r.attStun > 0) && (this.bonkT = (this.bonkT || 0) - dt) <= 0) { this.bonkT = 0.78; this.popAt({ x: P.x, z: P.z, y: P.y + 0.9 }, ['ポカッ!', 'ゴツッ!', 'ポコッ!'][(this.t * 3 | 0) % 3], 0.5); this.flash = Math.max(this.flash || 0, 0.06); } }   // (the one on his shoulders bonks him on the head)
       for (let k = 0; k < this.att.length; k++) { const n = this.att[k]; if (!n || n.att === undefined) continue; const a = n.a;
-        if (this.cap) { const t = this.cap.t, s = this.view.s, u = Math.min(1, t / 0.5), px = P.x + Math.cos(k * 1.3) * 0.35 * s, pz = P.z + Math.sin(k * 1.3) * 0.35 * s;
-          a.x += (px - a.x) * u * 0.3; a.z += (pz - a.z) * u * 0.3; a.y = P.y + (0.35 + 0.32 * k) * s * u + Math.abs(Math.sin(t * 10 + k)) * 0.06; a.cling = null; a.st = k % 2 ? 'down' : 'hold'; a.dur = 1e9; continue; }
-        const q = this.slotPos(k); a.x = q.x; a.z = q.z; a.y = q.y; a.f = q.f; a.st = q.st; a.cling = q.cling;
+        if (this.cap) { if (!n.capFell) { n.capFell = true; a.cling = null; a.st = 'down'; a.t = 0; a.dur = 1e9; a.slipFall = false; a.fallX = P.x - a.x; a.fallZ = P.z - a.z; n.capY = a.y; }   // caught: every one of them just falls onto him in a heap
+          a.y += (P.y + (k === 4 ? 0.35 : 0.12) * this.view.s - a.y) * Math.min(1, dt * 6); continue; }
+        const q = this.slotPos(k); a.x = q.x; a.z = q.z; a.y = q.y; a.f = q.f; a.st = q.st; a.cling = q.cling; a.clingY = q.clingY;
         if (n.attStun > 0) { a.f += Math.sin(this.t * 22 + k) * 0.35; a.y += Math.abs(Math.sin(this.t * 18 + k)) * 0.08; }   // (rattled by the wall: shaking, still holding on)
       }
     }
@@ -2677,7 +2679,7 @@
       if (P.st === 'stompW' && this.stompW) w.t = 0.45 * Math.min(1, this.stompW.t / this.stompW.W); if (this.cap) { this.cap.t += dt; w.t = this.cap.t; }
       w.torpedo = !!(P.st === 'skill' && g && g.torp); w.szCur = g && g.sz ? g.sz : 1; w.gulpI = this.gulp ? 0 : -1; if (g && g.wdur) w.dur = g.wdur;
       if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.st === 'captured' ? !!(this.cap && this.cap.t > 0.3) : P.t > 0.3 && P.t < 1.0; } else w.down = false;
-      w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0, Math.min(0.9, this.attN() * 0.2)); w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : P.carryN ? {} : null;   // (hunched: tiptoe, curled up, or bowed under the dogpile)
+      w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0, Math.min(0.9, this.attN() * 0.2)); w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : P.carryN ? {} : null; w.armHeld = this.att && !this.cap ? { L: !!(this.att[0] && this.att[0].att !== undefined), R: !!(this.att[1] && this.att[1].att !== undefined) } : null;   // (hunched: tiptoe, curled up, or bowed under the dogpile)
       if (this.freeze) w.fxs.dizzy = 1;
       if (P.st === 'skill' && g && g.ball) { w.fxs.ball = 1; w.ballRoll = g.roll; }
       if (g && g.id === 'hands' && P.st === 'skill') w.hand = g.sd;
@@ -2705,10 +2707,18 @@
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)
       }
       v.root.rotation.z = 0;   // (no rocking on tiptoe)
-      if (rolling) {   // the charge, curled up into a ball: the whole sumo turns over and over about his middle as he rolls
-        const ax = this._rax || (this._rax = new THREE.Vector3()), q = this._rq || (this._rq = new THREE.Quaternion()), cc = this._rc || (this._rc = new THREE.Vector3());
-        ax.set(Math.sin(P.f), 0, -Math.cos(P.f)); q.setFromAxisAngle(ax, P.ballRoll); cc.set(P.x, P.y + 0.55 * v.s, P.z);
-        v.root.position.sub(cc).applyQuaternion(q).add(cc); v.root.quaternion.premultiply(q); }
+      if (rolling) {   // the charge, rolled up: a round sumo ball (skin, his mawashi round it, the topknot) turning over and over as it goes
+        let B = this.sumoBall; if (!B) { const g = new THREE.Group(), inner = new THREE.Group(), R = 0.78;
+          const skin = S.Flat.mat(0xefc09c), belt = S.Flat.mat(0x2f3a6e), hair = S.Flat.mat(0x1f1a22);
+          const body = new THREE.Mesh(new THREE.SphereGeometry(R, 24, 18), skin); body.castShadow = true; inner.add(body);
+          const band = new THREE.Mesh(new THREE.TorusGeometry(R * 1.0, R * 0.12, 8, 32), belt); band.rotation.x = Math.PI / 2; inner.add(band);
+          const cap = new THREE.Mesh(new THREE.SphereGeometry(R * 0.42, 14, 10), hair); cap.position.set(0, R * 0.78, R * 0.18); cap.scale.set(1, 0.55, 1); inner.add(cap);
+          const knot = new THREE.Mesh(new THREE.SphereGeometry(R * 0.14, 10, 8), hair); knot.position.set(0, R * 1.02, -R * 0.08); inner.add(knot);
+          for (const sd of [-1, 1]) { const h = new THREE.Mesh(new THREE.SphereGeometry(R * 0.2, 10, 8), skin); h.position.set(sd * R * 0.55, R * 0.1, R * 0.72); inner.add(h); }   // (hands tucked in)
+          g.add(inner); g.userData.R = R; this.G.add(g); B = this.sumoBall = g; }
+        const R = B.userData.R * v.s; B.visible = true; B.scale.setScalar(v.s); B.position.set(P.x, P.y + R, P.z);
+        B.rotation.set(0, Math.PI / 2 - P.f, 0); B.children[0].rotation.set(P.ballRoll, 0, 0); v.root.visible = false;
+      } else if (this.sumoBall) this.sumoBall.visible = false;
       v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       this.shortsStep(dt); this.tattooStep(v); this.stinkStep(T, v);
       if (P.held && P.held.state === 'held') {
@@ -2730,7 +2740,7 @@
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
       const vleft = g && g.id === 'vanish' ? g.dur - g.t : 9, gop = g && g.id === 'vanish' ? (vleft < 1.5 && Math.sin(T * 24) > 0 ? 0.6 : 0.3) : g && g.ghost && P.st === 'skill' ? g.ghost : this.inSmoke(P.x, P.z) ? 0.55 : 0;
       this.ghost(gop, gop === 0.55);   // VANISH: a faint ghost of himself; in the SMOKE: seen through it
-      const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden && !this.gotMawashi && !(w.fxs.ball > 0);
+      const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden && !this.gotMawashi && !(w.fxs.ball > 0) && !(P.ball && P.st === 'charge');
       m.s.material.transparent = true; m.s.material.opacity = gop || 1; m.s.material.depthTest = gop !== 0.55; m.s.renderOrder = gop === 0.55 ? 21 : 0;
       if (m.s.visible) {
         m.t -= dt;
@@ -2826,7 +2836,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J slap (to the face: knocked flying · the side: spun round · the back: stumbles) · hold J stomp (throws off anyone hanging on) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · a run-up smashes things · shakes one hanger-on off; smashing into something throws them all off) · I mid-charge: roll up into a ball (faster, steer it, rolls while L is held) · K use / pick up / throw / push a cart / pick up a person (tap K throw, hold K slam) · hold K smash what you hold · Esc pause</div>' +
+        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J slap (to the face: knocked flying · the side: spun round · the back: stumbles) · hold J stomp (throws off anyone hanging on) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · a run-up smashes things · shakes one hanger-on off; smashing into something throws them all off) · I mid-charge: roll up into a ball (faster, steer it, rolls while L is held) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="settings">SETTINGS</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
