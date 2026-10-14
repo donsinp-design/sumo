@@ -51,8 +51,8 @@
     slapFront: 7, slapRear: 5, spinT: 1.5,       // a slap: knocked back / stumbling forward (speeds), spun round (seconds)
     slapDown: 2.2, stumbleDown: 1.8, bumpDown: 1.6, flungDown: 2.4, thrownDown: 2.6,   // seconds on the floor before they get up
     pickR: 1.5, liftT: 0.45, throwSp: 9, carryMax: 5, carrySpeed: 0.8,                  // picking one up (a heave), the throw, how long they let him hold them
-    captureT: 1.4, fadeT: 0.35,                  // caught: the pile, then the fade to the checkpoint
-    rideScale: 0.65,                             // the one on his shoulders is drawn smaller (a full-size one hides his whole head)
+    captureT: 1.5, fadeT: 0.4,                  // caught: the pile, then the fade to the checkpoint
+    rideScale: 1,                                // the one on his shoulders, drawn at this size (1: full size)
   };
   const HIT_WIN = 4;   // seconds: a second hit inside this turns the edges red, a third knocks him out; after it, he's fine again
   // the gacha machine by the locker-room door: one pull, one skill for this level, used once with SPACE
@@ -1471,24 +1471,26 @@
       return !this.cap && !n.carried && this.t >= (n.noGrab || 0) && P.st !== 'charge' && P.st !== 'wind' && P.st !== 'skill' && P.st !== 'captured'
         && !P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.unseen() && Math.abs(n.a.y - P.y) < 1 && this.att.some((q) => !q) && !(g && g.id === 'giant');
     }
-    pickSlot(n) {   // which part of him they go for: whatever's nearest them (round the back: onto his shoulders)
-      const P = this.P, ang0 = ang(Math.atan2(n.a.z - P.z, n.a.x - P.x) - P.f), A = this.att, free = (k) => !A[k];
-      const pref = Math.abs(ang0) > 2.1 ? [4, 0, ang0 > 0 ? 2 : 3] : ang0 > 0 ? [2, 0, 1, 4] : [1, 3, 0, 4];   // (from behind: onto his shoulders or his back; from the side: an arm or a leg)
-      for (const k of pref.concat([0, 1, 2, 3, 4])) if (free(k)) return k;
-      return -1;
+    pickSlot(n) {   // the third one up goes onto his shoulders; the rest take whichever arm or leg is nearest them
+      const A = this.att, taken = A.filter(Boolean).length, P = this.P, s = this.view.s, fx = Math.cos(P.f), fz = Math.sin(P.f);
+      if (taken === 2 && !A[4]) return 4;
+      let best = -1, bd = 1e9;
+      for (const k of [0, 1, 2, 3]) { if (A[k]) continue; const sd = k % 2 ? 1 : -1, sx = -fz * sd, sz = fx * sd, back = k >= 2 ? -0.5 : 0.2;
+        const d = Math.hypot(n.a.x - (P.x + (sx * 0.9 + fx * back) * s), n.a.z - (P.z + (sz * 0.9 + fz * back) * s)); if (d < bd) { bd = d; best = k; } }
+      if (best < 0 && !A[4]) best = 4;
+      return best;
     }
     lunge(n) {   // a run and a jump at him; latched on if they get there
       const k = this.pickSlot(n); if (k < 0) return;
       this.att[k] = n; n.lunge = { t: 0, k, x0: n.a.x, z0: n.a.z, y0: n.a.y }; n.a.st = 'hold'; n.a.t = 0; n.path = null;
       this.popAt(n.a, ['捕まえた!', 'とりゃ!', 'つかまえろ!'][(this.t * 3 | 0) % 3], 0.9);
     }
-    slotPos(k) {   // where a hanger-on is, on his real joints: 0 on his back (a piggyback), 1 hugging his arm, 2/3 sat on the floor hugging a leg, 4 on his shoulders (hands over his eyes)
+    slotPos(k) {   // where a hanger-on is, on his real joints: 0/1 hugging an arm (tight to his side), 2/3 sat on the floor hugging a leg, 4 on his shoulders (hands over his eyes)
       const P = this.P, v = this.view, s = v.s, fx = Math.cos(P.f), fz = Math.sin(P.f), T = this.t, mv = Math.min(1, Math.hypot(P.vx, P.vz) / 2), Q = this._sq || (this._sq = new THREE.Vector3());
       const n = this.att[k], mo = n && n.v.mo && n.v.mo.out, pelY = mo ? mo[0].y : 0.95, nkY = mo ? mo[1].y : 1.45, bob = Math.abs(Math.sin(T * 8 + k)) * 0.05 * (0.3 + mv);
-      if (k === 4) { v.head.getWorldPosition(Q);   // astride the back of his neck: thighs either side of his head (the apron behind it), hands round onto his eyes
-        return { x: Q.x - fx * 0.3 * s, z: Q.z - fz * 0.3 * s, y: Q.y - 0.22 * s - pelY * DOG.rideScale + bob, f: P.f + Math.sin(T * 5) * 0.1, st: 'held', cling: 'ride' }; }
-      if (k === 0) return { x: P.x - fx * 0.6 * s, z: P.z - fz * 0.6 * s, y: P.y + 0.92 * s - pelY + bob, f: P.f + Math.sin(T * 4) * 0.08, st: 'held', cling: 'back' };   // chest to his back
-      if (k === 1) { v.handWorld(1, Q); let ox = Q.x - P.x, oz = Q.z - P.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;   // tight against his side, wrapped round his arm
+      if (k === 4) { v.head.getWorldPosition(Q);   // astride the back of his neck: thighs either side of his head, hands round onto his eyes
+        return { x: Q.x - fx * 0.4 * s, z: Q.z - fz * 0.4 * s, y: Q.y - 0.2 * s - pelY + bob, f: P.f + Math.sin(T * 5) * 0.1, st: 'held', cling: 'ride' }; }
+      if (k < 2) { v.handWorld(k === 0 ? -1 : 1, Q); let ox = Q.x - P.x, oz = Q.z - P.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;   // tight against his side, wrapped round his arm
         const x = Q.x + ox * 0.16, z = Q.z + oz * 0.16;
         return { x, z, y: Math.max(P.y, Q.y + 0.5 * s - nkY - 0.14) + bob, f: Math.atan2(-oz, -ox), st: 'held', cling: 'arm' }; }
       const sd = k === 2 ? -1 : 1, sx = -fz * sd, sz = fx * sd, lx = P.x + (sx * 0.36 - fx * 0.05) * s, lz = P.z + (sz * 0.36 - fz * 0.05) * s;
@@ -1602,7 +1604,7 @@
     capture() {   // the fifth one on: down he goes under the pile, a moment, a fade, and back to the checkpoint
       if (this.cap) return; const P = this.P;
       if (this.gSkill === 'rewind' && this.hist && this.hist.length >= 6) { this.detachAll('drop'); this.autoRewind(); return; }   // (REWIND: saved)
-      this.stompW = null; this.cap = { t: 0 }; P.st = 'captured'; P.t = 0; P.dur = 1e9; P.vx = P.vz = 0; P.fall = P.f + Math.PI; this.shove = null;
+      this.stompW = null; this.cap = { t: 0 }; P.st = 'captured'; P.t = 0; P.dur = 1e9; P.vx = P.vz = 0; P.fall = P.f; this.shove = null;   // (forward, flat on his face)
       if (P.carryN) { const n = P.carryN; P.carryN = null; n.carried = false; }
       this.flash = 0.6; this.sfx('thump', 9); this.clearPops(); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, '確保ーっ!!', 1.6, true);
       this.freeze = DOG.captureT + DOG.fadeT + 0.15; this.catcher = this.att.find((n) => n) || null;
