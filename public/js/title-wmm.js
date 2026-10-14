@@ -101,7 +101,7 @@
     dt = Math.min(dt, 0.05); t += dt;
     if (!champ) {
       champ = makeChamp(R);
-      if (champ) { cam.fov = 30; cam.position.set(-1.6, 2.9, 10.2); cam.lookAt(-1.6, 1.75, 0); cam.updateProjectionMatrix(); }
+      if (champ) { cam.fov = 48; cam.position.set(-1.3, 0.55, 4.7); cam.lookAt(-1.3, 2.15, 0); cam.updateProjectionMatrix(); }   // (low, looking up past the booty at the trophy)
       else { step(dt); R.r.render(scene, cam); return; }   // (the model is still loading: the food rain for a moment)
     }
     if (stars.length) { for (const s of stars) scene.remove(s.m); stars.length = 0; }

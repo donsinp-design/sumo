@@ -42,7 +42,7 @@
     speed: [1, 0.78, 0.58, 0.4, 0.22, 0],        // his walk with 0..5 on him
     charge: [1, 0.85, 0.7, 0.55, 0.4],           // how far a charge carries with 0..4 on him (the burst itself is the same)
     stompWind: [0.5, 0.6, 0.8, 1.0, 1.2],
-    ballSpeed: 8.4, ballMax: 2.4, ballTurn: 3.0, tuckC: 0.62, tuckLift: 0.12,   // (the tucked roll turns about this height; lifted a little so it rolls on its back, not its feet)  // I mid-charge: rolled up into a daruma (faster than the charge's 7.2), rolls on while L is held, up to this long        // hold J: the stomp's wind-up with 0..4 on him (fixed when it starts)
+    ballSpeed: 8.4, ballMax: 2.4, ballTurn: 3.0, ballSlow: 1.6, tuckC: 0.62, tuckLift: 0.12,   // (the tucked roll turns about this height; lifted a little so it rolls on its back, not its feet)  // I mid-charge: rolled up into a daruma (faster than the charge's 7.2), rolls on while L is held, up to this long        // hold J: the stomp's wind-up with 0..4 on him (fixed when it starts)
     holdJ: 0.22,                                 // J held this long becomes the stomp (a tap slaps at once, no wait)
     grabR: 1.45, lunge: 0.3,                     // they jump at him from this close; the jump takes this long
     regrab: 1.6,                                 // up again after a slap, a fall or a throw: this long before they can grab again
@@ -816,7 +816,8 @@
           if (!this.saidCart) { this.saidCart = true; this.think('...just a cart of towels. Nothing to see.', 2.0); } return; }
       }
       // I: TIPTOE. Silent, slow, and tiring: about six seconds on his toes, then the heels come down with a thud
-      if (P.ball && P.st !== 'charge') this.iLock = true; if (!this.keys.KeyI) this.iLock = false;   // (the roll's I: not a tiptoe once it ends)
+      if (P.ball && P.st !== 'charge') { this.iLock = true; if (this.keys.KeyI) this.ballHold = true; } if (!this.keys.KeyI) { this.iLock = false; this.ballHold = false; }   // (the roll ends with I held: he stays a ball until I is let go)
+      if (this.ballHold && (P.st !== 'free' || P.held || P.cart)) this.ballHold = this.ballHold && P.st === 'charge';
       const tipOn = !!this.keys.KeyI && !this.iLock && P.st === 'free' && !wet && !P.tired && !P.cart;
       // in the bath, I: duck right under (just bubbles on the water)
       P.sub = wet && !!this.keys.KeyI && P.st === 'free' && !P.tired;
@@ -833,12 +834,13 @@
       if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart && !P.carryN) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
       let spd = 0;
       if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 6.4 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : this.wearing && this.keys.KeyI ? 1.2 : (this.wearing ? 3.0 : 3.4);   // (crouched in the box, out of puff: a slow shuffle)
-      if (P.st === 'free') spd *= DOG.speed[Math.min(DOG.maxAtt, this.attN())] * (P.carryN ? DOG.carrySpeed : 1);   // the dogpile weighs him down
+      if (P.st === 'free') spd *= DOG.speed[Math.min(DOG.maxAtt, this.attN())] * (P.carryN ? DOG.carrySpeed : 1);
+      if (this.ballHold && P.st === 'free') { spd = DOG.ballSlow; P.ballRoll = (P.ballRoll || 0) + Math.hypot(P.vx, P.vz) * dt / 0.62; }   // (still a ball: it rolls along slowly)   // the dogpile weighs him down
       if (P.st === 'charge' && this.keys.KeyI && !P.ball && !P.carryN) { P.ball = true; P.ballRoll = 0; this.sfx('whoosh', 0.3); this.popAt({ x: P.x, z: P.z, y: P.y }, 'ゴロン!', 0.7); }   // I in a charge: roll up into a ball
       if (P.st !== 'charge') P.ball = false;
       if (P.ball && mag > 0.3) P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * DOG.ballTurn);   // (the ball steers)
       P.chT = P.st === 'charge' ? (P.chT || 0) + dt : 0; if (P.chT > (P.ball ? DOG.ballMax : 0.95) * this.chargeK()) { P.st = 'free'; P.t = 0; P.cd = 0.5; P.chT = 0; }   // (a charge can never run on)
-      if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = P.ball ? DOG.ballSpeed : 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur; if (P.t > (P.ball ? DOG.ballMax : 0.85) * this.chargeK()) P.t = P.dur + 0.01; else if (P.ball && c.dash.held) P.t = Math.min(P.t, P.dur - 0.01); P.f = P.cdir; if (P.ball) P.ballRoll += Math.hypot(P.vx, P.vz) * dt / 0.62; }   // (never longer than 0.85 s)
+      if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = P.ball ? DOG.ballSpeed : 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur + 0.01; if (P.t > (P.ball ? DOG.ballMax : 0.85) * this.chargeK()) P.t = P.dur + 0.01; else if (P.ball && c.dash.held) P.t = Math.min(P.t, P.dur - 0.01); P.f = P.cdir; if (P.ball) P.ballRoll += Math.hypot(P.vx, P.vz) * dt / 0.62; }   // (never longer than 0.85 s)
       if (P.st === 'wind' && mag > 0.3) { P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * 8); P.f = P.cdir; }
       const power = P.st === 'charge' && P.run > 1.0;   // it needs a run-up: from right next to something he just bumps it
       const dir = P.st === 'charge' || mag > 0.3;
@@ -2697,7 +2699,7 @@
           q.m.position.set(q.sx + (mx - q.sx) * e - fz * sw, q.sy + (hy - q.sy) * e + sw * 0.4, q.sz + (mz - q.sz) * e + fx * sw); q.m.rotation.y += dt * 18; q.m.rotation.x += dt * 9; q.m.scale.setScalar(1.3 * (1 - 0.7 * e)); q.m.visible = k < 1; }
         if (E.t > E.dur) { for (const q of E.pieces) if (q.m) this.G.remove(q.m); this.eatAnim = null; }
       }
-      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : P.st === 'charge' && P.ball ? 'tuck' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? 'bigstomp' : P.st === 'busy' && this.stompDone > this.t ? 'free' : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
+      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : (P.st === 'charge' && P.ball) || (this.ballHold && P.st === 'free') ? 'tuck' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? 'bigstomp' : P.st === 'busy' && this.stompDone > this.t ? 'free' : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (P.st === 'skill' && g && g.wt !== undefined) w.t = g.wt;
       if (P.st === 'stompW' && this.stompW) w.t = 0.45 * Math.min(1, this.stompW.t / this.stompW.W); if (this.cap) { this.cap.t += dt; w.t = this.cap.t; }
@@ -2713,7 +2715,7 @@
       if (v.ballSpin && v.ballSpin.visible) v.ballSpin.position.y += P.y;   // (the daruma: on the floor he's on)
       const gk = (w.szCur || 1) * (this.gulp ? 1.22 + Math.sin(T * 9) * 0.03 : 1);   // GIANT, or someone swallowed
       const boxTip = this.wearing && !!this.keys.KeyI && P.st === 'free' && !P.sub && !P.hidden;   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
-      const rolling = !!(P.ball && P.st === 'charge'), ball = P.boxHide || boxTip || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
+      const rolling = !!(P.ball && P.st === 'charge') || !!(this.ballHold && P.st === 'free'), ball = P.boxHide || boxTip || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
       this.ballK = (this.ballK || 0) + ((ball ? 1 : 0) - (this.ballK || 0)) * Math.min(1, dt * 10);
       if (this.ballK > 0.01) { const k = this.ballK; v.root.position.y -= (P.boxHide || boxTip ? 0.8 : 0.06) * v.s * k; v.root.scale.set(v.s * gk * (1 - 0.1 * k), v.s * gk * (1 - 0.32 * k), v.s * gk * (1 - 0.1 * k)); } else v.root.scale.setScalar(v.s * gk);
       // ducking in the box: the same box stays where it stood on the floor and he sinks down into it (no second box)
@@ -2756,7 +2758,7 @@
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
       const vleft = g && g.id === 'vanish' ? g.dur - g.t : 9, gop = g && g.id === 'vanish' ? (vleft < 1.5 && Math.sin(T * 24) > 0 ? 0.6 : 0.3) : g && g.ghost && P.st === 'skill' ? g.ghost : this.inSmoke(P.x, P.z) ? 0.55 : 0;
       this.ghost(gop, gop === 0.55);   // VANISH: a faint ghost of himself; in the SMOKE: seen through it
-      const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden && !this.gotMawashi && !(w.fxs.ball > 0) && !(P.ball && P.st === 'charge');
+      const m = this.mosaic; m.s.visible = !this.wearing && P.y > -0.25 && this.outOfBath && !P.hidden && !this.gotMawashi && !(w.fxs.ball > 0) && !rolling;
       m.s.material.transparent = true; m.s.material.opacity = gop || 1; m.s.material.depthTest = gop !== 0.55; m.s.renderOrder = gop === 0.55 ? 21 : 0;
       if (m.s.visible) {
         m.t -= dt;
