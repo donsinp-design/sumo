@@ -640,6 +640,7 @@
         }
         case 'gale': { rate = 14; c = 0.4; const sw = Math.sin(t * 14); p = 0.05 + 0.12 * sw; Rh = [0.18, 1.1 + 0.3 * sw, 0.45 + 0.2 * sw]; Lh = mir(Rh); break; }
         case 'rewinding': { rate = 30; const sw = Math.sin(t * 40); p = -0.15; Rh = [0.5, 0.35 + 0.25 * sw, -0.2]; Lh = [-0.5, 0.35 - 0.25 * sw, -0.2]; tw = 0.15 * sw; break; } // jerky backwards scramble
+        case 'bslam': c = 0.9; p = -0.28; hp = -0.2; Rh = w.slamAir ? [0.8, 1.15, 0.25] : [0.75, -0.1, 0.3]; Lh = mir(Rh); rate = 30; break;   // the booty slam: sat in the air, legs out in front, arms flung up; then sat on the floor, hands down by his sides
         case 'bigstomp': { // the big leg lift, then the stamp
           this.stompSd = -1;
           const up = Math.sin(Math.min(1, t / 0.45) * Math.PI / 2);
@@ -863,11 +864,12 @@
         if (downed) pole.set(Lg.sd * 0.3, 0, 1).transformDirection(this.body.matrix); // knees bend the way the body faces, not the old standing way
         if (w.torpedo) foot.set(Lg.sd * 0.2 * s, hip.y - 0.78 * s, hip.z - 0.1 * s); // legs straight out behind
         else if (w.st === 'air') foot.set(Lg.sd * 0.45 * s, hip.y - 0.6 * s, -0.5 * s);
+        else if (w.st === 'bslam') foot.set(Lg.sd * 0.42 * s, hip.y - 0.22 * s, hip.z + 0.72 * s);   // (sitting: legs straight out in front)
         else if (w.st === 'tuck') foot.set(Lg.sd * 0.24 * s, hip.y - 0.3 * s, hip.z + 0.4 * s);   // (tucked: feet drawn up under him, knees to his chest)
         ik(hip, foot, Lg.l1, Lg.l2, pole, this.v4);
         seg(Lg.thigh, hip, this.v4); seg(Lg.calf, this.v4, foot);
         (Lg.hp = Lg.hp || new THREE.Vector3()).copy(hip); (Lg.kn = Lg.kn || new THREE.Vector3()).copy(this.v4); (Lg.ft = Lg.ft || new THREE.Vector3()).copy(foot);
-        Lg.foot.position.set(foot.x, Math.max(foot.y - 0.02 * s, 0.05 * s + (w.y > 0.12 || w.st === 'tuck' ? -1 : 0)), foot.z + 0.08 * s);
+        Lg.foot.position.set(foot.x, Math.max(foot.y - 0.02 * s, 0.05 * s + (w.y > 0.12 || w.st === 'tuck' || w.st === 'bslam' ? -1 : 0)), foot.z + 0.08 * s);
         Lg.foot.rotation.y = Lg.sd * 0.4;
       }
       // shadow

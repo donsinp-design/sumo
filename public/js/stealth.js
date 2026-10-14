@@ -48,6 +48,7 @@
     grabR: 1.45, lunge: 0.3,                     // they jump at him from this close; the jump takes this long
     regrab: 1.6,                                 // up again after a slap, a fall or a throw: this long before they can grab again
     wallStun: 1.4,                               // charged into a wall: the ones still hanging on are stunned this long
+    slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
     slapFront: 7, slapRear: 5, spinT: 1.5,       // a slap: knocked back / stumbling forward (speeds), spun round (seconds)
     slapDown: 2.2, stumbleDown: 1.8, bumpDown: 1.6, flungDown: 2.4, thrownDown: 2.6,   // seconds on the floor before they get up
@@ -1531,7 +1532,7 @@
       if (this.att[L.k] !== n || this.cap || P.st === 'charge' || P.st === 'wind' || P.st === 'skill' || P.hidden || P.boxHide || P.inStall || this.unseen() || (this.gs && this.gs.id === 'giant')) { if (this.att[L.k] === n) this.att[L.k] = null; a.st = 'free'; n.noGrab = this.t + 1; return true; }   // (he charged off, hid, vanished...: they miss)
       n.att = L.k; n.attStun = 0; a.st = q.st; a.cling = q.cling;
       this.flash = Math.max(this.flash || 0, 0.12); this.sfx('thump', 3); if (this.g.audio && this.g.audio.grab) this.g.audio.grab();
-      if (!this.tipGrab) { this.tipGrab = true; this.tip(['THEY GRABBED YOU', 'Each one hanging on slows you down. If FIVE get hold of you, you are caught.', '#HOLD J: STOMP', 'Plant your feet and stomp: everyone flies off. It takes longer the more are on you.', '#L: CHARGE', 'Every charge throws one off. Charge into a wall or anything solid and they all come off.'], { now: true }); }
+      if (!this.tipGrab) { this.tipGrab = true; this.tip(['THEY GRABBED YOU', 'Each one hanging on slows you down. If FIVE get hold of you, you are caught.', '#HOLD J: BOOTY SLAM', 'Jump up and land on your booty: everyone falls off. It takes longer the more are on you.', '#L: CHARGE', 'Every charge throws one off. Charge into a wall or anything solid and they all come off.'], { now: true }); }
       if (this.attN() >= DOG.maxAtt) this.capture();
       return true;
     }
@@ -1580,17 +1581,17 @@
         else if (was) this.launch(n, dx * 1.5, dz * 1.5, 1.2, DOG.flungDown);
         else { a.st = 'free'; n.noGrab = this.t + 1; } }
     }
-    startStomp() {   // hold J: feet planted, the leg comes up... (its time is set now: more hanging on doesn't make it longer)
+    startStomp() {   // hold J: the BOOTY SLAM. He crouches, springs up, and comes down on his backside... (its time is set now: more hanging on doesn't make it longer)
       const P = this.P, k = Math.min(DOG.stompWind.length - 1, this.attN());
       this.stompW = { t: 0, W: DOG.stompWind[k] }; P.st = 'stompW'; P.t = 0; P.dur = 1e9; P.vx = P.vz = 0;
     }
-    doStomp() {   // ...STAMP: everyone hanging on flies off, and anyone near is thrown back by the shock
-      const P = this.P; this.stompW = null; P.st = 'busy'; P.t = 0; P.dur = 0.35; this.stompDone = this.t + 0.35;
+    doStomp() {   // ...BOOM: he lands on his booty. Everyone hanging on falls off, and anyone near is knocked down by the shock
+      const P = this.P; this.stompW = null; P.st = 'busy'; P.t = 0; P.dur = DOG.slamLand; this.stompDone = this.t + DOG.slamLand;
       this.detachAll('stomp');
       for (const n of this.npcs) { const a = n.a; if (!this.upright(n) || Math.abs(a.y - P.y) > 1.2) continue; const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz) || 1; if (d > DOG.stompR) continue;
         this.dropOff(n, dx, dz, DOG.bumpDown); }   // (the shock knocks them off their feet)
       this.flash = Math.max(this.flash || 0, 0.7); this.shake = Math.max(this.shake || 0, 0.35); this.sfx('thump', 9); this.fx.ring(P.x, P.z, DOG.stompR, 0.45); this.fx.ring(P.x, P.z, DOG.stompR * 0.55, 0.3);
-      this.fx.dust(P.x, P.y + 0.05, P.z, 20, 1.2, 0.6, 0.6); this.popAt({ x: P.x, z: P.z, y: P.y }, 'ドスン!!', 1.0, true); this.noise(P.x, P.z, 10, '!?');
+      this.fx.dust(P.x, P.y + 0.05, P.z, 20, 1.2, 0.6, 0.6); this.popAt({ x: P.x, z: P.z, y: P.y }, 'BOOTY SLAM!!', 1.0, true); this.noise(P.x, P.z, 10, '!?');
     }
     dropOff(n, dx, dz, downT) {   // shaken off: they just let go and fall down where they are (a little push away from him), no flying
       this.unattach(n); n.spin = null; n.shock = 0; n.a.shock = 0; n.ko = false; n.path = null; n.hold = 0; n.alarm = 0;
@@ -2341,7 +2342,7 @@
       const near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r, room = roomAt(P.x, P.z), sub = this.el('.st-sub').style.display === 'block';
       if (!(this.paused || this.over || this.asleep || this.sf || this.freeze || this.choiceCb || sub || this.jumpOn || this.camFocus || this.bossCut)) {   // (no prompts in a cutscene, dialog or not)
         const V = this.vend;
-        if (this.attN && this.attN()) L = [['hold J', 'stomp them all off'], ['L into a wall', 'shake one off']];
+        if (this.attN && this.attN()) L = [['hold J', 'booty slam them off'], ['L into a wall', 'shake one off']];
         else if (P.carryN) L = [['K', 'throw'], ['hold K', 'slam down']];
         else if (P.stallHide !== undefined) L = [['move / I', 'come out']];
         else if (P.hidden) L = [['move / I', 'climb out'], ['hold I + direction', 'climb out silently']];
@@ -2373,7 +2374,7 @@
       if (!this.tipCart && this.outOfBath && !P.held && !P.cart && this.carts.some((cc) => near(cc.x, cc.z, 2.6))) { this.tipCart = true; this.tip(['K: PUSH THE CART', 'Press K again to let go.', '#I next to it: HIDE INSIDE', 'Hide while nobody can see you. If they see you climb in, they will look inside.'], { until: () => !!P.cart }); }
       if (!this.tipSneak && room === 'lock') { this.tipSneak = true;
         this.tip(['I: SNEAK', 'People can hear you coming. HOLD I to move quietly.', 'You are a big boy, so sneaking tires you out. Stand still and you recover.', '#I: HIDE', 'I also lets you hide in carts and toilet stalls. Hide while nobody can see you. If they see you hide, they will find you.']);
-        this.tip(['J: BOOTY BUMP', 'He spins round and bumps with his booty.', 'Bump a WALL to make a noise. Whoever hears it comes to look, so you can lure them away.', 'Bump a PERSON: from the front they fly back, on the side they spin, from behind they stumble.', 'HOLD J: STOMP. Throws off anyone hanging on you.']); }
+        this.tip(['J: BOOTY BUMP', 'He spins round and bumps with his booty.', 'Bump a WALL to make a noise. Whoever hears it comes to look, so you can lure them away.', 'Bump a PERSON: from the front they fly back, on the side they spin, from behind they stumble.', 'HOLD J: BOOTY SLAM. Jump and land on your booty: throws off anyone hanging on you.']); }
       if (!this.tipLockK && this.stage === 'locker' && near(this.locker.x, this.locker.z, 3.2)) { this.tipLockK = true; this.tip(['K: OPEN YOUR LOCKER'], { until: () => this.stage !== 'locker' }); }
       if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['HOLD L + A DIRECTION: CHARGE', 'Charging breaks things.', 'You need room for a run-up, and you cannot charge right away.', '#PRESS I WHILE CHARGING: ROLL', 'You curl up into a ball and roll, faster and further, as long as you hold L. Steer it. Nobody can grab you, and you bowl over anyone in the way.']); }
     }
@@ -2578,7 +2579,11 @@
       { const H = 0.8, D = 1.4, dark = S.Flat.mat(0x3a2a1c), torn = S.Flat.mat(0xe6cfa4);   // too much booty for one box: it's burst a hole in the back, and out it pokes
         const rip = new THREE.Mesh(new THREE.CircleGeometry(0.5, 11), torn); rip.scale.set(1.08, 0.72, 1); rip.position.set(0, H * 0.52, -D / 2 - 0.006); rip.rotation.y = Math.PI; b.add(rip);
         const hole = new THREE.Mesh(new THREE.CircleGeometry(0.44, 11), dark); hole.scale.set(1.05, 0.66, 1); hole.position.set(0, H * 0.52, -D / 2 - 0.01); hole.rotation.y = Math.PI; b.add(hole);
-        const bp = this.bootyProp(); bp.position.set(0, H * 0.5, -D / 2 + 0.06); b.add(bp); b.booty = bp; }
+        const bp = this.bootyProp(); bp.position.set(0, H * 0.5, -D / 2 + 0.06); b.add(bp); b.booty = bp; b.torn = [rip, hole]; rip.visible = hole.visible = bp.visible = false; }   // (whole until he first squats down in it: then it bursts)
+    }
+    boxBurst(b) {   // the first time he squats down in the box, there's too much booty for it: the back rips open and out it pops
+      b.burst = this.t; for (const m of b.torn) m.visible = true;
+      const q = b.localToWorld(new THREE.Vector3(0, 0.42, -0.8)); this.fx.dust(q.x, q.y, q.z, 10, 0.5, 0.5, 0.4); this.popAt({ x: q.x, z: q.z, y: this.P.y }, 'ビリッ!', 0.9, true); this.sfx('thump', 3);
     }
     putOnBox() {
       this.wearing = true; this.pantsBox.visible = false; this.spBox.visible = false; this.spExit.visible = true; this.wearBox();
@@ -2729,10 +2734,10 @@
           q.m.position.set(q.sx + (mx - q.sx) * e - fz * sw, q.sy + (hy - q.sy) * e + sw * 0.4, q.sz + (mz - q.sz) * e + fx * sw); q.m.rotation.y += dt * 18; q.m.rotation.x += dt * 9; q.m.scale.setScalar(1.3 * (1 - 0.7 * e)); q.m.visible = k < 1; }
         if (E.t > E.dur) { for (const q of E.pieces) if (q.m) this.G.remove(q.m); this.eatAnim = null; }
       }
-      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : (P.st === 'charge' && P.ball) || (this.ballHold && P.st === 'free') ? 'tuck' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? 'bigstomp' : P.st === 'busy' && this.stompDone > this.t ? 'free' : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? (this.bump ? 'brace' : 'free') : P.st === 'wear' ? 'brace' : 'free';
+      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : (P.st === 'charge' && P.ball) || (this.ballHold && P.st === 'free') ? 'tuck' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? (this.stompW && this.stompW.t / this.stompW.W < DOG.slamCrouch ? 'brace' : 'bslam') : P.st === 'busy' && this.stompDone > this.t ? (this.stompDone - this.t > DOG.slamLand * 0.35 ? 'bslam' : 'recover') : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? (this.bump ? 'brace' : 'free') : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (P.st === 'skill' && g && g.wt !== undefined) w.t = g.wt;
-      if (P.st === 'stompW' && this.stompW) w.t = 0.45 * Math.min(1, this.stompW.t / this.stompW.W); if (this.cap) { this.cap.t += dt; w.t = this.cap.t; }
+      w.slamAir = P.st === 'stompW'; if (this.cap) { this.cap.t += dt; w.t = this.cap.t; }
       w.torpedo = !!(P.st === 'skill' && g && g.torp); w.szCur = g && g.sz ? g.sz : 1; w.gulpI = this.gulp ? 0 : -1; if (g && g.wdur) w.dur = g.wdur;
       if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.st === 'captured' ? !!(this.cap && this.cap.t > 0.3) : P.t > 0.3 && P.t < 1.0; } else w.down = false;
       w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0, Math.min(0.9, this.attN() * 0.2)); w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : P.carryN ? {} : null; w.armHeld = this.att && !this.cap ? { L: !!(this.att[0] && this.att[0].att !== undefined), R: !!(this.att[1] && this.att[1].att !== undefined) } : null;   // (hunched: tiptoe, curled up, or bowed under the dogpile)
@@ -2741,7 +2746,9 @@
       if (g && g.id === 'hands' && P.st === 'skill') w.hand = g.sd;
       v.update(w, Math.max(dt, 1e-4), T);
       if (this.asleep && v.soft) for (const m of v.soft.mats) m.emissive.setRGB(0, 0, 0);   // (asleep: the pose, not the versus sleep-skill's blue tint)
-      v.root.position.y += P.y + 0.04 * v.s * P.tip + (this.gsY || 0); v.root.visible = !P.hidden && !(w.fxs.ball > 0);
+      v.root.position.y += P.y + 0.04 * v.s * P.tip + (this.gsY || 0);
+      if (P.st === 'stompW' && this.stompW) { const u = this.stompW.t / this.stompW.W, c0 = DOG.slamCrouch; if (u > c0) v.root.position.y += DOG.slamH * v.s * Math.sin(Math.PI * Math.pow((u - c0) / (1 - c0), 0.7)); }   // the booty slam: up he goes, and down
+      else if (P.st === 'busy' && this.stompDone > this.t) { const r = (this.stompDone - this.t) / DOG.slamLand; v.root.position.y -= DOG.slamSit * v.s * Math.min(1, r / 0.35); }   // (sat down hard on his booty, then up he gets) v.root.visible = !P.hidden && !(w.fxs.ball > 0);
       if (v.ballSpin && v.ballSpin.visible) v.ballSpin.position.y += P.y;   // (the daruma: on the floor he's on)
       const gk = (w.szCur || 1) * (this.gulp ? 1.22 + Math.sin(T * 9) * 0.03 : 1);   // GIANT, or someone swallowed
       const boxTip = this.wearing && !!this.keys.KeyI && P.st === 'free' && !P.sub && !P.hidden;   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
@@ -2754,12 +2761,12 @@
       if (this.squatBox) this.squatBox.visible = false;
       if (bw) {
         if (duck && !this.boxDown) { this.boxDown = true; this.scene.attach(bw);   // let go of it where it is: it stays standing on the floor, its own size, level
-          const e = new THREE.Euler().setFromQuaternion(bw.quaternion, 'YXZ'); bw.rotation.set(0, e.y, 0); bw.scale.setScalar(0.95 * v.s); bw.position.y = P.y; this.boxYawOff = e.y + P.f; }
+          const e = new THREE.Euler().setFromQuaternion(bw.quaternion, 'YXZ'); bw.rotation.set(0, e.y, 0); bw.scale.setScalar(0.95 * v.s); bw.position.y = P.y; this.boxYawOff = e.y + P.f; if (bw.torn && !bw.burst) { bw.updateMatrixWorld(true); this.boxBurst(bw); } }
         else if (!duck && this.boxDown) { this.boxDown = false; v.body.attach(bw); bw.position.set(0, -0.62 * v.s, 0.02 * v.s); bw.rotation.set(0, 0, 0); bw.scale.setScalar(0.95); }
         if (this.boxDown) { bw.position.x = P.x; bw.position.z = P.z; bw.position.y = P.y;   // (up the stairs too: it rides each step with him, never left sunk in them)
           if (boxTip && !P.boxHide && this.boxYawOff !== undefined) bw.rotation.y = this.boxYawOff - P.f;   // (tiptoeing along: the closed box turns the way he goes)
           if (this.boxYaw !== undefined && this.npcs.some((n) => n.pushing2)) { const q = Math.PI / 2, want = -this.boxYaw, d = ((want - bw.rotation.y) % q + q * 1.5) % q - q / 2; bw.rotation.y += d * Math.min(1, dt * 2.5); } }   // (shoved square-on: the box swings round flat to them)
-        this.bootyDress(bw.booty);
+        if (bw.booty) { const bb = bw.booty; bb.visible = !!bw.burst && this.boxDown; if (bb.visible) { const k = Math.min(1, (this.t - bw.burst) / 0.3); bb.scale.setScalar(0.35 + 0.65 * k + 0.25 * Math.sin(k * Math.PI)); } this.bootyDress(bb); }   // (popping out through the hole)
         if (bw.setOpen) bw.setOpen(this.boxDown || boxTip ? Math.max(0, 1 - (this.ballK || 0) * 1.3) : 1);   // the flaps fold shut over him
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)
       }
@@ -2768,7 +2775,7 @@
         if (hc) { let g = cb; if (!g) { g = this.cartBooty = this.bootyProp(); g.scale.setScalar(0.9 * v.s); }
           if (g.parent !== hc.m) hc.m.add(g); g.visible = true; g.position.set(0.05, DOG.cartBootyY, 0); g.rotation.set(-Math.PI / 2 + 0.25, 0, Math.sin(T * 2.2) * 0.06); this.bootyDress(g); }
         else if (cb) cb.visible = false; }
-      if (v.soft) { const want = P.st === 'charge' && !P.ball ? 0.075 : 0; this.jigA = (this.jigA || 0) + (want - (this.jigA || 0)) * Math.min(1, dt * 8);   // charging: left and right cheeks bounce up and down in turn
+      if (v.soft) { const want = P.st === 'charge' && !P.ball ? 0.075 : P.st === 'busy' && this.stompDone - this.t > DOG.slamLand * 0.3 ? 0.14 : 0;   // (and after a booty slam: a big wobble) this.jigA = (this.jigA || 0) + (want - (this.jigA || 0)) * Math.min(1, dt * 8);   // charging: left and right cheeks bounce up and down in turn
         if (this.jigA > 0.002 || this.jigOn) { const ph = T * 15; S.SoftSumo.jiggle(v, this.jigA * Math.sin(ph), this.jigA * Math.sin(ph + Math.PI)); this.jigOn = this.jigA > 0.002; } }
       if (rolling) {   // the charge, tucked into a cannonball (knees to his chest, arms round them, face on his knees), turning over and over about his middle
         const ax = this._rax || (this._rax = new THREE.Vector3()), q = this._rq || (this._rq = new THREE.Quaternion()), cc = this._rc || (this._rc = new THREE.Vector3());
@@ -2892,7 +2899,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J booty bump (he spins round and bumps them with his booty: from the front they fly back, the side spins them, from behind they stumble) · hold J stomp (throws off anyone hanging on) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · a run-up smashes things · shakes one hanger-on off; smashing into something throws them all off) · I mid-charge: roll up into a ball (faster, steer it, rolls while L is held) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J booty bump (he spins round and bumps them with his booty: from the front they fly back, the side spins them, from behind they stumble) · hold J booty slam (jump and land on your booty: throws off anyone hanging on, knocks down anyone near) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · a run-up smashes things · shakes one hanger-on off; smashing into something throws them all off) · I mid-charge: roll up into a ball (faster, steer it, rolls while L is held) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="settings">SETTINGS</button><button data-c="tips">TUTORIAL TIPS: ON</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
