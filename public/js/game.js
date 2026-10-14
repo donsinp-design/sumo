@@ -126,10 +126,14 @@
       if (kind !== 'tutorial') { m.newRound(); this.handleEvents(); this.dealSkills(); }
     }
     // gacha rules: every round, both players draw a fresh random skill (unused ones are lost)
+    skillFor(k) {   // a capsule for wrestler k: a player's sumo has no hands, so never a slap skill
+      const w = this.match && this.match.w[k], HANDS = ['dizzySlap', 'turnSlap', 'hundred', 'thief'];
+      let id = S.Skills.random(); for (let n = 0; n < 20 && w && w.booty && HANDS.includes(id); n++) id = S.Skills.random(); return id;
+    }
     dealSkills() {
       const m = this.match;
       if (S.profile.rules !== 'gacha' || (this.kind !== 'cpu' && this.kind !== 'pvp')) return;
-      m.skills = [S.Skills.random(), S.Skills.random()]; m.peek = [false, false];
+      m.skills = [this.skillFor(0), this.skillFor(1)]; m.peek = [false, false];
       this.refreshSkills();
       this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1200;
       setTimeout(() => { if (this.match === m) { this.ui.gacha(0, m.skills[0], false, this.skillKey(0), true, this.contKey(0)); this.audio.blip(true); } }, 500);
@@ -137,7 +141,7 @@
     // ---- the boss, from the bathhouse: a sumo bout against him (best of three), a training session; then back to the bathhouse
     dealBossGacha() {   // "ハンデだ": you lost a round, so he flicks you a capsule: one skill, yours for the next
       const m = this.match; if (!m) return;
-      m.skills = [S.Skills.random(), null]; m.peek = [false, false]; this.refreshSkills();
+      m.skills = [this.skillFor(0), null]; m.peek = [false, false]; this.refreshSkills();
       this.awaitGacha = true; this.gachaReadyAt = performance.now() + 1200;
       this.ui.gacha(0, m.skills[0], false, this.skillKey(0), true, this.contKey(0)); this.audio.blip(true);
     }

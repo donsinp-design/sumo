@@ -1421,7 +1421,7 @@
       o.slideT = 0.35;
       this.m.tag(o, w, 'rear');
       this.m.hurt(o, 0.3, s * nx, s * nz);
-      w.set('recover', 0.2);
+      w.set('recover', 0.2); if (w.booty) { w.set('bootyBump', 0.5); w.hitDone = true; }   // (no hands: the booty sends them off)
       this.m.emit('hit', { kind: 'heavy', x: o.x, z: o.z, nx: s * nx, nz: s * nz, power: imp, zone: 'rear', w, o, big: true });
     }
 
@@ -1440,7 +1440,8 @@
         this.m.tag(o, w, 'break');
         this.m.hurt(o, esc ? 0.03 : 0.1, s * nx, s * nz);
         w.set('recover', esc ? 0.2 : 0.16); o.set('recover', esc ? 0.14 : 0.2);
-        this.m.emit('hit', { kind: 'palm', x: (w.x + o.x) / 2, z: (w.z + o.z) / 2, nx: s * nx, nz: s * nz, power: imp, zone: 'front', w, o });
+        if (w.booty) { w.set('bootyBump', 0.5); w.hitDone = true; }   // (no hands: out of the grip with a bump of the booty)
+        this.m.emit('hit', { kind: w.booty ? 'heavy' : 'palm', x: (w.x + o.x) / 2, z: (w.z + o.z) / 2, nx: s * nx, nz: s * nz, power: imp, zone: 'front', w, o });
       }
       void i; void j;
     }
