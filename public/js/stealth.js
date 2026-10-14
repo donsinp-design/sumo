@@ -1112,14 +1112,27 @@
       this.gSkill = null; if (!f || this.rew) return;
       if (f.call(this) === false) this.gSkill = id;   // (nothing to use it on: kept for later)
     }
+    miniPuff(x, y, z) {   // a mini smoke bomb: a ring of little white clouds bursting out round the base, swelling and fading
+      const geo = this.puffGeo || (this.puffGeo = new THREE.IcosahedronGeometry(1, 1)), mat = S.Flat.mat(0xf6f3ee, { transparent: true, opacity: 0.9 }), g = new THREE.Group(), N = 9;
+      for (let k = 0; k < N; k++) { const a = k / N * Math.PI * 2 + Math.random() * 0.4, m = new THREE.Mesh(geo, mat); m.userData = { a, v: 1.2 + Math.random() * 0.7, s: 0.12 + Math.random() * 0.08 }; g.add(m); }
+      g.position.set(x, y, z); this.G.add(g); (this.puffs || (this.puffs = [])).push({ g, mat, t: 0, dur: 0.75 });
+    }
+    puffStep(dt) {
+      if (!this.puffs || !this.puffs.length) return;
+      this.puffs = this.puffs.filter((P0) => { P0.t += dt; const k = Math.min(1, P0.t / P0.dur), e = 1 - (1 - k) * (1 - k);
+        for (const m of P0.g.children) { const u = m.userData, r = 0.45 + u.v * 0.55 * e; m.position.set(Math.cos(u.a) * r, 0.08 + 0.35 * e, Math.sin(u.a) * r); m.scale.setScalar(u.s * (1 + 1.8 * e)); }
+        P0.mat.opacity = 0.9 * (1 - k * k);
+        if (k >= 1) { this.G.remove(P0.g); P0.mat.dispose(); return false; } return true; });
+    }
     gachaStep(dt) {
+      this.puffStep(dt);
       const gm = this.gm; if (!gm) return;
       if (!gm.fade && !gm.gone) {   // waiting: every few seconds it hops, squashes on landing, and bounces once more (an arcade-cabinet idle)
         const c = (this.t + 1.3) % 3.0, hop = (t0, d, h) => (c > t0 && c < t0 + d ? Math.sin(Math.PI * (c - t0) / d) * h : 0);
         const y = hop(0.18, 0.34, 0.26) + hop(0.56, 0.2, 0.07), sq = (q, t0) => (c > t0 && c < t0 + 0.14 ? Math.sin(Math.PI * (c - t0) / 0.14) * q : 0);
         const k = -sq(0.16, 0.0) + sq(0.08, 0.15) - sq(0.12, 0.52) - sq(0.06, 0.76);   // crouch, stretch on take-off, squash on each landing
         gm.g.position.y = y; gm.g.scale.set(1.2 * (1 - k * 0.6), 1.2 * (1 + k), 1.2 * (1 - k * 0.6));   // (1.2: a touch bigger than life, so it reads next to him)
-        if (gm.lastC !== undefined && gm.lastC < 0.52 && c >= 0.52) { this.fx.dust(gm.x, 0.05, gm.z, 5, 0.45, 0.25, 0.4); if (Math.hypot(this.P.x - gm.x, this.P.z - gm.z) < 9 && this.g.audio && this.g.audio.thump) this.g.audio.thump(1.5); }
+        if (gm.lastC !== undefined && gm.lastC < 0.52 && c >= 0.52) { this.miniPuff(gm.x, 0, gm.z); if (Math.hypot(this.P.x - gm.x, this.P.z - gm.z) < 9 && this.g.audio && this.g.audio.thump) this.g.audio.thump(1.5); }
         gm.lastC = c; return;
       }
       if (!gm.fade) return; gm.g.scale.setScalar(1.2);
