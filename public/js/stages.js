@@ -356,6 +356,9 @@
       for (let k = 0; k < 5; k++) { const m = new THREE.Mesh(new THREE.CircleGeometry(2.6 + k % 3, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false })); m.position.set(-10 + k * 5, 0.2 - H, -23 - (k % 2) * 3); g.add(m); }
     },
 
+    // ---------------------------------------------------------------- the boss's bath, drained, a dohyo on its bottom (the Blender kit; this is just its stand-in while it loads)
+    bathpit(Rn, g, spin) { return S.STAGE_BUILD.bath(Rn, g, spin); },
+
     // ---------------------------------------------------------------- pizza on a restaurant table
     pizza(Rn, g, spin) {
       const H = 0.18;

@@ -121,7 +121,7 @@
       this.bnrGo = false; this.bnrKey = null;
       if (this.bannerKind()) S.Banners.wall({ hold: 0.15, speed: 0.95 });
       // stage: your pick (or a random one) for CPU, local versus and training; the classic dohyo everywhere else
-      const stage = kind === 'boss' ? 'bath' : ['cpu', 'pvp', 'training'].includes(kind) ? S.stageFor(S.profile.stage) : 'dohyo';
+      const stage = kind === 'boss' ? 'bathpit' : ['cpu', 'pvp', 'training'].includes(kind) ? S.stageFor(S.profile.stage) : 'dohyo';
       this.R.setStage(stage); m.stage = stage;
       if (kind !== 'tutorial') { m.newRound(); this.handleEvents(); this.dealSkills(); }
     }
@@ -328,14 +328,15 @@
     counterTip(m, me) {
       const o = me.opp, J = '<kbd>J</kbd>', K = '<kbd>K</kbd>', Lk = '<kbd>L</kbd>';
       if (me.st === 'teeter') return '<b>TEETERING!</b> Hold toward the <b>middle</b> of the ring to stay in';
-      if (o.st === 'teeter') return '<b>THEY ARE TEETERING!</b> Give them a push ' + J + ' before they recover';
+      const BB = me.booty;   // (a player's sumo has no hands: every hint is the booty)
+      if (o.st === 'teeter') return '<b>THEY ARE TEETERING!</b> ' + (BB ? 'Booty bump them ' : 'Give them a push ') + J + ' before they recover';
       const dx = o.x - me.x, dz = o.z - me.z, d = Math.hypot(dx, dz) || 1, gap = d - me.r - o.r;
       const toMe = -(o.vx * dx + o.vz * dz) / d;
       if (o.fxs && (o.fxs.chicken > 0 || o.fxs.ball > 0)) return null;
-      if ((o.st === 'charge' || (o.st === 'dash' && toMe > 3)) && gap < 3) return '<b>CHARGE!</b> Hold away + ' + J + ' slap down &nbsp;·&nbsp; side + ' + Lk + ' dodge';
-      if (o.st === 'palm' && (o.flurry || 0) >= 3 && gap < 1) return '<b>FLURRY!</b> ' + Lk + ' (no direction) parry &nbsp;·&nbsp; away + ' + J + ' slap down';
+      if ((o.st === 'charge' || (o.st === 'dash' && toMe > 3)) && gap < 3) return '<b>CHARGE!</b> ' + (BB ? J + ' booty bump' : 'Hold away + ' + J + ' slap down') + ' &nbsp;·&nbsp; side + ' + Lk + ' dodge';
+      if (o.st === 'palm' && (o.flurry || 0) >= 3 && gap < 1) return '<b>FLURRY!</b> ' + Lk + ' (no direction) parry &nbsp;·&nbsp; ' + (BB ? J + ' booty bump' : 'away + ' + J + ' slap down');
       if (o.st === 'wind' && gap < 1.2) return '<b>WIND-UP!</b> ' + J + ' now to interrupt';
-      if (['recover', 'overrun', 'stun', 'stumble'].includes(o.st) && gap < 1.4) return '<b>OPEN!</b> ' + J + ' push &nbsp;·&nbsp; ' + K + ' grab';
+      if (['recover', 'overrun', 'stun', 'stumble'].includes(o.st) && gap < 1.4) return '<b>OPEN!</b> ' + J + (BB ? ' booty bump' : ' push') + ' &nbsp;·&nbsp; ' + K + ' grab';
       const edge = S.RING_R - Math.hypot(me.x, me.z);
       if (edge < 1.0 && o.contact && o.fwdIn > 0.5) return '<b>ON THE EDGE!</b> Side + ' + Lk + ' to slip out';
       return null;
@@ -351,7 +352,7 @@
         return '<b>Point anywhere</b> to swing them round you · let go of ' + K + ' to throw';
       }
       if (c.lift) { const left = Math.max(0, c.lift.w.stam); const bar = '<span class="wbar"><i style="width:' + Math.round(left * 100) + '%"></i></span>'; return c.lift.w === me ? 'Walk them out of the ring · ' + K + ' slam them down ' + bar : '<b>WRIGGLE!</b> Mash any button to break free ' + bar; }
-      if (c.rear === me) return 'You are behind them! ' + J + ' shove them out';
+      if (c.rear === me) return 'You are behind them! ' + J + (me.booty ? ' booty bump them out' : ' shove them out');
       if (c.rear) return 'They are behind you! Hold any direction to turn around';
       // being grabbed: how to get out, first
       // only when they are really aiming a move (K held and pointing) or already swinging you
@@ -359,7 +360,7 @@
       const swinging = c.swing && c.swing.w === o && c.swing.swept > 0.15;
       if (swinging || (oAim && (Math.abs(oAim[0]) > 0.35 || Math.abs(oAim[1]) > 0.35))) {
         const what = swinging || !oAim || Math.abs(oAim[1]) > 0.35 || oAim[0] < -0.35 ? 'THROW' : 'LEG TRIP';
-        return '<b>' + what + ' COMING!</b> ' + Lk + ' slip out &nbsp;·&nbsp; ' + J + ' shove off';
+        return '<b>' + what + ' COMING!</b> ' + Lk + ' slip out &nbsp;·&nbsp; ' + J + (me.booty ? ' bump off' : ' shove off');
       }
       if (c.b === me && c.t < (this.match.techWin || 0.38)) return '<b>GRABBED!</b> Tap ' + K + ' now to break the grip';
       const myEdge = S.RING_R - Math.hypot(me.x, me.z), oEdge = S.RING_R - Math.hypot(o.x, o.z);
