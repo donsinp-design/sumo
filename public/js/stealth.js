@@ -55,6 +55,7 @@
     captureT: 1.5, fadeT: 0.4,                  // caught: the pile, then the fade to the checkpoint
     rideScale: 1,                                // the one on his shoulders, drawn at this size (1: full size)
   };
+  const VIS = { range: 1.2, cones: false };   // how far the staff see (x their own range), and whether their vision cones are drawn on the floor
   const HIT_WIN = 4;   // seconds: a second hit inside this turns the edges red, a third knocks him out; after it, he's fine again
   // the gacha machine by the locker-room door: one pull, one skill for this level, used once with SPACE
   const GACHA_POOL = ['smoke', 'vanish', 'timedrag', 'sleepdart', 'trapdoor', 'rewind', 'phantom', 'torpedo', 'daruma', 'giant', 'stomp', 'hands', 'bomb'];   // (consume and belly flop: built, not in the campaign)   // (the owner picks which; until then the machine says so)
@@ -1695,7 +1696,7 @@
         if (d < 0.8 && d > 1e-4) { const k = (0.8 - d) / 2 / d; a.x -= dx * k; a.z -= dz * k; b.x += dx * k; b.z += dz * k; this.collide(a, 0.4); this.collide(b, 0.4); }
       }
     }
-    range(n) { if (n.raid && n.looked) return 10; return n.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }   // (the bath searchers look right across the water)
+    range(n) { if (n.raid && n.looked) return 10 * VIS.range; return n.range * VIS.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }   // (the bath searchers look right across the water)
     breakThing(B) {
       if (this.P.st === 'charge') this.chargeWall();   // (smashed through something: they all come off)
       this.bonusLose('broke', { lockers: 'a locker', bench: 'a bench', plant: 'a plant pot', baskets: 'the baskets', washer: 'a washing machine', vanity: 'a mirror stand', towels: 'the towel shelf', boiler: 'a boiler', crates: 'the crates', prep: 'a counter', pantry: 'the pantry shelf', kfridge: 'the fridge', firewood: 'the firewood', tsinks: 'a sink', washisland: 'a wash station', washrow: 'a wash station', foldtable: 'a table' }[B.s.k] || 'something');
@@ -2807,6 +2808,7 @@
       this.drawHud(dt);
     }
     drawCone(n) {
+      if (!VIS.cones) { n.cone.visible = false; return; }   // (the cones on the floor are hidden; the minimap still shows where they look)
       const a = n.a, N = 22, P = this.P, hide = (SAFE[roomAt(P.x, P.z)] && !n.raid) || n.busy || Math.abs(a.y - P.y) > 1.6 || a.st !== 'free' || n.eaten || n.pit > 0;
       // it fades rather than blinks: a state that flips for a frame (busy, a stumble) no longer pops it off and on
       n.coneV = Math.max(0, Math.min(1, (n.coneV === undefined ? 1 : n.coneV) + (hide ? -1 : 1) * (this.dtR || 1 / 60) * 6));
