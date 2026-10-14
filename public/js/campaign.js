@@ -1642,13 +1642,13 @@
           out[11].copy(V(-0.36, -0.34, 0.5)); out[14].copy(V(0.36, -0.34, 0.5));
           out[4].copy(V(-0.42, 0.42, 0.2)); out[7].copy(V(0.42, 0.42, 0.2));
           out[5].copy(V(-0.3, 0.44, 0.56)); out[8].copy(V(0.3, 0.44, 0.56));
-        } else if (a.cling === 'arm') {   // hanging off his arm like a child off a bar: both arms wrapped over it, legs hooked up round it, body dangling
-          const nk = out[1].clone(), sw = Math.sin(T * 6 + this.ph);
-          out[5].set(nk.x - 0.06, nk.y + 0.06, nk.z + 0.16); out[8].set(nk.x + 0.06, nk.y + 0.04, nk.z + 0.16);
-          out[4].set(nk.x - 0.22, nk.y - 0.06, nk.z + 0.12); out[7].set(nk.x + 0.22, nk.y - 0.08, nk.z + 0.12);
-          for (let i = 1; i <= 3; i++) out[i].z -= 0.08;
-          out[10].set(out[9].x - 0.04, out[9].y + 0.06, out[9].z + 0.36); out[11].set(out[9].x - 0.02, out[9].y - 0.34, out[9].z + 0.42);   // (one knee drawn right up, shin hanging down: the foot the right way up)
-          out[13].set(out[12].x + 0.04, out[12].y - 0.38, out[12].z + 0.12 + sw * 0.06); out[14].set(out[12].x + 0.02, out[12].y - 0.8, out[12].z + 0.04 + sw * 0.14);   // (the other leg dangling, kicking)
+        } else if (a.cling === 'arm') {   // stood on the floor, both hands round his wrist at his side, leaning back and tugging on it
+          const gy = (a.clingY || 0.8) - p.y, tg = Math.sin(T * 6 + this.ph) * 0.03;
+          for (let i = 1; i <= 3; i++) out[i].z -= 0.1 * i + tg;
+          out[5].copy(V(-0.04, gy, 0.42)); out[8].copy(V(0.05, gy + 0.03, 0.42));
+          out[4].copy(V(-0.2, gy + 0.12, 0.18)); out[7].copy(V(0.2, gy + 0.14, 0.18));
+          out[10].copy(V(-0.14, -p.y * 0.5, 0.2)); out[11].copy(V(-0.14, -p.y + 0.06, 0.34));   // (one foot braced out in front, the other back)
+          out[13].copy(V(0.14, -p.y * 0.5, -0.06)); out[14].copy(V(0.14, -p.y + 0.06, -0.2));
         } else {   // 'hug': sat on the floor beside his leg, legs round it, arms wrapped round his shin, cheek against it
           const dy = p.y - 0.26; for (let i = 0; i <= 8; i++) { out[i].y -= dy; if (i) out[i].z += 0.1; }
           out[2].z += 0.08; const q = out[0];

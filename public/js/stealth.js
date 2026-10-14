@@ -49,7 +49,7 @@
     regrab: 1.6,                                 // up again after a slap, a fall or a throw: this long before they can grab again
     wallStun: 1.4,                               // charged into a wall: the ones still hanging on are stunned this long
     skinCol: 0xf3c4a0,                           // (the stand-in booty, in a cart or out of the shut box: his skin colour, no texture)
-    jiggle: 0.22,                                // charging: how far each cheek bounces up and down
+    jiggle: 0.2,                                 // charging: how far each cheek bounces up and down
     boxFwd: 0.3,                                 // the box he wears sits this far forward on him, so his booty pokes out through the hole in its back
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
@@ -1073,7 +1073,6 @@
     pullOut(n) {   // dragged out of his hiding place
       const P = this.P, a = n.a; this.popAt(a, '見つけた!', 1.2, true);
       if (P.hidden) { const hc = P.hidden; P.hidden = null; this.view.root.visible = true; hc.off = false; this.cartBox(hc); const ang = Math.atan2(a.z - hc.z, a.x - hc.x) + 0.6; P.x = hc.x + Math.cos(ang) * 1.5; P.z = hc.z + Math.sin(ang) * 1.5; this.collide(P, P.r); this.shoulderShorts(); }
-      if (P.boxHide) { this.noDuck = 0.35; }   // (a moment's jolt, then he can duck back down)
       if (P.stallHide !== undefined) this.stallOut();
       for (const m of this.npcs) m.pullOut = false;
     }
@@ -1521,9 +1520,9 @@
       if (k === 4) { v.head.getWorldPosition(Q);   // astride the back of his neck: thighs either side of his head, hands round onto his eyes
         return { x: Q.x - fx * 0.4 * s, z: Q.z - fz * 0.4 * s, y: Q.y - 0.2 * s - pelY + bob, f: P.f + Math.sin(T * 5) * 0.1, st: 'held', cling: 'ride' }; }
       if (k === 5) return { x: P.x - fx * 0.62 * s, z: P.z - fz * 0.62 * s, y: P.y + 0.88 * s - pelY + bob, f: P.f + Math.sin(T * 4) * 0.08, st: 'held', cling: 'back' };   // a piggyback, chest to his back, below the one on his shoulders
-      if (k < 2) { v.handWorld(k === 0 ? -1 : 1, Q); let ox = Q.x - P.x, oz = Q.z - P.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;   // hanging off his held-out arm: arms and legs wrapped round it, feet off the floor, swinging
-        const sw = Math.sin(T * 5 + k * 2) * 0.06 * (0.5 + mv), x = Q.x - ox * 0.12 - fx * 0.16 + fx * sw, z = Q.z - oz * 0.12 - fz * 0.16 + fz * sw;   // (facing the way he faces, across his arm, the way a child hangs off a bar)
-        return { x, z, y: Math.max(P.y + 0.15, Q.y - nkY + 0.02) + bob * 0.5, f: P.f + Math.sin(T * 4 + k) * 0.1, st: 'held', cling: 'arm' }; }
+      if (k < 2) { v.handWorld(k === 0 ? -1 : 1, Q); const sd = k === 0 ? -1 : 1, sx = -fz * sd, sz = fx * sd;   // stood beside him, both hands round his wrist (his arm down by his side as usual), leaning back and tugging
+        const tug = Math.sin(T * 6 + k * 2) * 0.04, x = Q.x + (sx * 0.42 + fx * 0.12) * s + sx * tug, z = Q.z + (sz * 0.42 + fz * 0.12) * s + sz * tug;
+        return { x, z, y: P.y, f: Math.atan2(Q.z - z, Q.x - x), st: 'held', cling: 'arm', clingY: Math.min(1.2, Math.max(0.55, Q.y - P.y)) }; }
       const sd = k === 2 ? -1 : 1, sx = -fz * sd, sz = fx * sd, lx = P.x + (sx * 0.36 - fx * 0.05) * s, lz = P.z + (sz * 0.36 - fz * 0.05) * s;
       let ox = sx * 0.8 - fx * 0.6, oz = sz * 0.8 - fz * 0.6; const ol = Math.hypot(ox, oz); ox /= ol; oz /= ol;
       return { x: lx + ox * 0.34, z: lz + oz * 0.34, y: P.y, f: Math.atan2(-oz, -ox), st: 'held', cling: 'hug' };

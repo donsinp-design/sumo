@@ -92,7 +92,7 @@
       // which vertices belong to each cheek (for the jiggle): weights from the rest shape
       const idx = [], wl = [], wr = [], base = [];
       for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (z > 0.05) continue;
-        const lo = Math.min(1, Math.max(0, (0.98 - y) / 0.14)), f = (cx) => lo * Math.exp(-((Math.hypot((x - cx) * 1.3, y - 0.78, (z + 0.2) * 0.7) / 0.34) ** 2)), a = f(-0.21), c = f(0.21);   // (nothing above the hips moves: the cheeks bounce, not his back) if (a + c < 0.03) continue;
+        const sm = (e0, e1, v) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); }, lo = sm(0.98, 0.86, y) * sm(0.5, 0.62, y), f = (cx) => lo * sm(0.36, 0.16, Math.hypot((x - cx) * 1.2, y - 0.78, (z + 0.2) * 0.7)), a = f(-0.21), c = f(0.21);   // (each cheek moves as one round lump; nothing above the hips or down the legs moves) if (a + c < 0.03) continue;
         idx.push(i); wl.push(a); wr.push(c); base.push(x, y, z); }
       { const mx = Math.max(...wl, ...wr) || 1; for (let n = 0; n < wl.length; n++) { wl[n] /= mx; wr[n] /= mx; } }   // (the middle of each cheek moves the full amount)
       (view.jig || (view.jig = [])).push({ P, idx, wl, wr, base });
@@ -189,7 +189,7 @@
     if (!view.jig) return;
     for (const J of view.jig) { const P = J.P, a = P.array, B = J.base;
       for (let n = 0; n < J.idx.length; n++) { const i = J.idx[n] * 3, dl = J.wl[n] * aL, dr = J.wr[n] * aR, d = dl + dr;
-        a[i] = B[n * 3] - dl * 0.35 + dr * 0.35; a[i + 1] = B[n * 3 + 1] + d * 0.8; a[i + 2] = B[n * 3 + 2] - d * 0.75; }
+        a[i] = B[n * 3]; a[i + 1] = B[n * 3 + 1] + d; a[i + 2] = B[n * 3 + 2] - d * 0.3; }
       P.needsUpdate = true; }
   }
   S.SoftSumo = { ready, attach, drive, jiggle, get loaded() { return !!tpl; } };
