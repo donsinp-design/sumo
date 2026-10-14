@@ -1624,7 +1624,31 @@
         for (let i = 1; i <= 8; i++) out[i].z -= 0.1 * w;
         [[4, 5, -1], [7, 8, 1]].forEach(([el, hd, sg]) => { out[el].lerp(new THREE.Vector3(nk.x + sg * 0.34, nk.y + 0.02, nk.z + 0.06), w); out[hd].lerp(new THREE.Vector3(nk.x + sg * 0.28, nk.y + 0.42, nk.z + 0.16), w); }); }
       // held up by the collar: hanging upright, legs kicking, hands clawing at the holder's wrists
-      if (st === 'held' || st === 'clawed') {
+      if (st === 'held' && a.cling) {   // (the stealth level's dogpile) clinging to the sumo: on his shoulders, hugging his arm, sitting on the floor hugging his leg
+        A.sample('stance', 0.3, out);
+        const p = out[0].clone(), V = (x, y, z) => new THREE.Vector3(p.x + x, p.y + y, p.z + z), sw = Math.sin(T * 9 + this.ph), sw2 = Math.sin(T * 9 + this.ph + 2.4);
+        if (a.cling === 'ride') {   // sitting on his shoulders: thighs over them, shins down his chest, both hands over his eyes
+          for (let i = 1; i <= 3; i++) out[i].z += 0.07;
+          out[9].copy(V(-0.11, 0, 0)); out[12].copy(V(0.11, 0, 0));
+          out[10].copy(V(-0.27, 0.02, 0.3)); out[13].copy(V(0.27, 0.02, 0.3));
+          out[11].copy(V(-0.27, -0.4, 0.4 + sw * 0.05)); out[14].copy(V(0.27, -0.4, 0.4 + sw2 * 0.05));
+          out[4].copy(V(-0.24, 0.42, 0.26)); out[7].copy(V(0.24, 0.42, 0.26));
+          out[5].copy(V(-0.07, 0.34, 0.5)); out[8].copy(V(0.07, 0.34, 0.5));
+        } else if (a.cling === 'arm') {   // both arms wrapped round his arm, hanging off it, legs kicking
+          const nk = out[1].clone();
+          out[5].set(nk.x - 0.05, nk.y + 0.14, nk.z + 0.3); out[8].set(nk.x + 0.05, nk.y + 0.1, nk.z + 0.3);
+          out[4].set(nk.x - 0.25, nk.y - 0.02, nk.z + 0.18); out[7].set(nk.x + 0.25, nk.y - 0.04, nk.z + 0.18);
+          [[9, 10, 11, sw], [12, 13, 14, sw2]].forEach(([h, kn, ft, w]) => { const H = out[h]; out[kn].set(H.x, H.y - 0.32, H.z + 0.22 + w * 0.1); out[ft].set(H.x, H.y - 0.7, H.z + 0.08 + w * 0.22); });
+        } else {   // 'hug': sat on the floor beside his leg, legs round it, arms wrapped round his shin, cheek against it
+          const dy = p.y - 0.26; for (let i = 0; i <= 8; i++) { out[i].y -= dy; if (i) out[i].z += 0.1; }
+          out[2].z += 0.08; const q = out[0];
+          out[9].set(q.x - 0.1, 0.26, q.z); out[12].set(q.x + 0.1, 0.26, q.z);
+          out[10].set(q.x - 0.24, 0.44, q.z + 0.26); out[13].set(q.x + 0.24, 0.44, q.z + 0.26);
+          out[11].set(q.x - 0.27, 0.06, q.z + 0.44); out[14].set(q.x + 0.27, 0.06, q.z + 0.44);
+          out[5].set(q.x - 0.05, 0.62, q.z + 0.38); out[8].set(q.x + 0.05, 0.6, q.z + 0.38);
+          out[4].set(q.x - 0.22, 0.62, q.z + 0.2); out[7].set(q.x + 0.22, 0.6, q.z + 0.2);
+        }
+      } else if (st === 'held' || st === 'clawed') {
         A.sample('stance', 0.3, out);
         const nk = out[1], hip = [out[9], out[12]];
         for (const [i, sg] of [[5, -1], [8, 1]]) out[i].set(nk.x + sg * 0.1, nk.y + 0.08, nk.z + 0.26);          // hands at the collar
