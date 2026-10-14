@@ -79,14 +79,14 @@
     const g = new THREE.Group(), gold = M(0xf2c14e), dark = M(0xb98a2c), base = M(0x3a2a22);
     const prof = [[0, 0], [0.22, 0], [0.22, 0.07], [0.1, 0.1], [0.06, 0.2], [0.05, 0.32], [0.12, 0.38], [0.28, 0.5], [0.34, 0.68], [0.36, 0.86], [0.33, 0.88]].map(([x, y]) => new THREE.Vector2(x, y));
     const cup = new THREE.Mesh(new THREE.LatheGeometry(prof, 24), gold); g.add(cup);
-    for (const sd of [-1, 1]) { const h = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.03, 8, 16, Math.PI * 1.2), dark); h.position.set(sd * 0.36, 0.66, 0); h.rotation.z = sd > 0 ? -Math.PI * 0.6 : Math.PI * 1.6; g.add(h); }
+    // (no handles: just the cup)
     const b = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.4), base); b.position.y = -0.06; g.add(b);
     return done(g);
   }
   function makeChamp(R) {
     if (!S.SoftSumo || !S.SoftSumo.loaded || !S.Match || !S.WrestlerView) return null;
     const A = [S.ARCH[0], S.ARCH[1]], m = new S.Match(A), w = m.w[0];
-    m.phase = 'shikiri'; m.phaseT = 9; w.x = 0; w.z = 0; w.f = -Math.PI / 2 + 0.6; w.pre = 'trophy';   // (his back to us: the booty, the trophy up over his head) w.preT = 0;
+    m.phase = 'shikiri'; m.phaseT = 9; w.x = 0; w.z = 0; w.f = -Math.PI / 2 + 0.6; w.pre = 'trophy'; w.preT = 0;   // (his back to us: the booty, the trophy up over his head)
     const v = new S.WrestlerView(scene, A[0], R.fx, S.DEF_EQ); S.SoftSumo.attach(v, { noBlob: true, booty: 3.5 });
     if (v.shadow) v.shadow.visible = false;
     const clay = M(0xd9b07c), straw = M(0xdcc58c);
