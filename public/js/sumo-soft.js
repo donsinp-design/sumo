@@ -78,11 +78,14 @@
     view.head.scale.setScalar(rest.headR * k / (0.25 * s));
     if (o.booty) M.traverse((q) => {   // BIG BOOTY: two rounder, fuller cheeks pushed out behind (on this sumo's own copy of the shape)
       if (!q.isSkinnedMesh || !/^(Skin|Mawashi)/.test((q.material && q.material.name) || '')) return;
-      q.geometry = q.geometry.clone(); const P = q.geometry.attributes.position, b = o.booty;
+      q.geometry = q.geometry.clone(); const P = q.geometry.attributes.position, b = o.booty, belt = /^Mawashi/.test(q.material.name) ? 1.18 : 1;   // (the mawashi swells a little more, so it stays over the skin)
       for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (z > 0.1) continue;
-        const g = 1 + 0.06 * Math.max(0, b - 1);   // (bigger: further out behind, round, at hip height; not lower, not much wider)
-        const wy = Math.exp(-(((y - 0.82) / (0.22 * g)) ** 2)), wx = Math.max(Math.exp(-(((x - 0.2) / (0.2 * g)) ** 2)), Math.exp(-(((x + 0.2) / (0.2 * g)) ** 2))), wz = Math.min(1, Math.max(0, (0.1 - z) / 0.35)) ** 0.7, w = wy * wx * wz;
-        P.setXYZ(i, x * (1 + w * 0.06 * b), y + w * 0.01 * b, z - w * 0.2 * b); }
+        // each cheek swells out round from its own middle, like a balloon, plus a little further back
+        let dx = 0, dy = 0, dz = 0;
+        for (const cx of [-0.2, 0.2]) { const cy = 0.8, cz = -0.12, ox = x - cx, oy = y - cy, oz = z - cz, d = Math.hypot(ox * 1.1, oy, oz) || 1e-6;
+          const w = Math.exp(-((d / 0.3) ** 2)) * Math.min(1, Math.max(0, (0.12 - z) / 0.3)); if (w < 1e-3) continue;
+          const k = w * 0.075 * b * belt; dx += ox / d * k; dy += oy / d * k * 0.8; dz += oz / d * k - w * 0.05 * b * belt - (belt > 1 ? w * 0.015 : 0); }
+        P.setXYZ(i, x + dx, y + dy, z + dz); }
       P.needsUpdate = true; q.geometry.computeVertexNormals(); q.geometry.computeBoundingSphere();
     });
     view.soft = { M, B, k, mats, tq: new THREE.Quaternion(), q: new THREE.Quaternion(), wq: {}, bodyQ: new THREE.Quaternion(), headQ: new THREE.Quaternion(),

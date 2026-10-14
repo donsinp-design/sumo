@@ -87,7 +87,7 @@
     if (!S.SoftSumo || !S.SoftSumo.loaded || !S.Match || !S.WrestlerView) return null;
     const A = [S.ARCH[0], S.ARCH[1]], m = new S.Match(A), w = m.w[0];
     m.phase = 'shikiri'; m.phaseT = 9; w.x = 0; w.z = 0; w.f = -Math.PI / 2 + 0.6; w.pre = 'trophy';   // (his back to us: the booty, the trophy up over his head) w.preT = 0;
-    const v = new S.WrestlerView(scene, A[0], R.fx, S.DEF_EQ); S.SoftSumo.attach(v, { noBlob: true, booty: 3 });
+    const v = new S.WrestlerView(scene, A[0], R.fx, S.DEF_EQ); S.SoftSumo.attach(v, { noBlob: true, booty: 3.5 });
     if (v.shadow) v.shadow.visible = false;
     const clay = M(0xd9b07c), straw = M(0xdcc58c);
     const mound = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.7, 0.7, 48), clay); mound.position.y = -0.35;

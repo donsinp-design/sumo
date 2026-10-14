@@ -2705,7 +2705,7 @@
     // ============================================================== drawing
     draw(dt) {
       const P = this.P, T = this.t, w = this.w, v = this.view;
-      if (S.SoftSumo && S.SoftSumo.loaded && !v.soft) S.SoftSumo.attach(v, { noBlob: true, booty: 1.35 });
+      if (S.SoftSumo && S.SoftSumo.loaded && !v.soft) S.SoftSumo.attach(v, { noBlob: true, booty: 2.2 });
       if (v.soft && !v.pantsOff && !this.gotMawashi) { v.pantsOff = true; for (const m of v.soft.mats) if (/mawashi/i.test(m.name || '')) m.visible = false; }
       if (v.soft && v.pantsOff && this.gotMawashi) { v.pantsOff = false; for (const m of v.soft.mats) if (/mawashi/i.test(m.name || '')) m.visible = true; }   // (won it back)
       const spin = this.bumpSpin(); w.x = P.x; w.z = P.z; w.y = 0; w.f = P.f + spin; w.fx = Math.cos(w.f); w.fz = Math.sin(w.f); w.vx = P.vx; w.vz = P.vz; w.spd = Math.hypot(P.vx, P.vz);
