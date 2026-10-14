@@ -1025,6 +1025,7 @@
             this.popAt(n.a, ['…足跡?', 'なんだこの足跡…', 'でかい足…!?'][(this.t * 3 | 0) % 3], 1.4); } }
         if ((SAFE[pr] && !n.raid) || this.grace > 0 || n.a.st !== 'free' || n.busy || P.hidden || P.boxHide || P.inStall || P.sub || this.unseen()) { n.alarm = Math.max(0, n.alarm - ndt); continue; }
         const range = this.range(n), d = Math.hypot(P.x - n.a.x, P.z - n.a.z), same = roomAt(n.a.x, n.a.z) === pr;
+        if (this.wearing && this.keys.KeyI && !(this.noDuck > 0) && Math.hypot(P.vx, P.vz) > 0.2 && same && this.sees(n, P.x, P.z, range)) { this.noDuck = 1.5; this.popAt(n.a, ['箱が動いた!?', 'あの箱…!', '動く箱!?'][(this.t * 3 | 0) % 3], 1.2); }   // (anyone who sees the box shuffle along: they've rumbled him, up he pops)
         // right next to someone they hear you, whichever way they face; on tiptoe you can get much closer
         // (the receptionist, at her desk, still catches a tiptoe that comes right up behind her)
         const ear = (P.tip > 0.5 ? (n.ear ? 1.2 : 0.6) : (n.ear || 1.7)) * (pr === 'laundry' ? 0.5 : 1);
