@@ -92,8 +92,8 @@
       // which vertices belong to each cheek (for the jiggle): weights from the rest shape
       const idx = [], wl = [], wr = [], base = [];
       for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (z > 0.05) continue;
-        const f = (cx) => Math.exp(-((Math.hypot(x - cx, y - 0.78, (z + 0.2) * 0.8) / 0.32) ** 2)), a = f(-0.21), c = f(0.21); if (a + c < 0.03) continue;
-        idx.push(i); wl.push(a); wr.push(c); base.push(y, z); }
+        const lo = Math.min(1, Math.max(0, (0.98 - y) / 0.14)), f = (cx) => lo * Math.exp(-((Math.hypot((x - cx) * 1.3, y - 0.78, (z + 0.2) * 0.7) / 0.34) ** 2)), a = f(-0.21), c = f(0.21);   // (nothing above the hips moves: the cheeks bounce, not his back) if (a + c < 0.03) continue;
+        idx.push(i); wl.push(a); wr.push(c); base.push(x, y, z); }
       { const mx = Math.max(...wl, ...wr) || 1; for (let n = 0; n < wl.length; n++) { wl[n] /= mx; wr[n] /= mx; } }   // (the middle of each cheek moves the full amount)
       (view.jig || (view.jig = [])).push({ P, idx, wl, wr, base });
     });
@@ -185,10 +185,11 @@
     view.head.position.copy(centre).sub(S_.v.set(0, 0.17 * s * view.head.scale.y, -0.02 * s).applyQuaternion(view.head.quaternion));   // the topknot lifts the box: masks sit on the face, not the brow
   }
   // the booty jiggle: each cheek bobs on its own (aL, aR: how far up, in model units)
-  function jiggle(view, aL, aR) {
+  function jiggle(view, aL, aR) {   // each cheek bounces up, out the back and a little to its side by its own amount (seen from above as well as from the side)
     if (!view.jig) return;
-    for (const J of view.jig) { const P = J.P, a = P.array;
-      for (let n = 0; n < J.idx.length; n++) { const i = J.idx[n] * 3, d = J.wl[n] * aL + J.wr[n] * aR; a[i + 1] = J.base[n * 2] + d; a[i + 2] = J.base[n * 2 + 1] - Math.abs(d) * 0.3; }
+    for (const J of view.jig) { const P = J.P, a = P.array, B = J.base;
+      for (let n = 0; n < J.idx.length; n++) { const i = J.idx[n] * 3, dl = J.wl[n] * aL, dr = J.wr[n] * aR, d = dl + dr;
+        a[i] = B[n * 3] - dl * 0.35 + dr * 0.35; a[i + 1] = B[n * 3 + 1] + d * 0.8; a[i + 2] = B[n * 3 + 2] - d * 0.75; }
       P.needsUpdate = true; }
   }
   S.SoftSumo = { ready, attach, drive, jiggle, get loaded() { return !!tpl; } };

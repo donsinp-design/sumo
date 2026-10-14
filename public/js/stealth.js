@@ -48,7 +48,8 @@
     grabR: 1.45, lunge: 0.3,                     // they jump at him from this close; the jump takes this long
     regrab: 1.6,                                 // up again after a slap, a fall or a throw: this long before they can grab again
     wallStun: 1.4,                               // charged into a wall: the ones still hanging on are stunned this long
-    jiggle: 0.6,                                 // charging: how far each cheek bounces up and down
+    skinCol: 0xf3c4a0,                           // (the stand-in booty, in a cart or out of the shut box: his skin colour, no texture)
+    jiggle: 0.22,                                // charging: how far each cheek bounces up and down
     boxFwd: 0.3,                                 // the box he wears sits this far forward on him, so his booty pokes out through the hole in its back
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
@@ -918,8 +919,8 @@
       if (wet !== this.wasWet) { if (this.wasWet !== undefined) this.fx.water && this.fx.water(P.x, P.z, 1.6, POOL.water); this.wasWet = wet; }
       if (P.st === 'charge') {
         if (power && this.stage === 'smash' && !this.chasing() && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.25) { this.chargeWall(); this.hitLocker(); P.st = 'busy'; P.t = 0; P.dur = 0.5; }
-        else if (hit && P.ball && this.pN) { const nx = this.pN[0], nz = this.pN[1], vx = Math.cos(P.cdir), vz = Math.sin(P.cdir), d = vx * nx + vz * nz; P.cdir = Math.atan2(vz - 2 * d * nz, vx - 2 * d * nx); P.f = P.cdir; P.vx *= 0.6; P.vz *= 0.6; this.sfx('thump', 5); this.fx.dust(P.x, P.y + 0.3, P.z, 5, 0.3, 0.4, 0.4); this.noiseS(P.x, P.z, 6, '?'); }   // (rolled up: it bounces off and rolls on)
-        else if (hit) { this.chargeWall(); P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.fx.dust && this.fx.dust(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (true) this.noiseS(P.x, P.z, 5, '?'); }
+        else if (hit && P.ball && this.pN) { const nx = this.pN[0], nz = this.pN[1], vx = Math.cos(P.cdir), vz = Math.sin(P.cdir), d = vx * nx + vz * nz; P.cdir = Math.atan2(vz - 2 * d * nz, vx - 2 * d * nx); P.f = P.cdir; P.vx *= 0.6; P.vz *= 0.6; this.sfx('thump', 5); this.puff(P.x, P.y + 0.3, P.z, 5, 0.3, 0.4, 0.4); this.noiseS(P.x, P.z, 6, '?'); }   // (rolled up: it bounces off and rolls on)
+        else if (hit) { this.chargeWall(); P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.puff(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (true) this.noiseS(P.x, P.z, 5, '?'); }
       }
       if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = was === 'wind' ? 'charge' : 'free'; P.t = 0; if (was === 'wind') { P.dur = 0.85 * this.chargeK(); P.run = 0; this.chargeOne(); } if (was === 'charge') P.cd = 0.5; if (was === 'wear') this.putOnBox(); }
       // puddles: walking over them is fine; RUNNING (the charge) over one, you slip
@@ -956,9 +957,9 @@
       const BD = LY.backdoor;
       if (this.stage === 'escape' && P.x < BD.x - 0.3 && P.z < BD.z1 && P.z > BD.z0) { this.win(); return; }
       // in the box, hold I standing still: he squats right down inside it. Just a box
-      P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet && !(this.noDuck > 0) && !this.attN(); this.noDuck = Math.max(0, (this.noDuck || 0) - dt);
+      P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet && !(this.noDuck > 0); this.noDuck = Math.max(0, (this.noDuck || 0) - dt);
       if (!this.boxW) { this.boxW = { x0: 1e4, x1: 1e4, z0: 1e4, z1: 1e4, tall: false, box: true }; this.walls.push(this.boxW); }
-      if (P.boxHide && !this.wasBoxHide) this.markWitness();
+      if (P.boxHide && !this.wasBoxHide) { this.markWitness(); if (this.attN()) this.detachAll('drop'); }   // (down into the box: anyone hanging on is left holding nothing)
       // the box stands UP (I let go): only then does anyone jump, and only someone shoving it or actually looking at it (tiptoeing along in it isn't standing up)
       const ducked = P.boxHide || (this.wearing && !!this.keys.KeyI);
       if (!ducked && this.wasDucked && this.wearing) for (const n of this.npcs) if ((n.pushing2 || (n.mode !== 'chase' && !n.pullOut && n.a.st === 'free' && !n.busy && this.sees(n, P.x, P.z, 2.8))) && !n.ko && Math.abs(n.a.y - P.y) < 1.2 && Math.hypot(n.a.x - P.x, n.a.z - P.z) < (n.pushing2 ? 2.2 : 2.8)) {   // (anyone close who wasn't expecting a box to stand up)   // the box they were shoving stands up: they leap back
@@ -1072,7 +1073,7 @@
     pullOut(n) {   // dragged out of his hiding place
       const P = this.P, a = n.a; this.popAt(a, '見つけた!', 1.2, true);
       if (P.hidden) { const hc = P.hidden; P.hidden = null; this.view.root.visible = true; hc.off = false; this.cartBox(hc); const ang = Math.atan2(a.z - hc.z, a.x - hc.x) + 0.6; P.x = hc.x + Math.cos(ang) * 1.5; P.z = hc.z + Math.sin(ang) * 1.5; this.collide(P, P.r); this.shoulderShorts(); }
-      if (P.boxHide) { this.noDuck = 1.5; }
+      if (P.boxHide) { this.noDuck = 0.35; }   // (a moment's jolt, then he can duck back down)
       if (P.stallHide !== undefined) this.stallOut();
       for (const m of this.npcs) m.pullOut = false;
     }
@@ -1123,6 +1124,7 @@
       this.gSkill = null; if (!f || this.rew) return;
       if (f.call(this) === false) this.gSkill = id;   // (nothing to use it on: kept for later)
     }
+    puff(x, y, z, n, sp) { this.miniPuff(x, Math.max(this.P ? this.P.y : 0, y - 0.45), z, Math.min(2, 0.55 + (sp || 0.3) * 1.1), Math.max(6, Math.min(14, n || 6))); }   // (dust: always the white smoke-bomb puff, never brown dust)
     miniPuff(x, y, z, sz, N) {   // a mini smoke bomb: a ring of little white clouds bursting out round the base, swelling and fading (sz: bigger, N clouds)
       const geo = this.puffGeo || (this.puffGeo = new THREE.IcosahedronGeometry(1, 1)), mat = S.Flat.mat(0xf6f3ee, { transparent: true, opacity: 0.9 }), g = new THREE.Group(); N = N || 9; if (sz) g.scale.setScalar(sz);
       for (let k = 0; k < N; k++) { const a = k / N * Math.PI * 2 + Math.random() * 0.4, m = new THREE.Mesh(geo, mat); m.userData = { a, v: 1.2 + Math.random() * 0.7, s: 0.12 + Math.random() * 0.08 }; g.add(m); }
@@ -1349,7 +1351,7 @@
         .map((n) => ({ n, t: ((n.a.x - x0) * fx + (n.a.z - z0) * fz) / L }));
       this.gsStart('phantom', { move: true, pose: 'charge', dur: 0.3, ghost: 0.45, move: (dt, mx, mz, mag, g) => {
         const k = Math.min(1, g.t / g.dur), e = 1 - (1 - k) * (1 - k); P.x = x0 + (x1 - x0) * e; P.z = z0 + (z1 - z0) * e; P.vx = P.vz = 0; P.f = Math.atan2(fz, fx); this.noGuard = true;
-        this.fx.dust(P.x, P.y + 0.6, P.z, 2, 0.25, 0.2, 0.45);
+        this.puff(P.x, P.y + 0.6, P.z, 2, 0.25, 0.2, 0.45);
         for (const o of on) if (!o.hit && o.t <= e + 0.05) { o.hit = true; this.knockOut(o.n, fx, fz, ['ズバッ!', 'シュッ!'][(this.t * 7 | 0) % 2], 4); } },
         end: () => { this.fx.ring(P.x, P.z, 1.8, 0.3); for (const o of on) if (!o.hit) this.knockOut(o.n, fx, fz, 'ズバッ!', 4); } });
       this.flash = Math.max(this.flash || 0, 0.3); this.sfx('whoosh', 0.3); this.popAt({ x: P.x, z: P.z, y: P.y }, 'シュン!', 0.8);
@@ -1361,10 +1363,10 @@
       this.gsStart('torpedo', { move: true, pose: 'charge', torp: true, dur: 1.7, dir: P.f, nT: 0, move: (dt, mx, mz, mag, g) => {
         if (mag > 0.3) g.dir = lerpA(g.dir, Math.atan2(mz, mx), dt * 3.2); P.f = g.dir;
         const sp = 10 * Math.min(1, g.t / 0.12) * (g.t > g.dur - 0.3 ? Math.max(0.15, (g.dur - g.t) / 0.3) : 1); P.vx = Math.cos(g.dir) * sp; P.vz = Math.sin(g.dir) * sp;
-        if (Math.random() < 0.6) this.fx.dust(P.x - Math.cos(g.dir) * 0.6, P.y + 0.1, P.z - Math.sin(g.dir) * 0.6, 1, 0.2, 0.3, 0.4);
+        if (Math.random() < 0.6) this.puff(P.x - Math.cos(g.dir) * 0.6, P.y + 0.1, P.z - Math.sin(g.dir) * 0.6, 1, 0.2, 0.3, 0.4);
         this.bowl(P.r + 0.6, 5, ['ドーン!', 'ズドン!'][(this.t * 3 | 0) % 2]);
         if ((g.nT -= dt) <= 0) { g.nT = 0.3; this.noise(P.x, P.z, 6, '?!', true); }
-        if (this.pHit && g.t > 0.12) { this.fx.dust(P.x, P.y + 0.5, P.z, 10, 0.4, 0.6, 0.5); this.flash = Math.max(this.flash || 0, 0.4); this.sfx('thump', 7); this.noiseS(P.x, P.z, 8, '?!');
+        if (this.pHit && g.t > 0.12) { this.puff(P.x, P.y + 0.5, P.z, 10, 0.4, 0.6, 0.5); this.flash = Math.max(this.flash || 0, 0.4); this.sfx('thump', 7); this.noiseS(P.x, P.z, 8, '?!');
           this.gsEnd(); P.st = 'busy'; P.t = 0; P.dur = 0.5; P.vx *= -0.2; P.vz *= -0.2; this.think('Oof.', 0.8); } } });
       this.sfx('whoosh', 0.6); this.popAt({ x: P.x, z: P.z, y: P.y }, 'ズドーン!', 0.9);
     }
@@ -1374,11 +1376,11 @@
       const P = this.P;
       this.gsStart('daruma', { move: true, pose: 'free', ball: true, dur: 5, meter: true, col: '#d9534f', vx: Math.cos(P.f) * 5, vz: Math.sin(P.f) * 5, roll: 0, nT: 0, move: (dt, mx, mz, mag, g) => {
         if (mag > 0.3) { g.vx += (mx * 7 - g.vx) * Math.min(1, dt * 2.2); g.vz += (mz * 7 - g.vz) * Math.min(1, dt * 2.2); }
-        if (this.pHit0 && this.pN) { const [nx, nz] = this.pN, vn = g.vx * nx + g.vz * nz; if (vn < -0.5) { g.vx -= 1.7 * vn * nx; g.vz -= 1.7 * vn * nz; this.sfx('thump', 4); this.fx.dust(P.x, P.y + 0.3, P.z, 5, 0.3, 0.4, 0.4); this.noiseS(P.x, P.z, 6, '?'); } }
+        if (this.pHit0 && this.pN) { const [nx, nz] = this.pN, vn = g.vx * nx + g.vz * nz; if (vn < -0.5) { g.vx -= 1.7 * vn * nx; g.vz -= 1.7 * vn * nz; this.sfx('thump', 4); this.puff(P.x, P.y + 0.3, P.z, 5, 0.3, 0.4, 0.4); this.noiseS(P.x, P.z, 6, '?'); } }
         const sp = Math.hypot(g.vx, g.vz); P.vx = g.vx; P.vz = g.vz; if (sp > 0.4) P.f = Math.atan2(g.vz, g.vx); g.roll += sp * dt / 0.62;
         if (sp > 2) this.bowl(P.r + 0.6, 4, ['ゴロゴロ!', 'ドカッ!'][(this.t * 3 | 0) % 2]);
         if ((g.nT -= dt) <= 0) { g.nT = 0.4; this.noise(P.x, P.z, 5, '?', true); } },
-        end: () => { this.fx.dust(P.x, P.y + 0.4, P.z, 10, 0.5, 0.6, 0.5); } });
+        end: () => { this.puff(P.x, P.y + 0.4, P.z, 10, 0.5, 0.6, 0.5); } });
       this.sfx('whoosh', 0.4); this.popAt({ x: P.x, z: P.z, y: P.y }, 'ゴロン!', 0.9);
     }
 
@@ -1388,7 +1390,7 @@
       this.gsStart('giant', { dur: 10, meter: true, col: '#e8a33d', sz: 1, stepT: 0, tick: (dt, g) => {
         const want = g.t < g.dur - 0.5 ? 2 : 1; g.sz += (want - g.sz) * Math.min(1, dt * 4);
         if (P.st === 'free' || P.st === 'charge') this.bowl(P.r * g.sz * 0.75 + 0.5, P.st === 'charge' ? 6 : 3.5, ['ドスン!', 'ボヨン!'][(this.t * 3 | 0) % 2]);
-        if (Math.hypot(P.vx, P.vz) > 1 && !P.hidden && (g.stepT -= dt) <= 0) { g.stepT = 0.42; this.flash = Math.max(this.flash || 0, 0.1); this.sfx('thump', 3); this.fx.dust(P.x, P.y + 0.05, P.z, 4, 0.5, 0.3, 0.5); this.noise(P.x, P.z, 6, '?!', true); } },
+        if (Math.hypot(P.vx, P.vz) > 1 && !P.hidden && (g.stepT -= dt) <= 0) { g.stepT = 0.42; this.flash = Math.max(this.flash || 0, 0.1); this.sfx('thump', 3); this.puff(P.x, P.y + 0.05, P.z, 4, 0.5, 0.3, 0.5); this.noise(P.x, P.z, 6, '?!', true); } },
         end: (q) => { if (!q) this.think('...back to normal.', 1.2); } });
       this.flash = Math.max(this.flash || 0, 0.5); this.sfx('thump', 8); this.popAt({ x: P.x, z: P.z, y: P.y + 1 }, 'ゴゴゴ…!', 1.2);
     }
@@ -1398,7 +1400,7 @@
       const P = this.P;
       this.gsStart('stomp', { move: true, pose: 'bigstomp', dur: 1.0, move: (dt, mx, mz, mag, g) => { P.vx = P.vz = 0; if (g.hit || g.t < 0.48) return;
         g.hit = true; g.pose = 'free'; this.flash = 1.6; this.sfx('thump', 10); this.later(0.08, () => this.sfx('thump', 8));
-        this.fx.ring(P.x, P.z, 5, 0.5); this.fx.ring(P.x, P.z, 10, 0.8); this.fx.dust(P.x, P.y + 0.05, P.z, 30, 1.6, 0.8, 0.7); this.popAt({ x: P.x, z: P.z, y: P.y }, 'ドォォン!!', 1.2, true);
+        this.fx.ring(P.x, P.z, 5, 0.5); this.fx.ring(P.x, P.z, 10, 0.8); this.puff(P.x, P.y + 0.05, P.z, 30, 1.6, 0.8, 0.7); this.popAt({ x: P.x, z: P.z, y: P.y }, 'ドォォン!!', 1.2, true);
         for (const n of this.npcs) { const a = n.a; if (!this.upright(n) || Math.abs(a.y - P.y) > 1.6) continue; const q = this.project(a.x, a.y + 1, a.z);
           if (q.x < -60 || q.x > innerWidth + 60 || q.y < -60 || q.y > innerHeight + 60) continue;
           const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz) || 1; this.knockOut(n, dx / d, dz / d, ['ドテッ!', 'うわっ!', 'ズテン!'][(this.t * 9 + d | 0) % 3], 1.5); }
@@ -1464,7 +1466,7 @@
       if (B.kicked && sp > 0.5 && this.npcs.some((n) => this.upright(n) && Math.abs(n.a.y - floorY(B.x, B.z)) < 1.2 && Math.hypot(n.a.x - B.x, n.a.z - B.z) < 0.75)) B.t = 0;   // (kicked into someone: it goes off on them)
       if (B.t > 0) return;
       this.G.remove(B.g); this.bomb = null; const y = floorY(B.x, B.z), P = this.P;
-      this.fx.burst(B.x, B.z, 2.6); this.fx.ring(B.x, B.z, 4, 0.5); this.fx.ring(B.x, B.z, 2.2, 0.3); this.fx.dust(B.x, y + 0.3, B.z, 30, 1.2, 1.4, 0.8); this.fx.spark && this.fx.spark(B.x, y + 0.6, B.z, 2.4);
+      this.fx.burst(B.x, B.z, 2.6); this.fx.ring(B.x, B.z, 4, 0.5); this.fx.ring(B.x, B.z, 2.2, 0.3); this.puff(B.x, y + 0.3, B.z, 30, 1.2, 1.4, 0.8); this.fx.spark && this.fx.spark(B.x, y + 0.6, B.z, 2.4);
       this.flash = Math.max(this.flash || 0, 1.0); this.sfx('thump', 10); this.later(0.06, () => this.sfx('thump', 9)); this.popAt({ x: B.x, z: B.z, y }, 'ドカーン!!', 1.2, true);
       for (const n of this.npcs) { const a = n.a; if (!this.upright(n) || Math.abs(a.y - y) > 1.5) continue; const dx = a.x - B.x, dz = a.z - B.z, d = Math.hypot(dx, dz) || 1; if (d < 3.6) this.knockOut(n, dx / d, dz / d, ['ぎゃっ!', 'うわっ!'][(this.t * 5 | 0) % 2], 6); }
       { const dx = P.x - B.x, dz = P.z - B.z, d = Math.hypot(dx, dz) || 1; if (d < 3 && Math.abs(P.y - y) < 1.5 && !P.hidden) { this.shove = { x: dx / d * 6, z: dz / d * 6, t: 0.3 }; this.think('...too close!', 1.0); } }
@@ -1483,7 +1485,7 @@
         const k = Math.min(1, g.t / g.len); this.gsY = Math.sin(Math.PI * k) * 2.3; g.wt = k * 1.6;
         sh.visible = true; sh.position.set(P.x, P.y + 0.03, P.z); sh.scale.setScalar(0.5 + 1.0 * k); sh.material.opacity = 0.2 + 0.3 * k;
         if (g.t < g.len) return;
-        sh.visible = false; this.flash = Math.max(this.flash || 0, 0.9); this.sfx('thump', 10); this.fx.ring(P.x, P.z, 3.4, 0.45); this.fx.dust(P.x, P.y + 0.05, P.z, 24, 1.2, 0.7, 0.6);
+        sh.visible = false; this.flash = Math.max(this.flash || 0, 0.9); this.sfx('thump', 10); this.fx.ring(P.x, P.z, 3.4, 0.45); this.puff(P.x, P.y + 0.05, P.z, 24, 1.2, 0.7, 0.6);
         this.popAt({ x: P.x, z: P.z, y: P.y }, 'ドッスーン!!', 1.1, true);
         for (const n of this.npcs) { const a = n.a; if (!this.upright(n) || Math.abs(a.y - P.y) > 1.2) continue; const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz) || 1; if (d < 3.2) this.knockOut(n, dx / d, dz / d, ['ぐえっ!', 'ドテッ!'][(this.t * 5 | 0) % 2], 3.5); }
         this.noise(P.x, P.z, 12, '!?'); const f = P.f; this.gsEnd(); P.st = 'slip'; P.t = 0.3; P.dur = 1.1; P.fall = f; P.vx = P.vz = 0; },
@@ -1547,12 +1549,12 @@
     }
     flyStep2(n, dt) {   // (npcStep) in the air: walls bounce them, they bowl over whoever they hit, and land in a heap
       const a = n.a; a.vy -= 18 * dt; a.y += a.vy * dt; a.x += a.vx * dt; a.z += a.vz * dt;
-      if (this.collide(a, 0.35)) { a.vx *= -0.35; a.vz *= -0.35; if (!n.wallHit) { n.wallHit = true; this.sfx('thump', 5); this.fx.dust(a.x, a.y + 0.5, a.z, 5, 0.3, 0.4, 0.4); } }
+      if (this.collide(a, 0.35)) { a.vx *= -0.35; a.vz *= -0.35; if (!n.wallHit) { n.wallHit = true; this.sfx('thump', 5); this.puff(a.x, a.y + 0.5, a.z, 5, 0.3, 0.4, 0.4); } }
       const fy = floorY(a.x, a.z), sp = Math.hypot(a.vx, a.vz);
       if (sp > 2) for (const m of this.npcs) if (m !== n && this.upright(m) && Math.abs(m.a.y - fy) < 1.2 && a.y < fy + 1.6 && Math.hypot(m.a.x - a.x, m.a.z - a.z) < 0.8) {
         this.launch(m, a.vx * 0.55, a.vz * 0.55, 2.2, DOG.bumpDown); this.popAt(m.a, ['ドカッ!', 'うわっ!', 'ぎゃっ!'][(this.t * 7 | 0) % 3], 0.9); a.vx *= 0.7; a.vz *= 0.7; }
       if (a.y <= fy && a.vy < 0) { a.y = fy; a.st = 'down'; a.t = 0; a.dur = n.thrDown || 2; a.slipFall = false; a.fallX = a.vx; a.fallZ = a.vz; a.vx *= 0.35; a.vz *= 0.35; n.wallHit = false;
-        n.recover = true; n.noGrab = this.t + a.dur + 1.2 + DOG.regrab; this.fx.dust(a.x, fy + 0.05, a.z, 6, 0.35, 0.4, 0.4); this.sfx('thump', 4); }
+        n.recover = true; n.noGrab = this.t + a.dur + 1.2 + DOG.regrab; this.puff(a.x, fy + 0.05, a.z, 6, 0.35, 0.4, 0.4); this.sfx('thump', 4); }
     }
     recoverAI(n) {   // back on their feet after a slap, a spin or a flight: after him again if they can see him, else a look round
       const a = n.a, P = this.P; a.st = 'free'; a.t = 0; n.noGrab = Math.max(n.noGrab || 0, this.t + DOG.regrab);
@@ -1721,7 +1723,7 @@
         const sx = sd.x0 + Math.random() * (sd.x1 - sd.x0), sz = sd.z0 + Math.random() * (sd.z1 - sd.z0), d = 0.6 + Math.random() * 1.6, sp = (Math.random() - 0.5) * 1.6;
         this.flying.push({ m, sx, sy: y0 + Math.random() * h, sz, tx: sx + (ax / al) * d - (az / al) * sp, ty: y0 + r * 0.6, tz: sz + (az / al) * d + (ax / al) * sp, h: 0.4 + Math.random() * 0.6, t: 0, dur: 0.35 + Math.random() * 0.3, r0: [0, 0, 0], r1: [Math.random() * 6, Math.random() * 6, Math.random() * 6] });
       }
-      this.fx.dust && this.fx.dust(cx, y0 + 0.6, cz, 10, 0.5, 0.7, 0.5); this.flash = 0.5;
+      this.puff(cx, y0 + 0.6, cz, 10, 0.5, 0.7, 0.5); this.flash = 0.5;
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(8);
       if (true) this.noiseS(cx, cz, 12, '!?');
       this.think(['*CRASH*', 'Oops.', '...that was loud.', 'Sorry!'][(this.t * 3 | 0) % 4], 1.2);
@@ -2032,10 +2034,10 @@
     sfHit(a, d, kind) {   // a (the attacker) hits d, if it reaches
       const f = this.sf, dist = Math.abs(a.x - d.x), reach = kind === 'jab' ? 1.75 : 2.15; if (dist > reach || (d.x - a.x) * a.dir < 0) return;
       const dmg = kind === 'jab' ? 6 : 14, kb = kind === 'jab' ? 0.5 : 1.8, blocking = d.st === 'block' && (a.x - d.x) * d.dir > 0; a.done = true;
-      if (blocking) { d.hp -= dmg * 0.12; d.vx = a.dir * kb * 2.2; this.fx.dust && this.fx.dust(d.x, 1.0, -0.9, 2, 0.1, 0.2, 0.1); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); return; }
+      if (blocking) { d.hp -= dmg * 0.12; d.vx = a.dir * kb * 2.2; this.puff(d.x, 1.0, -0.9, 2, 0.1, 0.2, 0.1); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); return; }
       if (d.inv > 0) return;
       d.hp -= dmg; d.st = 'hit'; d.t = 0; d.stun = kind === 'jab' ? 0.28 : 0.5; d.vx = a.dir * kb * 3.2; d.inv = d.stun + 0.12; d.done = true;
-      this.fx.dust && this.fx.dust(d.x, 1.0, -0.9, 5, 0.2, 0.3, 0.2); this.flash = kind === 'jab' ? 0.1 : 0.3; f.shake = kind === 'jab' ? 0.08 : 0.2;
+      this.puff(d.x, 1.0, -0.9, 5, 0.2, 0.3, 0.2); this.flash = kind === 'jab' ? 0.1 : 0.3; f.shake = kind === 'jab' ? 0.08 : 0.2;
       this.popAt({ x: d.x, z: -0.9, y: 0.3 }, kind === 'jab' ? 'バシッ!' : 'ドーン!', 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(kind === 'jab' ? 6 : 10);
     }
     sfStep(dt) {
@@ -2388,7 +2390,7 @@
       this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ごくごく…', 1.1);
       this.later(1.15, () => { b.state = 'gone'; b.m.visible = false; if (this.drinkB === b) this.drinkB = null; this.popAt({ x: P.x, z: P.z, y: P.y + 0.7 }, 'ぷはーっ!', 1.1); });
       this.think((this.hits ? '*glug glug glug* Ahhh... that\'s better. ♥' : '*glug glug glug* AHHH. Good as new! ♥'), 1.6);
-      this.later(2.4, () => { this.think(['*BUUUUURP*', '*BWAAARP!*', '*urrrp*... pardon.'][(this.t * 3 | 0) % 3], 1.6); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'ゲェェップ!!', 1.6, true); this.fx.dust && this.fx.dust(P.x + Math.cos(P.f) * 0.5, P.y + 1.7, P.z + Math.sin(P.f) * 0.5, 6, 0.25, 0.4, 0.25);   // (a big one: you can't miss it)
+      this.later(2.4, () => { this.think(['*BUUUUURP*', '*BWAAARP!*', '*urrrp*... pardon.'][(this.t * 3 | 0) % 3], 1.6); this.popAt({ x: P.x, z: P.z, y: P.y + 0.6 }, 'ゲェェップ!!', 1.6, true); this.puff(P.x + Math.cos(P.f) * 0.5, P.y + 1.7, P.z + Math.sin(P.f) * 0.5, 6, 0.25, 0.4, 0.25);   // (a big one: you can't miss it)
         if (true) this.noiseS(P.x, P.z, 6, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); });   // (loud enough to turn heads)
     }
     // a big bare footprint (x forward, the big toe on the inside): a sole, wide at the ball, and five toes
@@ -2498,7 +2500,7 @@
       if (D[0]) { D[0].position.z -= k === 1 ? 0.05 : 0.09; D[0].rotation.set(-0.12 * k, 0.04 * k, 0.05 * k); if (k === 2) D[0].scale.y = 0.93; }
       if (D[1]) D[1].rotation.set(0, -0.06 * k, 0.03 * k); if (D[2]) D[2].rotation.set(0.02 * k, 0, -0.035 * k);
       if (k === 2) { if (D[3]) D[3].rotation.y = 0.18; if (D[4]) D[4].position.z -= 0.03; }
-      this.fx.dust && this.fx.dust(this.locker.x, 1.0, this.locker.z, 6, 0.3, 0.4, 0.3); this.flash = 0.35;
+      this.puff(this.locker.x, 1.0, this.locker.z, 6, 0.3, 0.4, 0.3); this.flash = 0.35;
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(7);
       this.noise(this.locker.x, this.locker.z, 14, '?!');
       this.think(k === 1 ? 'Hmm... just a dent. Let me try that again.' : 'The hinge is coming loose... one more!', 2.2);
@@ -2515,7 +2517,7 @@
         const src = this.lkDoors[1 + (k % 4)] || this.lkDoors[0], sx = src ? src.position.x : this.locker.x, sy = src ? src.position.y : 1;
         this.flying.push({ m: c, sx, sy, sz: LY.locker.face + 0.2, tx: sx + (k % 2 ? 0.5 : -0.5) * (0.5 + (k % 3) * 0.4), ty: 0.01, tz: LY.locker.face + 0.8 + (k % 4) * 0.35, h: 0.7 + (k % 3) * 0.2, t: 0, dur: 0.5 + k * 0.06, r0: [0, 0, 0], r1: [0, k * 1.3, 0] });
       }
-      this.fx.dust && this.fx.dust(this.locker.x, 0.8, this.locker.z, 10, 0.4, 0.6, 0.4); this.flash = 0.6;
+      this.puff(this.locker.x, 0.8, this.locker.z, 10, 0.4, 0.6, 0.4); this.flash = 0.6;
       this.noise(this.locker.x, this.locker.z, 26, '!?');
       if (this.g.audio) { this.g.audio.thump && this.g.audio.thump(9); this.later(0.15, () => this.g.audio.thump && this.g.audio.thump(5)); }
       this.think('...EMPTY?! Someone took my clothes!', 2.2);
@@ -2550,7 +2552,7 @@
       for (let k = 0; k < 7; k++) { const sz = 0.3 + (k % 3) * 0.12, ch = new THREE.Mesh(new THREE.BoxGeometry(sz, sz * 0.8, sz), M); ch.castShadow = true; ch.userData.flatDone = true; this.G.add(ch);
         const x = C.x0 + 0.8 + (k * 0.67) % 3.2, y = 0.3 + (k % 3) * 0.35, tz = C.z0 - 0.8 - (k % 4) * 0.9;
         this.flying.push({ m: ch, sx: x, sy: y, sz: C.z, tx: x + ((k % 3) - 1) * 0.7, ty: floorY(x, tz) + sz * 0.4, tz, h: 0.5 + (k % 3) * 0.3, t: 0, dur: 0.4 + (k % 4) * 0.08, r0: [0, 0, 0], r1: [k, k * 0.7, k * 1.3] }); }
-      this.fx.dust && this.fx.dust(C.x, 0.8, C.z, 14, 0.6, 0.8, 0.6); this.flash = 0.7;
+      this.puff(C.x, 0.8, C.z, 14, 0.6, 0.8, 0.6); this.flash = 0.7;
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(9);
       if (quiet || this.stage !== 'storage') return;   // (only when he really is smashing his way upstairs, never from a jump or later on)
       this.noise(C.x, C.z1 + 0.8, 14, '?!');
@@ -2558,7 +2560,7 @@
     }
     // the box he wears: built here (the same size and card as the storage-room box) so its two flaps can fold shut over him
     bootyProp() {   // his booty, on its own: sticking out of the box's back, or up out of a cart of towels
-      const v = this.view, skin = (v.soft && v.soft.mats.find((m) => /skin/i.test(m.name))) || S.Flat.mat(0xefc09c), belt = S.Flat.mat(0x2f3a6e), g = new THREE.Group();
+      const v = this.view, skin = S.Flat.mat(DOG.skinCol), belt = S.Flat.mat(0x2f3a6e), g = new THREE.Group();
       for (const sd of [-1, 1]) { const c = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 14), skin); c.position.set(sd * 0.2, 0, -0.04); c.scale.set(1, 0.95, 0.9); c.castShadow = true; g.add(c); }
       const strip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.06), belt); strip.position.set(0, -0.02, -0.25); strip.rotation.x = 0.12;
       const band = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.07, 0.08), belt); band.position.set(0, 0.24, -0.12);
@@ -2692,7 +2694,7 @@
         g.position.x += s.vx * dt; g.position.z += s.vz * dt; g.position.y += s.vy * dt; s.vy -= 9.8 * dt; g.rotation.y += s.spin * dt;
         s.k = Math.min(1, s.k + dt * 2.2); this.shortsShape(s, s.k * 0.7, this.t);
         const fy = floorY(g.position.x, g.position.z) + 0.01;
-        if (g.position.y <= fy) { g.position.y = fy; s.vy = null; s.k = 1; this.shortsShape(s, 1, 0); if (this.fx.dust) this.fx.dust(g.position.x, fy + 0.05, g.position.z, 3, 0.2, 0.3, 0.2); }
+        if (g.position.y <= fy) { g.position.y = fy; s.vy = null; s.k = 1; this.shortsShape(s, 1, 0); this.puff(g.position.x, fy + 0.05, g.position.z, 3, 0.2, 0.3, 0.2); }
       }
       if ((s.life -= dt) <= 0) this.dropShorts(true);
     }
@@ -2770,14 +2772,16 @@
           if (this.boxYaw !== undefined && this.npcs.some((n) => n.pushing2)) { const q = Math.PI / 2, want = -this.boxYaw, d = ((want - bw.rotation.y) % q + q * 1.5) % q - q / 2; bw.rotation.y += d * Math.min(1, dt * 2.5); } }   // (shoved square-on: the box swings round flat to them)
         if (bw.setOpen) bw.setOpen(this.boxDown || boxTip ? Math.max(0, 1 - (this.ballK || 0) * 1.3) : 1);   // the flaps fold shut over him
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)
+        { let bb = bw.booty; if (!bb) { bb = bw.booty = this.bootyProp(); bb.position.set(0, 0.4, -0.66); bw.add(bb); }   // (...and his booty out through the hole in its back)
+          bb.visible = this.boxDown && !v.root.visible; if (bb.visible) { const j = Math.sin(T * 3) * 0.03; bb.scale.set(1 + j, 1 - j, 1); this.bootyDress(bb); } }
       }
       v.root.rotation.z = 0;   // (no rocking on tiptoe)
       { const hc = P.hidden, cb = this.cartBooty;   // hiding in a cart: the booty sticks up out of the towels (and wobbles a little)
         if (hc) { let g = cb; if (!g) { g = this.cartBooty = this.bootyProp(); g.scale.setScalar(0.9 * v.s); }
           if (g.parent !== hc.m) hc.m.add(g); g.visible = true; g.position.set(0.05, DOG.cartBootyY, 0); g.rotation.set(-Math.PI / 2 + 0.25, 0, Math.sin(T * 2.2) * 0.06); this.bootyDress(g); }
         else if (cb) cb.visible = false; }
-      if (v.soft) { const want = P.st === 'charge' && !P.ball ? DOG.jiggle : P.st === 'busy' && this.stompDone - this.t > DOG.slamLand * 0.3 ? 0.14 : 0;   // (and after a booty slam: a big wobble) this.jigA = (this.jigA || 0) + (want - (this.jigA || 0)) * Math.min(1, dt * 8);   // charging: left and right cheeks bounce up and down in turn
-        if (this.jigA > 0.002 || this.jigOn) { const ph = T * 13, bo = (x) => Math.max(0, Math.sin(x)) * 1.6 - 0.3; S.SoftSumo.jiggle(v, this.jigA * bo(ph), this.jigA * bo(ph + Math.PI)); this.jigOn = this.jigA > 0.002; } }   // (each cheek bounces up in turn)
+      if (v.soft) { const want = P.st === 'charge' && !P.ball ? DOG.jiggle : P.st === 'busy' && this.stompDone - this.t > DOG.slamLand * 0.3 ? 0.14 : 0; this.jigA = (this.jigA || 0) + (want - (this.jigA || 0)) * Math.min(1, dt * 20);   // charging: left and right cheeks bounce up and down in turn   // (and after a booty slam: a big wobble)
+        if (this.jigA > 0.002 || this.jigOn) { const ph = T * 22, bo = (x) => Math.max(0, Math.sin(x)) * 1.6 - 0.3; S.SoftSumo.jiggle(v, this.jigA * bo(ph), this.jigA * bo(ph + Math.PI)); this.jigOn = this.jigA > 0.002; } }   // (each cheek bounces up in turn)
       if (rolling) {   // the charge, tucked into a cannonball (knees to his chest, arms round them, face on his knees), turning over and over about his middle
         const ax = this._rax || (this._rax = new THREE.Vector3()), q = this._rq || (this._rq = new THREE.Quaternion()), cc = this._rc || (this._rc = new THREE.Vector3());
         ax.set(Math.sin(P.f), 0, -Math.cos(P.f)); q.setFromAxisAngle(ax, P.ballRoll); cc.set(P.x, P.y + DOG.tuckC * v.s, P.z);
