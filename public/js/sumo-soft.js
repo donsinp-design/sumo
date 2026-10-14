@@ -89,6 +89,12 @@
         const [dx, dy, dz] = swell(x, y, z), out = isBelt ? 0.018 : 0;
         P.setXYZ(i, x + dx, y + dy, z + dz - out); }
       P.needsUpdate = true; q.geometry.computeVertexNormals(); q.geometry.computeBoundingSphere();
+      // which vertices belong to each cheek (for the jiggle): weights from the rest shape
+      const idx = [], wl = [], wr = [], base = [];
+      for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); if (z > 0.05) continue;
+        const f = (cx) => Math.exp(-((Math.hypot(x - cx, y - 0.78, (z + 0.2) * 0.8) / 0.32) ** 2)), a = f(-0.21), c = f(0.21); if (a + c < 0.03) continue;
+        idx.push(i); wl.push(a); wr.push(c); base.push(y, z); }
+      (view.jig || (view.jig = [])).push({ P, idx, wl, wr, base });
     });
     view.soft = { M, B, k, mats, tq: new THREE.Quaternion(), q: new THREE.Quaternion(), wq: {}, bodyQ: new THREE.Quaternion(), headQ: new THREE.Quaternion(),
       v: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), m: new THREE.Matrix4() };
@@ -177,5 +183,12 @@
     const centre = headW.add(hc.multiplyScalar(k).applyQuaternion(view.root.quaternion)).applyMatrix4(inv);   // body space
     view.head.position.copy(centre).sub(S_.v.set(0, 0.17 * s * view.head.scale.y, -0.02 * s).applyQuaternion(view.head.quaternion));   // the topknot lifts the box: masks sit on the face, not the brow
   }
-  S.SoftSumo = { ready, attach, drive, get loaded() { return !!tpl; } };
+  // the booty jiggle: each cheek bobs on its own (aL, aR: how far up, in model units)
+  function jiggle(view, aL, aR) {
+    if (!view.jig) return;
+    for (const J of view.jig) { const P = J.P, a = P.array;
+      for (let n = 0; n < J.idx.length; n++) { const i = J.idx[n] * 3, d = J.wl[n] * aL + J.wr[n] * aR; a[i + 1] = J.base[n * 2] + d; a[i + 2] = J.base[n * 2 + 1] - Math.abs(d) * 0.3; }
+      P.needsUpdate = true; }
+  }
+  S.SoftSumo = { ready, attach, drive, jiggle, get loaded() { return !!tpl; } };
 })();

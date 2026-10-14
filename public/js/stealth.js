@@ -53,6 +53,7 @@
     slapDown: 2.2, stumbleDown: 1.8, bumpDown: 1.6, flungDown: 2.4, thrownDown: 2.6,   // seconds on the floor before they get up
     pickR: 1.5, liftT: 0.45, throwSp: 9, carryMax: 5, carrySpeed: 0.8,                  // picking one up (a heave), the throw, how long they let him hold them
     captureT: 1.5, fadeT: 0.4,                  // caught: the pile, then the fade to the checkpoint
+    cartBootyY: 1.0,                             // (hiding in a cart: how high his booty sits, poking up out of the towels)
     rideScale: 1,                                // the one on his shoulders, drawn at this size (1: full size)
   };
   const VIS = { range: 1.2, cones: false };   // how far the staff see (x their own range), and whether their vision cones are drawn on the floor
@@ -2553,6 +2554,15 @@
       this.think('Special delivery! ...up the stairs we go.', 2.2);
     }
     // the box he wears: built here (the same size and card as the storage-room box) so its two flaps can fold shut over him
+    bootyProp() {   // his booty, on its own: sticking out of the box's back, or up out of a cart of towels
+      const v = this.view, skin = (v.soft && v.soft.mats.find((m) => /skin/i.test(m.name))) || S.Flat.mat(0xefc09c), belt = S.Flat.mat(0x2f3a6e), g = new THREE.Group();
+      for (const sd of [-1, 1]) { const c = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 14), skin); c.position.set(sd * 0.2, 0, -0.04); c.scale.set(1, 0.95, 0.9); c.castShadow = true; g.add(c); }
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.06), belt); strip.position.set(0, -0.02, -0.25); strip.rotation.x = 0.12;
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.07, 0.08), belt); band.position.set(0, 0.24, -0.12);
+      const cen = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.mosaic.s.material.map, transparent: true })); cen.position.set(0, -0.02, -0.38); cen.scale.set(0.42, 0.42, 1); cen.renderOrder = 5;
+      g.add(strip, band, cen); g.userData = { strip, band, cen }; return g;
+    }
+    bootyDress(g) { if (!g) return; const on = !!this.gotMawashi; g.userData.strip.visible = g.userData.band.visible = on; g.userData.cen.visible = !on; }
     makeBox() {
       const g = new THREE.Group(), C = S.Flat.mat(0xd3a96e), Cd = S.Flat.mat(0xb98c52), Bd = S.Flat.mat(0xe6cfa4), W = 1.6, H = 0.8, D = 1.4, t = 0.04;
       const bx = (w, h, d, x, y, z, m) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = true; o.userData.flatDone = true; g.add(o); return o; };
@@ -2565,6 +2575,10 @@
     wearBox() {
       if (!this.proto || !this.proto.BOX) return;
       const b = this.makeBox(); b.visible = true; b.scale.setScalar(0.95); b.position.set(0, -0.62 * this.view.s, 0.02 * this.view.s); this.view.body.add(b); this.boxWorn = b;
+      { const H = 0.8, D = 1.4, dark = S.Flat.mat(0x3a2a1c), torn = S.Flat.mat(0xe6cfa4);   // too much booty for one box: it's burst a hole in the back, and out it pokes
+        const rip = new THREE.Mesh(new THREE.CircleGeometry(0.5, 11), torn); rip.scale.set(1.08, 0.72, 1); rip.position.set(0, H * 0.52, -D / 2 - 0.006); rip.rotation.y = Math.PI; b.add(rip);
+        const hole = new THREE.Mesh(new THREE.CircleGeometry(0.44, 11), dark); hole.scale.set(1.05, 0.66, 1); hole.position.set(0, H * 0.52, -D / 2 - 0.01); hole.rotation.y = Math.PI; b.add(hole);
+        const bp = this.bootyProp(); bp.position.set(0, H * 0.5, -D / 2 + 0.06); b.add(bp); b.booty = bp; }
     }
     putOnBox() {
       this.wearing = true; this.pantsBox.visible = false; this.spBox.visible = false; this.spExit.visible = true; this.wearBox();
@@ -2745,10 +2759,17 @@
         if (this.boxDown) { bw.position.x = P.x; bw.position.z = P.z; bw.position.y = P.y;   // (up the stairs too: it rides each step with him, never left sunk in them)
           if (boxTip && !P.boxHide && this.boxYawOff !== undefined) bw.rotation.y = this.boxYawOff - P.f;   // (tiptoeing along: the closed box turns the way he goes)
           if (this.boxYaw !== undefined && this.npcs.some((n) => n.pushing2)) { const q = Math.PI / 2, want = -this.boxYaw, d = ((want - bw.rotation.y) % q + q * 1.5) % q - q / 2; bw.rotation.y += d * Math.min(1, dt * 2.5); } }   // (shoved square-on: the box swings round flat to them)
+        this.bootyDress(bw.booty);
         if (bw.setOpen) bw.setOpen(this.boxDown || boxTip ? Math.max(0, 1 - (this.ballK || 0) * 1.3) : 1);   // the flaps fold shut over him
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)
       }
       v.root.rotation.z = 0;   // (no rocking on tiptoe)
+      { const hc = P.hidden, cb = this.cartBooty;   // hiding in a cart: the booty sticks up out of the towels (and wobbles a little)
+        if (hc) { let g = cb; if (!g) { g = this.cartBooty = this.bootyProp(); g.scale.setScalar(0.9 * v.s); }
+          if (g.parent !== hc.m) hc.m.add(g); g.visible = true; g.position.set(0.05, DOG.cartBootyY, 0); g.rotation.set(-Math.PI / 2 + 0.25, 0, Math.sin(T * 2.2) * 0.06); this.bootyDress(g); }
+        else if (cb) cb.visible = false; }
+      if (v.soft) { const want = P.st === 'charge' && !P.ball ? 0.075 : 0; this.jigA = (this.jigA || 0) + (want - (this.jigA || 0)) * Math.min(1, dt * 8);   // charging: left and right cheeks bounce up and down in turn
+        if (this.jigA > 0.002 || this.jigOn) { const ph = T * 15; S.SoftSumo.jiggle(v, this.jigA * Math.sin(ph), this.jigA * Math.sin(ph + Math.PI)); this.jigOn = this.jigA > 0.002; } }
       if (rolling) {   // the charge, tucked into a cannonball (knees to his chest, arms round them, face on his knees), turning over and over about his middle
         const ax = this._rax || (this._rax = new THREE.Vector3()), q = this._rq || (this._rq = new THREE.Quaternion()), cc = this._rc || (this._rc = new THREE.Vector3());
         ax.set(Math.sin(P.f), 0, -Math.cos(P.f)); q.setFromAxisAngle(ax, P.ballRoll); cc.set(P.x, P.y + DOG.tuckC * v.s, P.z);
