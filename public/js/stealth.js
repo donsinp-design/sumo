@@ -2680,7 +2680,6 @@
       w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0, Math.min(0.9, this.attN() * 0.2)); w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : P.carryN ? {} : null;   // (hunched: tiptoe, curled up, or bowed under the dogpile)
       if (this.freeze) w.fxs.dizzy = 1;
       if (P.st === 'skill' && g && g.ball) { w.fxs.ball = 1; w.ballRoll = g.roll; }
-      if (P.ball && P.st === 'charge') { w.fxs.ball = 1; w.ballRoll = P.ballRoll; }   // (the charge, rolled up)
       if (g && g.id === 'hands' && P.st === 'skill') w.hand = g.sd;
       v.update(w, Math.max(dt, 1e-4), T);
       if (this.asleep && v.soft) for (const m of v.soft.mats) m.emissive.setRGB(0, 0, 0);   // (asleep: the pose, not the versus sleep-skill's blue tint)
@@ -2688,7 +2687,7 @@
       if (v.ballSpin && v.ballSpin.visible) v.ballSpin.position.y += P.y;   // (the daruma: on the floor he's on)
       const gk = (w.szCur || 1) * (this.gulp ? 1.22 + Math.sin(T * 9) * 0.03 : 1);   // GIANT, or someone swallowed
       const boxTip = this.wearing && !!this.keys.KeyI && P.st === 'free' && !P.sub && !P.hidden;   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
-      const ball = P.boxHide || boxTip || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
+      const rolling = !!(P.ball && P.st === 'charge'), ball = rolling || P.boxHide || boxTip || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
       this.ballK = (this.ballK || 0) + ((ball ? 1 : 0) - (this.ballK || 0)) * Math.min(1, dt * 10);
       if (this.ballK > 0.01) { const k = this.ballK; v.root.position.y -= (P.boxHide || boxTip ? 0.8 : 0.06) * v.s * k; v.root.scale.set(v.s * gk * (1 - 0.1 * k), v.s * gk * (1 - 0.32 * k), v.s * gk * (1 - 0.1 * k)); } else v.root.scale.setScalar(v.s * gk);
       // ducking in the box: the same box stays where it stood on the floor and he sinks down into it (no second box)
@@ -2706,6 +2705,10 @@
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)
       }
       v.root.rotation.z = 0;   // (no rocking on tiptoe)
+      if (rolling) {   // the charge, curled up into a ball: the whole sumo turns over and over about his middle as he rolls
+        const ax = this._rax || (this._rax = new THREE.Vector3()), q = this._rq || (this._rq = new THREE.Quaternion()), cc = this._rc || (this._rc = new THREE.Vector3());
+        ax.set(Math.sin(P.f), 0, -Math.cos(P.f)); q.setFromAxisAngle(ax, P.ballRoll); cc.set(P.x, P.y + 0.55 * v.s, P.z);
+        v.root.position.sub(cc).applyQuaternion(q).add(cc); v.root.quaternion.premultiply(q); }
       v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       this.shortsStep(dt); this.tattooStep(v); this.stinkStep(T, v);
       if (P.held && P.held.state === 'held') {
