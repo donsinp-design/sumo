@@ -1647,8 +1647,8 @@
           out[5].set(nk.x - 0.06, nk.y + 0.06, nk.z + 0.16); out[8].set(nk.x + 0.06, nk.y + 0.04, nk.z + 0.16);
           out[4].set(nk.x - 0.22, nk.y - 0.06, nk.z + 0.12); out[7].set(nk.x + 0.22, nk.y - 0.08, nk.z + 0.12);
           for (let i = 1; i <= 3; i++) out[i].z -= 0.08;
-          out[10].set(out[9].x - 0.04, out[9].y + 0.12, out[9].z + 0.34); out[13].set(out[12].x + 0.04, out[12].y + 0.06, out[12].z + 0.34 + sw * 0.04);
-          out[11].set(out[9].x + 0.02, out[9].y + 0.42, out[9].z + 0.3); out[14].set(out[12].x - 0.02, out[12].y - 0.3 + sw * 0.12, out[12].z + 0.2);   // (one leg hooked up over his arm, the other kicking)
+          out[10].set(out[9].x - 0.04, out[9].y + 0.06, out[9].z + 0.36); out[11].set(out[9].x - 0.02, out[9].y - 0.34, out[9].z + 0.42);   // (one knee drawn right up, shin hanging down: the foot the right way up)
+          out[13].set(out[12].x + 0.04, out[12].y - 0.38, out[12].z + 0.12 + sw * 0.06); out[14].set(out[12].x + 0.02, out[12].y - 0.8, out[12].z + 0.04 + sw * 0.14);   // (the other leg dangling, kicking)
         } else {   // 'hug': sat on the floor beside his leg, legs round it, arms wrapped round his shin, cheek against it
           const dy = p.y - 0.26; for (let i = 0; i <= 8; i++) { out[i].y -= dy; if (i) out[i].z += 0.1; }
           out[2].z += 0.08; const q = out[0];

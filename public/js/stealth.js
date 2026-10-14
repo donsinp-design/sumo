@@ -849,13 +849,13 @@
       if (!P.hidden && !P.boxHide && P.st !== 'skill') for (const n of this.npcs) {   // bodies: he bumps into people (a charge bowls them over: see below)
         const a = n.a; if (a.st === 'down' || Math.abs(a.y - P.y) > 1 || n.att !== undefined || n.lunge || n.carried || a.st === 'thrown') continue;
         const dx = P.x - a.x, dz = P.z - a.z, d = Math.hypot(dx, dz), R2 = P.r * 0.8 + 0.4;
-        if (d < R2 && d > 1e-4 && !(P.st === 'charge' && n.mode !== 'chase' && n.alarm < 1 && a.st === 'free')) { P.x = a.x + dx / d * R2; P.z = a.z + dz / d * R2; if (P.st === 'charge') { P.t = P.dur + 0.01; P.vx *= -0.2; P.vz *= -0.2; } }
+        if (d < R2 && d > 1e-4 && !(P.st === 'charge' && (P.ball || (n.mode !== 'chase' && n.alarm < 1)) && a.st === 'free')) { P.x = a.x + dx / d * R2; P.z = a.z + dz / d * R2; if (P.st === 'charge') { P.t = P.dur + 0.01; P.vx *= -0.2; P.vz *= -0.2; } }
       }
       // the cracked wall gives way to a charge
       const CK = LY.crack;
       if (power && !this.crackDone && P.z < CK.z1 + P.r + 0.25 && P.z > CK.z0 - 0.2 && P.x > CK.x0 && P.x < CK.x1) { this.chargeWall(); this.smashCrack(); }
       if (power) for (const n of this.npcs) {   // a charge bowls over anyone he hits who hadn't made him out yet (not someone already after him)
-        if (n.a.st !== 'free' || ((n.alarm >= 1 || n.mode === 'chase') && !(this.gs && this.gs.id === 'giant')) || Math.abs(n.a.y - P.y) > 1) continue;
+        if (n.a.st !== 'free' || ((n.alarm >= 1 || n.mode === 'chase') && !(this.gs && this.gs.id === 'giant') && !P.ball) || Math.abs(n.a.y - P.y) > 1 || n.lunge) continue;   // (rolled up, or a giant: even the ones after him go down)
         const dx = n.a.x - P.x, dz = n.a.z - P.z, d = Math.hypot(dx, dz);
         if (d < P.r + 0.55 && (dx * Math.cos(P.f) + dz * Math.sin(P.f)) / (d || 1) > 0.2) this.knockOut(n, Math.cos(P.f), Math.sin(P.f), ['ドーン!', 'ドスン!'][(this.t * 3 | 0) % 2], 4.5);
       }
@@ -864,7 +864,7 @@
         if (power && !V.broke && !V.cd && Math.abs(P.y - V.y) < 1 && P.x > V.x0 - P.r - 0.2 && P.z > V.z0 - 0.3 && P.z < V.z1 + 0.3) { V.cd = 0.6; this.chargeWall(); this.hitVend(); P.t = P.dur + 0.01; P.vx *= -0.3; P.vz *= -0.3; } }
       P.brkCd = Math.max(0, (P.brkCd || 0) - dt); this.runupCd = Math.max(0, (this.runupCd || 0) - dt);
       if (P.st === 'charge' && !power && this.breakables && !this.runupCd && this.breakables.some((B) => !B.done && Math.abs((B.s.f ? UP : 0) - P.y) < 1.2 && Math.hypot(P.x - clamp(P.x, B.s.x0, B.s.x1), P.z - clamp(P.z, B.s.z0, B.s.z1)) < P.r + 0.15)) {
-        this.runupCd = 8; this.think('Too close... I need a RUN-UP to smash through that!', 2); }   // (from right up against it he only bumps it)
+        this.runupCd = 8; this.chargeWall(); this.think('Too close... I need a RUN-UP to smash through that!', 2); }   // (from right up against it he only bumps it)
       if (power && this.breakables && !P.brkCd) {   // one piece at a time: the nearest one he hits
         let best = null, bd = P.r + 0.15;
         for (const B of this.breakables) {
@@ -891,7 +891,8 @@
       }
       this.cartStep(dt);
       const hx0 = P.x, hz0 = P.z, hit0 = this.collide(P, P.r), hpx = P.x - hx0, hpz = P.z - hz0, hpl = Math.hypot(hpx, hpz);
-      this.pHit0 = hit0 && hpl > 1e-5; this.pN = this.pHit0 ? [hpx / hpl, hpz / hpl] : null; this.pHit = this.pHit0 && (hpx * Math.cos(P.f) + hpz * Math.sin(P.f)) / hpl < -0.55;   // (for the skills: ran into a wall, and which way it faces)
+      this.pHit0 = hit0 && hpl > 1e-5; this.pN = this.pHit0 ? [hpx / hpl, hpz / hpl] : null; this.pHit = this.pHit0 && (hpx * Math.cos(P.f) + hpz * Math.sin(P.f)) / hpl < -0.55;
+      if (P.st === 'charge' && this.pHit0 && (hpx * Math.cos(P.cdir) + hpz * Math.sin(P.cdir)) / hpl < -0.3) this.chargeWall();   // (ran into a wall or anything solid: everyone hanging on is thrown off)   // (for the skills: ran into a wall, and which way it faces)
       const hit = hit0 && (P.st !== 'charge' || (hpl > 1e-5 && (hpx * Math.cos(P.cdir) + hpz * Math.sin(P.cdir)) / hpl < -0.55));   // (a charge only bumps a wall it runs INTO: brushing along one beside him doesn't count)
       if (this.noGuard) this.noGuard = false; else if ((P.x !== px0 || P.z !== pz0) && Math.hypot(P.x - px0, P.z - pz0) < 2.5 && this.segInWall(px0, pz0, P.x, P.z)) { P.x = px0; P.z = pz0; }   // (never squeezed through a wall: a shove, a punch, a crowd pushing)
       // how high he stands: in the bath up to his chest, the stairs, the floor above
@@ -1494,8 +1495,8 @@
         return { x: Q.x - fx * 0.4 * s, z: Q.z - fz * 0.4 * s, y: Q.y - 0.2 * s - pelY + bob, f: P.f + Math.sin(T * 5) * 0.1, st: 'held', cling: 'ride' }; }
       if (k === 5) return { x: P.x - fx * 0.62 * s, z: P.z - fz * 0.62 * s, y: P.y + 0.88 * s - pelY + bob, f: P.f + Math.sin(T * 4) * 0.08, st: 'held', cling: 'back' };   // a piggyback, chest to his back, below the one on his shoulders
       if (k < 2) { v.handWorld(k === 0 ? -1 : 1, Q); let ox = Q.x - P.x, oz = Q.z - P.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;   // hanging off his held-out arm: arms and legs wrapped round it, feet off the floor, swinging
-        const sw = Math.sin(T * 5 + k * 2) * 0.06 * (0.5 + mv), x = Q.x - ox * 0.12 + fx * 0.16 + fx * sw, z = Q.z - oz * 0.12 + fz * 0.16 + fz * sw;   // (facing across his arm, the way a child hangs off a bar)
-        return { x, z, y: Math.max(P.y + 0.15, Q.y - nkY + 0.02) + bob * 0.5, f: P.f + Math.PI + Math.sin(T * 4 + k) * 0.1, st: 'held', cling: 'arm' }; }
+        const sw = Math.sin(T * 5 + k * 2) * 0.06 * (0.5 + mv), x = Q.x - ox * 0.12 - fx * 0.16 + fx * sw, z = Q.z - oz * 0.12 - fz * 0.16 + fz * sw;   // (facing the way he faces, across his arm, the way a child hangs off a bar)
+        return { x, z, y: Math.max(P.y + 0.15, Q.y - nkY + 0.02) + bob * 0.5, f: P.f + Math.sin(T * 4 + k) * 0.1, st: 'held', cling: 'arm' }; }
       const sd = k === 2 ? -1 : 1, sx = -fz * sd, sz = fx * sd, lx = P.x + (sx * 0.36 - fx * 0.05) * s, lz = P.z + (sz * 0.36 - fz * 0.05) * s;
       let ox = sx * 0.8 - fx * 0.6, oz = sz * 0.8 - fz * 0.6; const ol = Math.hypot(ox, oz); ox /= ol; oz /= ol;
       return { x: lx + ox * 0.34, z: lz + oz * 0.34, y: P.y, f: Math.atan2(-oz, -ox), st: 'held', cling: 'hug' };
