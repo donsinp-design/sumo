@@ -53,6 +53,7 @@
     propJig: 0.09,                               // the stand-in booty out of the box or the cart: how high each cheek bounces
     boxFwd: 0.1,                                 // the box he wears sits this far forward on him, so his booty pokes out through the hole in its back
     boxDeep: 0.72,                               // ...and that much as deep as the box on the floor (snug round his belly, the back through his booty)
+    sfBump: [0.15, 0.3, 0.5], sfSlam: [0.62, 0.72, 1.2],   // the boss fight: the booty bump's and booty slam's timing (hits from / to, done at)
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
     slapFront: 7, slapRear: 5, spinT: 1.5,       // a slap: knocked back / stumbling forward (speeds), spun round (seconds)
@@ -1128,10 +1129,11 @@
       this.gSkill = null; if (!f || this.rew) return;
       if (f.call(this) === false) this.gSkill = id;   // (nothing to use it on: kept for later)
     }
-    puff(x, y, z, n, sp) { this.miniPuff(x, Math.max(this.P ? this.P.y : 0, y - 0.45), z, Math.min(2, 0.55 + (sp || 0.3) * 1.1), Math.max(6, Math.min(14, n || 6))); }   // (dust: always the white smoke-bomb puff, never brown dust)
+    puff(x, y, z, n, sp) { this.miniPuff(x, Math.max(this.P ? this.P.y : 0, y - 0.45), z, Math.min(0.8, 0.22 + (sp || 0.3) * 0.5), Math.max(6, Math.min(12, n || 6))); }   // (dust: always the white smoke-bomb puff, never brown dust)
     miniPuff(x, y, z, sz, N) {   // a mini smoke bomb: a ring of little white clouds bursting out round the base, swelling and fading (sz: bigger, N clouds)
       const geo = this.puffGeo || (this.puffGeo = new THREE.IcosahedronGeometry(1, 1)), mat = (this.puffMats || (this.puffMats = [])).pop() || S.Flat.mat(0xf6f3ee, { transparent: true, opacity: 0.9 }), g = new THREE.Group(); N = N || 9;
-      if (this.puffs && this.puffs.length >= 14) { const o = this.puffs.shift(); this.G.remove(o.g); this.puffMats.push(o.mat); }   // (no more than 14 at once: the oldest goes) if (sz) g.scale.setScalar(sz);
+      if (this.puffs && this.puffs.length >= 14) { const o = this.puffs.shift(); this.G.remove(o.g); this.puffMats.push(o.mat); }   // (no more than 14 at once: the oldest goes)
+      if (sz) g.scale.setScalar(sz);
       for (let k = 0; k < N; k++) { const a = k / N * Math.PI * 2 + Math.random() * 0.4, m = new THREE.Mesh(geo, mat); m.userData = { a, v: 1.2 + Math.random() * 0.7, s: 0.12 + Math.random() * 0.08 }; g.add(m); }
       g.position.set(x, y, z); this.G.add(g); (this.puffs || (this.puffs = [])).push({ g, mat, t: 0, dur: sz ? 1.1 : 0.75 });
     }
@@ -2016,7 +2018,7 @@
     }
     sfHud(init) {
       const e = this.el('.st-sf'), f = this.sf;
-      if (init) e.innerHTML = '<div class="bars"><div class="bar l"><b></b><i></i></div><div class="tm">60</div><div class="bar r"><b></b><i></i></div></div><div class="nm l">YOU</div><div class="nm r">YUNOFUJI</div><div class="pips l"></div><div class="pips r"></div><div class="big"></div><div class="keys">A / D move · J slap · K shove (slow, heavy) · hold I block</div>';
+      if (init) e.innerHTML = '<div class="bars"><div class="bar l"><b></b><i></i></div><div class="tm">60</div><div class="bar r"><b></b><i></i></div></div><div class="nm l">YOU</div><div class="nm r">YUNOFUJI</div><div class="pips l"></div><div class="pips r"></div><div class="big"></div><div class="keys">A / D move · J booty bump · hold J booty slam · K / L shove (slow, heavy) · hold I block</div>';
       const y = f.you, b = f.boss, q = (c) => e.querySelector(c), pc = (h) => Math.max(0, h) + '%';
       f.dy = (f.dy === undefined ? 100 : f.dy + (y.hp - f.dy) * 0.08); f.db = (f.db === undefined ? 100 : f.db + (b.hp - f.db) * 0.08);
       q('.bar.l i').style.width = pc(y.hp); q('.bar.l b').style.width = pc(f.dy); q('.bar.r i').style.width = pc(b.hp); q('.bar.r b').style.width = pc(f.db);
@@ -2028,46 +2030,54 @@
       f.dy = f.db = 100; f.timer = 60; f.ph = 'intro'; f.t = 0; f.pose = null; f.fightShown = false; this.sfApply(); this.sfText('ROUND ' + f.round); this.sfHud();
     }
     sfApply() {   // the two fighters onto the real characters
-      const f = this.sf, P = this.P, B = this.boss, y = f.you, b = f.boss, pose = { idle: 'free', jab: 'busy', heavy: 'charge', block: 'wind', hit: 'free', ko: 'slip', win: 'free', lose: 'slip' };
+      const f = this.sf, P = this.P, B = this.boss, y = f.you, b = f.boss, pose = { idle: 'free', jab: 'busy', heavy: 'charge', block: 'wind', hit: 'free', ko: 'slip', win: 'free', lose: 'slip', bump: 'busy', slam: 'busy' };
       P.x = y.x; P.z = -0.9; P.y = 0; P.f = y.dir > 0 ? 0 : Math.PI; P.vx = P.vz = 0; P.st = pose[y.st]; P.t = y.t; P.dur = 9; P.fall = y.dir > 0 ? Math.PI : 0; P.tip = 0; P.hidden = null; P.cart = null; P.held = null;
+      this.bump = y.st === 'bump' ? { t: y.t, hit: true, f: P.f } : null;   // (the booty bump's spin round and back)
+      if (y.st === 'slam') { const s0 = DOG.sfSlam[0]; if (y.t < s0) { P.st = 'stompW'; this.stompW = { t: y.t, W: s0 }; } else { P.st = 'busy'; this.stompW = null; this.stompDone = this.t + DOG.slamLand * Math.max(0, 1 - (y.t - s0) / (DOG.sfSlam[2] - s0)); } }   // (up in the air, then sat on the floor)
+      else if (this.stompW) this.stompW = null;
       this.w.throatT = y.st === 'hit' ? Math.max(0, 0.3 - y.t) * 3.3 : 0; f.pose = y.st === 'win' ? 'win' : null;
       B.x = b.x; B.z = -0.9; B.y = 0; B.f = b.dir > 0 ? 0 : Math.PI; B.st = { idle: 'free', jab: 'palm', heavy: 'charge', block: 'brace', hit: 'free', ko: 'fall', win: 'win', lose: 'fall' }[b.st]; B.w.throatT = b.st === 'hit' ? Math.max(0, 0.3 - b.t) * 3.3 : 0;
       B.w.fallX = b.dir > 0 ? -1 : 1; B.w.fallZ = 0; B.w.down = b.st === 'ko' && b.t > 0.3 && b.t < 1.0;
     }
     sfHit(a, d, kind) {   // a (the attacker) hits d, if it reaches
-      const f = this.sf, dist = Math.abs(a.x - d.x), reach = kind === 'jab' ? 1.75 : 2.15; if (dist > reach || (d.x - a.x) * a.dir < 0) return;
-      const dmg = kind === 'jab' ? 6 : 14, kb = kind === 'jab' ? 0.5 : 1.8, blocking = d.st === 'block' && (a.x - d.x) * d.dir > 0; a.done = true;
+      const H = { jab: [1.75, 6, 0.5, 0.28], heavy: [2.15, 14, 1.8, 0.5], bump: [1.95, 9, 1.2, 0.36], slam: [2.6, 18, 2.4, 0.7] }[kind];   // reach, damage, knockback, stun
+      const f = this.sf, dist = Math.abs(a.x - d.x); if (dist > H[0] || (kind !== 'slam' && (d.x - a.x) * a.dir < 0)) return;   // (the slam's shock reaches round both sides)
+      const dmg = H[1], kb = H[2], blocking = kind !== 'slam' && d.st === 'block' && (a.x - d.x) * d.dir > 0; a.done = true;   // (nobody blocks a booty landing on the floor)
       if (blocking) { d.hp -= dmg * 0.12; d.vx = a.dir * kb * 2.2; this.puff(d.x, 1.0, -0.9, 2, 0.1, 0.2, 0.1); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); return; }
       if (d.inv > 0) return;
-      d.hp -= dmg; d.st = 'hit'; d.t = 0; d.stun = kind === 'jab' ? 0.28 : 0.5; d.vx = a.dir * kb * 3.2; d.inv = d.stun + 0.12; d.done = true;
-      this.puff(d.x, 1.0, -0.9, 5, 0.2, 0.3, 0.2); this.flash = kind === 'jab' ? 0.1 : 0.3; f.shake = kind === 'jab' ? 0.08 : 0.2;
-      this.popAt({ x: d.x, z: -0.9, y: 0.3 }, kind === 'jab' ? 'バシッ!' : 'ドーン!', 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(kind === 'jab' ? 6 : 10);
+      d.hp -= dmg; d.st = 'hit'; d.t = 0; d.stun = H[3]; d.vx = Math.sign(d.x - a.x || a.dir) * kb * 3.2; d.inv = d.stun + 0.12; d.done = true;
+      this.miniPuff(d.x, 0.45, -0.9, 0.28, 7); this.flash = kind === 'jab' ? 0.1 : 0.3; f.shake = kind === 'jab' ? 0.08 : 0.2;
+      this.popAt({ x: d.x, z: -0.9, y: 0.3 }, { jab: 'バシッ!', heavy: 'ドーン!', bump: 'ボヨン!', slam: 'BOOTY SLAM!!' }[kind], 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(kind === 'jab' ? 6 : kind === 'slam' ? 12 : 9);
     }
     sfStep(dt) {
       const f = this.sf, y = f.you, b = f.boss, c = this.ctrl; f.t += dt;
       const face = () => { y.dir = b.x >= y.x ? 1 : -1; b.dir = y.x >= b.x ? 1 : -1; };
       const run = (F, fr, kind) => {   // an attack's timeline: startup, active, recovery
-        F.t += dt; const [s0, s1, e] = kind === 'jab' ? [0.09, 0.2, 0.34] : [0.3, 0.42, 0.72];
-        if (!F.done && F.t >= s0 && F.t <= s1) this.sfHit(F, fr, kind); if (F.t >= e) { F.st = 'idle'; F.t = 0; F.done = false; } else if (kind === 'heavy' && F.t > s0 && F.t < s1) F.x += F.dir * 5 * dt;   // (the shove lunges)
+        F.t += dt; const [s0, s1, e] = { jab: [0.09, 0.2, 0.34], heavy: [0.3, 0.42, 0.72], bump: DOG.sfBump, slam: DOG.sfSlam }[kind];
+        if (kind === 'slam' && !F.landed && F.t >= s0) { F.landed = true; this.miniPuff(F.x, 0, -0.9, 0.7, 12); f.shake = 0.35; this.flash = 0.4; }   // (down on his booty: the white puff, the room shakes)
+        if (!F.done && F.t >= s0 && F.t <= s1) this.sfHit(F, fr, kind); if (F.t >= e) { F.st = 'idle'; F.t = 0; F.done = false; F.landed = false; } else if (kind === 'heavy' && F.t > s0 && F.t < s1) F.x += F.dir * 5 * dt;   // (the shove lunges)
       };
       if (f.ph === 'intro') { if (f.t > 1.3 && !f.fightShown) { f.fightShown = true; this.sfText('FIGHT!'); } if (f.t > 2.2) { f.ph = 'fight'; f.t = 0; this.sfText(''); } }
       else if (f.ph === 'fight') {
         f.timer -= dt; face();
         for (const F of [y, b]) { F.inv = Math.max(0, F.inv - dt); F.x += F.vx * dt; F.vx *= Math.max(0, 1 - dt * 7); }
         if (y.st === 'hit') { y.t += dt; if (y.t >= y.stun) { y.st = 'idle'; y.t = 0; } }
-        else if (y.st === 'jab' || y.st === 'heavy') run(y, b, y.st);
+        else if (y.st === 'heavy' || y.st === 'bump' || y.st === 'slam') run(y, b, y.st);
         else {
           const mx = c ? c.mx : 0, blk = !!this.keys.KeyI; y.st = blk ? 'block' : 'idle'; y.t += dt;
           if (!blk && Math.abs(mx) > 0.3) y.x += Math.sign(mx) * (Math.sign(mx) === y.dir ? 3.3 : 2.7) * dt;
-          if (c && c.push.pressed) { y.st = 'jab'; y.t = 0; y.done = false; } else if (c && (c.grab.pressed || c.dash.pressed)) { y.st = 'heavy'; y.t = 0; y.done = false; }
+          if (c && c.push.pressed) y.jHold = true;   // J: a tap is the booty bump (on letting go), held it's the booty slam. No slaps
+          if (y.jHold && c && c.push.held && c.push.t > DOG.holdJ) { y.jHold = false; y.st = 'slam'; y.t = 0; y.done = false; y.landed = false; }
+          else if (y.jHold && c && !c.push.held) { y.jHold = false; y.st = 'bump'; y.t = 0; y.done = false; }
+          else if (c && (c.grab.pressed || c.dash.pressed)) { y.st = 'heavy'; y.t = 0; y.done = false; }
         }
         if (b.st === 'hit') { b.t += dt; if (b.t >= b.stun) { b.st = 'idle'; b.t = 0; } }
         else if (b.st === 'jab' || b.st === 'heavy') run(b, y, b.st);
         else {
           const dist = Math.abs(y.x - b.x); b.t += dt; b.ai -= dt; b.blockT = Math.max(0, b.blockT - dt);
           if (b.blockT > 0) b.st = 'block'; else if (b.st === 'block') b.st = 'idle';
-          if ((y.st === 'jab' || y.st === 'heavy') && y.t < 0.2 && dist < 2.4 && !b.reacted) { b.reacted = true; if (Math.random() < 0.38) { b.blockT = 0.55; b.st = 'block'; } }
-          if (y.st !== 'jab' && y.st !== 'heavy') b.reacted = false;
+          if ((y.st === 'bump' || y.st === 'heavy') && y.t < 0.2 && dist < 2.4 && !b.reacted) { b.reacted = true; if (Math.random() < 0.38) { b.blockT = 0.55; b.st = 'block'; } }
+          if (y.st !== 'bump' && y.st !== 'heavy') b.reacted = false;
           if (b.st !== 'block' && b.ai <= 0) { b.ai = 0.22 + Math.random() * 0.38; const r = Math.random();
             if (dist > 2.7) b.mv = 1;
             else if (dist > 1.8) { if (r < 0.4) { b.st = 'heavy'; b.t = 0; b.done = false; } else if (r < 0.7) b.mv = 1; else b.mv = 0; }
