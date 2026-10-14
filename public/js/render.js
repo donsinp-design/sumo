@@ -708,7 +708,7 @@
         else { Rh = [0.4, 0.3, 0.66]; Lh = mir(Rh); }
       }
       // (the bathhouse dogpile) someone hugging his arm: that arm held out to the side, where they've got it
-      if (w.armHeld && w.st !== 'fall') { const A = [0.85, 0.72, 0.08]; if (w.armHeld.R) Rh = A; if (w.armHeld.L) Lh = mir(A); this.clipArms = 0; }
+      if (w.armHeld && w.st !== 'fall') { const A = [0.95, 1.05, 0.12]; if (w.armHeld.R) Rh = A; if (w.armHeld.L) Lh = mir(A); this.clipArms = 0; }
       // tiptoeing (the bathhouse): drawn up tall, chin up, hands lifted in front, wrists limp, each little step dabbing
       if (w.tiptoe > 0 && !w.carry && w.st !== 'fall' && !w.lifted) {
         const k = w.tiptoe, ph = this.gaitPh || 0, sw = Math.sin(ph) * 0.06 * (this.gaitW || 0);

@@ -119,7 +119,7 @@
         const bw = Object.assign({}, this.w, { a: bA, idx: 1, fxs: {}, carry: null });
         this.boss = { v: bv, w: bw, x: 3, z: -7, y: -2.6, f: Math.PI / 2, on: false, hold: false, st: 'free', t: 0, belt: arch.belt }; }
       this.mosaic = this.makeMosaic();
-      this.npcs = this.makeNpcs(); this.att = [null, null, null, null, null];
+      this.npcs = this.makeNpcs(); this.att = [null, null, null, null, null, null];
       this.stage = 'locker'; this.cp = { x: 1.2, z: 0.2, f: Math.PI / 2 }; this.room = 'bath';
       this.camT = new THREE.Vector3(this.P.x * 0.8, 0, this.P.z - 2.6);
       this.buildHud();
@@ -1472,13 +1472,14 @@
       return !this.cap && !n.carried && this.t >= (n.noGrab || 0) && P.st !== 'charge' && P.st !== 'wind' && P.st !== 'skill' && P.st !== 'captured'
         && !P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.unseen() && Math.abs(n.a.y - P.y) < 1 && this.att.some((q) => !q) && !(g && g.id === 'giant');
     }
-    pickSlot(n) {   // the third one up goes onto his shoulders; the rest take whichever arm or leg is nearest them
+    pickSlot(n) {   // the third one up goes onto his shoulders, the fourth onto his back; the rest take whichever arm or leg is nearest them
       const A = this.att, taken = A.filter(Boolean).length, P = this.P, s = this.view.s, fx = Math.cos(P.f), fz = Math.sin(P.f);
       if (taken === 2 && !A[4]) return 4;
+      if (taken === 3 && !A[5]) return 5;
       let best = -1, bd = 1e9;
       for (const k of [0, 1, 2, 3]) { if (A[k]) continue; const sd = k % 2 ? 1 : -1, sx = -fz * sd, sz = fx * sd, back = k >= 2 ? -0.5 : 0.2;
         const d = Math.hypot(n.a.x - (P.x + (sx * 0.9 + fx * back) * s), n.a.z - (P.z + (sz * 0.9 + fz * back) * s)); if (d < bd) { bd = d; best = k; } }
-      if (best < 0 && !A[4]) best = 4;
+      if (best < 0) best = !A[4] ? 4 : !A[5] ? 5 : -1;
       return best;
     }
     lunge(n) {   // a run and a jump at him; latched on if they get there
@@ -1491,9 +1492,10 @@
       const n = this.att[k], mo = n && n.v.mo && n.v.mo.out, pelY = mo ? mo[0].y : 0.95, nkY = mo ? mo[1].y : 1.45, bob = Math.abs(Math.sin(T * 8 + k)) * 0.05 * (0.3 + mv);
       if (k === 4) { v.head.getWorldPosition(Q);   // astride the back of his neck: thighs either side of his head, hands round onto his eyes
         return { x: Q.x - fx * 0.4 * s, z: Q.z - fz * 0.4 * s, y: Q.y - 0.2 * s - pelY + bob, f: P.f + Math.sin(T * 5) * 0.1, st: 'held', cling: 'ride' }; }
-      if (k < 2) { v.handWorld(k === 0 ? -1 : 1, Q); let ox = Q.x - P.x, oz = Q.z - P.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;   // on their feet beside his held-out arm, hugging it at their chest
-        const x = Q.x + ox * 0.34, z = Q.z + oz * 0.34;
-        return { x, z, y: P.y, f: Math.atan2(-oz, -ox) + Math.sin(T * 6 + k) * 0.06, st: 'held', cling: 'arm', clingY: Q.y - P.y }; }
+      if (k === 5) return { x: P.x - fx * 0.62 * s, z: P.z - fz * 0.62 * s, y: P.y + 0.88 * s - pelY + bob, f: P.f + Math.sin(T * 4) * 0.08, st: 'held', cling: 'back' };   // a piggyback, chest to his back, below the one on his shoulders
+      if (k < 2) { v.handWorld(k === 0 ? -1 : 1, Q); let ox = Q.x - P.x, oz = Q.z - P.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;   // hanging off his held-out arm: arms and legs wrapped round it, feet off the floor, swinging
+        const sw = Math.sin(T * 5 + k * 2) * 0.06 * (0.5 + mv), x = Q.x - ox * 0.12 + fx * 0.16 + fx * sw, z = Q.z - oz * 0.12 + fz * 0.16 + fz * sw;   // (facing across his arm, the way a child hangs off a bar)
+        return { x, z, y: Math.max(P.y + 0.15, Q.y - nkY + 0.02) + bob * 0.5, f: P.f + Math.PI + Math.sin(T * 4 + k) * 0.1, st: 'held', cling: 'arm' }; }
       const sd = k === 2 ? -1 : 1, sx = -fz * sd, sz = fx * sd, lx = P.x + (sx * 0.36 - fx * 0.05) * s, lz = P.z + (sz * 0.36 - fz * 0.05) * s;
       let ox = sx * 0.8 - fx * 0.6, oz = sz * 0.8 - fz * 0.6; const ol = Math.hypot(ox, oz); ox /= ol; oz /= ol;
       return { x: lx + ox * 0.34, z: lz + oz * 0.34, y: P.y, f: Math.atan2(-oz, -ox), st: 'held', cling: 'hug' };
@@ -2829,7 +2831,7 @@
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
         '<canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J slap (to the face: knocked flying · the side: spun round · the back: stumbles) · hold J stomp (throws off anyone hanging on) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · a run-up smashes things · shakes one hanger-on off; smashing into something throws them all off) · I mid-charge: roll up into a ball (faster, steer it, rolls while L is held) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
-        '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="settings">SETTINGS</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
+        '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="settings">SETTINGS</button><button data-c="tips">TUTORIAL TIPS: ON</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h);
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
       this.pops = [];
@@ -2876,7 +2878,8 @@
       this.npcs.forEach((n, i) => { const d = this.qs[i]; if (n.alarm > 0.08 && !this.freeze) { const p = this.project(n.a.x, n.a.y + 2.4, n.a.z); d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.textContent = n.alarm > 0.6 ? '?!' : '?'; d.style.display = ''; d.style.transform = 'translate(-50%,-100%) scale(' + (0.8 + n.alarm * 0.6) + ')'; } else d.style.display = 'none'; });
     }
     markMenu(q, i) { this.el(q).querySelectorAll('button').forEach((b, k) => b.classList.toggle('sel', k === i)); }
-    setPause(on) { this.paused = on; this.el('.st-pause').classList.toggle('on', on); if (on) { this.pauseI = 0; this.markMenu('.st-pause', 0); } }
+    setPause(on) { this.paused = on; this.el('.st-pause').classList.toggle('on', on); if (on) { this.pauseI = 0; this.markMenu('.st-pause', 0); this.tipsLabel(); } }
+    tipsLabel() { const b = this.el('.st-pause button[data-c="tips"]'); if (b) b.textContent = 'TUTORIAL TIPS: ' + (this.g.settings && this.g.settings.hudTips === false ? 'OFF' : 'ON'); }
     hudApply() {   // the HUD pieces he can hide in SETTINGS
       const st = this.g.settings || {}; for (const k of ['guide', 'map', 'bonus', 'goal', 'meter', 'tips', 'ctx']) this.hud.classList.toggle('nh-' + k, k === 'guide' ? st.hudGuide !== true : st['hud' + k[0].toUpperCase() + k.slice(1)] === false);   // (the controls guide: off unless he turns it on)
     }
@@ -2886,6 +2889,7 @@
       else if (c === 'cp') { this.setPause(false); if (this.P.stallHide !== undefined) this.stallOut(); this.respawn(); this.grace = 2.5; }
       else if (c === 'retry') { const g = this.g; this.stop(); g.camp = new S.Stealth(g); g.camp.start(); }
       else if (c === 'quit') this.g.endCampaign();
+      else if (c === 'tips') { const st = this.g.settings; st.hudTips = st.hudTips === false; this.g.save && this.g.save(); if (st.hudTips === false) { this.tipQ = []; const e = this.el('.st-tip'); if (e) e.classList.remove('on'); } this.tipsLabel(); }   // tutorial tips on/off, right here
       else if (c === 'settings') { this.el('.st-pause').classList.remove('on'); this.g.uiBack = 'stealth'; this.g.ui.show('settings'); }   // the game's own settings, over the paused level
     }
     onKey(e) {

@@ -1642,12 +1642,13 @@
           out[11].copy(V(-0.36, -0.34, 0.5)); out[14].copy(V(0.36, -0.34, 0.5));
           out[4].copy(V(-0.42, 0.42, 0.2)); out[7].copy(V(0.42, 0.42, 0.2));
           out[5].copy(V(-0.3, 0.44, 0.56)); out[8].copy(V(0.3, 0.44, 0.56));
-        } else if (a.cling === 'arm') {   // feet planted, leaning back, both arms locked round his arm at chest height, pulling
-          for (let i = 1; i <= 8; i++) out[i].z -= 0.08;
-          const nk = out[1].clone(), hy = a.clingY !== undefined ? a.clingY : nk.y - 0.15;
-          out[5].set(nk.x - 0.06, hy, nk.z + 0.36); out[8].set(nk.x + 0.06, hy - 0.04, nk.z + 0.36);
-          out[4].set(nk.x - 0.24, hy - 0.08, nk.z + 0.16); out[7].set(nk.x + 0.24, hy - 0.1, nk.z + 0.16);
-          out[10].z += 0.1 + sw * 0.03; out[13].z -= 0.06; out[11].z += 0.16; out[14].z -= 0.1;
+        } else if (a.cling === 'arm') {   // hanging off his arm like a child off a bar: both arms wrapped over it, legs hooked up round it, body dangling
+          const nk = out[1].clone(), sw = Math.sin(T * 6 + this.ph);
+          out[5].set(nk.x - 0.06, nk.y + 0.06, nk.z + 0.16); out[8].set(nk.x + 0.06, nk.y + 0.04, nk.z + 0.16);
+          out[4].set(nk.x - 0.22, nk.y - 0.06, nk.z + 0.12); out[7].set(nk.x + 0.22, nk.y - 0.08, nk.z + 0.12);
+          for (let i = 1; i <= 3; i++) out[i].z -= 0.08;
+          out[10].set(out[9].x - 0.04, out[9].y + 0.12, out[9].z + 0.34); out[13].set(out[12].x + 0.04, out[12].y + 0.06, out[12].z + 0.34 + sw * 0.04);
+          out[11].set(out[9].x + 0.02, out[9].y + 0.42, out[9].z + 0.3); out[14].set(out[12].x - 0.02, out[12].y - 0.3 + sw * 0.12, out[12].z + 0.2);   // (one leg hooked up over his arm, the other kicking)
         } else {   // 'hug': sat on the floor beside his leg, legs round it, arms wrapped round his shin, cheek against it
           const dy = p.y - 0.26; for (let i = 0; i <= 8; i++) { out[i].y -= dy; if (i) out[i].z += 0.1; }
           out[2].z += 0.08; const q = out[0];
