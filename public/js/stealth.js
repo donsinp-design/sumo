@@ -1509,7 +1509,7 @@
       if (this.att[L.k] !== n || this.cap || P.st === 'charge' || P.st === 'wind' || P.st === 'skill' || P.hidden || P.boxHide || P.inStall || this.unseen() || (this.gs && this.gs.id === 'giant')) { if (this.att[L.k] === n) this.att[L.k] = null; a.st = 'free'; n.noGrab = this.t + 1; return true; }   // (he charged off, hid, vanished...: they miss)
       n.att = L.k; n.attStun = 0; a.st = q.st; a.cling = q.cling;
       this.flash = Math.max(this.flash || 0, 0.12); this.sfx('thump', 3); if (this.g.audio && this.g.audio.grab) this.g.audio.grab();
-      if (!this.saidGrab) { this.saidGrab = true; this.think('Get OFF me! (hold J: stomp them off · charge them into a wall)', 2.6); }
+      if (!this.tipGrab) { this.tipGrab = true; this.tip(['THEY GRABBED YOU', 'Each one hanging on slows you down. If FIVE get hold of you, you are caught.', '#HOLD J: STOMP', 'Plant your feet and stomp: everyone flies off. It takes longer the more are on you.', '#L: CHARGE', 'Every charge throws one off. Charge into a wall or anything solid and they all come off.'], { now: true }); }
       if (this.attN() >= DOG.maxAtt) this.capture();
       return true;
     }
@@ -2335,7 +2335,7 @@
         this.tip(['I: SNEAK', 'People can hear you coming. HOLD I to move quietly.', 'You are a big boy, so sneaking tires you out. Stand still and you recover.', '#I: HIDE', 'I also lets you hide in carts and toilet stalls. Hide while nobody can see you. If they see you hide, they will find you.']);
         this.tip(['J: SLAP', 'Slap a WALL to make a noise. Whoever hears it comes to look, so you can lure them away.', 'Slap a PERSON: in the face they fly back, on the side they spin, from behind they stumble.', 'HOLD J: STOMP. Throws off anyone hanging on you.']); }
       if (!this.tipLockK && this.stage === 'locker' && near(this.locker.x, this.locker.z, 3.2)) { this.tipLockK = true; this.tip(['K: OPEN YOUR LOCKER'], { until: () => this.stage !== 'locker' }); }
-      if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['HOLD L + A DIRECTION: CHARGE', 'Charging breaks things.', 'You need room for a run-up, and you cannot charge right away.']); }
+      if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['HOLD L + A DIRECTION: CHARGE', 'Charging breaks things.', 'You need room for a run-up, and you cannot charge right away.', '#PRESS I WHILE CHARGING: ROLL', 'You curl up into a ball and roll, faster and further, as long as you hold L. Steer it. Nobody can grab you, and you bowl over anyone in the way.']); }
     }
     drink() {
       const P = this.P, b = P.held; if (!b) return;
