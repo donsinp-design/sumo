@@ -51,7 +51,8 @@
     skinCol: 0xf3c4a0,                           // (the stand-in booty, in a cart or out of the shut box: his skin colour, no texture)
     jiggle: 0.34,                                // charging: how far each cheek bounces up and down
     propJig: 0.09,                               // the stand-in booty out of the box or the cart: how high each cheek bounces
-    boxFwd: 0.3,                                 // the box he wears sits this far forward on him, so his booty pokes out through the hole in its back
+    boxFwd: 0.1,                                 // the box he wears sits this far forward on him, so his booty pokes out through the hole in its back
+    boxDeep: 0.72,                               // ...and that much as deep as the box on the floor (snug round his belly, the back through his booty)
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
     slapFront: 7, slapRear: 5, spinT: 1.5,       // a slap: knocked back / stumbling forward (speeds), spun round (seconds)
@@ -250,7 +251,7 @@
       }
       if (P.hidden) { const c = P.hidden; if (c.mesh) { c.mesh.scale.y = 1 + Math.sin(this.t * 2.2) * 0.02; } }
     }
-    kitShown() { const L = this.hud && this.hud.querySelector('.st-load'); if (L) L.classList.add('gone'); }
+    kitShown() { const L = this.hud && this.hud.querySelector('.st-load'); if (L) { L.classList.add('gone'); setTimeout(() => L.remove(), 400); } }
     dress(root) {
       this.kit = root; this.scene.add(root); this.kitShown();
       // the genkan's stone tiles sat 1 mm over the lobby's board strips (which ran on under them): they fought, the tiles blinked in and out at a distance.
@@ -959,11 +960,11 @@
       const BD = LY.backdoor;
       if (this.stage === 'escape' && P.x < BD.x - 0.3 && P.z < BD.z1 && P.z > BD.z0) { this.win(); return; }
       // in the box, hold I standing still: he squats right down inside it. Just a box
-      P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet && !(this.noDuck > 0); this.noDuck = Math.max(0, (this.noDuck || 0) - dt);
+      P.boxHide = this.wearing && !!this.keys.KeyI && mag < 0.3 && P.st === 'free' && !wet && !(this.noDuck > 0) && !this.attN(); this.noDuck = Math.max(0, (this.noDuck || 0) - dt);
       if (!this.boxW) { this.boxW = { x0: 1e4, x1: 1e4, z0: 1e4, z1: 1e4, tall: false, box: true }; this.walls.push(this.boxW); }
-      if (P.boxHide && !this.wasBoxHide) { this.markWitness(); if (this.attN()) this.detachAll('drop'); }   // (down into the box: anyone hanging on is left holding nothing)
+      if (P.boxHide && !this.wasBoxHide) this.markWitness();
       // the box stands UP (I let go): only then does anyone jump, and only someone shoving it or actually looking at it (tiptoeing along in it isn't standing up)
-      const ducked = P.boxHide || (this.wearing && !!this.keys.KeyI);
+      const ducked = P.boxHide || (this.wearing && !!this.keys.KeyI && !(this.noDuck > 0) && !this.attN());
       if (!ducked && this.wasDucked && this.wearing) for (const n of this.npcs) if ((n.pushing2 || (n.mode !== 'chase' && !n.pullOut && n.a.st === 'free' && !n.busy && this.sees(n, P.x, P.z, 2.8))) && !n.ko && Math.abs(n.a.y - P.y) < 1.2 && Math.hypot(n.a.x - P.x, n.a.z - P.z) < (n.pushing2 ? 2.2 : 2.8)) {   // (anyone close who wasn't expecting a box to stand up)   // the box they were shoving stands up: they leap back
         const d = Math.hypot(n.a.x - P.x, n.a.z - P.z) || 1; n.shock = 1.1; n.a.shock = 1; n.hop = true; n.shockV = [(n.a.x - P.x) / d * 6.4, (n.a.z - P.z) / d * 6.4];
         n.pushing2 = false; n.tug = 0; n.path = null; n.a.push = false; this.popAt(n.a, ['うわぁっ!?', 'ひぃっ!?', 'えっ!?'][(this.t * 3 | 0) % 3], 1.1); }
@@ -1101,6 +1102,7 @@
       if (a.st === 'free' && dd > 0.2) { const sp = 3.2; a.vx = dx / dd * sp; a.vz = dz / dd * sp; a.f = lerpA(a.f, Math.atan2(dz, dx), dt * 9); } else { a.vx *= 0.8; a.vz *= 0.8; }
       const cx0 = a.x, cz0 = a.z; a.x += a.vx * dt; a.z += a.vz * dt; this.collide(a, 0.4); a.y = floorY(a.x, a.z);
       n.stk = a.st === 'free' && dd > 0.5 && Math.hypot(a.x - cx0, a.z - cz0) < 0.4 * dt ? (n.stk || 0) + dt : 0; if (n.stk > 3) { n.stk = 0; this.unstick(n); n.rp = 0; }
+      if (seen && this.wearing && !P.boxHide && this.keys.KeyI) this.noDuck = Math.max(this.noDuck || 0, 1.5);   // (spotted shuffling along inside the box: they've rumbled him, up he pops)
       if (seen && d < DOG.grabR && a.st === 'free' && this.canGrab(n)) this.lunge(n);   // close enough: they jump on him (no punches)
       else if (seen && d < 1.3 && !(this.hitCd > 0) && a.st === 'free' && this.gs && this.gs.id === 'giant') this.hitBy(n);   // (GIANT: they bounce off)
     }
@@ -1127,7 +1129,8 @@
     }
     puff(x, y, z, n, sp) { this.miniPuff(x, Math.max(this.P ? this.P.y : 0, y - 0.45), z, Math.min(2, 0.55 + (sp || 0.3) * 1.1), Math.max(6, Math.min(14, n || 6))); }   // (dust: always the white smoke-bomb puff, never brown dust)
     miniPuff(x, y, z, sz, N) {   // a mini smoke bomb: a ring of little white clouds bursting out round the base, swelling and fading (sz: bigger, N clouds)
-      const geo = this.puffGeo || (this.puffGeo = new THREE.IcosahedronGeometry(1, 1)), mat = S.Flat.mat(0xf6f3ee, { transparent: true, opacity: 0.9 }), g = new THREE.Group(); N = N || 9; if (sz) g.scale.setScalar(sz);
+      const geo = this.puffGeo || (this.puffGeo = new THREE.IcosahedronGeometry(1, 1)), mat = (this.puffMats || (this.puffMats = [])).pop() || S.Flat.mat(0xf6f3ee, { transparent: true, opacity: 0.9 }), g = new THREE.Group(); N = N || 9;
+      if (this.puffs && this.puffs.length >= 14) { const o = this.puffs.shift(); this.G.remove(o.g); this.puffMats.push(o.mat); }   // (no more than 14 at once: the oldest goes) if (sz) g.scale.setScalar(sz);
       for (let k = 0; k < N; k++) { const a = k / N * Math.PI * 2 + Math.random() * 0.4, m = new THREE.Mesh(geo, mat); m.userData = { a, v: 1.2 + Math.random() * 0.7, s: 0.12 + Math.random() * 0.08 }; g.add(m); }
       g.position.set(x, y, z); this.G.add(g); (this.puffs || (this.puffs = [])).push({ g, mat, t: 0, dur: sz ? 1.1 : 0.75 });
     }
@@ -1136,7 +1139,7 @@
       this.puffs = this.puffs.filter((P0) => { P0.t += dt; const k = Math.min(1, P0.t / P0.dur), e = 1 - (1 - k) * (1 - k);
         for (const m of P0.g.children) { const u = m.userData, r = 0.45 + u.v * 0.55 * e; m.position.set(Math.cos(u.a) * r, 0.08 + 0.35 * e, Math.sin(u.a) * r); m.scale.setScalar(u.s * (1 + 1.8 * e)); }
         P0.mat.opacity = 0.9 * (1 - k * k);
-        if (k >= 1) { this.G.remove(P0.g); P0.mat.dispose(); return false; } return true; });
+        if (k >= 1) { this.G.remove(P0.g); this.puffMats.push(P0.mat); return false; } return true; });
     }
     gachaStep(dt) {
       this.puffStep(dt);
@@ -1499,20 +1502,18 @@
     canGrab(n) {
       const P = this.P, g = this.gs;
       return !this.cap && !n.carried && this.t >= (n.noGrab || 0) && P.st !== 'charge' && P.st !== 'wind' && P.st !== 'skill' && P.st !== 'captured'
-        && !P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.unseen() && Math.abs(n.a.y - P.y) < 1 && this.att.some((q) => !q) && !(g && g.id === 'giant');
+        && !P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.unseen() && Math.abs(n.a.y - P.y) < 1 && !(g && g.id === 'giant');
     }
-    pickSlot(n) {   // the third one up goes onto his shoulders, the fourth onto his back; the rest take whichever arm or leg is nearest them
-      const A = this.att, taken = A.filter(Boolean).length, P = this.P, s = this.view.s, fx = Math.cos(P.f), fz = Math.sin(P.f);
-      if (taken === 2 && !A[4]) return 4;
-      if (taken === 3 && !A[5]) return 5;
+    pickSlot(n) {   // the first two take a leg each (whichever's nearest them), the third his shoulders (head), the fourth his back. Nobody grabs an arm
+      const A = this.att, P = this.P, s = this.view.s, fx = Math.cos(P.f), fz = Math.sin(P.f);
       let best = -1, bd = 1e9;
-      for (const k of [0, 1, 2, 3]) { if (A[k]) continue; const sd = k % 2 ? 1 : -1, sx = -fz * sd, sz = fx * sd, back = k >= 2 ? -0.5 : 0.2;
-        const d = Math.hypot(n.a.x - (P.x + (sx * 0.9 + fx * back) * s), n.a.z - (P.z + (sz * 0.9 + fz * back) * s)); if (d < bd) { bd = d; best = k; } }
+      for (const k of [2, 3]) { if (A[k]) continue; const sd = k % 2 ? 1 : -1, sx = -fz * sd, sz = fx * sd;
+        const d = Math.hypot(n.a.x - (P.x + (sx * 0.9 - fx * 0.5) * s), n.a.z - (P.z + (sz * 0.9 - fz * 0.5) * s)); if (d < bd) { bd = d; best = k; } }
       if (best < 0) best = !A[4] ? 4 : !A[5] ? 5 : -1;
       return best;
     }
     lunge(n) {   // a run and a jump at him; latched on if they get there
-      const k = this.pickSlot(n); if (k < 0) return;
+      const k = this.pickSlot(n); if (k < 0) { this.capture(); return; }   // (all four holds taken: one more piles on and down he goes)
       this.att[k] = n; n.lunge = { t: 0, k, x0: n.a.x, z0: n.a.z, y0: n.a.y }; n.a.st = 'hold'; n.a.t = 0; n.path = null;
       this.popAt(n.a, ['捕まえた!', 'とりゃ!', 'つかまえろ!'][(this.t * 3 | 0) % 3], 0.9);
     }
@@ -1537,7 +1538,7 @@
       if (this.att[L.k] !== n || this.cap || P.st === 'charge' || P.st === 'wind' || P.st === 'skill' || P.hidden || P.boxHide || P.inStall || this.unseen() || (this.gs && this.gs.id === 'giant')) { if (this.att[L.k] === n) this.att[L.k] = null; a.st = 'free'; n.noGrab = this.t + 1; return true; }   // (he charged off, hid, vanished...: they miss)
       n.att = L.k; n.attStun = 0; a.st = q.st; a.cling = q.cling;
       this.flash = Math.max(this.flash || 0, 0.12); this.sfx('thump', 3); if (this.g.audio && this.g.audio.grab) this.g.audio.grab();
-      if (!this.tipGrab) { this.tipGrab = true; this.tip(['THEY GRABBED YOU', 'Each one hanging on slows you down. If FIVE get hold of you, you are caught.', '#HOLD J: BOOTY SLAM', 'Jump up and land on your booty: everyone falls off. It takes longer the more are on you.', '#L: CHARGE', 'Every charge throws one off. Charge into a wall or anything solid and they all come off.'], { now: true }); }
+      if (!this.tipGrab) { this.tipGrab = true; this.tip(['THEY GRABBED YOU', 'Each one hanging on slows you down. Two on your legs, one on your head, one on your back... and if a FIFTH piles on, you are caught.', '#HOLD J: BOOTY SLAM', 'Jump up and land on your booty: everyone falls off. It takes longer the more are on you.', '#L: CHARGE', 'Every charge throws one off. Charge into a wall or anything solid and they all come off.'], { now: true }); }
       if (this.attN() >= DOG.maxAtt) this.capture();
       return true;
     }
@@ -2568,7 +2569,7 @@
       g.add(strip, band); g.userData = { strip, band, ch }; return g;
     }
     bootyWobble(g, T, amp) {   // the stand-in's cheeks bounce in turn, each up and down by itself (and squash a little as they land)
-      const [a, b] = g.userData.ch; for (const [c, ph] of [[a, 0], [b, Math.PI]]) { const u = Math.max(0, Math.sin(T * 11 + ph)); c.position.y = amp * u; c.scale.set(1 + 0.08 * (1 - u) * amp / 0.1, 0.95 - 0.08 * (1 - u) * amp / 0.1, 0.9); }
+      const [a, b] = g.userData.ch; for (const [c, ph] of [[a, 0], [b, Math.PI]]) { const u = Math.max(0, Math.sin(T * 11 + ph)); c.position.y = amp * u; c.scale.set(1 + 0.08 * (1 - u) * amp / 0.1, 0.95 - 0.08 * (1 - u) * amp / 0.1, c.scale.z); }
     }
     bootyDress(g) { if (!g) return; const on = !!this.gotMawashi; g.userData.strip.visible = g.userData.band.visible = on; }   // (bare without the mawashi: a backside needs no censoring)
     makeBox() {
@@ -2585,7 +2586,7 @@
     }
     wearBox() {
       if (!this.proto || !this.proto.BOX) return;
-      const b = this.makeBox(); b.visible = true; b.scale.setScalar(0.95); b.position.set(0, -0.62 * this.view.s, DOG.boxFwd * this.view.s); this.view.body.add(b); this.boxWorn = b; b.burst = this.t;
+      const b = this.makeBox(); b.visible = true; b.scale.set(0.95, 0.95, 0.95 * DOG.boxDeep); b.position.set(0, -0.62 * this.view.s, DOG.boxFwd * this.view.s); this.view.body.add(b); this.boxWorn = b; b.burst = this.t;
       b.torn = true;   // (the box on the floor is whole: it bursts as he gets in)
     }
     boxBurst(b) {   // getting into the box: too much booty for it, the back rips open and out it pops
@@ -2759,7 +2760,7 @@
       v.root.visible = !P.hidden && !(w.fxs.ball > 0);   // (in a cart, or the daruma: not drawn)
       if (v.ballSpin && v.ballSpin.visible) v.ballSpin.position.y += P.y;   // (the daruma: on the floor he's on)
       const gk = (w.szCur || 1) * (this.gulp ? 1.22 + Math.sin(T * 9) * 0.03 : 1);   // GIANT, or someone swallowed
-      const boxTip = this.wearing && !!this.keys.KeyI && P.st === 'free' && !P.sub && !P.hidden;   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
+      const boxTip = this.wearing && !!this.keys.KeyI && P.st === 'free' && !P.sub && !P.hidden && !(this.noDuck > 0) && !this.attN();   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
       const rolling = !!(P.ball && P.st === 'charge') || !!(this.ballHold && P.st === 'free'), ball = P.boxHide || boxTip || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
       this.ballK = (this.ballK || 0) + ((ball ? 1 : 0) - (this.ballK || 0)) * Math.min(1, dt * 10);
       if (this.ballK > 0.01) { const k = this.ballK; v.root.position.y -= (P.boxHide || boxTip ? 0.8 : 0.06) * v.s * k; v.root.scale.set(v.s * gk * (1 - 0.1 * k), v.s * gk * (1 - 0.32 * k), v.s * gk * (1 - 0.1 * k)); } else v.root.scale.setScalar(v.s * gk);
@@ -2769,15 +2770,15 @@
       if (this.squatBox) this.squatBox.visible = false;
       if (bw) {
         if (duck && !this.boxDown) { this.boxDown = true; this.scene.attach(bw);   // let go of it where it is: it stays standing on the floor, its own size, level
-          const e = new THREE.Euler().setFromQuaternion(bw.quaternion, 'YXZ'); bw.rotation.set(0, e.y, 0); bw.scale.setScalar(0.95 * v.s); bw.position.y = P.y; this.boxYawOff = e.y + P.f; }
-        else if (!duck && this.boxDown) { this.boxDown = false; v.body.attach(bw); bw.position.set(0, -0.62 * v.s, DOG.boxFwd * v.s); bw.rotation.set(0, 0, 0); bw.scale.setScalar(0.95); }
+          const e = new THREE.Euler().setFromQuaternion(bw.quaternion, 'YXZ'); bw.rotation.set(0, e.y, 0); bw.scale.set(0.95 * v.s, 0.95 * v.s, 0.95 * v.s * DOG.boxDeep); bw.position.y = P.y; this.boxYawOff = e.y + P.f; }
+        else if (!duck && this.boxDown) { this.boxDown = false; v.body.attach(bw); bw.position.set(0, -0.62 * v.s, DOG.boxFwd * v.s); bw.rotation.set(0, 0, 0); bw.scale.set(0.95, 0.95, 0.95 * DOG.boxDeep); }
         if (this.boxDown) { bw.position.x = P.x; bw.position.z = P.z; bw.position.y = P.y;   // (up the stairs too: it rides each step with him, never left sunk in them)
           if (boxTip && !P.boxHide && this.boxYawOff !== undefined) bw.rotation.y = this.boxYawOff - P.f;   // (tiptoeing along: the closed box turns the way he goes)
           if (this.boxYaw !== undefined && this.npcs.some((n) => n.pushing2)) { const q = Math.PI / 2, want = -this.boxYaw, d = ((want - bw.rotation.y) % q + q * 1.5) % q - q / 2; bw.rotation.y += d * Math.min(1, dt * 2.5); } }   // (shoved square-on: the box swings round flat to them)
         if (bw.setOpen) bw.setOpen(this.boxDown || boxTip ? Math.max(0, 1 - (this.ballK || 0) * 1.3) : 1);   // the flaps fold shut over him
         if (this.boxDown && (this.ballK || 0) > 0.8) v.root.visible = false;   // (lid shut: just a box)
-        { let bb = bw.booty; if (!bb) { bb = bw.booty = this.bootyProp(); bb.position.set(0, 0.4, -0.66); bw.add(bb); }   // (...and his booty out through the hole in its back)
-          bb.visible = this.boxDown && !v.root.visible; if (bb.visible) { this.bootyDress(bb); this.bootyWobble(bb, T, DOG.propJig * (Math.hypot(P.vx, P.vz) > 0.2 ? 1.6 : 1)); } }   // (more as he shuffles along)
+        { let bb = bw.booty; if (!bb) { bb = bw.booty = this.bootyProp(); bb.position.set(0, 0.4, -0.66); bb.scale.z = 1 / DOG.boxDeep; bw.add(bb); this.bootyDress(bb); }   // (...and his booty out through the hole in its back)
+          bb.visible = !!this.boxDown && !v.root.visible; if (bb.visible) { this.bootyDress(bb); this.bootyWobble(bb, T, Math.hypot(P.vx, P.vz) > 0.2 ? DOG.propJig * 1.6 : 0); } }   // (only as he shuffles along)
       }
       v.root.rotation.z = 0;   // (no rocking on tiptoe)
       { const hc = P.hidden, cb = this.cartBooty;   // hiding in a cart: the booty sticks up out of the towels (and wobbles a little)
