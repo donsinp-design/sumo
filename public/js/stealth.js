@@ -1600,7 +1600,7 @@
       for (const n of this.npcs) { const a = n.a; if (!this.upright(n) || Math.abs(a.y - P.y) > 1.2) continue; const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz) || 1; if (d > DOG.stompR) continue;
         this.dropOff(n, dx, dz, DOG.bumpDown); }   // (the shock knocks them off their feet)
       this.flash = Math.max(this.flash || 0, 0.7); this.shake = Math.max(this.shake || 0, 0.35); this.sfx('thump', 9); this.fx.ring(P.x, P.z, DOG.stompR, 0.45); this.fx.ring(P.x, P.z, DOG.stompR * 0.55, 0.3);
-      this.miniPuff(P.x, P.y, P.z, 1.7, 14); this.popAt({ x: P.x, z: P.z, y: P.y }, 'BOOTY SLAM!!', 1.0, true); this.noise(P.x, P.z, 10, '!?');
+      this.miniPuff(P.x, P.y, P.z, 1.7, 14); this.noise(P.x, P.z, 10, '!?');
     }
     dropOff(n, dx, dz, downT) {   // shaken off: they just let go and fall down where they are (a little push away from him), no flying
       this.unattach(n); n.spin = null; n.shock = 0; n.a.shock = 0; n.ko = false; n.path = null; n.hold = 0; n.alarm = 0;
@@ -1844,7 +1844,7 @@
       any = any || this.rats.some((r) => r.st === 'fly' && r.t > 0.5) || this.buckets.some((b) => b.state === 'fly' && b.t < 0.05);
       // nothing to hit, a wall right there: he knocks on it. Anyone in earshot comes over to see who's knocking (a lure)
       const rr = this.reach(P.x, P.z, P.f, 1.7); if (!any && rr < 1.6) { const kx = P.x + fx * rr, kz = P.z + fz * rr;
-        this.think(['*BUMP*', '*BOOTY BUMP*', '*bump bump*'][(this.t * 3 | 0) % 3], 1.0); this.ringAt(kx, kz, 1.2, 0.5); this.popAt({ x: kx - fx * 0.2, z: kz - fz * 0.2, y: P.y + 0.5 }, 'ドンッ', 0.9);
+        this.ringAt(kx, kz, 1.2, 0.5); this.popAt({ x: kx - fx * 0.2, z: kz - fz * 0.2, y: P.y + 0.5 }, 'ドンッ', 0.9);
         if (true) this.noiseS(kx - fx * 0.6, kz - fz * 0.6, 7.5, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3);
         if (!this.saidKnock) { this.saidKnock = true; this.later(1.2, () => this.think('...that\'ll bring someone over to look. Then I go the other way.', 2.6)); } }
     }
@@ -2047,7 +2047,7 @@
       if (d.inv > 0) return;
       d.hp -= dmg; d.st = 'hit'; d.t = 0; d.stun = H[3]; d.vx = Math.sign(d.x - a.x || a.dir) * kb * 3.2; d.inv = d.stun + 0.12; d.done = true;
       this.miniPuff(d.x, 0.45, -0.9, 0.28, 7); this.flash = kind === 'jab' ? 0.1 : 0.3; f.shake = kind === 'jab' ? 0.08 : 0.2;
-      this.popAt({ x: d.x, z: -0.9, y: 0.3 }, { jab: 'バシッ!', heavy: 'ドーン!', bump: 'ボヨン!', slam: 'BOOTY SLAM!!' }[kind], 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(kind === 'jab' ? 6 : kind === 'slam' ? 12 : 9);
+      const word = { jab: 'バシッ!', heavy: 'ドーン!', bump: 'ボヨン!', slam: 'ドスン!' }[kind]; this.popAt({ x: d.x, z: -0.9, y: 0.3 }, word, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(kind === 'jab' ? 6 : kind === 'slam' ? 12 : 9);
     }
     sfStep(dt) {
       const f = this.sf, y = f.you, b = f.boss, c = this.ctrl; f.t += dt;
