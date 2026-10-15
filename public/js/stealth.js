@@ -2034,6 +2034,7 @@
     resumeFromBoss(res) {
       this.keys = {}; this.over = false; this.paused = false; this.acc = 0;
       if (res === 'quit') { this.g.endCampaign(); return; }
+      { const P = this.P; P.st = 'busy'; P.t = 0; P.dur = 999; P.vx = P.vz = 0; }   // (stood still through the boss's talk: no wandering into the ring. The last win lets him go)
       if (res === 'trained') { this.say([{ who: '親方', jp: 'どうだ、わかったか。…では、いくぞ。', en: 'There. Understood? ...Then let\'s begin.', t: 3.0 }], () => this.bossBout()); return; }
       if (res === 'lost' || res === 'won') { const B = this.boss; B.on = true; B.hold = false; B.holdSet = true; B.sink = undefined; B.x = 1.8; B.z = -4.6; B.y = -0.12; B.f = Math.atan2(this.P.z - B.z, this.P.x - B.x); if (this.mawM) this.mawM.visible = false; B.w.throatT = 0; }
       if (res === 'lost') { this.say([{ who: '親方', jp: 'まだまだ青いな。もう一番!', en: 'Still green. Again!', t: 2.6 }], () => this.bossBout()); return; }
