@@ -68,6 +68,8 @@
     ringDepth: -1.75,                            // the boss's ring, sunk under the bath floor until it rises
     slideV: 8.0, slideDry: 9.5, slideWet: 4.0, slideTurn: 1.4,   // L: the belly slide. Launch speed, how fast a dry / wet floor stops him, how much he can steer it
     slideDrop: 0.55, slideSmash: 5.0, slideNoise: 5, slideSeen: 0.6, slideUp: 0.6,   // fast enough to smash things above this; how far a dry slide is heard; how far staff see him sliding (x their range); time to get up
+    darkT: 20, fuseCd: 12, flashR: 5.5, flashHalf: 0.34,   // the power cut: how long; before the fuse can be pulled again; how far / how wide a phone's beam lets them see
+    mopEvery: 1.1, mopLife: 25,   // the cleaner: a wet patch every this far, drying after this long
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
     slapFront: 7, slapRear: 5, spinT: 1.5,       // a slap: knocked back / stumbling forward (speeds), spun round (seconds)
@@ -181,6 +183,8 @@
       // breakable pieces collide segment by segment (each can be smashed on its own)
       // the back alley outside the kitchen door: its concrete apron only (invisible kerbs; never out into the void)
       add(-19.2, -16.4, -64.8, -53.6, true); add(-19.2, -12.4, -64.8, -62.0, true); add(-19.2, -12.4, -56.0, -53.6, true);   // (thick: he's wide, a thin kerb could be squeezed through)
+      add(-18.75, -17.6, -36.45, -35.55);   // the cleaner's mop cart, parked in the toilets
+      this.mopCart = this.makeMopCart(-18.2, -36.0); this.fuse = { x: 4.0, z: -47.5, cd: 0 }; this.fuseM = this.makeFuse(4.0, -47.27);   // the fuse box in the back corridor
       this.solidW = LY.solids.map((s) => { if (!s.brk || s.n < 2) return [add(s.x0, s.x1, s.z0, s.z1, s.tall)];
         return [...Array(s.n)].map((_, k) => s.ax === 'x' ? add(s.x0 + (s.x1 - s.x0) * k / s.n, s.x0 + (s.x1 - s.x0) * (k + 1) / s.n, s.z0, s.z1, s.tall)
           : add(s.x0, s.x1, s.z0 + (s.z1 - s.z0) * k / s.n, s.z0 + (s.z1 - s.z0) * (k + 1) / s.n, s.tall)); });
@@ -428,7 +432,7 @@
         const v = new S.WorkerView(this.scene, kind, !!o.fat, o.pick); v.walls = this.walls; if (v.pole && v.pole.parent) v.pole.parent.remove(v.pole);   // (the market staff's hook-pole: not in a bathhouse)
         const cone = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0xffcf3a, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }));   // (offset: no flicker against the floor tiles)
         cone.renderOrder = 20; this.scene.add(cone);   // (drawn after every other see-through surface: no flicker as the sort order changes)
-        return { a, v, route, i: 0, wait: route[0][2], mode: 'route', alarm: 0, cone, onigiri: !!o.onigiri, range: o.range || 6.4, half: o.half || 0.62, room: o.room, speed: o.speed || 1.35, sway: o.sway || 0.6, ear: o.ear || 0, path: null, pi: 0 };
+        return { a, v, route, i: 0, wait: route[0][2], mode: 'route', alarm: 0, cone, onigiri: !!o.onigiri, cleaner: !!o.cleaner, range: o.range || 6.4, half: o.half || 0.62, room: o.room, speed: o.speed || 1.35, sway: o.sway || 0.6, ear: o.ear || 0, path: null, pi: 0 };
       };
       const P = Math.PI, U = P / 2;
       return [
@@ -458,7 +462,7 @@
         mk('chef', [[3.4, -55.4, 2.5, P], [3.6, -58.4, 2.5, 0]], { room: 'kitchen', pick: 3, fat: true, range: 5.0 }),
         // TOILETS. A man at the urinals (facing the wall), the cleaner mopping by the sinks
         mk('rusher', [[-14.8, -32.2, 999, U]], { room: 'toilet', pick: 0, range: 4.0, sway: 0.1 }),
-        mk('thrower', [[-17.4, -42.6, 2.2, P], [-13.6, -42.6, 2.2, 0]], { room: 'toilet', pick: 2, speed: 0.8, range: 4.8 }),
+        mk('thrower', [[-17.0, -37.0, 3.0, P], [-15.0, -41.5, 0.6, -U], [-13.8, -38.0, 0, 0], [-10.4, -38.2, 0, 0], [-10.4, -33.0, 0.8, -U], [-4.0, -33.0, 1.6, 0], [-10.4, -33.0, 0, P], [-10.4, -38.2, 0, P], [-13.8, -38.0, 0, P]], { room: 'toilet', pick: 2, speed: 0.75, range: 4.8, cleaner: true }),   // THE CLEANER: from his mop cart in the toilets, out through the changing room and back, mopping as he goes (wet floor behind him)
       ];
     }
     cook(n, dt) {   // true while he's at it (the rest of npcStep is skipped)
@@ -538,8 +542,8 @@
     cookStop(n) { n.busy = false; n.scratch = false; n.a.shock = 0; if (n.rice) n.rice.visible = false; }
     sees(n, x, z, range) {
       const a = n.a, dx = x - a.x, dz = z - a.z, d = Math.hypot(dx, dz);
-      if (d > range) return false;
-      if (d > 0.6 && Math.abs(ang(Math.atan2(dz, dx) - a.f)) > n.half) return false;   // (right up against them, they feel you there)
+      if (d > (this.dark ? Math.min(range, DOG.flashR) : range)) return false;   // (a power cut: only what's in their phone's beam)
+      if (d > 0.6 && Math.abs(ang(Math.atan2(dz, dx) - a.f)) > (this.dark ? DOG.flashHalf : n.half)) return false;   // (right up against them, they feel you there)
       if (this.smokeBlocks(a.x, a.z, x, z)) return false;   // (nobody sees into, out of, or through the smoke)
       return this.clear(a.x, a.z, x, z);
     }
@@ -1027,7 +1031,7 @@
           if (b.wet) { this.fx.water && (this.fx.water(b.x, b.z, 2.4, POOL.water), this.fx.water(b.x + 0.2, b.z - 0.1, 1.4, POOL.water)); b.m.rotation.set(0.3, 0.4, 0.2); b.m.position.y = b.ty; }
           else { if (pud && this.fx.water) this.fx.water(b.x, b.z, 1.4, b.ty); b.m.rotation.set(Math.PI / 2, 0, 0.4); b.m.position.y = b.ty + (b.kind === 'can' ? 0.1 : 0.3); if (b.kind === 'can') b.m.children[0].position.y = -0.085; } if (true) this.noiseS(b.x, b.z, 16, '?!'); else this.ringAt(b.x, b.z, 2, 0.5); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(6); this.think(b.wet ? '*SPLOOSH*' : '*CLATTER*', 1); }
       }
-      this.canStep(dt); this.printStep(dt); this.bossStep(dt); this.bumpStep(dt); this.gachaStep(dt); this.gsStep(dt); this.carryStep(dt); this.hurtStep(dt);
+      this.powerStep(dt); this.mopStep(dt); this.canStep(dt); this.printStep(dt); this.bossStep(dt); this.bumpStep(dt); this.gachaStep(dt); this.gsStep(dt); this.carryStep(dt); this.hurtStep(dt);
       // (flying bits: flyStep, run at the top of step so they still land while he hides)
       // the staff (nobody minds you in the bath or the wash area; just after a restart they get a moment too)
       this.grace = Math.max(0, this.grace - dt);
@@ -1105,7 +1109,7 @@
       const d = Math.hypot(P.x - a.x, P.z - a.z);
       if (SAFE[roomAt(P.x, P.z)] && !this.wearing) { n.mode = 'return'; this.goTo(n, n.route[n.i][0], n.route[n.i][1]); if (!this.saidBathSafe) { this.saidBathSafe = true; this.popAt(a, '…風呂か。', 1.4); } return; }   // back in the bath: they give up
       const seenHide = n.pullOut && (P.hidden || P.boxHide || P.stallHide !== undefined);
-      const inCone = d < 2.2 || Math.abs(ang(Math.atan2(P.z - a.z, P.x - a.x) - a.f)) < 1.25;
+      const inCone = this.dark ? d < DOG.flashR && (d < 0.8 || Math.abs(ang(Math.atan2(P.z - a.z, P.x - a.x) - a.f)) < DOG.flashHalf) : d < 2.2 || Math.abs(ang(Math.atan2(P.z - a.z, P.x - a.x) - a.f)) < 1.25;   // (in the dark: the phone's beam)
       const seen = seenHide || (!P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.freeze && !this.unseen() && !this.smokeBlocks(a.x, a.z, P.x, P.z) && Math.abs(P.y - a.y) < 1.5 && d < 11 && inCone && this.clear(a.x, a.z, P.x, P.z));
       if (seenHide && d < 1.6 && a.st === 'free') { this.pullOut(n); a.st = 'act'; a.atk = 'grab'; a.t = 0; a.dur = 0.5; return; }
       if (seen) { n.lostT = 0; n.last = [P.x, P.z]; } else n.lostT += dt;
@@ -1642,6 +1646,75 @@
       const off = on[(Math.random() * on.length) | 0], bx = -Math.cos(P.cdir), bz = -Math.sin(P.cdir);
       this.dropOff(off, off.a.x - P.x, off.a.z - P.z); this.popAt(off.a, 'うわっ!', 1.0); this.sfx('thump', 4);
     }
+    // ---- THE POWER CUT: pull the fuse in the back corridor, the lights go out for a while; the staff can only see in their phones' beams
+    makeFuse(x, z) {
+      const g = new THREE.Group(), add = (w, h, d, col, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), S.Flat.mat(col)); o.position.set(px, py, pz); o.castShadow = true; o.userData.flatDone = true; g.add(o); return o; };
+      add(0.46, 0.56, 0.1, 0x9aa3ab, 0, 0, 0); add(0.4, 0.5, 0.012, 0xc3cbd2, 0, 0, -0.056); add(0.04, 0.16, 0.06, 0x2f2a33, 0.1, 0.04, -0.09); add(0.08, 0.05, 0.08, 0xdd5a42, 0.1, 0.13, -0.1);
+      g.lever = g.children[3]; g.position.set(x, 0.78, z); this.G.add(g); return g;
+    }
+    powerOut() {
+      const P = this.P; this.dark = { t: 0 }; P.st = 'busy'; P.t = 0; P.dur = 0.35; this.fuse.cd = DOG.darkT + DOG.fuseCd;
+      if (this.fuseM && this.fuseM.lever) this.fuseM.lever.position.y = -0.1;
+      this.sfx('thump', 3); this.think('...lights out.', 1.4);
+      for (const n of this.npcs) if (n.a.st === 'free' && n.v.root.visible) this.popAt(n.a, ['停電!?', 'えっ、暗い!', '何も見えない…'][(n.a.x * 7 | 0) & 1 ? 0 : 2], 1.4);
+    }
+    powerReset() { this.dark = null; this.darkK = 0; if (this.fuse) this.fuse.cd = 0; this.darkApply(0); if (this.fuseM && this.fuseM.lever) this.fuseM.lever.position.y = 0.13; for (const n of this.npcs || []) if (n.flash) n.flash.visible = false; }
+    darkApply(k) {   // the whole bathhouse to a night blue (and back)
+      const U = S.Flat && S.Flat.U; if (!U) return;
+      if (!this.U0) this.U0 = { lit: U.uLit.value.clone(), shade: U.uShade.value.clone(), sun: U.uSunI.value, bg: this.scene && this.scene.background && this.scene.background.isColor ? this.scene.background.clone() : null };
+      const N0 = this.U0, nl = new THREE.Color(0.34, 0.37, 0.55), ns = new THREE.Color(0.28, 0.3, 0.46);
+      U.uLit.value.copy(N0.lit).lerp(nl, k); U.uShade.value.copy(N0.shade).lerp(ns, k);
+      if (N0.bg && this.scene.background && this.scene.background.isColor) this.scene.background.copy(N0.bg).lerp(new THREE.Color(0x1d2236), k);
+    }
+    powerStep(dt) {
+      if (this.fuse) this.fuse.cd = Math.max(0, this.fuse.cd - dt);
+      const D = this.dark; if (D) { D.t += dt; if (D.t > DOG.darkT) { this.dark = null; this.sfx('thump', 2); if (this.fuseM && this.fuseM.lever) this.fuseM.lever.position.y = 0.13; for (const n of this.npcs) if (n.a.st === 'free' && n.v.root.visible) this.popAt(n.a, 'ついた!', 1.0); } }
+      const want = this.dark ? 1 : 0, k0 = this.darkK || 0; this.darkK = k0 + (want - k0) * Math.min(1, dt * (want ? 6 : 2.5));
+      if (Math.abs(this.darkK - k0) > 1e-4 || (want && this.darkK < 0.999)) this.darkApply(this.darkK);
+    }
+    npcExtras(n, T) {   // drawn each frame: their phone torches in a power cut; the cleaner's mop
+      const a = n.a, up = a.st === 'free' || a.st === 'act';
+      if (this.darkK > 0.3 && up && n.v.root.visible && !n.eaten) {
+        if (!n.flash) { const g = new THREE.Group(), cone = new THREE.Mesh(new THREE.ConeGeometry(DOG.flashR * Math.tan(DOG.flashHalf), DOG.flashR, 18, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff3c2, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+          cone.rotation.z = Math.PI / 2; cone.position.x = DOG.flashR / 2; g.add(cone); const ph = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.08), new THREE.MeshBasicMaterial({ color: 0xffffff })); g.add(ph); this.G.add(g); n.flash = g; }
+        n.flash.visible = true; n.flash.position.set(a.x + Math.cos(a.f) * 0.35, a.y + 1.15, a.z + Math.sin(a.f) * 0.35); n.flash.rotation.set(0, -a.f, -0.12);
+      } else if (n.flash) n.flash.visible = false;
+      if (n.cleaner) {
+        if (!n.mop) { const g = new THREE.Group(), st = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1, 6), S.Flat.mat(0xbb8b5e)), hd = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.07, 0.16), S.Flat.mat(0xf2ede4));
+          for (const o of [st, hd]) { o.castShadow = true; o.userData.flatDone = true; g.add(o); } g.st = st; g.hd = hd; this.G.add(g); n.mop = g; }
+        const m = n.mop, f = a.f, mv = Math.hypot(a.vx || 0, a.vz || 0) > 0.1, sw = mv || n.mopping ? Math.sin(T * 4.2 + n.i) * 0.4 : 0;
+        const hx = a.x + Math.cos(f) * 0.32 - Math.sin(f) * 0.12, hz = a.z + Math.sin(f) * 0.32 + Math.cos(f) * 0.12, hy = a.y + 0.95;   // (both hands on the handle at his waist)
+        const fx = a.x + Math.cos(f) * 0.95 - Math.sin(f) * sw, fz = a.z + Math.sin(f) * 0.95 + Math.cos(f) * sw, fy = a.y + 0.04;   // (the head swishing side to side on the floor in front)
+        const A = new THREE.Vector3(hx, hy + 0.3, hz), B = new THREE.Vector3(fx, fy, fz), dir = B.clone().sub(A), L = dir.length();
+        m.visible = n.v.root.visible && up; m.st.position.copy(A).addScaledVector(dir, 0.5); m.st.scale.set(1, L, 1); m.st.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+        m.hd.position.set(fx, fy, fz); m.hd.rotation.set(0, -f + Math.PI / 2, 0);
+      }
+    }
+    // ---- THE CLEANER: a wet patch every metre or so behind him (the slide goes further on it; staff slip on it); it dries up after a while
+    makeMopCart(x, z) {
+      const g = new THREE.Group(), add = (geo, col, px, py, pz) => { const o = new THREE.Mesh(geo, S.Flat.mat(col)); o.position.set(px, py, pz); o.castShadow = true; o.userData.flatDone = true; g.add(o); return o; };
+      add(new THREE.BoxGeometry(0.9, 0.08, 0.6), 0xf2cf4a, 0, 0.16, 0);
+      for (const [wx, wz] of [[-0.38, -0.24], [0.38, -0.24], [-0.38, 0.24], [0.38, 0.24]]) add(new THREE.CylinderGeometry(0.06, 0.06, 0.05, 10).rotateX(Math.PI / 2), 0x4d4756, wx, 0.06, wz);
+      add(new THREE.CylinderGeometry(0.24, 0.2, 0.36, 16), 0x5a8fd0, -0.16, 0.38, 0); add(new THREE.CylinderGeometry(0.21, 0.21, 0.02, 16), 0x9cc6e8, -0.16, 0.56, 0);
+      add(new THREE.BoxGeometry(0.22, 0.3, 0.3), 0x9aa3ab, 0.24, 0.36, 0); add(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 6), 0x9aa3ab, 0.42, 0.62, 0);
+      const sign = new THREE.Group(); sign.position.set(0.9, 0, 0.55); g.add(sign);   // the yellow wet-floor sign
+      for (const sd of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.6, 0.02), S.Flat.mat(0xf2cf4a)); p.position.set(0, 0.3, sd * 0.09); p.rotation.x = sd * 0.28; p.castShadow = true; p.userData.flatDone = true; sign.add(p); }
+      g.position.set(x, floorY(x, z), z); this.G.add(g); return g;
+    }
+    mopSpot(x, z) {
+      if (this.puddles.some((q) => Math.hypot(q.x - x, q.z - z) < 0.6)) return;
+      const fy = floorY(x, z), rx = 0.62 + Math.random() * 0.15, rz = 0.4 + Math.random() * 0.1, m = new THREE.Mesh(new THREE.CircleGeometry(1, 16), S.Flat.mat(0xcfe6f5, { transparent: true, opacity: 0.85 }));
+      m.rotation.x = -Math.PI / 2; m.scale.set(rx, rz, 1); m.position.set(x, fy + 0.012, z); m.userData.flatDone = true; m.receiveShadow = true; this.G.add(m);
+      this.puddles.push({ x, z, rx, rz, y: fy, m, mop: DOG.mopLife });
+      const old = this.puddles.filter((q) => q.mop); if (old.length > 30) { const q = old[0]; this.G.remove(q.m); this.puddles.splice(this.puddles.indexOf(q), 1); }
+    }
+    mopStep(dt) {
+      for (const n of this.npcs) if (n.cleaner) { const a = n.a; if (a.st !== 'free' || n.mode === 'chase' || this.dark) { n.mopL = null; continue; }
+        const l = n.mopL || (n.mopL = { x: a.x, z: a.z }); if (Math.hypot(a.x - l.x, a.z - l.z) > DOG.mopEvery) { n.mopL = { x: a.x, z: a.z }; this.mopSpot(a.x - Math.cos(a.f) * 0.5, a.z - Math.sin(a.f) * 0.5); } }
+      for (let i = this.puddles.length - 1; i >= 0; i--) { const q = this.puddles[i]; if (!q.mop) continue; q.mop -= dt;
+        if (q.m && q.m.material) q.m.material.opacity = 0.85 * Math.min(1, q.mop / 4);
+        if (q.mop <= 0) { this.G.remove(q.m); this.puddles.splice(i, 1); } }
+    }
     wetFloor(x, z) { return !!SAFE[roomAt(x, z)] || this.puddles.some((q) => ((x - q.x) / q.rx) ** 2 + ((z - q.z) / q.rz) ** 2 < 1); }   // (the bath and the showers, and any puddle)
     slideGo(dir) {   // L: a dive onto his belly. Silent on a wet floor (and it goes on and on); a dry floor squeaks and stops him short
       const P = this.P; P.st = 'slide'; P.t = 0; P.dur = 99; P.cdir = dir; P.f = dir; P.sv = DOG.slideV; P.run = 0; this.slideNT = 0;   // (no slide with anyone hanging on: see the step)
@@ -1783,6 +1856,7 @@
     use() {
       const P = this.P, near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r;
       if (this.gm && !this.gm.used && !P.held && near(this.gm.x, this.gm.z, 1.6)) { this.pullGacha(); return; }
+      if (this.fuse && !this.dark && this.fuse.cd <= 0 && !P.held && near(this.fuse.x, this.fuse.z, 1.5)) { this.powerOut(); return; }
       if (P.held) { // throw it where you face
         const b = P.held; this.waterOff(b); P.held = null; b.state = 'fly'; b.t = 0; b.sx = b.m.position.x; b.sz = b.m.position.z; b.sy = b.m.position.y;
         const L = Math.max(1, this.reach(P.x, P.z, P.f, 8) - 0.6); b.tx = P.x + Math.cos(P.f) * L; b.tz = P.z + Math.sin(P.f) * L;
@@ -1977,6 +2051,7 @@
     }
     // ---- testing: jump straight to any goal (set up the way the story would have left things)
     jumpTo(k) {
+      this.powerReset();
       this.ringUp = false; this.ringCut = null; this.waterDrop = 0; if (this.dohyoM) this.dohyoM.visible = false;   // (the bath full again, no ring in it)
       const P = this.P, B = this.boss, at = (x, z, y, f) => { P.x = x; P.z = z; P.y = y || 0; P.f = f === undefined ? 0 : f; P.vx = P.vz = 0; P.st = 'free'; P.t = 0; P.dur = 0; this.noGuard = true; this.camT.set(Math.max(-18, Math.min(18, x * 0.8)), P.y, z - 2.6); };
       // clean slate
@@ -2051,7 +2126,7 @@
          this.think('My MAWASHI! ...still can\'t go out the front door like this.', 2.8); this.escapeStage(); });
     }
     // ---- "sumo rules": the bath drains, a dohyo rises up out of it, the camera settles on the ring; then the bout
-    bossBout() { this.ringRise(() => this.g.startBossBout(this)); }
+    bossBout() { this.powerReset(); this.ringRise(() => this.g.startBossBout(this)); }
     ringRise(cb) {
       if (this.ringUp) { cb(); return; }
       this.ringUp = true; this.ringCut = { t: 0, cb }; const P = this.P; P.st = 'busy'; P.t = 0; P.dur = 99; P.vx = P.vz = 0;
@@ -2425,6 +2500,7 @@
       if (!(this.paused || this.over || this.asleep || this.sf || this.freeze || this.choiceCb || sub || this.jumpOn || this.camFocus || this.bossCut)) {   // (no prompts in a cutscene, dialog or not)
         const V = this.vend;
         if (this.attN && this.attN()) L = [['hold J', 'booty slam them off']];
+        else if (this.fuse && !this.dark && this.fuse.cd <= 0 && !P.held && near(this.fuse.x, this.fuse.z, 1.5)) L = [['K', 'pull the fuse: lights out']];
         else if (P.carryN) L = [['K', 'throw'], ['hold K', 'slam down']];
         else if (P.stallHide !== undefined) L = [['move / I', 'come out']];
         else if (P.hidden) L = [['move / I', 'climb out'], ['hold I + direction', 'climb out silently']];
@@ -2881,7 +2957,7 @@
       this.bossDraw(dt, T); this.bonusBar(); this.mapDraw(T);
       if (this.drawN % 10 === 1) { this.hudApply(); const o = this.el('.st-obj'), hp = this.el('.st-hp'); if (o && hp) hp.style.setProperty('top', (o.offsetTop + o.offsetHeight + 8) + 'px', 'important'); }   // (a two-line goal pushes the badges down, never over them)
       this.attDraw(dt);
-      this.dtR = dt; const nK = this.npcK(); for (const n of this.npcs) { n.a.push = !!n.pushing2; { const want = n.a.cling === 'ride' ? DOG.rideScale : 1; n.rideK = (n.rideK || 1) + (want - (n.rideK || 1)) * Math.min(1, dt * 10); const k = n.rideK * (n.shrink !== undefined ? n.shrink : 1); n.v.root.scale.setScalar(k); if (n.v.body) { n.v.body.wrap.scale.setScalar(k); for (const m of n.v.body.aprons || []) m.visible = n.a.cling !== 'ride'; } } n.v.update(n.a, Math.max(dt * nK, 1e-4), T); n.v.root.visible = !n.inside && !(n.pit > 0 && n.pitT > 0.6); if (n.rice) n.rice.visible = !!(n.busy && n.mode === 'cook' && n.ck && n.ck.ph === 'make' && n.v.root.visible); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }   // (the rider's scale: set, not multiplied, since the view never resets it)
+      this.dtR = dt; const nK = this.npcK(); for (const n of this.npcs) { n.a.push = !!n.pushing2; { const want = n.a.cling === 'ride' ? DOG.rideScale : 1; n.rideK = (n.rideK || 1) + (want - (n.rideK || 1)) * Math.min(1, dt * 10); const k = n.rideK * (n.shrink !== undefined ? n.shrink : 1); n.v.root.scale.setScalar(k); if (n.v.body) { n.v.body.wrap.scale.setScalar(k); for (const m of n.v.body.aprons || []) m.visible = n.a.cling !== 'ride'; } } n.v.update(n.a, Math.max(dt * nK, 1e-4), T); n.v.root.visible = !n.inside && !(n.pit > 0 && n.pitT > 0.6); this.npcExtras(n, T); if (n.rice) n.rice.visible = !!(n.busy && n.mode === 'cook' && n.ck && n.ck.ph === 'make' && n.v.root.visible); if (n.busy) this.knead(n, T); else { n.pushK = (n.pushK || 0) + ((n.pushing2 ? 1 : 0) - (n.pushK || 0)) * Math.min(1, dt * 10); if (n.pushK > 0.01) this.knead(n, T, true, n.pushK); if (n.pushing2) this.sweat(n, dt); } if (n.phone) this.phonePose(n); if (n.scratch) this.scratchPose(n, T); this.drawCone(n); }   // (the rider's scale: set, not multiplied, since the view never resets it)
       this.sweatStep(dt);
       this.tipStep(dt); this.ctxStep();
       // censored: a jittering pixel block on his hips, on the line from his hips to the camera (hidden while he's in the water)
