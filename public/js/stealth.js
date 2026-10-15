@@ -1526,13 +1526,13 @@
       const n = this.att[k], mo = n && n.v.mo && n.v.mo.out, pelY = mo ? mo[0].y : 0.95, nkY = mo ? mo[1].y : 1.45, bob = Math.abs(Math.sin(T * 8 + k)) * 0.05 * (0.3 + mv);
       if (k === 4) { v.head.getWorldPosition(Q);   // astride the back of his neck: thighs either side of his head, hands round onto his eyes
         return { x: Q.x - fx * 0.4 * s, z: Q.z - fz * 0.4 * s, y: Q.y - 0.2 * s - pelY + bob, f: P.f + Math.sin(T * 5) * 0.1, st: 'held', cling: 'ride' }; }
-      if (k === 5) return { x: P.x - fx * 0.62 * s, z: P.z - fz * 0.62 * s, y: P.y + 0.88 * s - pelY + bob, f: P.f + Math.sin(T * 4) * 0.08, st: 'held', cling: 'back' };   // a piggyback, chest to his back, below the one on his shoulders
+      if (k === 5) return { x: P.x - fx * 0.62 * s, z: P.z - fz * 0.62 * s, y: P.y + 0.88 * s - pelY + bob + (this.slamY || 0), f: P.f + Math.sin(T * 4) * 0.08, st: 'held', cling: 'back' };   // a piggyback, chest to his back, below the one on his shoulders
       if (k < 2) { v.handWorld(k === 0 ? -1 : 1, Q); const sd = k === 0 ? -1 : 1, sx = -fz * sd, sz = fx * sd;   // stood beside him, both hands round his wrist (his arm down by his side as usual), leaning back and tugging
         const tug = Math.sin(T * 6 + k * 2) * 0.04, x = Q.x + (sx * 0.42 + fx * 0.12) * s + sx * tug, z = Q.z + (sz * 0.42 + fz * 0.12) * s + sz * tug;
         return { x, z, y: P.y, f: Math.atan2(Q.z - z, Q.x - x), st: 'held', cling: 'arm', clingY: Math.min(1.2, Math.max(0.55, Q.y - P.y)) }; }
       const sd = k === 2 ? -1 : 1, sx = -fz * sd, sz = fx * sd, lx = P.x + (sx * 0.36 - fx * 0.05) * s, lz = P.z + (sz * 0.36 - fz * 0.05) * s;
       let ox = sx * 0.8 - fx * 0.6, oz = sz * 0.8 - fz * 0.6; const ol = Math.hypot(ox, oz); ox /= ol; oz /= ol;
-      return { x: lx + ox * 0.34, z: lz + oz * 0.34, y: P.y, f: Math.atan2(-oz, -ox), st: 'held', cling: 'hug' };
+      return { x: lx + ox * 0.34, z: lz + oz * 0.34, y: P.y + (this.slamY || 0), f: Math.atan2(-oz, -ox), st: 'held', cling: 'hug' };   // (up in the air with him in a booty slam)
     }
     latchStep(n, dt) {   // the jump at him (true while it lasts)
       const L = n.lunge, a = n.a; L.t += dt; const k = Math.min(1, L.t / DOG.lunge), q = this.slotPos(L.k);
@@ -2793,7 +2793,7 @@
       v.update(w, Math.max(dt, 1e-4), T);
       if (this.asleep && v.soft) for (const m of v.soft.mats) m.emissive.setRGB(0, 0, 0);   // (asleep: the pose, not the versus sleep-skill's blue tint)
       v.root.position.y += P.y + 0.04 * v.s * P.tip + (this.gsY || 0);
-      if (P.st === 'stompW' && this.stompW) { const u = this.stompW.t / this.stompW.W, c0 = DOG.slamCrouch; if (u > c0) v.root.position.y += DOG.slamH * v.s * Math.sin(Math.PI * Math.pow((u - c0) / (1 - c0), 0.7)); }   // the booty slam: up he goes, and down
+      this.slamY = 0; if (P.st === 'stompW' && this.stompW) { const u = this.stompW.t / this.stompW.W, c0 = DOG.slamCrouch; if (u > c0) { this.slamY = DOG.slamH * v.s * Math.sin(Math.PI * Math.pow((u - c0) / (1 - c0), 0.7)); v.root.position.y += this.slamY; } }   // (anyone hanging on his legs or back goes up with him: slotPos)   // the booty slam: up he goes, and down
       else if (P.st === 'busy' && this.stompDone > this.t) { const r = (this.stompDone - this.t) / DOG.slamLand; v.root.position.y -= DOG.slamSit * v.s * Math.min(1, r / 0.35); }
       v.root.visible = !P.hidden && !(w.fxs.ball > 0);   // (in a cart, or the daruma: not drawn)
       if (v.ballSpin && v.ballSpin.visible) v.ballSpin.position.y += P.y;   // (the daruma: on the floor he's on)
@@ -2827,8 +2827,10 @@
         if (this.jigA > 0.002 || this.jigOn) { const ph = T * 22, dn = 1 - 0.2 * Math.max(0, Math.sin(P.f)), bo = (x) => Math.max(0, Math.sin(x)) * 1.3 * dn; S.SoftSumo.jiggle(v, this.jigA * bo(ph), this.jigA * bo(ph + Math.PI)); this.jigOn = this.jigA > 0.002; } }   // (each cheek bounces up in turn)   // (charging down the screen, towards the camera: 20% less, it read too long)
       if (rolling) {   // the charge, tucked into a cannonball (knees to his chest, arms round them, face on his knees), turning over and over about his middle
         const ax = this._rax || (this._rax = new THREE.Vector3()), q = this._rq || (this._rq = new THREE.Quaternion()), cc = this._rc || (this._rc = new THREE.Vector3());
-        ax.set(Math.sin(P.f), 0, -Math.cos(P.f)); q.setFromAxisAngle(ax, P.ballRoll); cc.set(P.x, P.y + DOG.tuckC * v.s, P.z);
-        v.root.position.y += DOG.tuckLift * v.s; v.root.position.sub(cc).applyQuaternion(q).add(cc); v.root.quaternion.premultiply(q); }
+        const R = P.ballRoll || 0; if (!this._rAcc || R < this._rl - 1e-6) { this._rAcc = new THREE.Quaternion(); this._rl = R; }   // (built up a little at a time, about the way he's going now: steering never jerks the tumble round)
+        ax.set(Math.sin(P.f), 0, -Math.cos(P.f)); q.setFromAxisAngle(ax, R - this._rl); this._rl = R; this._rAcc.premultiply(q).normalize(); cc.set(P.x, P.y + DOG.tuckC * v.s, P.z);
+        v.root.position.y += DOG.tuckLift * v.s; v.root.position.sub(cc).applyQuaternion(this._rAcc).add(cc); v.root.quaternion.premultiply(this._rAcc); }
+      else this._rAcc = null;
       v.root.updateMatrixWorld(true);   // the floor he stands on (the poses think he's on the ground)
       this.shortsStep(dt); this.tattooStep(v); this.stinkStep(T, v);
       if (P.held && P.held.state === 'held') {
