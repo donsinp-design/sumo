@@ -854,7 +854,7 @@
       P.chT = P.st === 'charge' ? (P.chT || 0) + dt : 0; if (P.chT > (P.ball ? DOG.ballMax : 0.95) * this.chargeK()) { P.st = 'free'; P.t = 0; P.cd = 0.5; P.chT = 0; }   // (a charge can never run on)
       if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = P.ball ? DOG.ballSpeed : 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur + 0.01; if (P.t > (P.ball ? DOG.ballMax : 0.85) * this.chargeK()) P.t = P.dur + 0.01; else if (P.ball && c.dash.held) P.t = Math.min(P.t, P.dur - 0.01); P.f = P.cdir; if (P.ball) P.ballRoll += Math.hypot(P.vx, P.vz) * dt / 0.62; }   // (never longer than 0.85 s)
       if (P.st === 'wind' && mag > 0.3) { P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * 8); P.f = P.cdir; }
-      const power = P.st === 'charge' && P.run > 1.0;   // it needs a run-up: from right next to something he just bumps it
+      const roll = P.st === 'charge' && P.run > 1.0, power = roll && !P.ball;   // it needs a run-up: from right next to something he just bumps it (rolled up in a ball he smashes nothing, he just bowls people over)
       const dir = P.st === 'charge' || mag > 0.3;
       P.vx += ((dir ? mx : 0) * spd - P.vx) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10)); P.vz += ((dir ? mz : 0) * spd - P.vz) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10));
       if (P.st === 'slip' || P.st === 'busy' || P.st === 'wear' || P.st === 'wind') { P.vx *= 0.85; P.vz *= 0.85; }
@@ -870,7 +870,7 @@
       // the cracked wall gives way to a charge
       const CK = LY.crack;
       if (power && !this.crackDone && P.z < CK.z1 + P.r + 0.25 && P.z > CK.z0 - 0.2 && P.x > CK.x0 && P.x < CK.x1) { this.chargeWall(); this.smashCrack(); }
-      if (power) for (const n of this.npcs) {   // a charge bowls over anyone he hits who hadn't made him out yet (not someone already after him)
+      if (roll) for (const n of this.npcs) {   // a charge bowls over anyone he hits who hadn't made him out yet (not someone already after him)
         if (n.a.st !== 'free' || ((n.alarm >= 1 || n.mode === 'chase') && !(this.gs && this.gs.id === 'giant') && !P.ball) || Math.abs(n.a.y - P.y) > 1 || n.lunge) continue;   // (rolled up, or a giant: even the ones after him go down)
         const dx = n.a.x - P.x, dz = n.a.z - P.z, d = Math.hypot(dx, dz);
         if (d < P.r + 0.55 && (dx * Math.cos(P.f) + dz * Math.sin(P.f)) / (d || 1) > 0.2) this.knockOut(n, Math.cos(P.f), Math.sin(P.f), ['ドーン!', 'ドスン!'][(this.t * 3 | 0) % 2], 4.5);
@@ -879,7 +879,7 @@
       if (this.vend) { const V = this.vend;
         if (power && !V.broke && !V.cd && Math.abs(P.y - V.y) < 1 && P.x > V.x0 - P.r - 0.2 && P.z > V.z0 - 0.3 && P.z < V.z1 + 0.3) { V.cd = 0.6; this.chargeWall(); this.hitVend(); P.t = P.dur + 0.01; P.vx *= -0.3; P.vz *= -0.3; } }
       P.brkCd = Math.max(0, (P.brkCd || 0) - dt); this.runupCd = Math.max(0, (this.runupCd || 0) - dt);
-      if (P.st === 'charge' && !power && this.breakables && !this.runupCd && this.breakables.some((B) => !B.done && Math.abs((B.s.f ? UP : 0) - P.y) < 1.2 && Math.hypot(P.x - clamp(P.x, B.s.x0, B.s.x1), P.z - clamp(P.z, B.s.z0, B.s.z1)) < P.r + 0.15)) {
+      if (P.st === 'charge' && !P.ball && !power && this.breakables && !this.runupCd && this.breakables.some((B) => !B.done && Math.abs((B.s.f ? UP : 0) - P.y) < 1.2 && Math.hypot(P.x - clamp(P.x, B.s.x0, B.s.x1), P.z - clamp(P.z, B.s.z0, B.s.z1)) < P.r + 0.15)) {
         this.runupCd = 8; this.chargeWall(); this.think('Too close... I need a RUN-UP to smash through that!', 2); }   // (from right up against it he only bumps it)
       if (power && this.breakables && !P.brkCd) {   // one piece at a time: the nearest one he hits
         let best = null, bd = P.r + 0.15;
