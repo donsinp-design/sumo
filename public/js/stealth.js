@@ -371,6 +371,10 @@
       this.stallDoors = LY.stalls.map((q, k) => get('STALLDOOR_' + k)).filter(Boolean);
       if (proto.BOX) { this.squatBox = clone('BOX'); this.squatBox.visible = false; this.scene.add(this.squatBox); }
       const cartP = get('ITEM_CART'); if (cartP) { cartP.visible = false; for (const c of this.carts) { const o = cartP.clone(); o.visible = true; o.position.set(0, 0, 0); c.m.add(o); c.mesh = o; } }
+      { const Fl = get('FLOORS'); if (Fl) { Fl.updateMatrixWorld(true); Fl.traverse((o) => {   // the building block behind the kitchen had its face on the kitchen's tiled back wall: the two fought (a flickering beige patchwork). Its face goes back behind the wall
+        const g = o.isMesh && o.geometry, e = o.matrixWorld.elements; if (!g || g.userData.kFix || Math.abs(e[0] - 1) > 1e-6 || Math.abs(e[10] - 1) > 1e-6) return; g.userData.kFix = true;
+        const P = g.attributes.position; for (let i = 0; i < P.count; i++) { const x = P.getX(i) + e[12], y = P.getY(i) + e[13], z = P.getZ(i) + e[14]; if (Math.abs(z + 61) < 0.01 && y > 0.01 && x > -12.41 && x < 12.41) P.setZ(i, P.getZ(i) - 0.45); }
+        P.needsUpdate = true; g.computeBoundingSphere(); }); } }
       this.water = get('WATER'); this.crackM = get('CRACK_WALL'); this.rubble = get('CRACK_RUBBLE'); this.holes = get('LKHOLES');
       if (this.rubble) this.rubble.visible = false; if (this.holes) this.holes.visible = false;
       this.lkDoors = [0, 1, 2, 3, 4].map((k) => get('LKDOOR_' + k)).filter(Boolean);
