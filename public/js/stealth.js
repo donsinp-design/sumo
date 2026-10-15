@@ -66,7 +66,7 @@
     boxDeep: 0.72,                               // ...and that much as deep as the box on the floor (snug round his belly, the back through his booty)
     sfBump: [0.15, 0.3, 0.5], sfSlam: [0.62, 0.72, 1.2],   // the boss fight: the booty bump's and booty slam's timing (hits from / to, done at)
     ringDepth: -1.75,                            // the boss's ring, sunk under the bath floor until it rises
-    slideV: 8.0, slideDry: 9.5, slideWet: 1.6, slideTurn: 1.4,   // L: the belly slide. Launch speed, how fast a dry / wet floor stops him, how much he can steer it
+    slideV: 8.0, slideDry: 9.5, slideWet: 4.0, slideTurn: 1.4,   // L: the belly slide. Launch speed, how fast a dry / wet floor stops him, how much he can steer it
     slideDrop: 0.55, slideSmash: 5.0, slideNoise: 5, slideSeen: 0.6, slideUp: 0.6,   // fast enough to smash things above this; how far a dry slide is heard; how far staff see him sliding (x their range); time to get up
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
