@@ -981,7 +981,7 @@
       // J: a slap. Rats go flying; things get knocked about; hitting a person is NOT allowed
       if (c.skill && c.skill.pressed && this.gSkill && P.st === 'free' && !P.hidden) this.useGacha();
       if (c.push.pressed && P.st === 'free' && !P.held && !P.cart && !P.carryN) this.jHold = true;   // J down: a tap or a hold? (decided on letting go, or once held long enough)
-      if (!c.push.held && this.jHold) { this.jHold = false; if (P.st === 'free' && !P.held && !P.cart && !P.carryN) this.slap(); }   // tap J: the booty bump
+      if (!c.push.held && this.jHold) { this.jHold = false; if (P.st === 'free' && !P.held && !P.cart && !P.carryN) this.slap(); }   // tap J: a push
       if (this.jHold && c.push.held && c.push.t > DOG.holdJ && P.st === 'free' && !P.held && !P.cart && !P.carryN && this.attN() < DOG.maxAtt) { this.jHold = false; this.startStomp(); }   // hold J: the stomp
       else if (c.push.pressed && P.st === 'free' && P.held && P.held.kind === 'can' && P.held.soda) this.drink();
       else if (c.push.pressed && P.st === 'free' && P.held) this.drop();
@@ -1813,9 +1813,9 @@
       this.objective('Find your LOCKER (through the wash area)');
     }
     // his locker takes three charges: a dent, a bad dent, then the doors burst. Each one is heard across the room
-    slap() {   // J: the BOOTY BUMP. He spins round, his booty slams into whatever was in front of him, and he spins back
-      const P = this.P; P.st = 'busy'; P.t = 0; P.dur = DOG.bumpT; this.bump = { t: 0, hit: false, f: P.f };
-      if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.2);
+    slap() {   // J: a push with both hands, at once: whatever's in front of him gets it (a person, rats, buckets, carts; a wall gets a knock)
+      const P = this.P; P.st = 'busy'; P.t = 0; P.dur = 0.35; this.w.hand = 1; this.bump = null;
+      if (this.g.audio && this.g.audio.whoosh) this.g.audio.whoosh(0.2); this.bumpHit(P.f);
     }
     bumpStep(dt) {
       const B = this.bump; if (!B) return; B.t += dt;
@@ -1831,7 +1831,7 @@
       const inFront = (x, z, r) => { const dx = x - P.x, dz = z - P.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.3; };
       const Bm = this.bomb; if (Bm && inFront(Bm.x, Bm.z, 1.8)) { Bm.vx = fx * 8; Bm.vz = fz * 8; Bm.kicked = true; this.popAt({ x: Bm.x, z: Bm.z, y: P.y }, 'ポーン!', 0.8); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3); return; }   // (the gacha bomb: kicked away)
       const V = this.vend; if (V && !V.broke && Math.abs(P.y - V.y) < 1 && inFront(V.x0 - 0.1, clamp(P.z, V.z0, V.z1), 1.5)) { this.hitVend(); return; }
-      for (const n of this.npcs) if ((n.a.st === 'free' || n.a.st === 'dazed' || n.lunge) && n.att === undefined && !n.carried && Math.abs(n.a.y - P.y) < 1 && inFront(n.a.x, n.a.z, 1.7)) { this.slapHit(n, fx, fz); this.popAt({ x: P.x + fx, z: P.z + fz, y: P.y + 0.3 }, 'ボヨン!', 0.7); return; }   // the booty lands on them (see slapHit: face, side or back)
+      for (const n of this.npcs) if ((n.a.st === 'free' || n.a.st === 'dazed' || n.lunge) && n.att === undefined && !n.carried && Math.abs(n.a.y - P.y) < 1 && inFront(n.a.x, n.a.z, 1.7)) { this.slapHit(n, fx, fz); return; }   // the booty lands on them (see slapHit: face, side or back)
       for (const r of this.rats) if (r.st !== 'home' && r.st !== 'fly' && inFront(r.x, r.z, 1.6)) {
         if (r.carry) { r.carry = false; this.oni.n = Math.min(4, this.oni.n + 1); this.oniDraw(); }
         r.st = 'fly'; r.t = 0.6; r.vx = (r.x - P.x) * 4; r.vz = (r.z - P.z) * 4; this.popAt({ x: r.x, z: r.z, y: 0 }, 'チュー!', 1.0);
@@ -1845,7 +1845,7 @@
       any = any || this.rats.some((r) => r.st === 'fly' && r.t > 0.5) || this.buckets.some((b) => b.state === 'fly' && b.t < 0.05);
       // nothing to hit, a wall right there: he knocks on it. Anyone in earshot comes over to see who's knocking (a lure)
       const rr = this.reach(P.x, P.z, P.f, 1.7); if (!any && rr < 1.6) { const kx = P.x + fx * rr, kz = P.z + fz * rr;
-        this.ringAt(kx, kz, 1.2, 0.5); this.popAt({ x: kx - fx * 0.2, z: kz - fz * 0.2, y: P.y + 0.5 }, 'ドンッ', 0.9);
+        this.ringAt(kx, kz, 1.2, 0.5); this.popAt({ x: kx - fx * 0.2, z: kz - fz * 0.2, y: P.y + 0.5 }, 'コンコン', 0.9);
         if (true) this.noiseS(kx - fx * 0.6, kz - fz * 0.6, 7.5, '?'); if (this.g.audio && this.g.audio.thump) this.g.audio.thump(3);
         if (!this.saidKnock) { this.saidKnock = true; this.later(1.2, () => this.think('...that\'ll bring someone over to look. Then I go the other way.', 2.6)); } }
     }
@@ -2048,7 +2048,7 @@
     }
     sfHud(init) {
       const e = this.el('.st-sf'), f = this.sf;
-      if (init) e.innerHTML = '<div class="bars"><div class="bar l"><b></b><i></i></div><div class="tm">60</div><div class="bar r"><b></b><i></i></div></div><div class="nm l">YOU</div><div class="nm r">YUNOFUJI</div><div class="pips l"></div><div class="pips r"></div><div class="big"></div><div class="keys">A / D move · J booty bump · hold J booty slam · K / L shove (slow, heavy) · hold I block</div>';
+      if (init) e.innerHTML = '<div class="bars"><div class="bar l"><b></b><i></i></div><div class="tm">60</div><div class="bar r"><b></b><i></i></div></div><div class="nm l">YOU</div><div class="nm r">YUNOFUJI</div><div class="pips l"></div><div class="pips r"></div><div class="big"></div><div class="keys">A / D move · J push · hold J booty slam · K / L shove (slow, heavy) · hold I block</div>';
       const y = f.you, b = f.boss, q = (c) => e.querySelector(c), pc = (h) => Math.max(0, h) + '%';
       f.dy = (f.dy === undefined ? 100 : f.dy + (y.hp - f.dy) * 0.08); f.db = (f.db === undefined ? 100 : f.db + (b.hp - f.db) * 0.08);
       q('.bar.l i').style.width = pc(y.hp); q('.bar.l b').style.width = pc(f.dy); q('.bar.r i').style.width = pc(b.hp); q('.bar.r b').style.width = pc(f.db);
@@ -2092,13 +2092,13 @@
         f.timer -= dt; face();
         for (const F of [y, b]) { F.inv = Math.max(0, F.inv - dt); F.x += F.vx * dt; F.vx *= Math.max(0, 1 - dt * 7); }
         if (y.st === 'hit') { y.t += dt; if (y.t >= y.stun) { y.st = 'idle'; y.t = 0; } }
-        else if (y.st === 'heavy' || y.st === 'bump' || y.st === 'slam') run(y, b, y.st);
+        else if (y.st === 'jab' || y.st === 'heavy' || y.st === 'slam') run(y, b, y.st);
         else {
           const mx = c ? c.mx : 0, blk = !!this.keys.KeyI; y.st = blk ? 'block' : 'idle'; y.t += dt;
           if (!blk && Math.abs(mx) > 0.3) y.x += Math.sign(mx) * (Math.sign(mx) === y.dir ? 3.3 : 2.7) * dt;
-          if (c && c.push.pressed) y.jHold = true;   // J: a tap is the booty bump (on letting go), held it's the booty slam. No slaps
+          if (c && c.push.pressed) y.jHold = true;   // J: a tap is a push (on letting go), held it's the booty slam
           if (y.jHold && c && c.push.held && c.push.t > DOG.holdJ) { y.jHold = false; y.st = 'slam'; y.t = 0; y.done = false; y.landed = false; }
-          else if (y.jHold && c && !c.push.held) { y.jHold = false; y.st = 'bump'; y.t = 0; y.done = false; }
+          else if (y.jHold && c && !c.push.held) { y.jHold = false; y.st = 'jab'; y.t = 0; y.done = false; }
           else if (c && (c.grab.pressed || c.dash.pressed)) { y.st = 'heavy'; y.t = 0; y.done = false; }
         }
         if (b.st === 'hit') { b.t += dt; if (b.t >= b.stun) { b.st = 'idle'; b.t = 0; } }
@@ -2106,8 +2106,8 @@
         else {
           const dist = Math.abs(y.x - b.x); b.t += dt; b.ai -= dt; b.blockT = Math.max(0, b.blockT - dt);
           if (b.blockT > 0) b.st = 'block'; else if (b.st === 'block') b.st = 'idle';
-          if ((y.st === 'bump' || y.st === 'heavy') && y.t < 0.2 && dist < 2.4 && !b.reacted) { b.reacted = true; if (Math.random() < 0.38) { b.blockT = 0.55; b.st = 'block'; } }
-          if (y.st !== 'bump' && y.st !== 'heavy') b.reacted = false;
+          if ((y.st === 'jab' || y.st === 'heavy') && y.t < 0.2 && dist < 2.4 && !b.reacted) { b.reacted = true; if (Math.random() < 0.38) { b.blockT = 0.55; b.st = 'block'; } }
+          if (y.st !== 'jab' && y.st !== 'heavy') b.reacted = false;
           if (b.st !== 'block' && b.ai <= 0) { b.ai = 0.22 + Math.random() * 0.38; const r = Math.random();
             if (dist > 2.7) b.mv = 1;
             else if (dist > 1.8) { if (r < 0.4) { b.st = 'heavy'; b.t = 0; b.done = false; } else if (r < 0.7) b.mv = 1; else b.mv = 0; }
@@ -2421,7 +2421,7 @@
       if (!this.tipCart && this.outOfBath && !P.held && !P.cart && this.carts.some((cc) => near(cc.x, cc.z, 2.6))) { this.tipCart = true; this.tip(['K: PUSH THE CART', 'Press K again to let go.', '#I next to it: HIDE INSIDE', 'Hide while nobody can see you. If they see you climb in, they will look inside.'], { until: () => !!P.cart }); }
       if (!this.tipSneak && room === 'lock') { this.tipSneak = true;
         this.tip(['I: SNEAK', 'People can hear you coming. HOLD I to move quietly.', 'You are a big boy, so sneaking tires you out. Stand still and you recover.', '#I: HIDE', 'I also lets you hide in carts and toilet stalls. Hide while nobody can see you. If they see you hide, they will find you.']);
-        this.tip(['J: BOOTY BUMP', 'He spins round and bumps with his booty.', 'Bump a WALL to make a noise. Whoever hears it comes to look, so you can lure them away.', 'Bump a PERSON: from the front they fly back, on the side they spin, from behind they stumble.', 'HOLD J: BOOTY SLAM. Jump and land on your booty: throws off anyone hanging on you.']); }
+        this.tip(['J: PUSH', 'Push a WALL to make a noise. Whoever hears it comes to look, so you can lure them away.', 'Push a PERSON: from the front they fly back, on the side they spin, from behind they stumble.', 'HOLD J: BOOTY SLAM. Jump and land on your booty: throws off anyone hanging on you.']); }
       if (!this.tipLockK && this.stage === 'locker' && near(this.locker.x, this.locker.z, 3.2)) { this.tipLockK = true; this.tip(['K: OPEN YOUR LOCKER'], { until: () => this.stage !== 'locker' }); }
       if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['HOLD L + A DIRECTION: CHARGE', 'Charging breaks things.', 'You need room for a run-up, and you cannot charge right away.', '#PRESS I WHILE CHARGING: ROLL', 'You curl up into a ball and roll, faster and further, as long as you hold L. Steer it. Nobody can grab you, and you bowl over anyone in the way.']); }
     }
@@ -2780,7 +2780,7 @@
           q.m.position.set(q.sx + (mx - q.sx) * e - fz * sw, q.sy + (hy - q.sy) * e + sw * 0.4, q.sz + (mz - q.sz) * e + fx * sw); q.m.rotation.y += dt * 18; q.m.rotation.x += dt * 9; q.m.scale.setScalar(1.3 * (1 - 0.7 * e)); q.m.visible = k < 1; }
         if (E.t > E.dur) { for (const q of E.pieces) if (q.m) this.G.remove(q.m); this.eatAnim = null; }
       }
-      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : (P.st === 'charge' && P.ball) || (this.ballHold && P.st === 'free') ? 'tuck' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? (this.stompW && this.stompW.t / this.stompW.W < DOG.slamCrouch ? 'brace' : 'bslam') : P.st === 'busy' && this.stompDone > this.t ? (this.stompDone - this.t > DOG.slamLand * 0.35 ? 'bslam' : 'recover') : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? (this.bump ? 'brace' : 'free') : P.st === 'wear' ? 'brace' : 'free';
+      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : (P.st === 'charge' && P.ball) || (this.ballHold && P.st === 'free') ? 'tuck' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? (this.stompW && this.stompW.t / this.stompW.W < DOG.slamCrouch ? 'brace' : 'bslam') : P.st === 'busy' && this.stompDone > this.t ? (this.stompDone - this.t > DOG.slamLand * 0.35 ? 'bslam' : 'recover') : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (P.st === 'skill' && g && g.wt !== undefined) w.t = g.wt;
       w.slamAir = P.st === 'stompW'; if (this.cap) { this.cap.t += dt; w.t = this.cap.t; }
@@ -2948,7 +2948,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-load">LOADING…</div><canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J booty bump (he spins round and bumps them with his booty: from the front they fly back, the side spins them, from behind they stumble) · hold J booty slam (jump and land on your booty: throws off anyone hanging on, knocks down anyone near) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · a run-up smashes things · shakes one hanger-on off; smashing into something throws them all off) · I mid-charge: roll up into a ball (faster, steer it, rolls while L is held) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<div class="st-load">LOADING…</div><canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J push (from the front they fly back, the side spins them, from behind they stumble) · hold J booty slam (jump and land on your booty: throws off anyone hanging on, knocks down anyone near) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · a run-up smashes things · shakes one hanger-on off; smashing into something throws them all off) · I mid-charge: roll up into a ball (faster, steer it, rolls while L is held) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="settings">SETTINGS</button><button data-c="tips">TUTORIAL TIPS: ON</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h); if (this.kit) this.kitShown();   // (until the bathhouse is in, a plain cover: never him on an empty blue sky)
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
