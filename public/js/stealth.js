@@ -40,7 +40,7 @@
   S.makeBathDohyo = () => {
     const g = new THREE.Group(), clay = S.Flat.mat(0xd3a96e), clayDk = S.Flat.mat(0xb98c52), straw = S.Flat.mat(0xd8d3a0), white = S.Flat.mat(0xf2ede4), T0 = 3.9, B0 = 4.3, H = 1.4;
     const add = (geo, mat, x, y, z, ry) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.y = ry || 0; o.castShadow = o.receiveShadow = true; o.userData.flatDone = true; g.add(o); return o; };
-    add(new THREE.CylinderGeometry(T0 * Math.SQRT2, B0 * Math.SQRT2, H, 4, 1), clayDk, 0, -H / 2, 0, Math.PI / 4);
+    add(new THREE.CylinderGeometry(T0 * Math.SQRT2, B0 * Math.SQRT2, H, 4, 1, true), clayDk, 0, -H / 2, 0, Math.PI / 4);   // (open: no lid fighting the clay top)
     add(new THREE.PlaneGeometry(T0 * 2 - 0.06, T0 * 2 - 0.06).rotateX(-Math.PI / 2), clay, 0, 0.004, 0);
     for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2, r = 3.1 + (i % 5 === 0 ? 0.24 : 0); add(new THREE.BoxGeometry(0.92, 0.17, 0.24), straw, Math.cos(a) * r, 0.085, Math.sin(a) * r, -a - Math.PI / 2); }
     for (const x of [-0.6, 0.6]) add(new THREE.BoxGeometry(0.09, 0.012, 0.9), white, x, 0.006, 0);
@@ -169,7 +169,7 @@
       this.later(3, () => { if (!this.outOfBath && this.scene && !this.tipWasd) { this.tipWasd = true; this.tip(['WASD: MOVE'], { until: () => this.outOfBath });
         this.tip(['THE MINIMAP: WHERE TO GO', 'The red ring is your goal. If it is off the edge of the map, an arrow points the way.', 'White dots are the staff.'], { arrow: true });
         this.tip(['YELLOW CONES: WHAT THEY CAN SEE', 'On the minimap, the yellow cone from each person is where they are looking.', 'Stay out of it, or hide (I). If you stay inside it, they will notice you.'], { arrow: true });
-        this.tip(['RED RINGS: NOISE', 'Every noise spreads a red ring on the minimap. It shows how far the noise carries.', 'Footsteps, charging, crashes, knocks and thrown things all make noise. Anyone inside the ring comes over to check.', 'Tiptoeing (hold I) makes no noise at all.'], { arrow: true }); } });
+        this.tip(['RED RINGS: NOISE', 'Every noise spreads a red ring on the minimap. It shows how far the noise carries.', 'Footsteps, sliding on a dry floor, crashes, knocks and thrown things all make noise. Anyone inside the ring comes over to check.', 'Tiptoeing (hold I) makes no noise at all.'], { arrow: true }); } });
     }
     later(sec, fn) { (this.timers || (this.timers = [])).push({ t: sec, fn }); }
 
@@ -860,7 +860,7 @@
       else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
       if (!c.dash.held) this.lRel = true;   // (one charge per press: let go of L before the next, no endless re-charging)
-      if (P.st === 'free' && c.dash.pressed && P.cd <= 0 && !wet && !P.cart && !P.carryN) this.slideGo(mag > 0.3 ? Math.atan2(mz, mx) : P.f);   // L: the BELLY SLIDE (see slideGo)
+      if (P.st === 'free' && c.dash.pressed && P.cd <= 0 && !wet && !P.cart && !P.carryN && !this.attN()) this.slideGo(mag > 0.3 ? Math.atan2(mz, mx) : P.f);   // L: the BELLY SLIDE (see slideGo)
       let spd = 0;
       if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 6.4 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : this.wearing && this.keys.KeyI ? 1.2 : (this.wearing ? 3.0 : 3.4);   // (crouched in the box, out of puff: a slow shuffle)
       if (P.st === 'free') spd *= DOG.speed[Math.min(DOG.maxAtt, this.attN())] * (P.carryN ? DOG.carrySpeed : 1);
@@ -873,7 +873,7 @@
       if (P.st === 'wind' && mag > 0.3) { P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * 8); P.f = P.cdir; }
       if (P.st === 'slide') { this.slideStep(dt, mag > 0.3 ? mx : 0, mag > 0.3 ? mz : 0, mag); mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = P.sv || 0; }
       if (P.st === 'getup') spd = 0;
-      const roll = (P.st === 'charge' && P.run > 1.0) || (P.st === 'slide' && P.sv > DOG.slideSmash), power = roll && !P.ball;   // (a slide smashes things only while it's going fast)   // it needs a run-up: from right next to something he just bumps it (rolled up in a ball he smashes nothing, he just bowls people over)
+      const roll = (P.st === 'charge' && P.run > 1.0) || (P.st === 'slide' && P.sv > DOG.slideSmash), power = roll && !P.ball && P.st !== 'slide';   // (the slide bowls people over but smashes nothing: the booty slam does that)   // it needs a run-up: from right next to something he just bumps it (rolled up in a ball he smashes nothing, he just bowls people over)
       const dir = P.st === 'charge' || P.st === 'slide' || mag > 0.3, rk = P.st === 'slide' ? 30 : P.st === 'charge' ? 14 : 10;
       P.vx += ((dir ? mx : 0) * spd - P.vx) * Math.min(1, dt * rk); P.vz += ((dir ? mz : 0) * spd - P.vz) * Math.min(1, dt * rk);
       if (P.st === 'slip' || P.st === 'busy' || P.st === 'wear' || P.st === 'wind') { P.vx *= 0.85; P.vz *= 0.85; }
@@ -898,8 +898,6 @@
       if (this.vend) { const V = this.vend;
         if (power && !V.broke && !V.cd && Math.abs(P.y - V.y) < 1 && P.x > V.x0 - P.r - 0.2 && P.z > V.z0 - 0.3 && P.z < V.z1 + 0.3) { V.cd = 0.6; this.chargeWall(); this.hitVend(); P.t = P.dur + 0.01; P.vx *= -0.3; P.vz *= -0.3; } }
       P.brkCd = Math.max(0, (P.brkCd || 0) - dt); this.runupCd = Math.max(0, (this.runupCd || 0) - dt);
-      if (P.st === 'slide' && !power && this.breakables && !this.runupCd && this.breakables.some((B) => !B.done && Math.abs((B.s.f ? UP : 0) - P.y) < 1.2 && Math.hypot(P.x - clamp(P.x, B.s.x0, B.s.x1), P.z - clamp(P.z, B.s.z0, B.s.z1)) < P.r + 0.15)) {
-        this.runupCd = 8; this.chargeWall(); this.think('Too slow to smash that... a WET floor would get me going.', 2.2); }   // (from right up against it he only bumps it)
       if (power && this.breakables && !P.brkCd) {   // one piece at a time: the nearest one he hits
         let best = null, bd = P.r + 0.15;
         for (const B of this.breakables) {
@@ -973,7 +971,7 @@
         if (room === 'store' && this.stage === 'storage') { this.stage = 'box'; this.spBox.visible = true; this.think('A cardboard box... it\'ll have to do!', 2.8); this.objective('Put on the BOX (K next to it)'); }
       }
       if (!this.crackDone && !this.saidCrack && room === 'corr' && P.x > 4 && this.stage === 'storage') {   // (only once he needs to get upstairs: after the towels) this.saidCrack = true; this.spCrack.visible = true;
-        this.think('The stairs! ...buried under a heap of delivery boxes. One good belly slide (L) should clear them.', 3.4); }
+        this.think('The stairs! ...buried under a heap of delivery boxes. One good booty slam (hold J) right next to them should clear them.', 3.4); }
       // fire exit
       if (P.x < EXIT.x + 0.4 && P.z < EXIT.z1 && P.z > EXIT.z0 && !this.saidChain) { this.saidChain = true; this.think('The fire exit... chained shut?!', 2.0); }
       const En = LY.entrance;
@@ -1561,7 +1559,7 @@
       if (this.att[L.k] !== n || this.cap || P.st === 'charge' || P.st === 'slide' || P.st === 'wind' || P.st === 'skill' || P.hidden || P.boxHide || P.inStall || this.unseen() || (this.gs && this.gs.id === 'giant')) { if (this.att[L.k] === n) this.att[L.k] = null; a.st = 'free'; n.noGrab = this.t + 1; return true; }   // (he charged off, hid, vanished...: they miss)
       n.att = L.k; n.attStun = 0; a.st = q.st; a.cling = q.cling;
       this.flash = Math.max(this.flash || 0, 0.12); this.sfx('thump', 3); if (this.g.audio && this.g.audio.grab) this.g.audio.grab();
-      if (!this.tipGrab) { this.tipGrab = true; this.tip(['THEY GRABBED YOU', 'Each one hanging on slows you down. Two on your legs, one on your head, one on your back... and if a FIFTH piles on, you are caught.', '#HOLD J: BOOTY SLAM', 'Jump up and land on your booty: everyone falls off. It takes longer the more are on you.', '#L: BELLY SLIDE', 'Every dive throws one off. Slide into a wall or anything solid and they all come off.'], { now: true }); }
+      if (!this.tipGrab) { this.tipGrab = true; this.tip(['THEY GRABBED YOU', 'Each one hanging on slows you down. Two on your legs, one on your head, one on your back... and if a FIFTH piles on, you are caught.', '#HOLD J: BOOTY SLAM', 'Jump up and land on your booty: everyone falls off. It takes longer the more are on you.', '#WITH ANYONE ON YOU', 'You cannot belly slide. Booty slam them off first.'], { now: true }); }
       if (this.attN() >= DOG.maxAtt) this.capture();
       return true;
     }
@@ -1616,11 +1614,23 @@
     }
     doStomp() {   // ...BOOM: he lands on his booty. Everyone hanging on falls off, and anyone near is knocked down by the shock
       const P = this.P; this.stompW = null; P.st = 'busy'; P.t = 0; P.dur = DOG.slamLand; this.stompDone = this.t + DOG.slamLand;
-      this.detachAll('stomp');
+      this.detachAll('stomp'); this.slamSmash();
       for (const n of this.npcs) { const a = n.a; if (!this.upright(n) || Math.abs(a.y - P.y) > 1.2) continue; const dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz) || 1; if (d > DOG.stompR) continue;
         this.dropOff(n, dx, dz, DOG.bumpDown); }   // (the shock knocks them off their feet)
       this.flash = Math.max(this.flash || 0, 0.7); this.shake = Math.max(this.shake || 0, 0.35); this.sfx('thump', 9); this.fx.ring(P.x, P.z, DOG.stompR, 0.45); this.fx.ring(P.x, P.z, DOG.stompR * 0.55, 0.3);
       this.miniPuff(P.x, P.y, P.z, 1.7, 14); this.noise(P.x, P.z, 10, '!?');
+    }
+    slamSmash() {   // the booty slam's shock smashes whatever he's right next to: his locker (three goes), the boxes on the stairs, the cracked wall, the machine, furniture; carts fly off
+      const P = this.P, nearBox = (x0, x1, z0, z1, r) => Math.hypot(P.x - clamp(P.x, x0, x1), P.z - clamp(P.z, z0, z1)) < r;
+      if (this.stage === 'smash' && this.locker && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.9) { this.hitLocker(); return; }
+      const CK = LY.crack; if (!this.crackDone && Math.abs(P.y) < 1 && nearBox(CK.x0, CK.x1, CK.z0, CK.z1, 1.7)) this.smashCrack();
+      const V = this.vend; if (V && !V.broke && Math.abs(P.y - V.y) < 1 && Math.hypot(P.x - V.x0, P.z - clamp(P.z, V.z0, V.z1)) < 1.7) this.hitVend();
+      if (this.breakables) { let best = null, bd = 1.5;
+        for (const B of this.breakables) { if (B.done) continue; const sd = B.s; if (Math.abs((sd.f ? UP : 0) - P.y) > 1.2) continue;
+          if (sd.k === 'lockers' && Math.abs((sd.z0 + sd.z1) / 2 - (LY.locker.bz0 + 0.35)) < 0.6 && sd.x1 > LY.locker.bx0 - 0.1 && sd.x0 < LY.locker.bx0 + 8.1) continue;   // (his own locker bank: only hitLocker)
+          const cx = clamp(P.x, sd.x0, sd.x1), cz = clamp(P.z, sd.z0, sd.z1), d = Math.hypot(P.x - cx, P.z - cz); if (this.segInWall(P.x, P.z, cx, cz)) continue; if (d < bd) { bd = d; best = B; } }
+        if (best) this.breakThing(best); }
+      for (const cc of this.carts) { if (cc === P.cart || cc === P.hidden) continue; const dx = cc.x - P.x, dz = cc.z - P.z, d = Math.hypot(dx, dz); if (d > 2.2 || d < 1e-3) continue; cc.vx = dx / d * 5; cc.vz = dz / d * 5; cc.spin = (Math.random() - 0.5) * 4; }
     }
     dropOff(n, dx, dz, downT) {   // shaken off: they just let go and fall down where they are (a little push away from him), no flying
       this.unattach(n); n.spin = null; n.shock = 0; n.a.shock = 0; n.ko = false; n.path = null; n.hold = 0; n.alarm = 0;
@@ -1634,7 +1644,7 @@
     }
     wetFloor(x, z) { return !!SAFE[roomAt(x, z)] || this.puddles.some((q) => ((x - q.x) / q.rx) ** 2 + ((z - q.z) / q.rz) ** 2 < 1); }   // (the bath and the showers, and any puddle)
     slideGo(dir) {   // L: a dive onto his belly. Silent on a wet floor (and it goes on and on); a dry floor squeaks and stops him short
-      const P = this.P; P.st = 'slide'; P.t = 0; P.dur = 99; P.cdir = dir; P.f = dir; P.sv = DOG.slideV; P.run = 0; this.slideNT = 0; this.chargeOne();
+      const P = this.P; P.st = 'slide'; P.t = 0; P.dur = 99; P.cdir = dir; P.f = dir; P.sv = DOG.slideV; P.run = 0; this.slideNT = 0;   // (no slide with anyone hanging on: see the step)
       this.sfx('whoosh', 0.5);
       if (this.wetFloor(P.x, P.z)) { if (this.fx.water) this.fx.water(P.x, P.z, 1.2, P.y); }
       else { this.noiseS(P.x, P.z, DOG.slideNoise, '?'); this.popAt({ x: P.x, z: P.z, y: P.y }, 'キュッ!', 0.6); }
@@ -1794,7 +1804,7 @@
         const wb = this.washB;
         this.flying.push({ m: wb, sx: wb.position.x, sy: 0, sz: wb.position.z, tx: wb.position.x + 0.3, ty: 0.34, tz: wb.position.z + 0.2, h: 0.5, t: 0, dur: 0.45, r0: [0, 0, 0], r1: [Math.PI, 0.6, 0] });
         this.think('Empty?! No key... Forget it. I\'ll just smash the locker open!', 3.2);
-        this.objective('BELLY SLIDE into your locker (L + direction). It will take a few hits: hide when they come running'); return;
+        this.objective('BOOTY SLAM right next to your locker (hold J). It will take a few goes: hide when they come running'); return;
       }
       if (this.stage === 'onigiri' && near(LY.onigiri.x, LY.onigiri.z, 1.7) && this.oni.n > 0) {
         const nEat = Math.min(this.oni.n, LY.onigiri.need - this.oni.eaten);
@@ -1986,7 +1996,7 @@
       switch (k) {
         case 'locker': this.stage = 'locker'; at(CP.lockN.x, CP.lockN.z, 0, CP.lockN.f); this.spLocker.visible = true; this.objective('Find your LOCKER (through the wash area)'); break;
         case 'key': at(CP.lockN.x, CP.lockN.z, 0, CP.lockN.f); this.spKey.visible = true; this.objective('Go back to the BATH and check your WASH BUCKET for the KEY'); break;
-        case 'smash': at(-10.5, -34.5, 0, -Math.PI / 2); this.spLocker.visible = true; this.objective('BELLY SLIDE into your locker (L + direction). It will take a few hits: hide when they come running'); break;
+        case 'smash': at(-10.5, -34.5, 0, -Math.PI / 2); this.spLocker.visible = true; this.objective('BOOTY SLAM right next to your locker (hold J). It will take a few goes: hide when they come running'); break;
         case 'towel': at(CP.corr.x, CP.corr.z, 0, CP.corr.f); this.spTowel.visible = true; this.objective('Get a TOWEL from the LAUNDRY room (through the staff door, along the back corridor)'); break;
         case 'storage': at(CP.corr.x + 8, CP.corr.z, 0, 0); this.spCrack.visible = !this.crackDone; this.objective('Get UPSTAIRS (the back stairs, past the boxes), into STORAGE behind the FRONT DESK'); break;
         case 'box': at(CP.store.x, CP.store.z, UP, CP.store.f); this.spBox.visible = true; this.objective('Put on the BOX (K next to it)'); break;
@@ -2030,7 +2040,8 @@
       // the first win is not enough: he was going easy, so there's a rematch (bare this time: the box is gone)
       if (!this.bossWon1) { this.bossWon1 = true; this.g.bossBox = false;
         this.say([{ who: '親方', jp: '…ほう。やるじゃないか。', en: '...Oh? Not bad at all.', t: 2.4 }, { who: '親方', jp: 'だが、今のは手加減してやったんだ。もう一番!', en: 'But I was going easy on you. Once more!', t: 3.2 }], () => this.bossBout()); return; }
-      // won the rematch: the mawashi comes back
+      // won the rematch: the mawashi comes back (and the bath fills up again: no ring left in it to walk through)
+      this.ringUp = false; this.ringCut = null; this.waterDrop = 0; if (this.dohyoM) this.dohyoM.visible = false;
       this.boss.on = true; this.boss.y = -0.12; this.boss.hold = false;
       this.say([
         { who: '親方', jp: '…見事だ。', en: '...Magnificent.', t: 2.2 },
@@ -2055,7 +2066,7 @@
       this.waterDrop = (POOL.water + 0.75) * e(c(0.4, 2.6));   // the water drains away...
       if (t > 0.4 && t < 2.6 && Math.random() < dt * 8 && this.fx.water) this.fx.water(POOL.x0 + 1 + Math.random() * (POOL.x1 - POOL.x0 - 2), POOL.z0 + 1 + Math.random() * (POOL.z1 - POOL.z0 - 2), 1.2, POOL.water - this.waterDrop);
       if (!R.shown && t > 2.6) { R.shown = true; this.sfx('thump', 6); }   // (...and there's the ring, standing on the bath's bottom)
-      this.camFocus = t < 2.6 ? { x: cx, z: cz + 1.5, y: 0, dist: 16, h: 0.6 } : { x: cx, z: cz, y: 0.3, dist: 12, h: 0.42 };   // (the bath, then in on the ring, square in the middle)
+      this.camFocus = { x: cx, z: cz, y: 0, dist: 15, h: 0.64 };   // (the ring square in the middle, from the usual height: never a low camera)
       if (t > 4.4) { this.ringCut = null; this.camFocus = null; this.P.st = 'free'; this.P.dur = 0; R.cb(); }
     }
     // ---- stage 1: a Street Fighter style bout in front of the Mt Fuji mural (best of three rounds)
@@ -2188,7 +2199,7 @@
     bonusHTML() {
       const B = this.bonus || { seen: true, ko: true, broke: true, hit: true }, all = B.seen && B.ko && B.broke && B.hit;
       const row = (ok, jp, t, d) => '<div style="display:flex;gap:10px;align-items:baseline;justify-content:center;opacity:' + (ok ? 1 : 0.45) + '"><b style="font:400 20px \'Yuji Syuku\',serif;color:' + (ok ? '#d8262e' : '#8a8178') + '">' + jp + '</b><span style="font:700 18px \'Barlow Condensed\',sans-serif;letter-spacing:0.06em;' + (ok ? '' : 'text-decoration:line-through') + '">' + (ok ? '✓ ' : '') + t + '</span><span style="font:500 15px \'Barlow Condensed\',sans-serif;opacity:0.7">' + d + '</span></div>';
-      return '<div style="margin:10px 0 14px;display:flex;flex-direction:column;gap:4px">' + row(B.seen, '忍', 'GHOST', 'never spotted') + row(B.ko, '和', 'PACIFIST', 'nobody knocked out') + row(B.broke, '静', 'LIGHT TOUCH', 'nothing broken by charging') + row(B.hit, '無傷', 'FLAWLESS', 'never got hit') +
+      return '<div style="margin:10px 0 14px;display:flex;flex-direction:column;gap:4px">' + row(B.seen, '忍', 'GHOST', 'never spotted') + row(B.ko, '和', 'PACIFIST', 'nobody knocked out') + row(B.broke, '静', 'LIGHT TOUCH', 'nothing broken') + row(B.hit, '無傷', 'FLAWLESS', 'never got hit') +
         (all ? '<div style="font:400 26px \'Dela Gothic One\',sans-serif;color:#d8262e;margin-top:6px">完璧 · PERFECT</div>' : '') + '</div>';
     }
     // ---- subtitles: who's speaking, the Japanese as they say it, the English underneath
@@ -2414,7 +2425,7 @@
       const near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r, room = roomAt(P.x, P.z), sub = this.el('.st-sub').style.display === 'block';
       if (!(this.paused || this.over || this.asleep || this.sf || this.freeze || this.choiceCb || sub || this.jumpOn || this.camFocus || this.bossCut)) {   // (no prompts in a cutscene, dialog or not)
         const V = this.vend;
-        if (this.attN && this.attN()) L = [['hold J', 'booty slam them off'], ['L slide', 'shake one off']];
+        if (this.attN && this.attN()) L = [['hold J', 'booty slam them off']];
         else if (P.carryN) L = [['K', 'throw'], ['hold K', 'slam down']];
         else if (P.stallHide !== undefined) L = [['move / I', 'come out']];
         else if (P.hidden) L = [['move / I', 'climb out'], ['hold I + direction', 'climb out silently']];
@@ -2448,7 +2459,7 @@
         this.tip(['I: SNEAK', 'People can hear you coming. HOLD I to move quietly.', 'You are a big boy, so sneaking tires you out. Stand still and you recover.', '#I: HIDE', 'I also lets you hide in carts and toilet stalls. Hide while nobody can see you. If they see you hide, they will find you.']);
         this.tip(['J: PUSH', 'Push a WALL to make a noise. Whoever hears it comes to look, so you can lure them away.', 'Push a PERSON: from the front they fly back, on the side they spin, from behind they stumble.', 'HOLD J: BOOTY SLAM. Jump and land on your booty: throws off anyone hanging on you.']); }
       if (!this.tipLockK && this.stage === 'locker' && near(this.locker.x, this.locker.z, 3.2)) { this.tipLockK = true; this.tip(['K: OPEN YOUR LOCKER'], { until: () => this.stage !== 'locker' }); }
-      if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['L + A DIRECTION: BELLY SLIDE', 'He dives onto his belly and slides. On a WET floor it is silent and goes a long way; a dry floor squeaks (they hear it) and stops him short.', 'Sliding, you are low and hard to spot, and anyone in the way goes down. Fast enough, it smashes things.', 'When it stops you lie there a moment: do not stop in front of anyone.']); }
+      if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['L + A DIRECTION: BELLY SLIDE', 'He dives onto his belly and slides. On a WET floor it is silent and goes a long way; a dry floor squeaks (they hear it) and stops him short.', 'Sliding, you are low and hard to spot, and anyone in the way goes down. It breaks nothing.', 'You cannot slide with anyone hanging on you. When it stops you lie there a moment: do not stop in front of anyone.']); }
     }
     drink() {
       const P = this.P, b = P.held; if (!b) return;
@@ -2572,7 +2583,7 @@
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(7);
       this.noise(this.locker.x, this.locker.z, 14, '?!');
       this.think(k === 1 ? 'Hmm... just a dent. Let me try that again.' : 'The hinge is coming loose... one more!', 2.2);
-      this.objective('SLIDE into your locker again (' + (3 - k) + ' more). Hide when they come to look');
+      this.objective('BOOTY SLAM your locker again (' + (3 - k) + ' more). Hide when they come to look');
     }
     smashLocker() {
       this.stage = 'storage'; this.spLocker.visible = false;
@@ -2824,7 +2835,7 @@
       if (v.ballSpin && v.ballSpin.visible) v.ballSpin.position.y += P.y;   // (the daruma: on the floor he's on)
       const gk = (w.szCur || 1) * (this.gulp ? 1.22 + Math.sin(T * 9) * 0.03 : 1);   // GIANT, or someone swallowed
       const boxTip = this.wearing && !!this.keys.KeyI && P.st === 'free' && !P.sub && !P.hidden && !(this.noDuck > 0) && !this.attN();   // (out of puff he stays down in the box: it never pops open on him)   // tiptoeing in the box: crouched down inside it, flaps shut, even while it moves
-      const rolling = !!(P.ball && P.st === 'charge') || !!(this.ballHold && P.st === 'free'), ball = P.boxHide || boxTip || (!!this.keys.KeyI && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
+      const rolling = !!(P.ball && P.st === 'charge') || !!(this.ballHold && P.st === 'free'), ball = P.boxHide || boxTip || (!!this.keys.KeyI && !this.attN() && P.tip > 0.5 && Math.hypot(P.vx, P.vz) < 0.3 && P.st === 'free' && !P.sub && !P.held && !P.cart);   // I, standing still: curled up in a ball
       this.ballK = (this.ballK || 0) + ((ball ? 1 : 0) - (this.ballK || 0)) * Math.min(1, dt * 10);
       if (this.ballK > 0.01) { const k = this.ballK; v.root.position.y -= (P.boxHide || boxTip ? 0.8 : 0.06) * v.s * k; v.root.scale.set(v.s * gk * (1 - 0.1 * k), v.s * gk * (1 - 0.32 * k), v.s * gk * (1 - 0.1 * k)); } else v.root.scale.setScalar(v.s * gk);
       // ducking in the box: the same box stays where it stood on the floor and he sinks down into it (no second box)
@@ -2975,7 +2986,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-load">LOADING…</div><canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J push (from the front they fly back, the side spins them, from behind they stumble) · hold J booty slam (jump and land on your booty: throws off anyone hanging on, knocks down anyone near) · J at a wall: knock, a noise to lure them · L + direction belly slide (silent and long on a wet floor, short and squeaky on a dry one · low, hard to spot · bowls people over · fast, it smashes things · shakes one off) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<div class="st-load">LOADING…</div><canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J push (from the front they fly back, the side spins them, from behind they stumble) · hold J booty slam (jump and land on your booty: throws off anyone hanging on, knocks down anyone near, smashes what is right next to you) · J at a wall: knock, a noise to lure them · L + direction belly slide (silent and long on a wet floor, short and squeaky on a dry one · low, hard to spot · bowls people over · breaks nothing · not with anyone hanging on) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="settings">SETTINGS</button><button data-c="tips">TUTORIAL TIPS: ON</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h); if (this.kit) this.kitShown();   // (until the bathhouse is in, a plain cover: never him on an empty blue sky)
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
