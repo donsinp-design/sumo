@@ -55,6 +55,8 @@
     boxDeep: 0.72,                               // ...and that much as deep as the box on the floor (snug round his belly, the back through his booty)
     sfBump: [0.15, 0.3, 0.5], sfSlam: [0.62, 0.72, 1.2],   // the boss fight: the booty bump's and booty slam's timing (hits from / to, done at)
     ringDepth: -1.75,                            // the boss's ring, sunk under the bath floor until it rises
+    slideV: 8.0, slideDry: 9.5, slideWet: 1.6, slideTurn: 1.4,   // L: the belly slide. Launch speed, how fast a dry / wet floor stops him, how much he can steer it
+    slideSmash: 5.0, slideNoise: 5, slideSeen: 0.6, slideUp: 0.6,   // fast enough to smash things above this; how far a dry slide is heard; how far staff see him sliding (x their range); time to get up
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
     slapFront: 7, slapRear: 5, spinT: 1.5,       // a slap: knocked back / stumbling forward (speeds), spun round (seconds)
@@ -847,7 +849,7 @@
       else { P.stam = Math.min(1, P.stam + dt * 0.3); if (P.tired && P.stam > 0.45) P.tired = false; }
       // L + direction: CHARGE (as everywhere in the game); not while wading
       if (!c.dash.held) this.lRel = true;   // (one charge per press: let go of L before the next, no endless re-charging)
-      if (P.st === 'free' && c.dash.held && this.lRel !== false && mag > 0.3 && P.cd <= 0 && !wet && !P.cart && !P.carryN) { this.lRel = false; P.st = 'wind'; P.t = 0; P.dur = 0.3; P.cdir = Math.atan2(mz, mx); P.f = P.cdir; }   // a wind-up first: he braces, then launches
+      if (P.st === 'free' && c.dash.pressed && P.cd <= 0 && !wet && !P.cart && !P.carryN) this.slideGo(mag > 0.3 ? Math.atan2(mz, mx) : P.f);   // L: the BELLY SLIDE (see slideGo)
       let spd = 0;
       if (P.st === 'free') spd = wet ? (P.sub ? 1.2 : 2.0) : P.cart ? 6.4 : P.tip > 0.5 ? (this.wearing ? 1.5 : 1.7) : this.wearing && this.keys.KeyI ? 1.2 : (this.wearing ? 3.0 : 3.4);   // (crouched in the box, out of puff: a slow shuffle)
       if (P.st === 'free') spd *= DOG.speed[Math.min(DOG.maxAtt, this.attN())] * (P.carryN ? DOG.carrySpeed : 1);
@@ -858,9 +860,11 @@
       P.chT = P.st === 'charge' ? (P.chT || 0) + dt : 0; if (P.chT > (P.ball ? DOG.ballMax : 0.95) * this.chargeK()) { P.st = 'free'; P.t = 0; P.cd = 0.5; P.chT = 0; }   // (a charge can never run on)
       if (P.st === 'charge') { mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = P.ball ? DOG.ballSpeed : 7.2; P.run = (P.run || 0) + Math.hypot(P.vx, P.vz) * dt; if (!c.dash.held && P.t > 0.25) P.t = P.dur + 0.01; if (P.t > (P.ball ? DOG.ballMax : 0.85) * this.chargeK()) P.t = P.dur + 0.01; else if (P.ball && c.dash.held) P.t = Math.min(P.t, P.dur - 0.01); P.f = P.cdir; if (P.ball) P.ballRoll += Math.hypot(P.vx, P.vz) * dt / 0.62; }   // (never longer than 0.85 s)
       if (P.st === 'wind' && mag > 0.3) { P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * 8); P.f = P.cdir; }
-      const roll = P.st === 'charge' && P.run > 1.0, power = roll && !P.ball;   // it needs a run-up: from right next to something he just bumps it (rolled up in a ball he smashes nothing, he just bowls people over)
-      const dir = P.st === 'charge' || mag > 0.3;
-      P.vx += ((dir ? mx : 0) * spd - P.vx) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10)); P.vz += ((dir ? mz : 0) * spd - P.vz) * Math.min(1, dt * (P.st === 'charge' ? 14 : 10));
+      if (P.st === 'slide') { this.slideStep(dt, mag > 0.3 ? mx : 0, mag > 0.3 ? mz : 0, mag); mx = Math.cos(P.cdir); mz = Math.sin(P.cdir); spd = P.sv || 0; }
+      if (P.st === 'getup') spd = 0;
+      const roll = (P.st === 'charge' && P.run > 1.0) || (P.st === 'slide' && P.sv > DOG.slideSmash), power = roll && !P.ball;   // (a slide smashes things only while it's going fast)   // it needs a run-up: from right next to something he just bumps it (rolled up in a ball he smashes nothing, he just bowls people over)
+      const dir = P.st === 'charge' || P.st === 'slide' || mag > 0.3, rk = P.st === 'slide' ? 30 : P.st === 'charge' ? 14 : 10;
+      P.vx += ((dir ? mx : 0) * spd - P.vx) * Math.min(1, dt * rk); P.vz += ((dir ? mz : 0) * spd - P.vz) * Math.min(1, dt * rk);
       if (P.st === 'slip' || P.st === 'busy' || P.st === 'wear' || P.st === 'wind') { P.vx *= 0.85; P.vz *= 0.85; }
       if (mag > 0.3 && P.st === 'free') P.f = lerpA(P.f, Math.atan2(mz, mx), dt * (P.cart ? 4 : 12));
       if (P.st === 'skill') this.gsMove(dt, mx, mz, mag);
@@ -869,13 +873,13 @@
       if (!P.hidden && !P.boxHide && P.st !== 'skill') for (const n of this.npcs) {   // bodies: he bumps into people (a charge bowls them over: see below)
         const a = n.a; if (a.st === 'down' || Math.abs(a.y - P.y) > 1 || n.att !== undefined || n.lunge || n.carried || a.st === 'thrown') continue;
         const dx = P.x - a.x, dz = P.z - a.z, d = Math.hypot(dx, dz), R2 = P.r * 0.8 + 0.4;
-        if (d < R2 && d > 1e-4 && !(P.st === 'charge' && (P.ball || (n.mode !== 'chase' && n.alarm < 1)) && a.st === 'free')) { P.x = a.x + dx / d * R2; P.z = a.z + dz / d * R2; if (P.st === 'charge') { P.t = P.dur + 0.01; P.vx *= -0.2; P.vz *= -0.2; } }
+        if (d < R2 && d > 1e-4 && !(((P.st === 'charge' && (P.ball || (n.mode !== 'chase' && n.alarm < 1))) || P.st === 'slide') && a.st === 'free')) { P.x = a.x + dx / d * R2; P.z = a.z + dz / d * R2; if (P.st === 'charge') { P.t = P.dur + 0.01; P.vx *= -0.2; P.vz *= -0.2; } }
       }
       // the cracked wall gives way to a charge
       const CK = LY.crack;
       if (power && !this.crackDone && P.z < CK.z1 + P.r + 0.25 && P.z > CK.z0 - 0.2 && P.x > CK.x0 && P.x < CK.x1) { this.chargeWall(); this.smashCrack(); }
       if (roll) for (const n of this.npcs) {   // a charge bowls over anyone he hits who hadn't made him out yet (not someone already after him)
-        if (n.a.st !== 'free' || ((n.alarm >= 1 || n.mode === 'chase') && !(this.gs && this.gs.id === 'giant') && !P.ball) || Math.abs(n.a.y - P.y) > 1 || n.lunge) continue;   // (rolled up, or a giant: even the ones after him go down)
+        if (n.a.st !== 'free' || ((n.alarm >= 1 || n.mode === 'chase') && !(this.gs && this.gs.id === 'giant') && !P.ball && P.st !== 'slide') || Math.abs(n.a.y - P.y) > 1 || n.lunge) continue;   // (rolled up, or a giant: even the ones after him go down)
         const dx = n.a.x - P.x, dz = n.a.z - P.z, d = Math.hypot(dx, dz);
         if (d < P.r + 0.55 && (dx * Math.cos(P.f) + dz * Math.sin(P.f)) / (d || 1) > 0.2) this.knockOut(n, Math.cos(P.f), Math.sin(P.f), ['ドーン!', 'ドスン!'][(this.t * 3 | 0) % 2], 4.5);
       }
@@ -883,8 +887,8 @@
       if (this.vend) { const V = this.vend;
         if (power && !V.broke && !V.cd && Math.abs(P.y - V.y) < 1 && P.x > V.x0 - P.r - 0.2 && P.z > V.z0 - 0.3 && P.z < V.z1 + 0.3) { V.cd = 0.6; this.chargeWall(); this.hitVend(); P.t = P.dur + 0.01; P.vx *= -0.3; P.vz *= -0.3; } }
       P.brkCd = Math.max(0, (P.brkCd || 0) - dt); this.runupCd = Math.max(0, (this.runupCd || 0) - dt);
-      if (P.st === 'charge' && !P.ball && !power && this.breakables && !this.runupCd && this.breakables.some((B) => !B.done && Math.abs((B.s.f ? UP : 0) - P.y) < 1.2 && Math.hypot(P.x - clamp(P.x, B.s.x0, B.s.x1), P.z - clamp(P.z, B.s.z0, B.s.z1)) < P.r + 0.15)) {
-        this.runupCd = 8; this.chargeWall(); this.think('Too close... I need a RUN-UP to smash through that!', 2); }   // (from right up against it he only bumps it)
+      if (P.st === 'slide' && !power && this.breakables && !this.runupCd && this.breakables.some((B) => !B.done && Math.abs((B.s.f ? UP : 0) - P.y) < 1.2 && Math.hypot(P.x - clamp(P.x, B.s.x0, B.s.x1), P.z - clamp(P.z, B.s.z0, B.s.z1)) < P.r + 0.15)) {
+        this.runupCd = 8; this.chargeWall(); this.think('Too slow to smash that... a WET floor would get me going.', 2.2); }   // (from right up against it he only bumps it)
       if (power && this.breakables && !P.brkCd) {   // one piece at a time: the nearest one he hits
         let best = null, bd = P.r + 0.15;
         for (const B of this.breakables) {
@@ -913,7 +917,7 @@
       const hx0 = P.x, hz0 = P.z, hit0 = this.collide(P, P.r), hpx = P.x - hx0, hpz = P.z - hz0, hpl = Math.hypot(hpx, hpz);
       this.pHit0 = hit0 && hpl > 1e-5; this.pN = this.pHit0 ? [hpx / hpl, hpz / hpl] : null; this.pHit = this.pHit0 && (hpx * Math.cos(P.f) + hpz * Math.sin(P.f)) / hpl < -0.55;
       if (P.st === 'charge' && this.pHit0 && (hpx * Math.cos(P.cdir) + hpz * Math.sin(P.cdir)) / hpl < -0.3) this.chargeWall();   // (ran into a wall or anything solid: everyone hanging on is thrown off)   // (for the skills: ran into a wall, and which way it faces)
-      const hit = hit0 && (P.st !== 'charge' || (hpl > 1e-5 && (hpx * Math.cos(P.cdir) + hpz * Math.sin(P.cdir)) / hpl < -0.55));   // (a charge only bumps a wall it runs INTO: brushing along one beside him doesn't count)
+      const hit = hit0 && ((P.st !== 'charge' && P.st !== 'slide') || (hpl > 1e-5 && (hpx * Math.cos(P.cdir) + hpz * Math.sin(P.cdir)) / hpl < -0.55));   // (a charge only bumps a wall it runs INTO: brushing along one beside him doesn't count)
       if (this.noGuard) this.noGuard = false; else if ((P.x !== px0 || P.z !== pz0) && Math.hypot(P.x - px0, P.z - pz0) < 2.5 && this.segInWall(px0, pz0, P.x, P.z)) { P.x = px0; P.z = pz0; }   // (never squeezed through a wall: a shove, a punch, a crowd pushing)
       // how high he stands: in the bath up to his chest, the stairs, the floor above
       const ty = wet ? (P.sub ? -1.6 : P.z > -3.4 && P.x > 0 && P.x < 2 ? -0.3 : -0.62) : floorY(P.x, P.z);
@@ -926,12 +930,12 @@
         if (!wet && !SAFE[roomAt(P.x, P.z)]) this.noise(P.x, P.z, P.tip > 0.5 ? 2.4 : 4.5, '?', true); } }
       else this.splT = 0;
       if (wet !== this.wasWet) { if (this.wasWet !== undefined) this.fx.water && this.fx.water(P.x, P.z, 1.6, POOL.water); this.wasWet = wet; }
-      if (P.st === 'charge') {
+      if (P.st === 'charge' || P.st === 'slide') {
         if (power && this.stage === 'smash' && !this.chasing() && Math.hypot(P.x - this.locker.x, P.z - this.locker.z) < 1.25) { this.chargeWall(); this.hitLocker(); P.st = 'busy'; P.t = 0; P.dur = 0.5; }
         else if (hit && P.ball && this.pN) { const nx = this.pN[0], nz = this.pN[1], vx = Math.cos(P.cdir), vz = Math.sin(P.cdir), d = vx * nx + vz * nz; P.cdir = Math.atan2(vz - 2 * d * nz, vx - 2 * d * nx); P.f = P.cdir; P.vx *= 0.6; P.vz *= 0.6; this.sfx('thump', 5); this.puff(P.x, P.y + 0.3, P.z, 5, 0.3, 0.4, 0.4); this.noiseS(P.x, P.z, 6, '?'); }   // (rolled up: it bounces off and rolls on)
-        else if (hit) { this.chargeWall(); P.st = 'busy'; P.t = 0; P.dur = 0.35; P.vx *= -0.3; P.vz *= -0.3; this.puff(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (true) this.noiseS(P.x, P.z, 5, '?'); }
+        else if (hit) { this.chargeWall(); const sl = P.st === 'slide'; P.st = sl ? 'getup' : 'busy'; P.t = 0; P.dur = sl ? DOG.slideUp : 0.35; P.vx *= -0.3; P.vz *= -0.3; this.puff(P.x, 0.5 + P.y, P.z, 5, 0.3, 0.5, 0.3); if (true) this.noiseS(P.x, P.z, 5, '?'); }
       }
-      if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = was === 'wind' ? 'charge' : 'free'; P.t = 0; if (was === 'wind') { P.dur = 0.85 * this.chargeK(); P.run = 0; this.chargeOne(); } if (was === 'charge') P.cd = 0.5; if (was === 'wear') this.putOnBox(); }
+      if (P.st !== 'free' && P.t > P.dur) { const was = P.st; P.st = was === 'wind' ? 'charge' : 'free'; P.t = 0; if (was === 'wind') { P.dur = 0.85 * this.chargeK(); P.run = 0; this.chargeOne(); } if (was === 'charge') P.cd = 0.5; if (was === 'getup') P.cd = 0.25; if (was === 'wear') this.putOnBox(); }
       // puddles: walking over them is fine; RUNNING (the charge) over one, you slip
       if (P.st === 'charge') for (const q of this.puddles) if (((P.x - q.x) / q.rx) ** 2 + ((P.z - q.z) / q.rz) ** 2 < 1) {
         P.st = 'slip'; P.t = 0; P.dur = 1.3; P.fall = Math.atan2(P.vz, P.vx); P.vx *= 0.6; P.vz *= 0.6;
@@ -958,7 +962,7 @@
         if (room === 'store' && this.stage === 'storage') { this.stage = 'box'; this.spBox.visible = true; this.think('A cardboard box... it\'ll have to do!', 2.8); this.objective('Put on the BOX (K next to it)'); }
       }
       if (!this.crackDone && !this.saidCrack && room === 'corr' && P.x > 4 && this.stage === 'storage') {   // (only once he needs to get upstairs: after the towels) this.saidCrack = true; this.spCrack.visible = true;
-        this.think('The stairs! ...buried under a heap of delivery boxes. One good charge (hold L) should clear them.', 3.4); }
+        this.think('The stairs! ...buried under a heap of delivery boxes. One good belly slide (L) should clear them.', 3.4); }
       // fire exit
       if (P.x < EXIT.x + 0.4 && P.z < EXIT.z1 && P.z > EXIT.z0 && !this.saidChain) { this.saidChain = true; this.think('The fire exit... chained shut?!', 2.0); }
       const En = LY.entrance;
@@ -1509,7 +1513,7 @@
     attN() { let k = 0; for (const n of this.att) if (n && n.att !== undefined) k++; return k; }
     canGrab(n) {
       const P = this.P, g = this.gs;
-      return !this.cap && !n.carried && this.t >= (n.noGrab || 0) && P.st !== 'charge' && P.st !== 'wind' && P.st !== 'skill' && P.st !== 'captured'
+      return !this.cap && !n.carried && this.t >= (n.noGrab || 0) && P.st !== 'charge' && P.st !== 'slide' && P.st !== 'wind' && P.st !== 'skill' && P.st !== 'captured'
         && !P.hidden && !P.boxHide && !P.inStall && !P.sub && !this.unseen() && Math.abs(n.a.y - P.y) < 1 && !(g && g.id === 'giant');
     }
     pickSlot(n) {   // the first two take a leg each (whichever's nearest them), the third his shoulders (head), the fourth his back. Nobody grabs an arm
@@ -1543,10 +1547,10 @@
       a.x = L.x0 + (q.x - L.x0) * k; a.z = L.z0 + (q.z - L.z0) * k; a.y = L.y0 + (q.y - L.y0) * k + Math.sin(Math.PI * k) * 0.45; a.f = Math.atan2(this.P.z - a.z, this.P.x - a.x); a.st = 'hold'; a.vx = a.vz = 0;
       if (k < 1) return true;
       n.lunge = null; const P = this.P;
-      if (this.att[L.k] !== n || this.cap || P.st === 'charge' || P.st === 'wind' || P.st === 'skill' || P.hidden || P.boxHide || P.inStall || this.unseen() || (this.gs && this.gs.id === 'giant')) { if (this.att[L.k] === n) this.att[L.k] = null; a.st = 'free'; n.noGrab = this.t + 1; return true; }   // (he charged off, hid, vanished...: they miss)
+      if (this.att[L.k] !== n || this.cap || P.st === 'charge' || P.st === 'slide' || P.st === 'wind' || P.st === 'skill' || P.hidden || P.boxHide || P.inStall || this.unseen() || (this.gs && this.gs.id === 'giant')) { if (this.att[L.k] === n) this.att[L.k] = null; a.st = 'free'; n.noGrab = this.t + 1; return true; }   // (he charged off, hid, vanished...: they miss)
       n.att = L.k; n.attStun = 0; a.st = q.st; a.cling = q.cling;
       this.flash = Math.max(this.flash || 0, 0.12); this.sfx('thump', 3); if (this.g.audio && this.g.audio.grab) this.g.audio.grab();
-      if (!this.tipGrab) { this.tipGrab = true; this.tip(['THEY GRABBED YOU', 'Each one hanging on slows you down. Two on your legs, one on your head, one on your back... and if a FIFTH piles on, you are caught.', '#HOLD J: BOOTY SLAM', 'Jump up and land on your booty: everyone falls off. It takes longer the more are on you.', '#L: CHARGE', 'Every charge throws one off. Charge into a wall or anything solid and they all come off.'], { now: true }); }
+      if (!this.tipGrab) { this.tipGrab = true; this.tip(['THEY GRABBED YOU', 'Each one hanging on slows you down. Two on your legs, one on your head, one on your back... and if a FIFTH piles on, you are caught.', '#HOLD J: BOOTY SLAM', 'Jump up and land on your booty: everyone falls off. It takes longer the more are on you.', '#L: BELLY SLIDE', 'Every dive throws one off. Slide into a wall or anything solid and they all come off.'], { now: true }); }
       if (this.attN() >= DOG.maxAtt) this.capture();
       return true;
     }
@@ -1616,6 +1620,21 @@
       const P = this.P, on = this.att.filter((n) => n && n.att !== undefined); if (!on.length) return;
       const off = on[(Math.random() * on.length) | 0], bx = -Math.cos(P.cdir), bz = -Math.sin(P.cdir);
       this.dropOff(off, off.a.x - P.x, off.a.z - P.z); this.popAt(off.a, 'うわっ!', 1.0); this.sfx('thump', 4);
+    }
+    wetFloor(x, z) { return !!SAFE[roomAt(x, z)] || this.puddles.some((q) => ((x - q.x) / q.rx) ** 2 + ((z - q.z) / q.rz) ** 2 < 1); }   // (the bath and the showers, and any puddle)
+    slideGo(dir) {   // L: a dive onto his belly. Silent on a wet floor (and it goes on and on); a dry floor squeaks and stops him short
+      const P = this.P; P.st = 'slide'; P.t = 0; P.dur = 99; P.cdir = dir; P.f = dir; P.sv = DOG.slideV; P.run = 0; this.slideNT = 0; this.chargeOne();
+      this.sfx('whoosh', 0.5);
+      if (this.wetFloor(P.x, P.z)) { if (this.fx.water) this.fx.water(P.x, P.z, 1.2, P.y); }
+      else { this.noiseS(P.x, P.z, DOG.slideNoise, '?'); this.popAt({ x: P.x, z: P.z, y: P.y }, 'キュッ!', 0.6); }
+    }
+    slideStep(dt, mx, mz, mag) {
+      const P = this.P, wf = this.wetFloor(P.x, P.z);
+      if (mag > 0.3) P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * DOG.slideTurn); P.f = P.cdir;   // (he can only lean it a little)
+      P.sv = Math.max(0, (P.sv || 0) - (wf ? DOG.slideWet : DOG.slideDry) * dt);
+      if (wf) { if (this.fx.water && Math.random() < dt * 12) this.fx.water(P.x - Math.cos(P.cdir) * 0.6, P.z - Math.sin(P.cdir) * 0.6, 0.45, P.y); }
+      else if ((this.slideNT -= dt) <= 0) { this.slideNT = 0.3; this.noise(P.x, P.z, DOG.slideNoise * 0.7, '?', true); }   // (squeaking along a dry floor: they hear it)
+      if (P.sv < 0.6) { P.st = 'getup'; P.t = 0; P.dur = DOG.slideUp; P.vx = P.vz = 0; }   // (stopped: flat on the floor a moment, then up)
     }
     chargeWall() {   // charging into a wall, or smashing through something: every one of them is thrown off
       const P = this.P, on = this.att.filter((n) => n && n.att !== undefined); if (!on.length) return;
@@ -1712,7 +1731,7 @@
         if (d < 0.8 && d > 1e-4) { const k = (0.8 - d) / 2 / d; a.x -= dx * k; a.z -= dz * k; b.x += dx * k; b.z += dz * k; this.collide(a, 0.4); this.collide(b, 0.4); }
       }
     }
-    range(n) { if (n.raid && n.looked) return 10 * VIS.range; return n.range * VIS.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1); }   // (the bath searchers look right across the water)
+    range(n) { if (n.raid && n.looked) return 10 * VIS.range; return n.range * VIS.range * (n.mode === 'search' || n.mode === 'goto' ? 1.2 : 1) * (this.P && this.P.st === 'slide' ? DOG.slideSeen : 1); }   // (flat on his belly, sliding: harder to spot)   // (the bath searchers look right across the water)
     breakThing(B) {
       if (this.P.st === 'charge') this.chargeWall();   // (smashed through something: they all come off)
       this.bonusLose('broke', { lockers: 'a locker', bench: 'a bench', plant: 'a plant pot', baskets: 'the baskets', washer: 'a washing machine', vanity: 'a mirror stand', towels: 'the towel shelf', boiler: 'a boiler', crates: 'the crates', prep: 'a counter', pantry: 'the pantry shelf', kfridge: 'the fridge', firewood: 'the firewood', tsinks: 'a sink', washisland: 'a wash station', washrow: 'a wash station', foldtable: 'a table' }[B.s.k] || 'something');
@@ -1763,7 +1782,7 @@
         const wb = this.washB;
         this.flying.push({ m: wb, sx: wb.position.x, sy: 0, sz: wb.position.z, tx: wb.position.x + 0.3, ty: 0.34, tz: wb.position.z + 0.2, h: 0.5, t: 0, dur: 0.45, r0: [0, 0, 0], r1: [Math.PI, 0.6, 0] });
         this.think('Empty?! No key... Forget it. I\'ll just smash the locker open!', 3.2);
-        this.objective('CHARGE into your locker (hold L + direction). It will take a few hits: hide when they come running'); return;
+        this.objective('BELLY SLIDE into your locker (L + direction). It will take a few hits: hide when they come running'); return;
       }
       if (this.stage === 'onigiri' && near(LY.onigiri.x, LY.onigiri.z, 1.7) && this.oni.n > 0) {
         const nEat = Math.min(this.oni.n, LY.onigiri.need - this.oni.eaten);
@@ -1955,7 +1974,7 @@
       switch (k) {
         case 'locker': this.stage = 'locker'; at(CP.lockN.x, CP.lockN.z, 0, CP.lockN.f); this.spLocker.visible = true; this.objective('Find your LOCKER (through the wash area)'); break;
         case 'key': at(CP.lockN.x, CP.lockN.z, 0, CP.lockN.f); this.spKey.visible = true; this.objective('Go back to the BATH and check your WASH BUCKET for the KEY'); break;
-        case 'smash': at(-10.5, -34.5, 0, -Math.PI / 2); this.spLocker.visible = true; this.objective('CHARGE into your locker (hold L + direction). It will take a few hits: hide when they come running'); break;
+        case 'smash': at(-10.5, -34.5, 0, -Math.PI / 2); this.spLocker.visible = true; this.objective('BELLY SLIDE into your locker (L + direction). It will take a few hits: hide when they come running'); break;
         case 'towel': at(CP.corr.x, CP.corr.z, 0, CP.corr.f); this.spTowel.visible = true; this.objective('Get a TOWEL from the LAUNDRY room (through the staff door, along the back corridor)'); break;
         case 'storage': at(CP.corr.x + 8, CP.corr.z, 0, 0); this.spCrack.visible = !this.crackDone; this.objective('Get UPSTAIRS (the back stairs, past the boxes), into STORAGE behind the FRONT DESK'); break;
         case 'box': at(CP.store.x, CP.store.z, UP, CP.store.f); this.spBox.visible = true; this.objective('Put on the BOX (K next to it)'); break;
@@ -2393,7 +2412,7 @@
       const near = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r, room = roomAt(P.x, P.z), sub = this.el('.st-sub').style.display === 'block';
       if (!(this.paused || this.over || this.asleep || this.sf || this.freeze || this.choiceCb || sub || this.jumpOn || this.camFocus || this.bossCut)) {   // (no prompts in a cutscene, dialog or not)
         const V = this.vend;
-        if (this.attN && this.attN()) L = [['hold J', 'booty slam them off'], ['L into a wall', 'shake one off']];
+        if (this.attN && this.attN()) L = [['hold J', 'booty slam them off'], ['L slide', 'shake one off']];
         else if (P.carryN) L = [['K', 'throw'], ['hold K', 'slam down']];
         else if (P.stallHide !== undefined) L = [['move / I', 'come out']];
         else if (P.hidden) L = [['move / I', 'climb out'], ['hold I + direction', 'climb out silently']];
@@ -2427,7 +2446,7 @@
         this.tip(['I: SNEAK', 'People can hear you coming. HOLD I to move quietly.', 'You are a big boy, so sneaking tires you out. Stand still and you recover.', '#I: HIDE', 'I also lets you hide in carts and toilet stalls. Hide while nobody can see you. If they see you hide, they will find you.']);
         this.tip(['J: PUSH', 'Push a WALL to make a noise. Whoever hears it comes to look, so you can lure them away.', 'Push a PERSON: from the front they fly back, on the side they spin, from behind they stumble.', 'HOLD J: BOOTY SLAM. Jump and land on your booty: throws off anyone hanging on you.']); }
       if (!this.tipLockK && this.stage === 'locker' && near(this.locker.x, this.locker.z, 3.2)) { this.tipLockK = true; this.tip(['K: OPEN YOUR LOCKER'], { until: () => this.stage !== 'locker' }); }
-      if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['HOLD L + A DIRECTION: CHARGE', 'Charging breaks things.', 'You need room for a run-up, and you cannot charge right away.', '#PRESS I WHILE CHARGING: ROLL', 'You curl up into a ball and roll, faster and further, as long as you hold L. Steer it. Nobody can grab you, and you bowl over anyone in the way.']); }
+      if (!this.tipCharge && this.stage === 'key' && room === 'bath') { this.tipCharge = true; this.tip(['L + A DIRECTION: BELLY SLIDE', 'He dives onto his belly and slides. On a WET floor it is silent and goes a long way; a dry floor squeaks (they hear it) and stops him short.', 'Sliding, you are low and hard to spot, and anyone in the way goes down. Fast enough, it smashes things.', 'When it stops you lie there a moment: do not stop in front of anyone.']); }
     }
     drink() {
       const P = this.P, b = P.held; if (!b) return;
@@ -2551,7 +2570,7 @@
       if (this.g.audio && this.g.audio.thump) this.g.audio.thump(7);
       this.noise(this.locker.x, this.locker.z, 14, '?!');
       this.think(k === 1 ? 'Hmm... just a dent. Let me try that again.' : 'The hinge is coming loose... one more!', 2.2);
-      this.objective('CHARGE your locker again (' + (3 - k) + ' more). Hide when they come to look');
+      this.objective('SLIDE into your locker again (' + (3 - k) + ' more). Hide when they come to look');
     }
     smashLocker() {
       this.stage = 'storage'; this.spLocker.visible = false;
@@ -2784,11 +2803,11 @@
           q.m.position.set(q.sx + (mx - q.sx) * e - fz * sw, q.sy + (hy - q.sy) * e + sw * 0.4, q.sz + (mz - q.sz) * e + fx * sw); q.m.rotation.y += dt * 18; q.m.rotation.x += dt * 9; q.m.scale.setScalar(1.3 * (1 - 0.7 * e)); q.m.visible = k < 1; }
         if (E.t > E.dur) { for (const q of E.pieces) if (q.m) this.G.remove(q.m); this.eatAnim = null; }
       }
-      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : (P.st === 'charge' && P.ball) || (this.ballHold && P.st === 'free') ? 'tuck' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? (this.stompW && this.stompW.t / this.stompW.W < DOG.slamCrouch ? 'brace' : 'bslam') : P.st === 'busy' && this.stompDone > this.t ? (this.stompDone - this.t > DOG.slamLand * 0.35 ? 'bslam' : 'recover') : this.eatAnim ? 'inhale' : P.st === 'charge' ? 'charge' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
+      const g = this.gs; let nst = this.sf && this.sf.pose ? this.sf.pose : P.st === 'skill' && g ? g.pose || 'free' : (P.st === 'charge' && P.ball) || (this.ballHold && P.st === 'free') ? 'tuck' : P.st === 'captured' ? 'fall' : P.st === 'stompW' ? (this.stompW && this.stompW.t / this.stompW.W < DOG.slamCrouch ? 'brace' : 'bslam') : P.st === 'busy' && this.stompDone > this.t ? (this.stompDone - this.t > DOG.slamLand * 0.35 ? 'bslam' : 'recover') : this.eatAnim ? 'inhale' : P.st === 'charge' || P.st === 'slide' || (P.st === 'getup' && P.t < DOG.slideUp * 0.55) ? 'charge' : P.st === 'getup' ? 'recover' : P.st === 'wind' ? 'brace' : P.st === 'slip' ? 'fall' : P.st === 'gasp' ? (P.t < 0.8 ? 'stun' : 'lose') : P.st === 'busy' ? 'palm' : P.st === 'wear' ? 'brace' : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (P.st === 'skill' && g && g.wt !== undefined) w.t = g.wt;
       w.slamAir = P.st === 'stompW'; if (this.cap) { this.cap.t += dt; w.t = this.cap.t; }
-      w.torpedo = !!(P.st === 'skill' && g && g.torp); w.szCur = g && g.sz ? g.sz : 1; w.gulpI = this.gulp ? 0 : -1; if (g && g.wdur) w.dur = g.wdur;
+      w.torpedo = !!(P.st === 'skill' && g && g.torp) || P.st === 'slide' || (P.st === 'getup' && P.t < DOG.slideUp * 0.55); w.szCur = g && g.sz ? g.sz : 1; w.gulpI = this.gulp ? 0 : -1; if (g && g.wdur) w.dur = g.wdur;
       if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.st === 'captured' ? !!(this.cap && this.cap.t > 0.3) : P.t > 0.3 && P.t < 1.0; } else w.down = false;
       w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0, Math.min(0.9, this.attN() * 0.2)); w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : P.carryN ? {} : null; w.armHeld = this.att && !this.cap ? { L: !!(this.att[0] && this.att[0].att !== undefined), R: !!(this.att[1] && this.att[1].att !== undefined) } : null;   // (hunched: tiptoe, curled up, or bowed under the dogpile)
       if (this.freeze) w.fxs.dizzy = 1;
@@ -2954,7 +2973,7 @@
         '#stealthHud .on{display:block}#stealthHud h2{font:400 56px "Dela Gothic One",sans-serif;margin:0 0 20px}#stealthHud h2:before{content:attr(data-jp);display:block;font-size:15px;letter-spacing:.5em;color:#d8262e;margin-bottom:8px}' +
         '#stealthHud .st-pause button,#stealthHud .st-over button{display:block;background:none;border:0;color:rgba(244,239,230,.55);font:700 30px "Barlow Condensed",sans-serif;padding:6px 0;cursor:pointer}' +
         '#stealthHud .st-pause button.sel{color:#f4efe6;padding-left:22px;border-left:5px solid #d8262e}#stealthHud .st-over button.sel{color:#f4efe6;padding-right:22px;border-right:5px solid #d8262e}#stealthHud .k{font-size:15px;opacity:.6}</style>' +
-        '<div class="st-load">LOADING…</div><canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J push (from the front they fly back, the side spins them, from behind they stumble) · hold J booty slam (jump and land on your booty: throws off anyone hanging on, knocks down anyone near) · J at a wall: knock, a noise to lure them · hold L + direction charge (loud · a run-up smashes things · shakes one hanger-on off; smashing into something throws them all off) · I mid-charge: roll up into a ball (faster, steer it, rolls while L is held) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
+        '<div class="st-load">LOADING…</div><canvas class="st-map" width="180" height="180"></canvas><div class="st-sf"></div><div class="st-choice"></div><div class="st-sub"></div><div class="st-tip"></div><div class="st-ctx"></div><div class="st-maparrow">◀ MAP</div><div class="st-bonus"></div><div class="st-obj"></div><div class="st-oni"></div><div class="st-zzz"><i>z</i><i>z</i><i>Z</i></div><div class="st-wake">PRESS ANY KEY</div><div class="st-stam"><i></i></div><div class="st-gbar"><i></i></div><div class="st-gbadge"></div><div class="st-hp"></div><div class="st-ko"></div><div class="st-safe">SAFE: everyone\'s naked here</div><div class="st-think"></div><div class="st-pops"></div><div class="st-help">WASD move (they hear you close by) · hold I tiptoe (silent, tiring) · I by a cart or toilet stall: hide (hold I + a direction: climb out that side, silently) · hide out of sight: if they see you hide they will find you · I in the bath: duck under · tap J push (from the front they fly back, the side spins them, from behind they stumble) · hold J booty slam (jump and land on your booty: throws off anyone hanging on, knocks down anyone near) · J at a wall: knock, a noise to lure them · L + direction belly slide (silent and long on a wet floor, short and squeaky on a dry one · low, hard to spot · bowls people over · fast, it smashes things · shakes one off) · K use / pick up / throw / push a cart · hold K smash what you hold · Esc pause</div>' +
         '<div class="st-pause"><h2 data-jp="一時停止">PAUSED</h2><button data-c="resume">RESUME</button><button data-c="settings">SETTINGS</button><button data-c="tips">TUTORIAL TIPS: ON</button><button data-c="cp">RESTART AT CHECKPOINT</button><button data-c="jump">JUMP TO A GOAL (testing)</button><button data-c="retry">RESTART LEVEL</button><button data-c="quit">QUIT TO TITLE</button><p class="k">W / S choose · Enter or J select</p></div><div class="st-jump"><h2 data-jp="跳">JUMP TO</h2><button data-j="locker">1 · Find your locker</button><button data-j="key">2 · Check the wash bucket for the key</button><button data-j="smash">3 · Smash the locker (charge)</button><button data-j="towel">4 · Get a towel (laundry)</button><button data-j="storage">5 · Upstairs: smash the box heap</button><button data-j="box">6 · Put on the box (storage)</button><button data-j="exit">7 · Out the front door (in the box)</button><button data-j="kitchen">8 · The back way: the kitchen</button><button data-j="onigiri">9 · Eat the onigiri</button><button data-j="toilet">10 · The toilet</button><button data-j="paper">11 · Fetch toilet paper</button><button data-j="toilet2">12 · Wipe (back to the stall)</button><button data-j="bossgo">13 · The boss rises (the phone call is done)</button><button data-j="sumo">14 · Boss: the training offer, then the sumo bout</button><button data-j="escape">15 · Escape (the kitchen back door)</button><p class="k">W / S choose · Enter or J go · Esc back</p></div><div class="st-over"></div>';
       document.body.appendChild(h); if (this.kit) this.kitShown();   // (until the bathhouse is in, a plain cover: never him on an empty blue sky)
       h.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) this.command(b.dataset.c); });
