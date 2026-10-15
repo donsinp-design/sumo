@@ -890,11 +890,11 @@
     // TORPEDO: a kick of dust at the launch, speed streaks and a dust trail behind him, a splash where he lands
     torpFx(w, dt, lay) {
       const s = this.s, fx = w.fx, fz = w.fz;
-      if (w.torpedo && !this.wasTorp) { this.fx.dust(w.x - fx * 0.4, 0.05, w.z - fz * 0.4, 16, 0.3, 1.1, 0.5, -fx * 3, -fz * 3); this.fx.ring(w.x, w.z, 1.5, 0.3); }
-      if (!w.torpedo && this.wasTorp) { this.fx.burst(w.x + fx * 0.5 * s, w.z + fz * 0.5 * s, 10); this.fx.ring(w.x + fx * 0.4 * s, w.z + fz * 0.4 * s, 2.4, 0.4); }
-      this.wasTorp = w.torpedo;
+      if (w.torpedo && !w.slide && !this.wasTorp) { this.fx.dust(w.x - fx * 0.4, 0.05, w.z - fz * 0.4, 16, 0.3, 1.1, 0.5, -fx * 3, -fz * 3); this.fx.ring(w.x, w.z, 1.5, 0.3); }
+      if (!w.torpedo && this.wasTorp && !this.wasSlide) { this.fx.burst(w.x + fx * 0.5 * s, w.z + fz * 0.5 * s, 10); this.fx.ring(w.x + fx * 0.4 * s, w.z + fz * 0.4 * s, 2.4, 0.4); }
+      this.wasTorp = w.torpedo; this.wasSlide = !!w.slide;
       if (w.st === 'torpwind' && Math.random() < 0.6) this.fx.dust(w.x + fx * 0.3 * s, 0.05, w.z + fz * 0.3 * s, 1, 0.25, 0.3, 0.3, fx * 1.2, fz * 1.2); // heels digging in
-      if (w.torpedo && Math.random() < 0.85) this.fx.dust(w.x - fx * 0.5 * s, 0.05, w.z - fz * 0.5 * s, 2, 0.2, 0.35, 0.4, -fx * 1.5, -fz * 1.5);
+      if (w.torpedo && !w.slide && Math.random() < 0.85) this.fx.dust(w.x - fx * 0.5 * s, 0.05, w.z - fz * 0.5 * s, 2, 0.2, 0.35, 0.4, -fx * 1.5, -fz * 1.5);
       if (!this.streak && lay > 0.05) {
         const g = this.streak = new THREE.Group(), mat = this.streakMat = new THREE.MeshBasicMaterial({ color: 0xfff6e6, transparent: true, opacity: 0, depthWrite: false });
         for (const [o, y, L] of [[-0.42, 0.75, 2.2], [0.42, 0.75, 2.0], [-0.2, 1.1, 2.8], [0.22, 1.05, 2.5], [0, 0.45, 1.8], [-0.5, 0.35, 1.4], [0.5, 0.4, 1.5]]) {
@@ -903,7 +903,7 @@
         this.scene.add(g);
       }
       if (this.streak) {
-        const on = w.torpedo ? lay : 0; this.streakMat.opacity += (on * 0.85 - this.streakMat.opacity) * Math.min(1, dt * 14);
+        const on = w.torpedo && !w.slide ? lay : 0;   // (the belly slide has no speed lines) this.streakMat.opacity += (on * 0.85 - this.streakMat.opacity) * Math.min(1, dt * 14);
         this.streak.visible = this.streakMat.opacity > 0.02 && this.root.visible;
         this.streak.position.set(w.x - fx * 0.75 * s, 0, w.z - fz * 0.75 * s); this.streak.rotation.y = -w.f;
         for (const st of this.streak.children) st.position.x = -st.scale.x / 2 - Math.random() * 0.15;

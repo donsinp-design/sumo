@@ -356,6 +356,17 @@
       for (let k = 0; k < 5; k++) { const m = new THREE.Mesh(new THREE.CircleGeometry(2.6 + k % 3, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false })); m.position.set(-10 + k * 5, 0.2 - H, -23 - (k % 2) * 3); g.add(m); }
     },
 
+    // ---------------------------------------------------------------- the boss bout: the bathhouse itself (the stealth level's kit), the bath drained and the dohyo
+    // standing in it, exactly as the cutscene leaves it. Scaled so the dohyo's straw ring is the bout's ring
+    bathring(Rn, g, spin) {
+      if (!S.loadBathKit || !S.makeBathDohyo) return S.STAGE_BUILD.bath(Rn, g, spin);
+      const K = R / (3.1 - 0.12), C = S.BATH_POOL_C(), hold = new THREE.Group(); hold.scale.setScalar(K); hold.position.set(-C.x * K, 0, -C.z * K); g.add(hold);
+      S.loadBathKit().then((root) => { if (!root || !g.parent) return; const k = root.clone(true);
+        k.traverse((o) => { if (/^(WATER|ITEM_|BOX$|CLOTH_|CRACK_RUBBLE|LKHOLES)/.test(o.name || '')) o.visible = false; });
+        hold.add(k); const d = S.makeBathDohyo(); d.position.set(C.x, 0, C.z); hold.add(d); });
+      if (Rn.scene && Rn.scene.background) Rn.scene.background.set(0xeef2ef);
+    },
+
     // ---------------------------------------------------------------- pizza on a restaurant table
     pizza(Rn, g, spin) {
       const H = 0.18;

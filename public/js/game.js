@@ -121,7 +121,7 @@
       this.bnrGo = false; this.bnrKey = null;
       if (this.bannerKind()) S.Banners.wall({ hold: 0.15, speed: 0.95 });
       // stage: your pick (or a random one) for CPU, local versus and training; the classic dohyo everywhere else
-      const stage = kind === 'boss' ? 'bath' : ['cpu', 'pvp', 'training'].includes(kind) ? S.stageFor(S.profile.stage) : 'dohyo';
+      const stage = kind === 'boss' ? 'bathring' : ['cpu', 'pvp', 'training'].includes(kind) ? S.stageFor(S.profile.stage) : 'dohyo';
       this.R.setStage(stage); m.stage = stage;
       if (kind !== 'tutorial') { m.newRound(); this.handleEvents(); this.dealSkills(); }
     }

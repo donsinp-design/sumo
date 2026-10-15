@@ -36,6 +36,17 @@
     if (z > -86) return 'up'; return x > 4 ? 'store' : 'up';
   }
   const SAFE = { bath: 1, shower: 1 };
+  // the boss's dohyo in the drained bath: a square clay mound, the straw ring, the two start lines (the bathhouse's flat colours). Shared with the bout's stage (render.js 'bathring')
+  S.makeBathDohyo = () => {
+    const g = new THREE.Group(), clay = S.Flat.mat(0xd3a96e), clayDk = S.Flat.mat(0xb98c52), straw = S.Flat.mat(0xd8d3a0), white = S.Flat.mat(0xf2ede4), T0 = 3.9, B0 = 4.3, H = 1.4;
+    const add = (geo, mat, x, y, z, ry) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.y = ry || 0; o.castShadow = o.receiveShadow = true; o.userData.flatDone = true; g.add(o); return o; };
+    add(new THREE.CylinderGeometry(T0 * Math.SQRT2, B0 * Math.SQRT2, H, 4, 1), clayDk, 0, -H / 2, 0, Math.PI / 4);
+    add(new THREE.PlaneGeometry(T0 * 2 - 0.06, T0 * 2 - 0.06).rotateX(-Math.PI / 2), clay, 0, 0.004, 0);
+    for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2, r = 3.1 + (i % 5 === 0 ? 0.24 : 0); add(new THREE.BoxGeometry(0.92, 0.17, 0.24), straw, Math.cos(a) * r, 0.085, Math.sin(a) * r, -a - Math.PI / 2); }
+    for (const x of [-0.6, 0.6]) add(new THREE.BoxGeometry(0.09, 0.012, 0.9), white, x, 0.006, 0);
+    return g;
+  };
+  S.BATH_POOL_C = () => ({ x: (S.BathLayout.pool.x0 + S.BathLayout.pool.x1) / 2, z: (S.BathLayout.pool.z0 + S.BathLayout.pool.z1) / 2 });
   // THE DOGPILE: staff don't punch, they grab him and hang on; five on him and he's caught. All the numbers, to tune:
   const DOG = {
     maxAtt: 5,                                   // hanging on at once (the fifth: caught)
@@ -56,7 +67,7 @@
     sfBump: [0.15, 0.3, 0.5], sfSlam: [0.62, 0.72, 1.2],   // the boss fight: the booty bump's and booty slam's timing (hits from / to, done at)
     ringDepth: -1.75,                            // the boss's ring, sunk under the bath floor until it rises
     slideV: 8.0, slideDry: 9.5, slideWet: 1.6, slideTurn: 1.4,   // L: the belly slide. Launch speed, how fast a dry / wet floor stops him, how much he can steer it
-    slideSmash: 5.0, slideNoise: 5, slideSeen: 0.6, slideUp: 0.6,   // fast enough to smash things above this; how far a dry slide is heard; how far staff see him sliding (x their range); time to get up
+    slideDrop: 0.55, slideSmash: 5.0, slideNoise: 5, slideSeen: 0.6, slideUp: 0.6,   // fast enough to smash things above this; how far a dry slide is heard; how far staff see him sliding (x their range); time to get up
     slamCrouch: 0.3, slamH: 1.1, slamSit: 0.42, slamLand: 0.7,   // the BOOTY SLAM (hold J): the crouch is this much of the wind-up, then he springs this high and lands sat on his booty, getting up after slamLand
     stompR: 3.4, stompFling: 7,                  // the stomp's shock (anyone this near is thrown back); how hard the hangers-on fly
     slapFront: 7, slapRear: 5, spinT: 1.5,       // a slap: knocked back / stumbling forward (speeds), spun round (seconds)
@@ -1633,8 +1644,9 @@
       if (mag > 0.3) P.cdir = lerpA(P.cdir, Math.atan2(mz, mx), dt * DOG.slideTurn); P.f = P.cdir;   // (he can only lean it a little)
       P.sv = Math.max(0, (P.sv || 0) - (wf ? DOG.slideWet : DOG.slideDry) * dt);
       if (wf) { if (this.fx.water && Math.random() < dt * 12) this.fx.water(P.x - Math.cos(P.cdir) * 0.6, P.z - Math.sin(P.cdir) * 0.6, 0.45, P.y); }
-      else if ((this.slideNT -= dt) <= 0) { this.slideNT = 0.3; this.noise(P.x, P.z, DOG.slideNoise * 0.7, '?', true); }   // (squeaking along a dry floor: they hear it)
+      else if ((this.slideNT -= dt) <= 0) { this.slideNT = 0.35; this.noiseS(P.x, P.z, DOG.slideNoise * 0.7, '?'); }   // (squeaking along a dry floor: they hear it, and the rings show how far)
       if (P.sv < 0.6) { P.st = 'getup'; P.t = 0; P.dur = DOG.slideUp; P.vx = P.vz = 0; }   // (stopped: flat on the floor a moment, then up)
+      if (inPool(P.x, P.z)) { P.st = 'busy'; P.t = 0; P.dur = 0.45; P.vx *= 0.3; P.vz *= 0.3; P.sv = 0; if (this.fx.water) { this.fx.water(P.x, P.z, 4, POOL.water); this.fx.water(P.x + Math.cos(P.cdir), P.z + Math.sin(P.cdir), 2.5, POOL.water); } this.popAt({ x: P.x, z: P.z, y: P.y }, 'ザブン!', 0.8); this.sfx('thump', 4); }   // (into the bath: a belly flop, and that's the end of the slide)
     }
     chargeWall() {   // charging into a wall, or smashing through something: every one of them is thrown off
       const P = this.P, on = this.att.filter((n) => n && n.att !== undefined); if (!on.length) return;
@@ -2033,28 +2045,18 @@
     ringRise(cb) {
       if (this.ringUp) { cb(); return; }
       this.ringUp = true; this.ringCut = { t: 0, cb }; const P = this.P; P.st = 'busy'; P.t = 0; P.dur = 99; P.vx = P.vz = 0;
-      if (!this.dohyoM) this.dohyoM = this.makeDohyo(); this.dohyoM.visible = true; this.dohyoM.position.y = DOG.ringDepth;
+      if (!this.dohyoM) this.dohyoM = this.makeDohyo(); this.dohyoM.visible = true; this.dohyoM.position.y = 0;   // (already standing in the bath, under the water: the drain reveals it)
       this.sfx('whoosh', 0.8);
     }
-    makeDohyo() {   // the bath's dohyo: a square clay mound, the straw ring, the two start lines (the bathhouse's flat colours)
-      const g = new THREE.Group(), clay = S.Flat.mat(0xd3a96e), clayDk = S.Flat.mat(0xb98c52), straw = S.Flat.mat(0xd8d3a0), white = S.Flat.mat(0xf2ede4), T0 = 3.9, B0 = 4.3, H = 1.4;
-      const add = (geo, mat, x, y, z, ry) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.y = ry || 0; o.castShadow = o.receiveShadow = true; o.userData.flatDone = true; g.add(o); return o; };
-      add(new THREE.CylinderGeometry(T0 * Math.SQRT2, B0 * Math.SQRT2, H, 4, 1), clayDk, 0, -H / 2, 0, Math.PI / 4);
-      add(new THREE.PlaneGeometry(T0 * 2 - 0.06, T0 * 2 - 0.06).rotateX(-Math.PI / 2), clay, 0, 0.004, 0);
-      for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2, r = 3.1 + (i % 5 === 0 ? 0.24 : 0); add(new THREE.BoxGeometry(0.92, 0.17, 0.24), straw, Math.cos(a) * r, 0.085, Math.sin(a) * r, -a - Math.PI / 2); }
-      for (const x of [-0.6, 0.6]) add(new THREE.BoxGeometry(0.09, 0.012, 0.9), white, x, 0.006, 0);
-      g.position.set((POOL.x0 + POOL.x1) / 2, DOG.ringDepth, (POOL.z0 + POOL.z1) / 2); this.G.add(g); return g;
-    }
+    makeDohyo() { const g = S.makeBathDohyo(); g.position.set((POOL.x0 + POOL.x1) / 2, DOG.ringDepth, (POOL.z0 + POOL.z1) / 2); this.G.add(g); return g; }
     ringStep(dt) {
       const R = this.ringCut; if (!R) return; R.t += dt; const t = R.t, e = (k) => k * k * (3 - 2 * k), c = (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
       const cx = (POOL.x0 + POOL.x1) / 2, cz = (POOL.z0 + POOL.z1) / 2;
       this.waterDrop = (POOL.water + 0.75) * e(c(0.4, 2.6));   // the water drains away...
       if (t > 0.4 && t < 2.6 && Math.random() < dt * 8 && this.fx.water) this.fx.water(POOL.x0 + 1 + Math.random() * (POOL.x1 - POOL.x0 - 2), POOL.z0 + 1 + Math.random() * (POOL.z1 - POOL.z0 - 2), 1.2, POOL.water - this.waterDrop);
-      const r = e(c(2.3, 4.2)); this.dohyoM.position.y = DOG.ringDepth * (1 - r);   // ...and up comes the ring
-      if (t > 2.3 && t < 4.2) this.shake = Math.max(this.shake || 0, 0.06);
-      if (!R.landed && t > 4.15) { R.landed = true; this.shake = 0.3; this.sfx('thump', 9); for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) this.miniPuff(cx + dx * 4.2, -0.5, cz + dz * 4.2, 0.6, 9); }
-      this.camFocus = t < 2.3 ? { x: cx, z: cz + 1.5, y: 0, dist: 16, h: 0.6 } : { x: cx, z: cz, y: 0.3, dist: 12, h: 0.42 };   // (the bath, then in on the ring, square in the middle)
-      if (t > 5.6) { this.ringCut = null; this.camFocus = null; this.P.st = 'free'; this.P.dur = 0; R.cb(); }
+      if (!R.shown && t > 2.6) { R.shown = true; this.sfx('thump', 6); }   // (...and there's the ring, standing on the bath's bottom)
+      this.camFocus = t < 2.6 ? { x: cx, z: cz + 1.5, y: 0, dist: 16, h: 0.6 } : { x: cx, z: cz, y: 0.3, dist: 12, h: 0.42 };   // (the bath, then in on the ring, square in the middle)
+      if (t > 4.4) { this.ringCut = null; this.camFocus = null; this.P.st = 'free'; this.P.dur = 0; R.cb(); }
     }
     // ---- stage 1: a Street Fighter style bout in front of the Mt Fuji mural (best of three rounds)
     sfHide(on) {   // potted plants and the like out of the arena while they fight
@@ -2807,7 +2809,7 @@
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = P.t;
       if (P.st === 'skill' && g && g.wt !== undefined) w.t = g.wt;
       w.slamAir = P.st === 'stompW'; if (this.cap) { this.cap.t += dt; w.t = this.cap.t; }
-      w.torpedo = !!(P.st === 'skill' && g && g.torp) || P.st === 'slide' || (P.st === 'getup' && P.t < DOG.slideUp * 0.55); w.szCur = g && g.sz ? g.sz : 1; w.gulpI = this.gulp ? 0 : -1; if (g && g.wdur) w.dur = g.wdur;
+      w.slide = P.st === 'slide' || (P.st === 'getup' && P.t < DOG.slideUp * 0.55); w.torpedo = !!(P.st === 'skill' && g && g.torp) || w.slide; w.szCur = g && g.sz ? g.sz : 1; w.gulpI = this.gulp ? 0 : -1; if (g && g.wdur) w.dur = g.wdur;
       if (nst === 'fall') { w.fallX = Math.cos(P.fall); w.fallZ = Math.sin(P.fall); w.down = P.st === 'captured' ? !!(this.cap && this.cap.t > 0.3) : P.t > 0.3 && P.t < 1.0; } else w.down = false;
       w.hand = 1; const ballW = (this.ballK || 0) > 0.5; w.hunch = Math.max(0.55 * P.tip, ballW ? 1 : 0, Math.min(0.9, this.attN() * 0.2)); w.tiptoe = ballW ? 0 : P.tip; w.crouchT = ballW ? 1 : 0; w.relaxed = true; w.fxs = this.asleep ? { sleep: 1 } : {}; w.carry = P.held ? { small: P.held.kind === 'oke' } : P.cart ? { cart: true } : P.carryN ? {} : null; w.armHeld = this.att && !this.cap ? { L: !!(this.att[0] && this.att[0].att !== undefined), R: !!(this.att[1] && this.att[1].att !== undefined) } : null;   // (hunched: tiptoe, curled up, or bowed under the dogpile)
       if (this.freeze) w.fxs.dizzy = 1;
@@ -2815,7 +2817,7 @@
       if (g && g.id === 'hands' && P.st === 'skill') w.hand = g.sd;
       v.update(w, Math.max(dt, 1e-4), T);
       if (this.asleep && v.soft) for (const m of v.soft.mats) m.emissive.setRGB(0, 0, 0);   // (asleep: the pose, not the versus sleep-skill's blue tint)
-      v.root.position.y += P.y + 0.04 * v.s * P.tip + (this.gsY || 0);
+      v.root.position.y += P.y + 0.04 * v.s * P.tip + (this.gsY || 0) - (w.slide ? DOG.slideDrop * v.s * Math.min(1, (v.tilt || 0) / 1.4) : 0);   // (the slide: down on the floor on his belly, not flying along like the torpedo)
       this.slamY = 0; if (P.st === 'stompW' && this.stompW) { const u = this.stompW.t / this.stompW.W, c0 = DOG.slamCrouch; if (u > c0) { this.slamY = DOG.slamH * v.s * Math.sin(Math.PI * Math.pow((u - c0) / (1 - c0), 0.7)); v.root.position.y += this.slamY; } }   // (anyone hanging on his legs or back goes up with him: slotPos)   // the booty slam: up he goes, and down
       else if (P.st === 'busy' && this.stompDone > this.t) { const r = (this.stompDone - this.t) / DOG.slamLand; v.root.position.y -= DOG.slamSit * v.s * Math.min(1, r / 0.35); }
       v.root.visible = !P.hidden && !(w.fxs.ball > 0);   // (in a cart, or the daruma: not drawn)
