@@ -529,7 +529,7 @@
         this.ui.hideKimarite();
         this.R.focus(0, 0, 0);
         const best = Math.max(m.wins[0], m.wins[1]), fin = this.matchEnd(m);
-        if (fin && this.kind === 'boss' && fin.wi !== undefined) { this.matchOver = true; this.ui.hideBanner(); this.leaveBoss(fin.wi === 0 ? 'won' : 'lost'); return; }
+        if (fin && this.kind === 'boss') { this.matchOver = true; this.rematchT = 0; this.ui.hideBanner(); this.leaveBoss(fin.wi === 0 && !fin.draw && !fin.third ? 'won' : 'lost'); return; }   // (a boss bout always goes back to the bathhouse: a draw counts as another go, never the CPU's rematch screen)
         if (fin && (fin.third || fin.draw) && this.kind !== 'attract') {
           // the challenger took it, or everyone has one point: nobody wins; a draw hands back the bet
           this.matchOver = true;
@@ -1147,7 +1147,7 @@
       else this.ui.kimarite(r.km, r.winner.a, r.winner.idx, label);
     }
     winLabel(i) {
-      if (this.kind === 'cpu' || this.kind === 'training' || this.kind === 'tutorial') return i === 0 ? 'YOU WIN' : 'YOU LOSE';
+      if (this.kind === 'cpu' || this.kind === 'boss' || this.kind === 'training' || this.kind === 'tutorial') return i === 0 ? 'YOU WIN' : 'YOU LOSE';
       if (this.kind === 'pvp') return this.names[i] + ' WINS';
       return '';
     }
