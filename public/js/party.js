@@ -17,7 +17,7 @@
   const D = { walk: 3.4, run: 5.4, runStam: 4.5, wade: 2.0, slideV: 8.0, slideRun: 1.22, slideDry: 9.5, slideWet: 4.0, getUp: 0.6, holdJ: 0.25, slam: 0.9, slamLand: 0.55,
     staffN: 5, see: 7, seeHalf: 0.65, chase: 3.7, patrol: 1.4, holdT: 3.0, downT: 3.0, hideT: 15, seekT: 75, toWin: 3, tagWin: 45, breath: 10 };
   const START = [[-0.6, 1.0], [2.6, 1.0]];
-  const MAW_SPOTS = [[20.6, -58.8], [12.9, -49.5], [2.2, -54.6], [-14.4, -43.2], [-3.6, -45.4], [1.4, -38.6], [-6.0, -21.6], [6.0, -21.6]];
+  const MAW_SPOTS = [[20.6, -58.8], [12.9, -49.5], [2.2, -54.6], [-14.4, -43.2], [-3.6, -45.4], [1.4, -38.6], [0.0, -21.6], [-8.5, -25.5]];   // (all reachable: checked against the nav)
 
   class Party extends S.Stealth {
     start(mode) {
@@ -154,8 +154,13 @@
           if (d < 1.7) { face(o.x, o.z); tap('push'); } else if (d < 4 && p.st === 'free' && Math.random() < dt * 1.5 && this.clear(p.x, p.z, o.x, o.z)) { face(o.x, o.z); raw.slide = !B.prev.slide; } }
       }
       let mx = 0, mz = 0;
-      if (B.direct) { const dx = B.direct[0] - p.x, dz = B.direct[1] - p.z, d = Math.hypot(dx, dz) || 1; mx = dx / d; mz = dz / d; B.direct = null; }   // (straight there: down the bath steps)
-      else if (gx !== null && Math.hypot(gx - p.x, gz - p.z) < 8 && this.clear(p.x, p.z, gx, gz) && !this.segInWall(p.x, p.z, gx, gz)) { const dx = gx - p.x, dz = gz - p.z, d = Math.hypot(dx, dz) || 1; mx = dx / d; mz = dz / d; B.path = null; }   // (in plain sight: straight there)
+      if (gx !== null || B.direct) { B.st = (B.st || 0) + (Math.hypot(p.vx, p.vz) < 0.35 && p.st === 'free' ? dt : -(B.st || 0)); } else B.st = 0;   // (stuck against something: a new route, then a step to the side)
+      if (B.st > 1.2) { B.st = 0; B.noDirect = 2.5; B.path = null; B.unstick = 0.7; B.side = Math.random() < 0.5 ? 1 : -1; }
+      B.noDirect = Math.max(0, (B.noDirect || 0) - dt);
+      if (B.unstick > 0) { B.unstick -= dt; const a = Math.atan2(gz === null ? 0 : gz - p.z, gx === null ? 1 : gx - p.x) + B.side * Math.PI / 2; mx = Math.cos(a); mz = Math.sin(a); B.direct = null; gx = null; }
+      if (B.unstick > 0) { /* stepping aside */ }
+      else if (B.direct) { const dx = B.direct[0] - p.x, dz = B.direct[1] - p.z, d = Math.hypot(dx, dz) || 1; mx = dx / d; mz = dz / d; B.direct = null; }   // (straight there: down the bath steps)
+      else if (gx !== null && !B.noDirect && Math.hypot(gx - p.x, gz - p.z) < 8 && this.clear(p.x, p.z, gx, gz) && !this.segInWall(p.x, p.z, gx, gz)) { const dx = gx - p.x, dz = gz - p.z, d = Math.hypot(dx, dz) || 1; mx = dx / d; mz = dz / d; B.path = null; }   // (in plain sight: straight there)
       else if (gx !== null) {
         if (B.gx === null || Math.hypot(gx - B.gx, gz - B.gz) > 1.5 || (B.repath -= dt) <= 0 || !B.path) { B.repath = 0.6; B.gx = gx; B.gz = gz; B.path = this.navPath(p.x, p.z, gx, gz) || [[gx, gz]]; B.pi = 0; }
         let pt = B.path[B.pi]; while (pt && Math.hypot(pt[0] - p.x, pt[1] - p.z) < 0.45 && B.pi < B.path.length - 1) { B.pi++; pt = B.path[B.pi]; }
@@ -184,6 +189,7 @@
         if (I.hideP || (I.mag > 0.5 && p.t > 0.4)) this.unhide(p); else return;
       }
       if (I.hideP && p.kind === 'sumo' && !p.pants && (p.st === 'free' || p.st === 'slide' || p.st === 'getup')) { if (this.tryHide(p, p.st !== 'free')) return; }
+      p.sneak = I.hide && p.st === 'free' && p.kind === 'sumo';   // (hold I in the open: crouched, slow, harder to spot)
       // push (tap) / booty slam (hold)
       if (p.kind === 'sumo' && p.st === 'free') {
         if (I.push) p.pushHeld += dt; if (p.pushHeld > D.holdJ && I.push) { p.pushHeld = -99; p.st = 'slam'; p.t = 0; p.slamDone = false; }
@@ -198,7 +204,7 @@
       let spd = 0, mx = I.mx, mz = I.mz;
       p.running = p.st === 'free' && I.run && I.mag > 0.3 && !p.tired && !wet;
       if (p.running) { p.stam -= dt / D.runStam; if (p.stam <= 0) { p.stam = 0; p.tired = true; } } else { p.stam = Math.min(1, p.stam + dt * 0.3); if (p.tired && p.stam > 0.45) p.tired = false; }
-      if (p.st === 'free') spd = wet ? D.wade : p.running ? D.run : D.walk;
+      if (p.st === 'free') spd = wet ? D.wade : p.sneak ? 1.7 : p.running ? D.run : D.walk;
       if (p.st === 'slide') { if (I.mag > 0.3) p.cdir = lerpA(p.cdir, Math.atan2(I.mz, I.mx), dt * 1.4); p.f = p.cdir; const wf = this.wetAt(p.x, p.z); p.sv = Math.max(0, p.sv - (wf ? D.slideWet : D.slideDry) * dt);
         if (wf && this.fx.water && Math.random() < dt * 10) this.fx.water(p.x, p.z, 0.4, p.y); mx = Math.cos(p.cdir); mz = Math.sin(p.cdir); spd = p.sv;
         if (p.sv < 0.6) { p.st = 'getup'; p.t = 0; } if (inPool(p.x, p.z)) { p.st = 'free'; p.sv = 0; this.fx.water && this.fx.water(p.x, p.z, 4, POOL.water); this.sfx('thump', 4); } }
@@ -274,7 +280,7 @@
       // who can he see?
       let seen = null, sd = 1e9;
       for (const p of this.ps) { if (p.hidden || p.sub || p.st === 'grabbed') continue; const dx = p.x - a.x, dz = p.z - a.z, d = Math.hypot(dx, dz);
-        if (d > D.see * (p.st === 'slide' ? 0.6 : 1) || Math.abs(p.y - a.y) > 1.2) continue; if (d > 0.8 && Math.abs(ang(Math.atan2(dz, dx) - a.f)) > D.seeHalf) continue; if (!this.clear(a.x, a.z, p.x, p.z)) continue;
+        if (d > D.see * (p.st === 'slide' ? 0.6 : p.sneak ? 0.7 : 1) || Math.abs(p.y - a.y) > 1.2) continue; if (d > 0.8 && Math.abs(ang(Math.atan2(dz, dx) - a.f)) > D.seeHalf) continue; if (!this.clear(a.x, a.z, p.x, p.z)) continue;
         if (d < sd) { sd = d; seen = p; } }
       if (!seen) for (const p of this.ps) if (p.running && !p.hidden && Math.hypot(p.x - a.x, p.z - a.z) < 5 && s.mode === 'patrol') { s.mode = 'search'; s.t = 0; s.last = [p.x, p.z]; s.path = null; }   // (heard running)
       if (seen) { if (s.mode !== 'chase') { s.ex.visible = true; this.sfx('whoosh', 0.2); } s.mode = 'chase'; s.target = seen; s.last = [seen.x, seen.z]; s.lost = 0; }
@@ -411,7 +417,7 @@
       const lay = p.st === 'slide' || (p.st === 'getup' && p.t < D.getUp * 0.55);
       const nst = p.st === 'win' ? 'win' : lay ? 'charge' : p.st === 'getup' ? 'recover' : p.st === 'grabbed' ? 'stun' : p.st === 'busy' ? 'palm' : p.st === 'slam' ? (p.t < 0.27 ? 'brace' : 'bslam') : 'free';
       if (w.st !== nst) { w.st = nst; w.t = 0; } else w.t = p.t;
-      w.torpedo = lay; w.slide = lay; w.slamAir = p.st === 'slam' && p.t < D.slamLand; w.fxs = {}; w.hunch = 0; w.tiptoe = 0; w.crouchT = 0; w.relaxed = true; w.carry = null; w.armHeld = null;
+      w.torpedo = lay; w.slide = lay; w.slamAir = p.st === 'slam' && p.t < D.slamLand; w.fxs = {}; w.hunch = p.sneak ? 0.55 : 0; w.tiptoe = p.sneak ? 1 : 0; w.crouchT = 0; w.relaxed = true; w.carry = null; w.armHeld = null;
       v.update(w, Math.max(dt, 1e-4), T);
       let y = p.y; if (lay) y -= 0.55 * v.s * Math.min(1, (v.tilt || 0) / 1.4);
       if (p.st === 'slam') { const u = p.t / D.slamLand; if (u > 0.3 && u < 1) y += 1.1 * v.s * Math.sin(Math.PI * Math.pow((u - 0.3) / 0.7, 0.7)); else if (u >= 1) y -= 0.42 * v.s * Math.max(0, 1 - (p.t - D.slamLand) / 0.35); }
@@ -445,7 +451,17 @@
     }
     title(name, how) { const c = this.hud.querySelector('.card'); c.innerHTML = '<b>' + name + '</b>' + how + (this.fpv ? '<br><span style="color:#f2cf4a">THIRD PERSON: the mouse turns the camera (click to capture it) · P2 turns it with left / right</span>' : '') + '<br><span style="color:#5a8fd0">P1: ' + HELP[0] + '</span><br><span style="color:#dd5a42">P2: ' + (this.cpu ? 'COMPUTER' : HELP[1]) + '</span><br>ESC: menu';
       c.style.opacity = 1; clearTimeout(this.cardT); this.cardT = setTimeout(() => { if (this.hud) c.style.opacity = 0; }, 9000); }
-    hudSide(p, txt) { const e = this.hud.querySelector('.s' + p.i); if (e.textContent !== txt) e.textContent = txt; e.style.borderLeft = '6px solid ' + CSS[p.i]; }
+    hint(p) {   // under each panel: what the buttons do right here
+      const near = (x, z, r) => Math.hypot(p.x - x, p.z - z) < r, K = p.i === 0 ? { use: 'K', hide: 'I', push: 'J' } : { use: ',', hide: 'M', push: '.' };
+      if (p.kind === 'staff') return this.ph === 'seek' ? K.use + ': search the cart / stall / water in front of you' : '';
+      if (p.hidden || p.sub) return K.hide + ': come out' + (p.sub ? ' (breath ' + p.breath.toFixed(0) + ')' : '');
+      if (p.st === 'grabbed') return 'GRABBED: your friend has to push it off!';
+      const o = this.other(p); if (o.grabbedBy && near(o.x, o.z, 3)) return K.push + ': push them off your friend!';
+      if (this.mode === 'coop' && !p.maw && this.maw && near(this.maw[p.i].x, this.maw[p.i].z, 1.6)) return K.use + ': put on your mawashi';
+      if (!p.pants && (this.carts.some((c) => near(c.x, c.z, 1.8)) || LY.stalls.some((q) => near(q.x + 0.4, q.z, 1.6)) || inPool(p.x, p.z))) return K.hide + ': hide here';
+      return '';
+    }
+    hudSide(p, txt) { const h = this.hint(p); if (h) txt += '  ·  ' + h; const e = this.hud.querySelector('.s' + p.i); if (e.textContent !== txt) e.textContent = txt; e.style.borderLeft = '6px solid ' + CSS[p.i]; }
     banner(p, txt, col) { const e = this.hud.querySelector('.b' + p.i); e.textContent = txt; e.style.color = col || '#3a3440'; e.classList.add('on'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('on'), 1800); }
     bigText(t, sub) { const e = this.hud.querySelector('.big'); e.innerHTML = t + (sub ? '<small>' + sub + '</small>' : ''); e.classList.add('on'); clearTimeout(this.bigT); if (this.ph !== 'over' && !(this.mode === 'coop' && this.ph === 'end')) this.bigT = setTimeout(() => { if (this.hud) e.classList.remove('on'); }, 2200); }
     cover(i, txt) { for (const k of [0, 1]) { const e = this.hud.querySelector('.c' + k); const on = k === i && !!txt; e.style.display = on ? 'flex' : 'none'; if (on && e.textContent !== txt) e.textContent = txt; } }
