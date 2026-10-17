@@ -270,12 +270,15 @@
       const P = S.profile;
       const foot = (t) => '<div class="foot">' + t + '</div>';
       if (n === 'title' && S.WMM) {   // Where's my Mawashi: white, the menu on the left, the ninja on the right
-        h = '<div class="wmm-logo"><span>BIG BOOTY</span>SUMO</div><div class="wmm-wrap"><div class="menu">' + btn('PLAY', 'wmmPlay') + (localStorage.getItem('wmm_boss') ? btn('TRAINING', 'learn') : '') + btn('SETTINGS', 'settings') +
+        h = '<div class="wmm-logo"><span>BIG BOOTY</span>SUMO</div><div class="wmm-wrap"><div class="menu">' + btn('PLAY', 'wmmPlay') + btn('PARTY', 'party') + (localStorage.getItem('wmm_boss') ? btn('TRAINING', 'learn') : '') + btn('SETTINGS', 'settings') +
           (S.APP === 'desktop' ? btn('QUIT', 'quitApp') : '') + '</div></div>';
       } else if (n === 'title') {
         h = '<div class="title-wrap"><img class="logo-img" src="assets/logo.webp?v=2" alt="Kumite"><div class="menu">' +
           btn('PLAY', 'play') + btn('MULTIPLAYER', 'online') + btn('SETTINGS', 'settings') + (S.APP === 'desktop' ? btn('QUIT', 'quitApp') : '') +
           '</div></div>';
+      } else if (n === 'party') {   // two players, one screen
+        h = '<div class="pause-wrap"><div class="ptitle">PARTY · 2 PLAYERS</div><div class="menu">' + btn('CO-OP HEIST', 'partyCoop') + btn('HIDE & SEEK', 'partyHide') + btn('PANTS TAG', 'partyTag') + btn('BACK', 'back') +
+          '</div>' + foot('One keyboard, split screen (or two pads) · P1: WASD, SHIFT, SPACE, F, E, Q · P2: ARROWS, R-SHIFT, / . , M · Esc back') + '</div>';
       } else if (n === 'play') {
         const phs = () => { const P = S.phones, k = P.slots.filter(Boolean).length; return P.on ? (k ? k + ' CONNECTED' : 'ON') : 'OFF'; };
         this.phs = phs;

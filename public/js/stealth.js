@@ -3174,6 +3174,7 @@
   const fmtT = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
 
   S.Stealth = Stealth;
+  S.StealthLib = { floorY, roomAt, inPool, ang, lerpA, LY, POOL, CENSOR, UP };   // (for the party modes: party.js)
   // the bathhouse kit, fetched once (in the background soon after start-up, so the test level opens at once)
   let bathP = null;
   let gachaP = null;

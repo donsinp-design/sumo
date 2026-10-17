@@ -3,7 +3,7 @@
 (function () {
   if (!window.THREE) { document.getElementById('nolib').classList.remove('hidden'); return; }
   const RR = S.RING_R;
-  S.OPAQUE_SCREENS = ['title', 'select', 'settings', 'controls', 'binds', 'soon', 'trainsel', 'tutorial', 'tutdone', 'moves', 'online', 'lobby', 'play'];
+  S.OPAQUE_SCREENS = ['party', 'title', 'select', 'settings', 'controls', 'binds', 'soon', 'trainsel', 'tutorial', 'tutdone', 'moves', 'online', 'lobby', 'play'];
 
   class Game {
     constructor() {
@@ -1015,6 +1015,12 @@
       this.mode = 'campaign'; document.body.classList.add('playing', 'campaign');
       this.camp = new S.Stealth(this); this.camp.start(intro);
     }
+    // PARTY: two players on one screen (party.js): co-op heist, hide and seek, pants tag
+    startParty(mode) {
+      this.startAttract(); this.ui.hide(); this.ui.showHud(false); this.ui.hint('');
+      this.mode = 'campaign'; document.body.classList.add('playing', 'campaign');
+      this.camp = new S.Party(this); this.camp.start(mode);
+    }
     endCampaign() {
       // cover the screen first, tear down underneath, then reveal the title: never a glimpse of the versus stage
       const done = () => {
@@ -1469,7 +1475,7 @@
       const n = this.ui.name;
       if (n === 'pause') this.pause(false);
       else if (n === 'settings') { if (this.uiBack === 'stealth' && this.camp) { this.ui.hide(); this.camp.hudApply(); this.camp.setPause(true); } else if (this.uiBack === 'pause') this.ui.show('pause', { tut: !!this.tut }); else this.ui.show('title'); }
-      else if (n === 'play') this.ui.show('title');
+      else if (n === 'play' || n === 'party') this.ui.show('title');
       else if (n === 'controls') { const f = this.uiBack; this.ui.show('settings'); this.uiBack = f; }
       else if (n === 'online') this.ui.show('title');
       else if (n === 'phones') { const b = this.phonesBack || 'online'; this.phonesBack = null; if (b === 'pause') this.ui.show('pause', { tut: !!this.tut }); else this.ui.show(b, {}); }
@@ -1532,6 +1538,10 @@
         case 'learn': this.startTutorial(); break;
         case 'campaign': this.startCampaign(); break;
         case 'test': this.startStealth(); break;
+        case 'party': ui.show('party'); break;
+        case 'partyCoop': this.startParty('coop'); break;
+        case 'partyHide': this.startParty('hide'); break;
+        case 'partyTag': this.startParty('tag'); break;
         case 'wmmPlay': this.ui.hide(); S.WMM.play(() => this.startStealth(true)); break;
         case 'training': this.sel.c1 = this.sel.c1 || 0; ui.show('trainsel', { c1: this.sel.c1 }); break;
         case 'play': ui.show('play'); break;
