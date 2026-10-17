@@ -21,10 +21,10 @@
 
   class Party extends S.Stealth {
     start(mode) {
-      const g = this.g; this.mode = mode; this.cpu = !!g.partyCpu; this.fpv = !!g.partyFpv;   // (first person: a camera in each one's head)   // (P2 played by the computer: one person can test every mode)
+      const g = this.g; this.mode = mode; this.cpu = !!g.partyCpu; this.fpv = !!g.partyFpv;   // (THIRD PERSON: a camera behind each one, Hitman / GTA style)   // (P2 played by the computer: one person can test every mode)
       this.R = g.R; this.t = 0; this.acc = 0; this.paused = false;
       this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xd9e6e9);
-      this.cams = [0, 1].map(() => new THREE.PerspectiveCamera(this.fpv ? 72 : 38, 1, this.fpv ? 0.08 : 2.0, 120)); this.cam = this.cams[0];
+      this.cams = [0, 1].map(() => new THREE.PerspectiveCamera(this.fpv ? 60 : 38, 1, this.fpv ? 0.1 : 2.0, 120)); this.cam = this.cams[0];
       this.fx = new S.FX(this.scene); this.fx.scene = this.scene; this.fx.noMarks = true;
       this.flat = { lights: S.Flat.lights(this.scene, { r: 22 }) };
       { const Lg = this.flat.lights, sun = Lg.sun, R = 60; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -R, right: R, top: R, bottom: -R, near: 1, far: 140 }); sun.shadow.camera.updateProjectionMatrix();
@@ -37,11 +37,11 @@
       for (const m of this.marks || []) m.visible = false;   // (the story's "go here" rings: not in a party)
       this.walls.push({ x0: LY.stairs.x0, x1: LY.stairs.x1, z0: LY.stairs.z1 - 0.9, z1: LY.stairs.z1 - 0.3, tall: true });   // (the ground floor only: the stairs are shut)
       this.buildNav();
-      if (this.fpv) this.raiseWalls();
+      if (this.fpv) { this.raiseWalls(); this.camWalls = LY.solids.filter((q) => !q.f && (q.k === 'wall' || q.h > 1.6)); }   // (what the camera behind him can't pass through)
       this.keys = {}; this.kd = (e) => { this.keys[e.code] = true; if (e.code === 'Escape') this.quit(); if (/Arrow|Space|Slash|Period|Comma/.test(e.code)) e.preventDefault(); }; this.ku = (e) => { this.keys[e.code] = false; };
       addEventListener('keydown', this.kd); addEventListener('keyup', this.ku);
       if (this.fpv) {   // P1 looks with the mouse (click the game to capture it)
-        this.mm = (e) => { const p = this.ps && this.ps[0]; if (!p || (!document.pointerLockElement && !e.movementX && !e.movementY)) return; p.f += e.movementX * 0.0026; p.pitch = Math.max(-0.9, Math.min(0.7, (p.pitch || 0) - e.movementY * 0.0022)); };   // (captured or not: moving the mouse turns him)
+        this.mm = (e) => { const p = this.ps && this.ps[0]; if (!p || (!document.pointerLockElement && !e.movementX && !e.movementY)) return; p.yaw = (p.yaw === undefined ? p.f : p.yaw) + e.movementX * 0.0026; p.pitch = Math.max(-0.9, Math.min(0.7, (p.pitch || 0) - e.movementY * 0.0022)); };   // (captured or not: moving the mouse turns him)
         this.mc = () => { if (document.pointerLockElement !== this.R.r.domElement && this.R.r.domElement.requestPointerLock) this.R.r.domElement.requestPointerLock(); };
         addEventListener('mousemove', this.mm); addEventListener('mousedown', this.mc); }   // (a click anywhere captures the mouse: the canvas has layers over it)
       const arch = S.ARCH[0];
@@ -87,7 +87,7 @@
       p.kind = 'staff'; p.staffV.root.visible = true; p.v.root.visible = false;
     }
     makeSumo(p) { p.kind = 'sumo'; if (p.staffV) p.staffV.root.visible = false; p.v.root.visible = true; }
-    place(p, x, z, f) { p.x = x; p.z = z; p.y = floorY(x, z); p.f = f === undefined ? -Math.PI / 2 : f; p.vx = p.vz = 0; p.st = 'free'; p.t = 0; p.hidden = null; p.sub = false; p.grabbedBy = null; p.camT.set(x, 0, z - 2.6); }
+    place(p, x, z, f) { p.x = x; p.z = z; p.y = floorY(x, z); p.f = f === undefined ? -Math.PI / 2 : f; p.yaw = p.f; p.cpos = null; p.vx = p.vz = 0; p.st = 'free'; p.t = 0; p.hidden = null; p.sub = false; p.grabbedBy = null; p.camT.set(x, 0, z - 2.6); }
     walkPoints() {   // floor spots on the ground floor the staff can wander between (a grid, anything in a wall or the bath left out)
       const out = [];
       for (let x = -19; x <= 21; x += 2) for (let z = -60; z <= 3; z += 2) {
@@ -103,11 +103,11 @@
       const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [], gp = pads[p.i];
       if (gp) { const ax = gp.axes[0] || 0, az = gp.axes[1] || 0; if (Math.hypot(ax, az) > 0.25) { mx = ax; mz = az; } const b = (n) => gp.buttons[n] && gp.buttons[n].pressed;
         I.slide = I.slide || b(0); I.hide = I.hide || b(1); I.push = I.push || b(2); I.use = I.use || b(3); I.run = I.run || b(5) || b(7); }
-      if (this.fpv) {   // first person: the stick / keys are relative to where he looks. P1: the mouse turns him; P2 (or a pad): left / right turn
-        if (gp && Math.abs(gp.axes[2] || 0) > 0.2) p.f += (gp.axes[2] || 0) * 0.05; if (gp && Math.abs(gp.axes[3] || 0) > 0.2) p.pitch = Math.max(-0.9, Math.min(0.7, (p.pitch || 0) - (gp.axes[3] || 0) * 0.03));
-        let side = mx; if (p.i === 1 && !gp) { p.f += mx * 2.6 / 60; side = 0; }
-        if (p.i === 0 && this.cpu) { const tl = this.keys.ArrowLeft ? 1 : 0, tr = this.keys.ArrowRight ? 1 : 0; if (tl || tr) { p.f += (tr - tl) * 2.6 / 60; side -= (tr - tl); } }   // (alone: the left / right arrows turn him, no mouse needed)
-        const fwd = -mz, f = p.f; mx = Math.cos(f) * fwd - Math.sin(f) * side; mz = Math.sin(f) * fwd + Math.cos(f) * side; }
+      if (this.fpv) {   // third person: the stick / keys are relative to the camera (W away from it, D to its right); he turns to face where he walks. P1: the mouse turns the camera; P2 (or a pad): left / right / right stick
+        if (p.yaw === undefined) p.yaw = p.f; if (gp && Math.abs(gp.axes[2] || 0) > 0.2) p.yaw += (gp.axes[2] || 0) * 0.05; if (gp && Math.abs(gp.axes[3] || 0) > 0.2) p.pitch = Math.max(-0.9, Math.min(0.7, (p.pitch || 0) - (gp.axes[3] || 0) * 0.03));
+        let side = mx; if (p.i === 1 && !gp && !(this.cpu)) { p.yaw += mx * 2.6 / 60; side = 0; }
+        if (p.i === 0 && this.cpu) { const tl = this.keys.ArrowLeft ? 1 : 0, tr = this.keys.ArrowRight ? 1 : 0; if (tl || tr) { p.yaw += (tr - tl) * 2.6 / 60; side -= (tr - tl); } }   // (alone: the left / right arrows turn him, no mouse needed)
+        const fwd = -mz, f = p.yaw; mx = Math.cos(f) * fwd - Math.sin(f) * side; mz = Math.sin(f) * fwd + Math.cos(f) * side; }
       const m = Math.hypot(mx, mz); if (m > 1) { mx /= m; mz /= m; }
       I.mx = mx; I.mz = mz; I.mag = Math.min(1, m);
       for (const b of ['push', 'slide', 'use', 'hide']) I[b + 'P'] = I[b] && !p.prev[b];
@@ -199,7 +199,7 @@
       p.running = p.st === 'free' && I.run && I.mag > 0.3 && !p.tired && !wet;
       if (p.running) { p.stam -= dt / D.runStam; if (p.stam <= 0) { p.stam = 0; p.tired = true; } } else { p.stam = Math.min(1, p.stam + dt * 0.3); if (p.tired && p.stam > 0.45) p.tired = false; }
       if (p.st === 'free') spd = wet ? D.wade : p.running ? D.run : D.walk;
-      if (p.st === 'slide') { if (I.mag > 0.3) p.cdir = lerpA(p.cdir, Math.atan2(I.mz, I.mx), dt * 1.4); if (!this.fpv || (this.cpu && p.i === 1)) p.f = p.cdir; const wf = this.wetAt(p.x, p.z); p.sv = Math.max(0, p.sv - (wf ? D.slideWet : D.slideDry) * dt);
+      if (p.st === 'slide') { if (I.mag > 0.3) p.cdir = lerpA(p.cdir, Math.atan2(I.mz, I.mx), dt * 1.4); p.f = p.cdir; const wf = this.wetAt(p.x, p.z); p.sv = Math.max(0, p.sv - (wf ? D.slideWet : D.slideDry) * dt);
         if (wf && this.fx.water && Math.random() < dt * 10) this.fx.water(p.x, p.z, 0.4, p.y); mx = Math.cos(p.cdir); mz = Math.sin(p.cdir); spd = p.sv;
         if (p.sv < 0.6) { p.st = 'getup'; p.t = 0; } if (inPool(p.x, p.z)) { p.st = 'free'; p.sv = 0; this.fx.water && this.fx.water(p.x, p.z, 4, POOL.water); this.sfx('thump', 4); } }
       if (p.st === 'getup' && p.t > D.getUp) { p.st = 'free'; p.t = 0; }
@@ -207,7 +207,7 @@
       if (p.st === 'slam') { if (!p.slamDone && p.t > D.slamLand) { p.slamDone = true; this.slamLand(p); } if (p.t > D.slam) { p.st = 'free'; p.t = 0; } }
       const go = p.st === 'slide' || (p.st === 'free' && I.mag > 0.3), rk = p.st === 'slide' ? 30 : 10;
       p.vx += ((go ? mx : 0) * spd - p.vx) * Math.min(1, dt * rk); p.vz += ((go ? mz : 0) * spd - p.vz) * Math.min(1, dt * rk);
-      if (p.st === 'free' && I.mag > 0.3 && !(this.fpv && !(this.cpu && p.i === 1))) p.f = lerpA(p.f, Math.atan2(I.mz, I.mx), dt * 12);   // (in first person he faces where he looks)
+      if (p.st === 'free' && I.mag > 0.3) p.f = lerpA(p.f, Math.atan2(I.mz, I.mx), dt * 12);
       p.x += p.vx * dt; p.z += p.vz * dt;
       const hit = this.collide(p, p.kind === 'staff' ? 0.4 : p.r); if (hit && p.st === 'slide') { p.st = 'getup'; p.t = 0; p.vx *= -0.3; p.vz *= -0.3; }
       const ty = inPool(p.x, p.z) ? (p.kind === 'staff' ? -0.55 : -0.62) : floorY(p.x, p.z); p.y += (ty - p.y) * Math.min(1, dt * 10);
@@ -377,26 +377,26 @@
       r.setScissorTest(true);
       for (const p of this.cpu ? [this.ps[0]] : this.ps) {
         const cam = this.cams[p.i]; cam.aspect = hw / H; cam.updateProjectionMatrix();
-        if (this.fpv) this.eyeCam(p, cam, dt);
+        if (this.fpv) this.behindCam(p, cam, dt);
         else { const tgt = new THREE.Vector3(p.x, Math.max(0, p.y), p.z - 2.6); p.camT.lerp(tgt, 1 - Math.exp(-dt * 4));
           const dist = 15, ch = 0.64, cz = Math.sqrt(1 - ch * ch); cam.position.set(p.camT.x, p.camT.y + dist * ch, p.camT.z + dist * cz); cam.lookAt(p.camT.x, p.camT.y + 0.6, p.camT.z); }
         cam.updateMatrixWorld();
         for (const q of this.ps) this.placeMosaic(q, cam);
-        const own = this.fpv ? [p.v.root, p.staffV && p.staffV.root, p.mosaic.s].filter((o) => o && o.visible) : []; for (const o of own) o.visible = false;   // (his own body: not in his own eyes)
         const x = p.i * hw; r.setViewport(x, 0, hw, H); r.setScissor(x, 0, hw, H); r.render(this.scene, cam);
-        for (const o of own) o.visible = true;
       }
       r.setScissorTest(false); r.setViewport(0, 0, W, H);
     }
-    eyeCam(p, cam, dt) {   // first person: in his head; flat on the floor in a belly slide; peeking over a cart's rim; under the bath water
-      const lay = p.st === 'slide' || (p.st === 'getup' && p.t < D.getUp * 0.55), s = p.v.s || 1;
-      let h = p.kind === 'staff' ? 1.62 : 1.78 * s; if (lay) h = 0.55; if (p.st === 'slam') h += p.t < D.slamLand ? 1.0 * Math.sin(Math.PI * Math.min(1, p.t / D.slamLand)) : -0.8;
-      let x = p.x + Math.cos(p.f) * 0.32, z = p.z + Math.sin(p.f) * 0.32, y = p.y + h;
-      if (p.hidden && p.hidden.w) { x = p.hidden.x; z = p.hidden.z; y = 1.15; } else if (typeof p.hidden === 'string') { y = p.y + 1.2; } if (p.sub) y = -0.95;
-      p.eye = p.eye || new THREE.Vector3(x, y, z); p.eye.lerp(new THREE.Vector3(x, y, z), 1 - Math.exp(-dt * 18));
-      const pt = p.pitch || 0, fx = Math.cos(p.f) * Math.cos(pt), fz = Math.sin(p.f) * Math.cos(pt), fy = Math.sin(pt);
-      cam.position.copy(p.eye); cam.lookAt(p.eye.x + fx, p.eye.y + fy, p.eye.z + fz);
+    behindCam(p, cam, dt) {   // third person: behind him and a little above, pulled in when a wall gets between; the mouse (or arrows / right stick) swings it round
+      if (p.yaw === undefined) p.yaw = p.f;
+      const yaw = p.yaw, pt = p.pitch || 0, lay = p.st === 'slide' || (p.st === 'getup' && p.t < D.getUp * 0.55), s = p.v.s || 1;
+      let tx = p.x, tz = p.z, ty = p.y + (p.kind === 'staff' ? 1.5 : 1.55 * s) - (lay ? 0.8 : 0);
+      if (p.hidden && p.hidden.w) { tx = p.hidden.x; tz = p.hidden.z; ty = 1.3; } if (p.sub) ty = 0.4;
+      const BACK = 4.2; let d = BACK; while (d > 0.8 && this.camHit(tx, tz, tx - Math.cos(yaw) * d, tz - Math.sin(yaw) * d)) d -= 0.3;
+      const up = (1.25 - pt * 2.2) * (0.45 + 0.55 * d / BACK), want = new THREE.Vector3(tx - Math.cos(yaw) * d, ty + up, tz - Math.sin(yaw) * d);
+      if (!p.cpos) p.cpos = want.clone(); p.cpos.lerp(want, 1 - Math.exp(-dt * 12));
+      cam.position.copy(p.cpos); cam.lookAt(tx + Math.cos(yaw) * 2.4, ty - 0.15 + pt * 2.2, tz + Math.sin(yaw) * 2.4);
     }
+    camHit(x0, z0, x1, z1) { for (let k = 1; k <= 12; k++) { const t = k / 12, x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t; for (const q of this.camWalls) if (x > q.x0 - 0.25 && x < q.x1 + 0.25 && z > q.z0 - 0.25 && z < q.z1 + 0.25) return true; } return false; }
     drawPlayer(p, dt, T) {
       if (p.kind === 'staff') {
         const sv = p.staffV, a = p.a || (p.a = { kind: 'staff', x: 0, z: 0, y: 0, f: 0, vx: 0, vz: 0, st: 'free', t: 0, hp: 1, maxHp: 1, dead: false, engage: false });
@@ -443,7 +443,7 @@
         (this.cpu ? '<style>#partyHud .mid,#partyHud .c1{display:none!important}#partyHud .c0{width:100%}#partyHud .s1,#partyHud .b1{left:auto;right:16px}</style>' : '') + '<div class="cov c0"></div><div class="cov c1"></div><div class="mid"></div><div class="side s0"></div><div class="side s1"></div><div class="bn b0"></div><div class="bn b1"></div><div class="big"></div><div class="card"></div>';
       document.body.appendChild(h);
     }
-    title(name, how) { const c = this.hud.querySelector('.card'); c.innerHTML = '<b>' + name + '</b>' + how + (this.fpv ? '<br><span style="color:#f2cf4a">FIRST PERSON: click to look with the mouse (P1) · P2 turns with left / right</span>' : '') + '<br><span style="color:#5a8fd0">P1: ' + HELP[0] + '</span><br><span style="color:#dd5a42">P2: ' + (this.cpu ? 'COMPUTER' : HELP[1]) + '</span><br>ESC: menu';
+    title(name, how) { const c = this.hud.querySelector('.card'); c.innerHTML = '<b>' + name + '</b>' + how + (this.fpv ? '<br><span style="color:#f2cf4a">THIRD PERSON: the mouse turns the camera (click to capture it) · P2 turns it with left / right</span>' : '') + '<br><span style="color:#5a8fd0">P1: ' + HELP[0] + '</span><br><span style="color:#dd5a42">P2: ' + (this.cpu ? 'COMPUTER' : HELP[1]) + '</span><br>ESC: menu';
       c.style.opacity = 1; clearTimeout(this.cardT); this.cardT = setTimeout(() => { if (this.hud) c.style.opacity = 0; }, 9000); }
     hudSide(p, txt) { const e = this.hud.querySelector('.s' + p.i); if (e.textContent !== txt) e.textContent = txt; e.style.borderLeft = '6px solid ' + CSS[p.i]; }
     banner(p, txt, col) { const e = this.hud.querySelector('.b' + p.i); e.textContent = txt; e.style.color = col || '#3a3440'; e.classList.add('on'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('on'), 1800); }
