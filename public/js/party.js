@@ -236,8 +236,10 @@
     }
     push(p) {   // two hands, in front: staff go down; in pants tag, the pants come off
       p.st = 'busy'; p.t = 0; p.w.hand = 1;
-      const fx = Math.cos(p.f), fz = Math.sin(p.f), inFront = (x, z, r) => { const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.3; };
-      for (const s of this.staff || []) if (s.mode !== 'down' && inFront(s.a.x, s.a.z, 1.7)) this.knock(s, fx, fz);
+      const fx = Math.cos(p.f), fz = Math.sin(p.f), inFront = (x, z, r) => { const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.2; };
+      this.miniPuff(p.x + fx * 1.5, p.y + 0.5, p.z + fz * 1.5, 0.45, 8);   // (a puff off his palms: you see every push)
+      for (const s of this.staff || []) if (s.mode !== 'down' && inFront(s.a.x, s.a.z, 2.0)) this.knock(s, fx, fz);
+      { const o2 = this.other(p); if (this.mode !== 'tag' && !o2.hidden && !o2.sub && o2.st !== 'grabbed' && inFront(o2.x, o2.z, 1.9)) { o2.vx += fx * 6; o2.vz += fz * 6; } }   // (and the other sumo gets shoved along)
       const fr = this.other(p).grabbedBy; if (fr && fr.mode === 'hold' && Math.hypot(fr.a.x - p.x, fr.a.z - p.z) < 2.2) this.knock(fr, fr.a.x - p.x, fr.a.z - p.z);   // (a friend held: any push near his grabber knocks it off)
       const o = this.other(p); if (this.mode === 'tag' && o.pants && !o.hidden && inFront(o.x, o.z, 1.8)) this.steal(o, p);
       this.sfx('whoosh', 0.2);
@@ -427,10 +429,11 @@
       // a booty out of the cart he's hiding in
       if (p.hidden && p.hidden.w) { if (!p.cb) { p.cb = this.bootyProp(); p.cb.scale.setScalar(0.9); } const c = p.hidden; if (p.cb.parent !== c.m) c.m.add(p.cb); p.cb.visible = true; p.cb.position.set(0.05, 1.0, 0); p.cb.rotation.set(-Math.PI / 2 + 0.25, 0, Math.sin(T * 2.2) * 0.06); p.cb.userData.strip.visible = p.cb.userData.band.visible = dressed; }
       else if (p.cb) p.cb.visible = false;
-      p.mosaic.s.visible = !dressed && v.root.visible && p.y > -0.3 && !lay;
+      p.mosaic.s.visible = p.mosaicOn = !dressed && v.root.visible && p.y > -0.3 && !lay;
     }
     placeMosaic(p, cam) {
-      const m = p.mosaic; if (!m.s.visible) return; const v = p.v;
+      const m = p.mosaic; if (p.mosaicOn === undefined) p.mosaicOn = m.s.visible; m.s.visible = p.mosaicOn; if (!m.s.visible) return; const v = p.v;
+      if ((cam.position.x - p.x) * Math.cos(p.f) + (cam.position.z - p.z) * Math.sin(p.f) < 0) { m.s.visible = false; return; }   // (seen from behind: his booty, no censor)
       if ((m.t -= 0.016) <= 0) { m.t = 0.1; const g = m.cv.getContext('2d'), sk = ['#e9b894', '#d9a07c', '#f0c8a8', '#c98a6a', '#e0ac88']; g.clearRect(0, 0, 8, 5);
         for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { if ((x === 0 || x === 7) && Math.random() < 0.6) continue; g.fillStyle = sk[(Math.random() * sk.length) | 0]; g.fillRect(x, y, 1, 1); } m.s.material.map.needsUpdate = true; }
       const s = v.s, hip = new THREE.Vector3(0, CENSOR.y * s, 0); v.body.updateWorldMatrix(true, false); v.body.localToWorld(hip); const to = cam.position.clone().sub(hip).normalize();
