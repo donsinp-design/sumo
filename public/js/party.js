@@ -21,10 +21,10 @@
 
   class Party extends S.Stealth {
     start(mode) {
-      const g = this.g; this.mode = mode; this.cpu = !!g.partyCpu;   // (P2 played by the computer: one person can test every mode)
+      const g = this.g; this.mode = mode; this.cpu = !!g.partyCpu; this.fpv = !!g.partyFpv;   // (first person: a camera in each one's head)   // (P2 played by the computer: one person can test every mode)
       this.R = g.R; this.t = 0; this.acc = 0; this.paused = false;
       this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xd9e6e9);
-      this.cams = [0, 1].map(() => new THREE.PerspectiveCamera(38, 1, 2.0, 120)); this.cam = this.cams[0];
+      this.cams = [0, 1].map(() => new THREE.PerspectiveCamera(this.fpv ? 72 : 38, 1, this.fpv ? 0.08 : 2.0, 120)); this.cam = this.cams[0];
       this.fx = new S.FX(this.scene); this.fx.scene = this.scene; this.fx.noMarks = true;
       this.flat = { lights: S.Flat.lights(this.scene, { r: 22 }) };
       { const Lg = this.flat.lights, sun = Lg.sun, R = 60; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -R, right: R, top: R, bottom: -R, near: 1, far: 140 }); sun.shadow.camera.updateProjectionMatrix();
@@ -37,8 +37,13 @@
       for (const m of this.marks || []) m.visible = false;   // (the story's "go here" rings: not in a party)
       this.walls.push({ x0: LY.stairs.x0, x1: LY.stairs.x1, z0: LY.stairs.z1 - 0.9, z1: LY.stairs.z1 - 0.3, tall: true });   // (the ground floor only: the stairs are shut)
       this.buildNav();
+      if (this.fpv) this.raiseWalls();
       this.keys = {}; this.kd = (e) => { this.keys[e.code] = true; if (e.code === 'Escape') this.quit(); if (/Arrow|Space|Slash|Period|Comma/.test(e.code)) e.preventDefault(); }; this.ku = (e) => { this.keys[e.code] = false; };
       addEventListener('keydown', this.kd); addEventListener('keyup', this.ku);
+      if (this.fpv) {   // P1 looks with the mouse (click the game to capture it)
+        this.mm = (e) => { if (document.pointerLockElement !== this.R.r.domElement) return; const p = this.ps && this.ps[0]; if (!p) return; p.f += e.movementX * 0.0026; p.pitch = Math.max(-0.9, Math.min(0.7, (p.pitch || 0) - e.movementY * 0.0022)); };
+        this.mc = () => { if (document.pointerLockElement !== this.R.r.domElement && this.R.r.domElement.requestPointerLock) this.R.r.domElement.requestPointerLock(); };
+        addEventListener('mousemove', this.mm); this.R.r.domElement.addEventListener('mousedown', this.mc); }
       const arch = S.ARCH[0];
       this.ps = [0, 1].map((i) => this.makePlayer(i, arch));
       this.buildHud();
@@ -48,10 +53,17 @@
     }
     stop() {
       removeEventListener('resize', this.resize); removeEventListener('keydown', this.kd); removeEventListener('keyup', this.ku);
+      if (this.mm) { removeEventListener('mousemove', this.mm); this.R.r.domElement.removeEventListener('mousedown', this.mc); if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); }
       if (this.hud) this.hud.remove();
       const r = this.R.r; r.setScissorTest(false); r.setViewport(0, 0, innerWidth, innerHeight); r.shadowMap.enabled = !!this.R.flat;
       const vg = document.getElementById('vignette'); if (vg) vg.style.display = this.R.flat ? 'none' : '';
       this.scene = null;
+    }
+    raiseWalls() {   // first person: the level's walls are cut away at waist height (made for a camera above). Raised to the ceiling here, in their own colours, so rooms hide what's in them
+      const C = { tile: 0xe6f0ee, glass: 0xc4dde8, plaster: 0xefe6d6, plaster_dk: 0xc9bfb2, wood: 0xd3ab7a, metal: 0x9aa3ab }, mats = {};
+      const g = new THREE.Group(); this.G.add(g);
+      for (const q of LY.solids) { if (q.k !== 'wall' || q.f || q.h > 2) continue; const col = C[q.col] || C.plaster, m = mats[col] || (mats[col] = S.Flat.mat(col, q.col === 'glass' ? { transparent: true, opacity: 0.55 } : undefined));
+        const h = 3.0 - q.h, o = new THREE.Mesh(new THREE.BoxGeometry(q.x1 - q.x0, h, q.z1 - q.z0), m); o.position.set((q.x0 + q.x1) / 2, q.h + h / 2, (q.z0 + q.z1) / 2); o.castShadow = o.receiveShadow = true; o.userData.flatDone = true; g.add(o); }
     }
     quit() { if (this.quitting) return; this.quitting = true; this.g.endCampaign(); }
     kitShown() {}
@@ -87,6 +99,10 @@
       const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [], gp = pads[p.i];
       if (gp) { const ax = gp.axes[0] || 0, az = gp.axes[1] || 0; if (Math.hypot(ax, az) > 0.25) { mx = ax; mz = az; } const b = (n) => gp.buttons[n] && gp.buttons[n].pressed;
         I.slide = I.slide || b(0); I.hide = I.hide || b(1); I.push = I.push || b(2); I.use = I.use || b(3); I.run = I.run || b(5) || b(7); }
+      if (this.fpv) {   // first person: the stick / keys are relative to where he looks. P1: the mouse turns him; P2 (or a pad): left / right turn
+        if (gp && Math.abs(gp.axes[2] || 0) > 0.2) p.f += (gp.axes[2] || 0) * 0.05; if (gp && Math.abs(gp.axes[3] || 0) > 0.2) p.pitch = Math.max(-0.9, Math.min(0.7, (p.pitch || 0) - (gp.axes[3] || 0) * 0.03));
+        let side = mx; if (p.i === 1 && !gp) { p.f += mx * 2.6 / 60; side = 0; }
+        const fwd = -mz, f = p.f; mx = Math.cos(f) * fwd - Math.sin(f) * side; mz = Math.sin(f) * fwd + Math.cos(f) * side; }
       const m = Math.hypot(mx, mz); if (m > 1) { mx /= m; mz /= m; }
       I.mx = mx; I.mz = mz; I.mag = Math.min(1, m);
       for (const b of ['push', 'slide', 'use', 'hide']) I[b + 'P'] = I[b] && !p.prev[b];
@@ -172,13 +188,13 @@
       if (p.kind === 'staff' && I.useP) this.search(p);
       if (p.kind === 'staff' && I.pushP) this.search(p);
       // the belly slide
-      if (p.kind === 'sumo' && I.slideP && p.st === 'free' && !wet && !p.grabbedBy) { p.st = 'slide'; p.t = 0; p.cdir = I.mag > 0.3 ? Math.atan2(I.mz, I.mx) : p.f; p.f = p.cdir; p.sv = D.slideV * (p.running ? D.slideRun : 1); this.sfx('whoosh', 0.5); }
+      if (p.kind === 'sumo' && I.slideP && p.st === 'free' && !wet && !p.grabbedBy) { p.st = 'slide'; p.t = 0; p.cdir = I.mag > 0.3 && !this.fpv ? Math.atan2(I.mz, I.mx) : I.mag > 0.3 ? Math.atan2(I.mz, I.mx) : p.f; p.f = p.cdir; p.sv = D.slideV * (p.running ? D.slideRun : 1); this.sfx('whoosh', 0.5); }
       if (I.useP && p.kind === 'sumo' && p.st === 'free') this.use2(p);
       let spd = 0, mx = I.mx, mz = I.mz;
       p.running = p.st === 'free' && I.run && I.mag > 0.3 && !p.tired && !wet;
       if (p.running) { p.stam -= dt / D.runStam; if (p.stam <= 0) { p.stam = 0; p.tired = true; } } else { p.stam = Math.min(1, p.stam + dt * 0.3); if (p.tired && p.stam > 0.45) p.tired = false; }
       if (p.st === 'free') spd = wet ? D.wade : p.running ? D.run : D.walk;
-      if (p.st === 'slide') { if (I.mag > 0.3) p.cdir = lerpA(p.cdir, Math.atan2(I.mz, I.mx), dt * 1.4); p.f = p.cdir; const wf = this.wetAt(p.x, p.z); p.sv = Math.max(0, p.sv - (wf ? D.slideWet : D.slideDry) * dt);
+      if (p.st === 'slide') { if (I.mag > 0.3) p.cdir = lerpA(p.cdir, Math.atan2(I.mz, I.mx), dt * 1.4); if (!this.fpv || (this.cpu && p.i === 1)) p.f = p.cdir; const wf = this.wetAt(p.x, p.z); p.sv = Math.max(0, p.sv - (wf ? D.slideWet : D.slideDry) * dt);
         if (wf && this.fx.water && Math.random() < dt * 10) this.fx.water(p.x, p.z, 0.4, p.y); mx = Math.cos(p.cdir); mz = Math.sin(p.cdir); spd = p.sv;
         if (p.sv < 0.6) { p.st = 'getup'; p.t = 0; } if (inPool(p.x, p.z)) { p.st = 'free'; p.sv = 0; this.fx.water && this.fx.water(p.x, p.z, 4, POOL.water); this.sfx('thump', 4); } }
       if (p.st === 'getup' && p.t > D.getUp) { p.st = 'free'; p.t = 0; }
@@ -186,7 +202,7 @@
       if (p.st === 'slam') { if (!p.slamDone && p.t > D.slamLand) { p.slamDone = true; this.slamLand(p); } if (p.t > D.slam) { p.st = 'free'; p.t = 0; } }
       const go = p.st === 'slide' || (p.st === 'free' && I.mag > 0.3), rk = p.st === 'slide' ? 30 : 10;
       p.vx += ((go ? mx : 0) * spd - p.vx) * Math.min(1, dt * rk); p.vz += ((go ? mz : 0) * spd - p.vz) * Math.min(1, dt * rk);
-      if (p.st === 'free' && I.mag > 0.3) p.f = lerpA(p.f, Math.atan2(I.mz, I.mx), dt * 12);
+      if (p.st === 'free' && I.mag > 0.3 && !(this.fpv && !(this.cpu && p.i === 1))) p.f = lerpA(p.f, Math.atan2(I.mz, I.mx), dt * 12);   // (in first person he faces where he looks)
       p.x += p.vx * dt; p.z += p.vz * dt;
       const hit = this.collide(p, p.kind === 'staff' ? 0.4 : p.r); if (hit && p.st === 'slide') { p.st = 'getup'; p.t = 0; p.vx *= -0.3; p.vz *= -0.3; }
       const ty = inPool(p.x, p.z) ? (p.kind === 'staff' ? -0.55 : -0.62) : floorY(p.x, p.z); p.y += (ty - p.y) * Math.min(1, dt * 10);
@@ -355,13 +371,26 @@
       const r = this.R.r, W = innerWidth, H = innerHeight, hw = this.cpu ? W : Math.floor(W / 2);
       r.setScissorTest(true);
       for (const p of this.cpu ? [this.ps[0]] : this.ps) {
-        const cam = this.cams[p.i], tgt = new THREE.Vector3(p.x, Math.max(0, p.y), p.z - 2.6); p.camT.lerp(tgt, 1 - Math.exp(-dt * 4));
-        const dist = 15, ch = 0.64, cz = Math.sqrt(1 - ch * ch); cam.aspect = hw / H; cam.updateProjectionMatrix();
-        cam.position.set(p.camT.x, p.camT.y + dist * ch, p.camT.z + dist * cz); cam.lookAt(p.camT.x, p.camT.y + 0.6, p.camT.z); cam.updateMatrixWorld();
+        const cam = this.cams[p.i]; cam.aspect = hw / H; cam.updateProjectionMatrix();
+        if (this.fpv) this.eyeCam(p, cam, dt);
+        else { const tgt = new THREE.Vector3(p.x, Math.max(0, p.y), p.z - 2.6); p.camT.lerp(tgt, 1 - Math.exp(-dt * 4));
+          const dist = 15, ch = 0.64, cz = Math.sqrt(1 - ch * ch); cam.position.set(p.camT.x, p.camT.y + dist * ch, p.camT.z + dist * cz); cam.lookAt(p.camT.x, p.camT.y + 0.6, p.camT.z); }
+        cam.updateMatrixWorld();
         for (const q of this.ps) this.placeMosaic(q, cam);
+        const own = this.fpv ? [p.v.root, p.staffV && p.staffV.root, p.mosaic.s].filter((o) => o && o.visible) : []; for (const o of own) o.visible = false;   // (his own body: not in his own eyes)
         const x = p.i * hw; r.setViewport(x, 0, hw, H); r.setScissor(x, 0, hw, H); r.render(this.scene, cam);
+        for (const o of own) o.visible = true;
       }
       r.setScissorTest(false); r.setViewport(0, 0, W, H);
+    }
+    eyeCam(p, cam, dt) {   // first person: in his head; flat on the floor in a belly slide; peeking over a cart's rim; under the bath water
+      const lay = p.st === 'slide' || (p.st === 'getup' && p.t < D.getUp * 0.55), s = p.v.s || 1;
+      let h = p.kind === 'staff' ? 1.62 : 1.78 * s; if (lay) h = 0.55; if (p.st === 'slam') h += p.t < D.slamLand ? 1.0 * Math.sin(Math.PI * Math.min(1, p.t / D.slamLand)) : -0.8;
+      let x = p.x + Math.cos(p.f) * 0.32, z = p.z + Math.sin(p.f) * 0.32, y = p.y + h;
+      if (p.hidden && p.hidden.w) { x = p.hidden.x; z = p.hidden.z; y = 1.15; } else if (typeof p.hidden === 'string') { y = p.y + 1.2; } if (p.sub) y = -0.95;
+      p.eye = p.eye || new THREE.Vector3(x, y, z); p.eye.lerp(new THREE.Vector3(x, y, z), 1 - Math.exp(-dt * 18));
+      const pt = p.pitch || 0, fx = Math.cos(p.f) * Math.cos(pt), fz = Math.sin(p.f) * Math.cos(pt), fy = Math.sin(pt);
+      cam.position.copy(p.eye); cam.lookAt(p.eye.x + fx, p.eye.y + fy, p.eye.z + fz);
     }
     drawPlayer(p, dt, T) {
       if (p.kind === 'staff') {
@@ -409,7 +438,7 @@
         (this.cpu ? '<style>#partyHud .mid,#partyHud .c1{display:none!important}#partyHud .c0{width:100%}#partyHud .s1,#partyHud .b1{left:auto;right:16px}</style>' : '') + '<div class="cov c0"></div><div class="cov c1"></div><div class="mid"></div><div class="side s0"></div><div class="side s1"></div><div class="bn b0"></div><div class="bn b1"></div><div class="big"></div><div class="card"></div>';
       document.body.appendChild(h);
     }
-    title(name, how) { const c = this.hud.querySelector('.card'); c.innerHTML = '<b>' + name + '</b>' + how + '<br><span style="color:#5a8fd0">P1: ' + HELP[0] + '</span><br><span style="color:#dd5a42">P2: ' + (this.cpu ? 'COMPUTER' : HELP[1]) + '</span><br>ESC: menu';
+    title(name, how) { const c = this.hud.querySelector('.card'); c.innerHTML = '<b>' + name + '</b>' + how + (this.fpv ? '<br><span style="color:#f2cf4a">FIRST PERSON: click to look with the mouse (P1) · P2 turns with left / right</span>' : '') + '<br><span style="color:#5a8fd0">P1: ' + HELP[0] + '</span><br><span style="color:#dd5a42">P2: ' + (this.cpu ? 'COMPUTER' : HELP[1]) + '</span><br>ESC: menu';
       c.style.opacity = 1; clearTimeout(this.cardT); this.cardT = setTimeout(() => { if (this.hud) c.style.opacity = 0; }, 9000); }
     hudSide(p, txt) { const e = this.hud.querySelector('.s' + p.i); if (e.textContent !== txt) e.textContent = txt; e.style.borderLeft = '6px solid ' + CSS[p.i]; }
     banner(p, txt, col) { const e = this.hud.querySelector('.b' + p.i); e.textContent = txt; e.style.color = col || '#3a3440'; e.classList.add('on'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('on'), 1800); }

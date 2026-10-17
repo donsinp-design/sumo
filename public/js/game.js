@@ -1538,7 +1538,9 @@
         case 'learn': this.startTutorial(); break;
         case 'campaign': this.startCampaign(); break;
         case 'test': this.startStealth(); break;
-        case 'party': if (this.partyCpu === undefined) { try { this.partyCpu = localStorage.getItem('party_p2') !== 'human'; } catch (e) { this.partyCpu = true; } } ui.show('party'); break;
+        case 'party': if (this.partyFpv === undefined) { try { this.partyFpv = localStorage.getItem('party_view') === 'fpv'; } catch (e) { this.partyFpv = false; } }
+          if (this.partyCpu === undefined) { try { this.partyCpu = localStorage.getItem('party_p2') !== 'human'; } catch (e) { this.partyCpu = true; } } ui.show('party'); break;
+        case 'partyView': this.partyFpv = !this.partyFpv; try { localStorage.setItem('party_view', this.partyFpv ? 'fpv' : 'top'); } catch (e) {} ui.show('party'); break;
         case 'partyP2': this.partyCpu = !this.partyCpu; try { localStorage.setItem('party_p2', this.partyCpu ? 'cpu' : 'human'); } catch (e) {} ui.show('party'); break;
         case 'partyCoop': this.startParty('coop'); break;
         case 'partyHide': this.startParty('hide'); break;
