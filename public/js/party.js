@@ -64,6 +64,10 @@
       const g = new THREE.Group(); this.G.add(g);
       for (const q of LY.solids) { if (q.k !== 'wall' || q.f || q.h > 2) continue; const col = C[q.col] || C.plaster, m = mats[col] || (mats[col] = S.Flat.mat(col, q.col === 'glass' ? { transparent: true, opacity: 0.55 } : undefined));
         const h = 3.0 - q.h, o = new THREE.Mesh(new THREE.BoxGeometry(q.x1 - q.x0, h, q.z1 - q.z0), m); o.position.set((q.x0 + q.x1) / 2, q.h + h / 2, (q.z0 + q.z1) / 2); o.castShadow = o.receiveShadow = true; o.userData.flatDone = true; g.add(o); }
+      // and a ceiling over the whole ground floor (with beams), out of the sun's way: it casts no shadow, so the rooms keep their light
+      const X0 = -21, X1 = 24, Z0 = -61, Z1 = 4.6, cm = new THREE.MeshBasicMaterial({ color: 0xebe4d8 }), bm = new THREE.MeshBasicMaterial({ color: 0xa97c55 });   // (unlit: a ceiling faces away from the sun, the flat light would tint it lilac)
+      const ceil = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0, Z1 - Z0).rotateX(Math.PI / 2), cm); ceil.position.set((X0 + X1) / 2, 3.0, (Z0 + Z1) / 2); ceil.userData.flatDone = true; ceil.receiveShadow = false; g.add(ceil);
+      for (let z = Z0 + 1.5; z < Z1; z += 3) { const b = new THREE.Mesh(new THREE.BoxGeometry(X1 - X0, 0.16, 0.22), bm); b.position.set((X0 + X1) / 2, 2.92, z); b.userData.flatDone = true; g.add(b); }
     }
     quit() { if (this.quitting) return; this.quitting = true; this.g.endCampaign(); }
     kitShown() {}
