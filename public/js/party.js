@@ -41,9 +41,9 @@
       this.keys = {}; this.kd = (e) => { this.keys[e.code] = true; if (e.code === 'Escape') this.quit(); if (/Arrow|Space|Slash|Period|Comma/.test(e.code)) e.preventDefault(); }; this.ku = (e) => { this.keys[e.code] = false; };
       addEventListener('keydown', this.kd); addEventListener('keyup', this.ku);
       if (this.fpv) {   // P1 looks with the mouse (click the game to capture it)
-        this.mm = (e) => { if (document.pointerLockElement !== this.R.r.domElement) return; const p = this.ps && this.ps[0]; if (!p) return; p.f += e.movementX * 0.0026; p.pitch = Math.max(-0.9, Math.min(0.7, (p.pitch || 0) - e.movementY * 0.0022)); };
+        this.mm = (e) => { const p = this.ps && this.ps[0]; if (!p || (!document.pointerLockElement && !e.movementX && !e.movementY)) return; p.f += e.movementX * 0.0026; p.pitch = Math.max(-0.9, Math.min(0.7, (p.pitch || 0) - e.movementY * 0.0022)); };   // (captured or not: moving the mouse turns him)
         this.mc = () => { if (document.pointerLockElement !== this.R.r.domElement && this.R.r.domElement.requestPointerLock) this.R.r.domElement.requestPointerLock(); };
-        addEventListener('mousemove', this.mm); this.R.r.domElement.addEventListener('mousedown', this.mc); }
+        addEventListener('mousemove', this.mm); addEventListener('mousedown', this.mc); }   // (a click anywhere captures the mouse: the canvas has layers over it)
       const arch = S.ARCH[0];
       this.ps = [0, 1].map((i) => this.makePlayer(i, arch));
       this.buildHud();
@@ -53,7 +53,7 @@
     }
     stop() {
       removeEventListener('resize', this.resize); removeEventListener('keydown', this.kd); removeEventListener('keyup', this.ku);
-      if (this.mm) { removeEventListener('mousemove', this.mm); this.R.r.domElement.removeEventListener('mousedown', this.mc); if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); }
+      if (this.mm) { removeEventListener('mousemove', this.mm); removeEventListener('mousedown', this.mc); if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); }
       if (this.hud) this.hud.remove();
       const r = this.R.r; r.setScissorTest(false); r.setViewport(0, 0, innerWidth, innerHeight); r.shadowMap.enabled = !!this.R.flat;
       const vg = document.getElementById('vignette'); if (vg) vg.style.display = this.R.flat ? 'none' : '';
@@ -106,6 +106,7 @@
       if (this.fpv) {   // first person: the stick / keys are relative to where he looks. P1: the mouse turns him; P2 (or a pad): left / right turn
         if (gp && Math.abs(gp.axes[2] || 0) > 0.2) p.f += (gp.axes[2] || 0) * 0.05; if (gp && Math.abs(gp.axes[3] || 0) > 0.2) p.pitch = Math.max(-0.9, Math.min(0.7, (p.pitch || 0) - (gp.axes[3] || 0) * 0.03));
         let side = mx; if (p.i === 1 && !gp) { p.f += mx * 2.6 / 60; side = 0; }
+        if (p.i === 0 && this.cpu) { const tl = this.keys.ArrowLeft ? 1 : 0, tr = this.keys.ArrowRight ? 1 : 0; if (tl || tr) { p.f += (tr - tl) * 2.6 / 60; side -= (tr - tl); } }   // (alone: the left / right arrows turn him, no mouse needed)
         const fwd = -mz, f = p.f; mx = Math.cos(f) * fwd - Math.sin(f) * side; mz = Math.sin(f) * fwd + Math.cos(f) * side; }
       const m = Math.hypot(mx, mz); if (m > 1) { mx /= m; mz /= m; }
       I.mx = mx; I.mz = mz; I.mag = Math.min(1, m);
