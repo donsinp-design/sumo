@@ -1538,7 +1538,8 @@
         case 'learn': this.startTutorial(); break;
         case 'campaign': this.startCampaign(); break;
         case 'test': this.startStealth(); break;
-        case 'party': ui.show('party'); break;
+        case 'party': if (this.partyCpu === undefined) { try { this.partyCpu = localStorage.getItem('party_p2') !== 'human'; } catch (e) { this.partyCpu = true; } } ui.show('party'); break;
+        case 'partyP2': this.partyCpu = !this.partyCpu; try { localStorage.setItem('party_p2', this.partyCpu ? 'cpu' : 'human'); } catch (e) {} ui.show('party'); break;
         case 'partyCoop': this.startParty('coop'); break;
         case 'partyHide': this.startParty('hide'); break;
         case 'partyTag': this.startParty('tag'); break;

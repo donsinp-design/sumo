@@ -21,7 +21,7 @@
 
   class Party extends S.Stealth {
     start(mode) {
-      const g = this.g; this.mode = mode;
+      const g = this.g; this.mode = mode; this.cpu = !!g.partyCpu;   // (P2 played by the computer: one person can test every mode)
       this.R = g.R; this.t = 0; this.acc = 0; this.paused = false;
       this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xd9e6e9);
       this.cams = [0, 1].map(() => new THREE.PerspectiveCamera(38, 1, 2.0, 120)); this.cam = this.cams[0];
@@ -79,7 +79,8 @@
         const q = { x, z }; this.collide(q, 0.5); if (Math.hypot(q.x - x, q.z - z) > 0.05) continue; out.push([x, z]); }
       return out;
     }
-    readInput(p) {   // keys (and a pad, if there is one for this player)
+    readInput(p, dt) {   // keys (and a pad, if there is one for this player); or the computer, for P2
+      if (this.cpu && p.i === 1) { p.inp = this.botInput(p, dt); return; }
       const K = KEYS[p.i], k = (a) => a.some((c) => this.keys[c]);
       let mx = (k(K.right) ? 1 : 0) - (k(K.left) ? 1 : 0), mz = (k(K.down) ? 1 : 0) - (k(K.up) ? 1 : 0);
       const I = { run: k(K.run), push: k(K.push), slide: k(K.slide), use: k(K.use), hide: k(K.hide) };
@@ -92,6 +93,64 @@
       I.pushR = !I.push && p.prev.push; p.prev = { push: I.push, slide: I.slide, use: I.use, hide: I.hide }; p.inp = I;
     }
     other(p) { return this.ps[1 - p.i]; }
+    // ---- the computer as P2: walks the nav paths to a goal, presses what a player would press
+    botInput(p, dt) {
+      const B = p.bot || (p.bot = { path: null, pi: 0, repath: 0, gx: null, gz: null, prev: {}, spot: null, list: null, li: 0, flee: null, fleeT: 0 }), o = this.other(p);
+      const raw = { run: false, push: false, slide: false, use: false, hide: false }; let gx = null, gz = null;
+      const dist = (x, z) => Math.hypot(p.x - x, p.z - z), face = (x, z) => { p.f = Math.atan2(z - p.z, x - p.x); };
+      const tap = (b) => { raw[b] = !B.prev[b]; };   // (a press: down one frame, up the next)
+      const goSpot = (S0, r) => {   // walk to a hiding place (into the bath by its steps); true once there
+        if (dist(S0.x, S0.z) <= r) return true;
+        if (S0.via && B.viaFor !== S0 && !inPool(p.x, p.z) && dist(S0.via[0], S0.via[1]) > 0.7) { gx = S0.via[0]; gz = S0.via[1]; return false; }
+        if (S0.via) B.viaFor = S0;   // (past the steps: no turning back for them)
+        if (S0.via) { B.direct = [S0.x, S0.z]; return false; }
+        gx = S0.x; gz = S0.z; return false; };
+      if (this.mode === 'coop') {
+        const grab = o.grabbedBy, chased = (this.staff || []).some((s) => s.mode === 'chase' && s.target === p && Math.hypot(s.a.x - p.x, s.a.z - p.z) < 5);
+        if (p.st === 'grabbed') { /* held: wait for the other */ }
+        else if (grab && grab.mode === 'hold') { gx = grab.a.x; gz = grab.a.z; raw.run = true; if (dist(gx, gz) < 1.9) { face(gx, gz); tap('push'); gx = null; } }
+        else if (!p.maw) { const m = this.maw[p.i]; gx = m.x; gz = m.z; if (dist(gx, gz) < 1.3) { tap('use'); gx = null; } }
+        else { gx = this.exit.x; gz = this.exit.z; if (dist(gx, gz) < 1.0) gx = null; }
+        if (chased) raw.run = true;
+        for (const s of this.staff || []) if (s.mode !== 'down' && s.mode !== 'hold' && Math.hypot(s.a.x - p.x, s.a.z - p.z) < 1.5) { face(s.a.x, s.a.z); tap('push'); break; }
+      } else if (this.mode === 'hide') {
+        const seeking = this.ps[this.seeker] === p;
+        if (!seeking) {   // the sumo: off to a hiding place, in, and still
+          if (this.ph === 'hide' || this.ph === 'seek') { if (!B.spot || B.round !== this.round) { B.round = this.round; const sp = this.hideSpots().filter((t) => dist(t.x, t.z) < 40).sort((a, b) => dist(a.x, a.z) - dist(b.x, b.z)); B.spot = sp[(Math.random() * Math.min(4, sp.length)) | 0] || this.hideSpots()[0]; }   // (one of the nearest few he can reach: there are only 15 seconds)   // (one of the nearest few: there are only 15 seconds)
+            if (!p.hidden && !p.sub) { raw.run = this.ph === 'hide'; if (goSpot(B.spot, B.spot.k === 'pool' ? 0.9 : 1.3)) tap('hide'); } }
+        } else if (this.ph === 'seek') {   // the owner: every hiding place in turn, nearest first; straight for him if he's in sight
+          if (!B.list || B.round !== this.round) { B.round = this.round; B.list = this.hideSpots().sort((a, b) => dist(a.x, a.z) - dist(b.x, b.z)); B.li = 0; }
+          if (!o.hidden && !o.sub && this.clear(p.x, p.z, o.x, o.z) && dist(o.x, o.z) < 9) { gx = o.x; gz = o.z; raw.run = true; }
+          else { const t = B.list[B.li % B.list.length]; B.stuck = (B.stuck || 0) + (Math.hypot(p.vx, p.vz) < 0.3 ? dt : -B.stuck); if (B.stuck > 2.5) { B.stuck = 0; B.li++; }   // (stuck: on to the next)
+            else if (goSpot(t, t.k === 'stall' ? 0.6 : 1.4)) { face(t.x - (t.k === 'stall' ? 2 : 0), t.z); tap('use'); B.li++; B.stuck = 0; } }
+        }
+      } else {   // pants tag
+        const P = this.pantsM;
+        if (p.pants) { B.fleeT -= dt; if (!B.flee || B.fleeT <= 0 || dist(B.flee[0], B.flee[1]) < 1.5) { B.fleeT = 2.5; let best = null, bd = -1; for (let k = 0; k < 40; k++) { const q = this.points[(Math.random() * this.points.length) | 0], d = Math.hypot(q[0] - o.x, q[1] - o.z); if (d > bd) { bd = d; best = q; } } B.flee = best; }
+          gx = B.flee[0]; gz = B.flee[1]; raw.run = dist(o.x, o.z) < 7; }
+        else if (P.free) { gx = P.x; gz = P.z; raw.run = true; }
+        else if (o.pants) { gx = o.x; gz = o.z; raw.run = true; const d = dist(o.x, o.z);
+          if (d < 1.7) { face(o.x, o.z); tap('push'); } else if (d < 4 && p.st === 'free' && Math.random() < dt * 1.5 && this.clear(p.x, p.z, o.x, o.z)) { face(o.x, o.z); raw.slide = !B.prev.slide; } }
+      }
+      let mx = 0, mz = 0;
+      if (B.direct) { const dx = B.direct[0] - p.x, dz = B.direct[1] - p.z, d = Math.hypot(dx, dz) || 1; mx = dx / d; mz = dz / d; B.direct = null; }   // (straight there: down the bath steps)
+      else if (gx !== null && Math.hypot(gx - p.x, gz - p.z) < 8 && this.clear(p.x, p.z, gx, gz) && !this.segInWall(p.x, p.z, gx, gz)) { const dx = gx - p.x, dz = gz - p.z, d = Math.hypot(dx, dz) || 1; mx = dx / d; mz = dz / d; B.path = null; }   // (in plain sight: straight there)
+      else if (gx !== null) {
+        if (B.gx === null || Math.hypot(gx - B.gx, gz - B.gz) > 1.5 || (B.repath -= dt) <= 0 || !B.path) { B.repath = 0.6; B.gx = gx; B.gz = gz; B.path = this.navPath(p.x, p.z, gx, gz) || [[gx, gz]]; B.pi = 0; }
+        let pt = B.path[B.pi]; while (pt && Math.hypot(pt[0] - p.x, pt[1] - p.z) < 0.45 && B.pi < B.path.length - 1) { B.pi++; pt = B.path[B.pi]; }
+        if (pt) { const dx = pt[0] - p.x, dz = pt[1] - p.z, d = Math.hypot(dx, dz) || 1; mx = dx / d; mz = dz / d; }
+      } else B.gx = null;
+      if (raw.slide) { mx = Math.cos(p.f); mz = Math.sin(p.f); }
+      const I = Object.assign({ mx, mz, mag: Math.hypot(mx, mz) }, raw);
+      for (const b of ['push', 'slide', 'use', 'hide']) I[b + 'P'] = I[b] && !B.prev[b];
+      I.pushR = !I.push && B.prev.push; B.prev = { push: raw.push, slide: raw.slide, use: raw.use, hide: raw.hide };
+      return I;
+    }
+    hideSpots() {   // where a sumo can hide: the carts, the toilet stalls, a few places in the bath
+      const out = this.carts.map((c) => ({ k: 'cart', x: c.x + 0.9, z: c.z })).concat(LY.stalls.map((q) => ({ k: 'stall', x: q.x + 2.3, z: q.z })));   // (stalls: from the walkway in front, clear of the doors)
+      const sx = (POOL.steps[0] + POOL.steps[1]) / 2; for (const [x, z] of [[sx, -5.5], [sx + 2.5, -7.5]]) out.push({ k: 'pool', x, z, via: [sx, POOL.z1 + 0.9] });   // (into the bath by its steps: the paths don't go through water)
+      return out;
+    }
     wetAt(x, z) { return !!{ bath: 1, shower: 1 }[roomAt(x, z)] || this.puddles.some((q) => ((x - q.x) / q.rx) ** 2 + ((z - q.z) / q.rz) ** 2 < 1); }
     stepPlayer(p, dt) {
       const I = p.inp; p.t += dt; p.lock = Math.max(0, p.lock - dt); p.flash = Math.max(0, p.flash - dt);
@@ -123,6 +182,7 @@
         if (wf && this.fx.water && Math.random() < dt * 10) this.fx.water(p.x, p.z, 0.4, p.y); mx = Math.cos(p.cdir); mz = Math.sin(p.cdir); spd = p.sv;
         if (p.sv < 0.6) { p.st = 'getup'; p.t = 0; } if (inPool(p.x, p.z)) { p.st = 'free'; p.sv = 0; this.fx.water && this.fx.water(p.x, p.z, 4, POOL.water); this.sfx('thump', 4); } }
       if (p.st === 'getup' && p.t > D.getUp) { p.st = 'free'; p.t = 0; }
+      if (p.st === 'busy' && p.t > 0.3) { p.st = 'free'; p.t = 0; }   // (a push, a look: over in a moment)
       if (p.st === 'slam') { if (!p.slamDone && p.t > D.slamLand) { p.slamDone = true; this.slamLand(p); } if (p.t > D.slam) { p.st = 'free'; p.t = 0; } }
       const go = p.st === 'slide' || (p.st === 'free' && I.mag > 0.3), rk = p.st === 'slide' ? 30 : 10;
       p.vx += ((go ? mx : 0) * spd - p.vx) * Math.min(1, dt * rk); p.vz += ((go ? mz : 0) * spd - p.vz) * Math.min(1, dt * rk);
@@ -131,13 +191,13 @@
       const hit = this.collide(p, p.kind === 'staff' ? 0.4 : p.r); if (hit && p.st === 'slide') { p.st = 'getup'; p.t = 0; p.vx *= -0.3; p.vz *= -0.3; }
       const ty = inPool(p.x, p.z) ? (p.kind === 'staff' ? -0.55 : -0.62) : floorY(p.x, p.z); p.y += (ty - p.y) * Math.min(1, dt * 10);
       // two sumos don't pass through each other
-      const o = this.other(p); if (!o.hidden && !o.sub && o.st !== 'grabbed') { const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), R = 1.1; if (d < R && d > 1e-4) { p.x = o.x + dx / d * R; p.z = o.z + dz / d * R; }
+      const o = this.other(p); if (!o.hidden && !o.sub && o.st !== 'grabbed' && !(this.mode === 'hide' && this.ph === 'hide')) { const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), R = 1.1; if (d < R && d > 1e-4) { p.x = o.x + dx / d * R; p.z = o.z + dz / d * R; }
         if (p.st === 'slide' && d < 1.4) this.slideHit(p, o); }
     }
     frozen(p) { return (this.mode === 'hide' && this.ph === 'hide' && p.kind === 'staff') || this.ph === 'end'; }
     tryHide(p, fromSlide) {
       const near = (x, z, r) => Math.hypot(p.x - x, p.z - z) < r;
-      for (const c of this.carts) if (near(c.x, c.z, fromSlide ? 1.8 : 1.4) && !this.ps.some((q) => q.hidden === c)) { p.hidden = c; p.st = 'free'; p.t = 0; p.vx = p.vz = 0; p.x = c.x; p.z = c.z; c.off = true; this.cartBox(c); this.sfx('whoosh', 0.3); return true; }
+      for (const c of this.carts) if (near(c.x, c.z, fromSlide ? 2.1 : 1.8) && !this.ps.some((q) => q.hidden === c)) { p.hidden = c; p.st = 'free'; p.t = 0; p.vx = p.vz = 0; p.x = c.x; p.z = c.z; c.off = true; this.cartBox(c); this.sfx('whoosh', 0.3); return true; }
       for (let k = 0; k < LY.stalls.length; k++) { const q = LY.stalls[k]; if (near(q.x + 0.4, q.z, 1.6) && !this.ps.some((o) => o.hidden === 'stall' + k)) { p.hidden = 'stall' + k; p.st = 'free'; p.t = 0; p.vx = p.vz = 0; p.x = q.x + 0.2; p.z = q.z; const Dd = this.stallDoors && this.stallDoors[k]; if (Dd) Dd.rotation.y = 0; return true; } }
       if (inPool(p.x, p.z)) { p.sub = true; p.breath = D.breath; p.t = 0; p.vx = p.vz = 0; this.fx.water && this.fx.water(p.x, p.z, 2.5, POOL.water); return true; }
       return false;
@@ -148,7 +208,7 @@
       else if (typeof h === 'string') { const k = +h.slice(5), q = LY.stalls[k], Dd = this.stallDoors && this.stallDoors[k]; if (Dd) Dd.rotation.y = -1.4; p.x = q.x + 1.7; p.z = q.z; p.f = 0; this.collide(p, p.r); }
     }
     push(p) {   // two hands, in front: staff go down; in pants tag, the pants come off
-      p.st = 'busy'; p.t = 0; p.w.hand = 1; setTimeout(() => { if (p.st === 'busy') p.st = 'free'; }, 300);
+      p.st = 'busy'; p.t = 0; p.w.hand = 1;
       const fx = Math.cos(p.f), fz = Math.sin(p.f), inFront = (x, z, r) => { const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.3; };
       for (const s of this.staff || []) if (s.mode !== 'down' && inFront(s.a.x, s.a.z, 1.7)) this.knock(s, fx, fz);
       const fr = this.other(p).grabbedBy; if (fr && fr.mode === 'hold' && Math.hypot(fr.a.x - p.x, fr.a.z - p.z) < 2.2) this.knock(fr, fr.a.x - p.x, fr.a.z - p.z);   // (a friend held: any push near his grabber knocks it off)
@@ -228,16 +288,16 @@
       this.round++; const sk = this.ps[this.seeker], hd = this.other(sk);
       this.makeSeeker(sk); this.makeSumo(hd);
       for (const p of this.ps) { if (p.hidden) this.unhide(p); }
-      this.place(hd, 1.0, 1.0); this.place(sk, 1.0, -0.2, Math.PI / 2);
+      this.place(hd, 1.0, 1.0); this.place(sk, -6.0, 1.2, Math.PI / 2);   // (the owner counts off to one side, out of the way)
       this.ph = 'hide'; this.phT = D.hideT; this.found = false;
     }
     search(p) {   // the owner looks in the cart / stall / water right in front of him
       const hd = this.other(p); if (this.mode !== 'hide' || this.ph !== 'seek') return;
       const near = (x, z, r) => Math.hypot(p.x - x, p.z - z) < r;
       let f = false; if (hd.hidden && hd.hidden.w && near(hd.hidden.x, hd.hidden.z, 1.9)) f = true;
-      if (typeof hd.hidden === 'string') { const q = LY.stalls[+hd.hidden.slice(5)]; if (near(q.x + 0.6, q.z, 2.2)) f = true; }
+      if (typeof hd.hidden === 'string') { const q = LY.stalls[+hd.hidden.slice(5)]; if (near(q.x + 0.6, q.z, 2.6) && Math.abs(p.z - q.z) < 1.0) f = true; }   // (the stall right in front of him)
       if (hd.sub && near(hd.x, hd.z, 2.6)) f = true;
-      p.st = 'busy'; p.t = 0; setTimeout(() => { if (p.st === 'busy') p.st = 'free'; }, 300);
+      p.st = 'busy'; p.t = 0;
       if (f) this.foundHim(p, hd);
     }
     foundHim(sk, hd) { if (this.found) return; this.found = true; if (hd.hidden) this.unhide(hd); hd.sub = false; sk.score++; this.ph = 'end'; this.phT = 3.2; this.bigText('FOUND!', (sk.i ? 'P2' : 'P1') + ' found the sumo'); this.sfx('thump', 6); }
@@ -282,7 +342,7 @@
     }
     step2(dt) {
       this.t += dt; this.puffStep(dt);
-      for (const p of this.ps) { this.readInput(p); this.stepPlayer(p, dt); }
+      for (const p of this.ps) { this.readInput(p, dt); this.stepPlayer(p, dt); }
       if (this.mode === 'coop') this.stepCoop(dt); else if (this.mode === 'hide') this.stepHide(dt); else this.stepTag(dt);
       for (const c of this.carts) if (!this.ps.some((p) => p.hidden === c)) { if (c.off) { c.off = false; this.cartBox(c); } }
     }
@@ -292,9 +352,9 @@
       for (const p of this.ps) this.drawPlayer(p, dt, T);
       for (const s of this.staff || []) { s.v.update(s.a, Math.max(dt, 1e-4), T); }
       this.fx.update && this.fx.update(dt);
-      const r = this.R.r, W = innerWidth, H = innerHeight, hw = Math.floor(W / 2);
+      const r = this.R.r, W = innerWidth, H = innerHeight, hw = this.cpu ? W : Math.floor(W / 2);
       r.setScissorTest(true);
-      for (const p of this.ps) {
+      for (const p of this.cpu ? [this.ps[0]] : this.ps) {
         const cam = this.cams[p.i], tgt = new THREE.Vector3(p.x, Math.max(0, p.y), p.z - 2.6); p.camT.lerp(tgt, 1 - Math.exp(-dt * 4));
         const dist = 15, ch = 0.64, cz = Math.sqrt(1 - ch * ch); cam.aspect = hw / H; cam.updateProjectionMatrix();
         cam.position.set(p.camT.x, p.camT.y + dist * ch, p.camT.z + dist * cz); cam.lookAt(p.camT.x, p.camT.y + 0.6, p.camT.z); cam.updateMatrixWorld();
@@ -346,10 +406,10 @@
         '#partyHud .big{position:absolute;left:0;right:0;top:34%;text-align:center;font-weight:900;font-size:76px;color:#d8262e;text-shadow:0 4px 0 #fff;opacity:0;transition:opacity .3s}#partyHud .big.on{opacity:1}#partyHud .big small{display:block;font-size:24px;color:#3a3440;text-shadow:none}' +
         '#partyHud .card{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(30,26,36,.88);color:#f4efe6;padding:12px 18px;border-radius:12px;font-size:17px;font-weight:700;text-align:center;max-width:88vw;transition:opacity .5s}#partyHud .card b{color:#f2cf4a;font-size:24px;display:block}' +
         '#partyHud .cov{position:absolute;top:0;bottom:0;width:50%;background:#1d2236;color:#f4efe6;display:none;align-items:center;justify-content:center;font-weight:900;font-size:54px}#partyHud .c0{left:0}#partyHud .c1{left:50%}</style>' +
-        '<div class="cov c0"></div><div class="cov c1"></div><div class="mid"></div><div class="side s0"></div><div class="side s1"></div><div class="bn b0"></div><div class="bn b1"></div><div class="big"></div><div class="card"></div>';
+        (this.cpu ? '<style>#partyHud .mid,#partyHud .c1{display:none!important}#partyHud .c0{width:100%}#partyHud .s1,#partyHud .b1{left:auto;right:16px}</style>' : '') + '<div class="cov c0"></div><div class="cov c1"></div><div class="mid"></div><div class="side s0"></div><div class="side s1"></div><div class="bn b0"></div><div class="bn b1"></div><div class="big"></div><div class="card"></div>';
       document.body.appendChild(h);
     }
-    title(name, how) { const c = this.hud.querySelector('.card'); c.innerHTML = '<b>' + name + '</b>' + how + '<br><span style="color:#5a8fd0">P1: ' + HELP[0] + '</span><br><span style="color:#dd5a42">P2: ' + HELP[1] + '</span><br>ESC: menu';
+    title(name, how) { const c = this.hud.querySelector('.card'); c.innerHTML = '<b>' + name + '</b>' + how + '<br><span style="color:#5a8fd0">P1: ' + HELP[0] + '</span><br><span style="color:#dd5a42">P2: ' + (this.cpu ? 'COMPUTER' : HELP[1]) + '</span><br>ESC: menu';
       c.style.opacity = 1; clearTimeout(this.cardT); this.cardT = setTimeout(() => { if (this.hud) c.style.opacity = 0; }, 9000); }
     hudSide(p, txt) { const e = this.hud.querySelector('.s' + p.i); if (e.textContent !== txt) e.textContent = txt; e.style.borderLeft = '6px solid ' + CSS[p.i]; }
     banner(p, txt, col) { const e = this.hud.querySelector('.b' + p.i); e.textContent = txt; e.style.color = col || '#3a3440'; e.classList.add('on'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('on'), 1800); }
