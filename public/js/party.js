@@ -9,10 +9,10 @@
   const { floorY, roomAt, inPool, ang, lerpA, LY, POOL, CENSOR } = L;
   const STEP = 1 / 60;
   const KEYS = [
-    { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], run: ['ShiftLeft'], push: ['KeyF'], slide: ['Space'], use: ['KeyE'], hide: ['KeyQ'] },
+    { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], run: ['ShiftLeft'], push: ['KeyF', 'KeyJ'], slide: ['Space', 'KeyL'], use: ['KeyE', 'KeyK'], hide: ['KeyQ', 'KeyI'] },   // (J K L I too: the story's keys)
     { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], run: ['ShiftRight'], push: ['Period'], slide: ['Slash'], use: ['Comma'], hide: ['KeyM'] },
   ];
-  const HELP = ['WASD move · SHIFT run · SPACE belly slide · F push (hold: booty slam) · E use · Q hide', 'ARROWS move · R-SHIFT run · / belly slide · . push (hold: booty slam) · , use · M hide'];
+  const HELP = ['WASD move · SHIFT run · L or SPACE belly slide · J or F push (hold: booty slam) · K or E use · I or Q hide', 'ARROWS move · R-SHIFT run · / belly slide · . push (hold: booty slam) · , use · M hide'];
   const COL = [0x2f4b7c, 0xb9493c], CSS = ['#5a8fd0', '#dd5a42'];
   const D = { walk: 3.4, run: 5.4, runStam: 4.5, wade: 2.0, slideV: 8.0, slideRun: 1.22, slideDry: 9.5, slideWet: 4.0, getUp: 0.6, holdJ: 0.25, slam: 0.9, slamLand: 0.55,
     staffN: 5, see: 7, seeHalf: 0.65, chase: 3.7, patrol: 1.4, holdT: 3.0, downT: 3.0, hideT: 15, seekT: 75, toWin: 3, tagWin: 45, breath: 10 };
@@ -97,7 +97,7 @@
     }
     readInput(p, dt) {   // keys (and a pad, if there is one for this player); or the computer, for P2
       if (this.cpu && p.i === 1) { p.inp = this.botInput(p, dt); return; }
-      const K = KEYS[p.i], k = (a) => a.some((c) => this.keys[c]);
+      const K0 = KEYS[p.i], K = this.cpu && p.i === 0 ? { up: K0.up.concat(['ArrowUp']), down: K0.down.concat(['ArrowDown']), left: K0.left.concat(['ArrowLeft']), right: K0.right.concat(['ArrowRight']), run: K0.run.concat(['ShiftRight']), push: K0.push, slide: K0.slide, use: K0.use, hide: K0.hide } : K0, k = (a) => a.some((c) => this.keys[c]);   // (alone against the computer: the arrows move P1 too)
       let mx = (k(K.right) ? 1 : 0) - (k(K.left) ? 1 : 0), mz = (k(K.down) ? 1 : 0) - (k(K.up) ? 1 : 0);
       const I = { run: k(K.run), push: k(K.push), slide: k(K.slide), use: k(K.use), hide: k(K.hide) };
       const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [], gp = pads[p.i];

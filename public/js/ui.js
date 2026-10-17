@@ -278,7 +278,7 @@
           '</div></div>';
       } else if (n === 'party') {   // two players, one screen
         h = '<div class="pause-wrap"><div class="ptitle">PARTY · 2 PLAYERS</div><div class="menu">' + btn('CO-OP HEIST', 'partyCoop') + btn('HIDE & SEEK', 'partyHide') + btn('PANTS TAG', 'partyTag') + btn('P2', 'partyP2', S.game && S.game.partyCpu ? 'COMPUTER' : 'HUMAN') + btn('VIEW', 'partyView', S.game && S.game.partyFpv ? 'FIRST PERSON' : 'TOP-DOWN') + btn('BACK', 'back') +
-          '</div>' + foot('One keyboard, split screen (or two pads) · P1: WASD, SHIFT, SPACE, F, E, Q · P2: ARROWS, R-SHIFT, / . , M · Esc back') + '</div>';
+          '</div>' + foot('One keyboard, split screen (or two pads) · P1: WASD, SHIFT, J K L I (or F E SPACE Q) · P2: ARROWS, R-SHIFT, / . , M · Esc back') + '</div>';
       } else if (n === 'play') {
         const phs = () => { const P = S.phones, k = P.slots.filter(Boolean).length; return P.on ? (k ? k + ' CONNECTED' : 'ON') : 'OFF'; };
         this.phs = phs;
