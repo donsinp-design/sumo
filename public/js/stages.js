@@ -367,6 +367,17 @@
       if (Rn.scene && Rn.scene.background) Rn.scene.background.set(0xeef2ef);
     },
 
+    // ---------------------------------------------------------------- a level's boss bout (story.js): the level itself, the dohyo standing where the cutscene raised it
+    lvring(Rn, g, spin) {
+      const id = S.game && S.game.bossLevel, L = id && S.Levels && S.Levels[id];
+      if (!L || !S.loadLevelKit || !S.makeBathDohyo) return S.STAGE_BUILD.bath(Rn, g, spin);
+      const K = R / (3.1 - 0.12), C = L.ring || { x: 0, z: 0 }, hold = new THREE.Group(); hold.scale.setScalar(K); hold.position.set(-C.x * K, 0, -C.z * K); g.add(hold);
+      S.loadLevelKit(id).then((root) => { if (!root || !g.parent) return; const k = root.clone(true);
+        k.traverse((o) => { if (/^(UPPER|PROTO)$/.test(o.name || '')) o.visible = false; });
+        hold.add(k); const d = S.makeBathDohyo(); d.position.set(C.x, 0, C.z); hold.add(d); });
+      if (Rn.scene && L.style && L.style.sky) Rn.scene.background = new THREE.Color(L.style.sky);
+    },
+
     // ---------------------------------------------------------------- pizza on a restaurant table
     pizza(Rn, g, spin) {
       const H = 0.18;

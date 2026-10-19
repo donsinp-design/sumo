@@ -80,7 +80,7 @@
       this.awaitGacha = false; if (this.ui) { this.ui.hideGacha(); this.ui.vhs(false); }
       let archs = [S.ARCH[i1], S.ARCH[i2]];
       if (kind === 'boss') { const A = S.ARCH[0]; i2 = 0; archs = [Object.assign({}, S.ARCH[i1], { name: 'YOU', kanji: 'あなた' }),   // the bathhouse owner: regular size, grey topknot, his own dark mawashi, a gentler build
-        Object.assign({}, A, { name: 'YUNOFUJI', kanji: '湯乃富士', belt: 0x3b3346, hair: 0xc9c6c0, accent: '#8a7aa8' }, this.campSaved && this.campSaved.bossWon1
+        Object.assign({}, A, { name: 'YUNOFUJI', kanji: '湯乃富士', belt: 0x3b3346, hair: 0xc9c6c0, accent: '#8a7aa8' }, this.bossInfo || {}, this.campSaved && this.campSaved.bossWon1
           ? { mass: 1.12, stability: 1.15, moveForce: A.moveForce * 1.05, pushForce: A.pushForce * 1.05, power: A.power * 1.15, grip: A.grip * 1.02, tech: 1.05, recovery: 1.08 }   // the rematch: the real champion, heavier and stronger than the first time (but beatable)
           : { moveForce: A.moveForce * 0.82, pushForce: A.pushForce * 0.72, power: A.power * 0.75, dashSpeed: A.dashSpeed * 0.82, grip: A.grip * 0.9, stability: A.stability * 0.92 })]; }
       this.kind = kind; this.archIdx = [i1, i2];
@@ -107,12 +107,12 @@
       const human = (k) => kind === 'pvp' || ((kind === 'cpu' || kind === 'boss' || kind === 'tutorial' || kind === 'showcase' || kind === 'training') && k === 0);
       for (let k = 0; k < 2; k++) m.w[k].booty = kind !== 'tutorial' && (kind === 'online' || human(k));   // (a player's sumo: J pushes two-handed, never a palm flurry or a slap. The CPU keeps its slaps)
       this.loadouts = kind === 'online' ? [0, 1].map((k) => (this.netMatch.los[k] || JSON.parse(JSON.stringify(S.DEF_EQ)))) : [0, 1].map((k) => (k === 0 && human(0) ? P.loadout() : kind === 'pvp' ? JSON.parse(JSON.stringify(S.DEF_EQ)) : P.randomLoadout()));
-      this.names = [kind === 'boss' ? 'YOU' : human(0) ? P.names[0] : 'CPU', kind === 'pvp' ? P.names[1] : kind === 'boss' ? 'YUNOFUJI' : kind === 'tutorial' || kind === 'training' ? 'PARTNER' : 'CPU'];
+      this.names = [kind === 'boss' ? 'YOU' : human(0) ? P.names[0] : 'CPU', kind === 'pvp' ? P.names[1] : kind === 'boss' ? (this.bossInfo ? this.bossInfo.name : 'YUNOFUJI') : kind === 'tutorial' || kind === 'training' ? 'PARTNER' : 'CPU'];
       this.viewerIdx = kind === 'pvp' ? -1 : kind === 'attract' ? -1 : 0;
       for (let k = 0; k < 2; k++) m.w[k].extraTaunts = this.loadouts[k].taunts.map((id) => (id ? S.item(id).pose : null));
       this.R.noMasks = kind === 'boss'; this.R.setWrestlers(archs, this.loadouts, this.names); this.R.bossGear(kind === 'boss', kind === 'boss' && this.bossBox, this.bossBoxMaker || null);
       for (const v of this.R.views) v.onDerobe = (w) => { this.audio.whoosh(0.4); this.R.fx.dust(w.x, 0.05, w.z, 6, 0.3, 0.5, 0.3); this.audio.cheer(0.4, 0.8); };
-      this.ui.setFighters(archs, kind === 'cpu' ? [this.names[0], 'CPU · ' + this.settings.difficulty.toUpperCase()] : kind === 'boss' ? ['', '湯乃富士'] : kind === 'pvp' ? this.names : kind === 'tutorial' ? ['YOU', 'PARTNER'] : ['CPU', 'CPU']);
+      this.ui.setFighters(archs, kind === 'cpu' ? [this.names[0], 'CPU · ' + this.settings.difficulty.toUpperCase()] : kind === 'boss' ? ['', this.bossInfo ? this.bossInfo.kanji : '湯乃富士'] : kind === 'pvp' ? this.names : kind === 'tutorial' ? ['YOU', 'PARTNER'] : ['CPU', 'CPU']);
       this.ui.setSkills([null, null], [false, false], ['', '']);
       this.ui.setRecord(kind === 'cpu' || kind === 'pvp' ? this.recordText() : '');
       this.ui.setWins([0, 0], this.need);
@@ -121,7 +121,7 @@
       this.bnrGo = false; this.bnrKey = null;
       if (this.bannerKind()) S.Banners.wall({ hold: 0.15, speed: 0.95 });
       // stage: your pick (or a random one) for CPU, local versus and training; the classic dohyo everywhere else
-      const stage = kind === 'boss' ? 'bathring' : ['cpu', 'pvp', 'training'].includes(kind) ? S.stageFor(S.profile.stage) : 'dohyo';
+      const stage = kind === 'boss' ? (this.bossStage || 'bathring') : ['cpu', 'pvp', 'training'].includes(kind) ? S.stageFor(S.profile.stage) : 'dohyo';
       this.R.setStage(stage); m.stage = stage;
       if (kind !== 'tutorial') { m.newRound(); this.handleEvents(); this.dealSkills(); }
     }
@@ -147,7 +147,9 @@
       this.ui.gacha(0, m.skills[0], false, this.skillKey(0), true, this.contKey(0)); this.audio.blip(true);
     }
     enterBoss(camp) {
-      if (camp && camp.makeBox) this.bossBoxMaker = () => camp.makeBox();   // park the bathhouse (it stays exactly as it is) and take over the screen
+      if (camp && camp.makeBox) this.bossBoxMaker = () => camp.makeBox();
+      this.bossInfo = (camp && camp.bossInfo) || null; this.bossStage = (camp && camp.bossStage) || null;   // (a level's own boss: his name, his belt, his ring in the level)
+      if (this.bossInfo) this.bossBox = false;   // park the bathhouse (it stays exactly as it is) and take over the screen
       this.campSaved = camp; this.camp = null; this.leavingBoss = false;
       if (camp.hud) camp.hud.style.display = 'none';
       document.body.classList.remove('campaign'); document.body.classList.add('playing');
@@ -1016,6 +1018,12 @@
       this.camp = new S.Stealth(this); this.camp.start(intro);
     }
     // PARTY: two players on one screen (party.js): co-op heist, hide and seek, pants tag
+    // a level's story (story.js): one player, the level's chain of steps, its boss
+    startLevelStory(id) {
+      this.startAttract(); this.ui.hide(); this.ui.showHud(false); this.ui.hint('');
+      this.mode = 'campaign'; document.body.classList.add('playing', 'campaign');
+      this.camp = new S.LevelStory(this); this.camp.start(id);
+    }
     startParty(mode) {
       this.startAttract(); this.ui.hide(); this.ui.showHud(false); this.ui.hint('');
       this.mode = 'campaign'; document.body.classList.add('playing', 'campaign');
@@ -1531,6 +1539,7 @@
         const a = act.slice(5), f = ui.focus; this.bindWait = a; ui.show('binds', { waiting: a }); ui.focus = f; ui.highlight(); this.audio.blip(true); return;
       }
       const refresh = () => { const f = ui.focus; ui.render(); ui.focus = f; ui.highlight(); };
+      if (/^lvStory:/.test(act)) { const id = act.slice(8); this.ui.hide(); if (id === 'bath') S.WMM.play(() => this.startStealth(true)); else this.startLevelStory(id); return; }   // (LEVELS: a level's story)
       switch (act) {
         case 'cpu': case 'pvp':
           this.sel = { mode: act, c1: this.sel.c1 || 0, c2: act === 'pvp' ? 1 : this.sel.c2, lock1: false, lock2: false };
@@ -1538,8 +1547,12 @@
         case 'learn': this.startTutorial(); break;
         case 'campaign': this.startCampaign(); break;
         case 'test': this.startStealth(); break;
+        case 'levels': ui.show('levels'); break;
         case 'party': if (this.partyFpv === undefined) { try { this.partyFpv = localStorage.getItem('party_view') === 'fpv'; } catch (e) { this.partyFpv = false; } }
+          if (this.partyLevel === undefined) { try { this.partyLevel = localStorage.getItem('party_lv') || 'bath'; } catch (e) { this.partyLevel = 'bath'; } }
+          if (!S.levelReady(this.partyLevel)) this.partyLevel = 'bath';
           if (this.partyCpu === undefined) { try { this.partyCpu = localStorage.getItem('party_p2') !== 'human'; } catch (e) { this.partyCpu = true; } } ui.show('party'); break;
+        case 'partyMap': { const L = S.LEVEL_ORDER.filter((k) => S.levelReady(k)); this.partyLevel = L[(L.indexOf(this.partyLevel) + 1) % L.length]; try { localStorage.setItem('party_lv', this.partyLevel); } catch (e) {} ui.show('party'); break; }   // (round the maps that are built)
         case 'partyView': this.partyFpv = !this.partyFpv; try { localStorage.setItem('party_view', this.partyFpv ? 'fpv' : 'top'); } catch (e) {} ui.show('party'); break;
         case 'partyP2': this.partyCpu = !this.partyCpu; try { localStorage.setItem('party_p2', this.partyCpu ? 'cpu' : 'human'); } catch (e) {} ui.show('party'); break;
         case 'partyCoop': this.startParty('coop'); break;

@@ -28,7 +28,9 @@
   const POOL = S.BathLayout.pool;
   const LY = S.BathLayout, EXIT = LY.exit;
   // which room a point is in (noise carries round its own room only; walls muffle it)
+  let CUR = null;   // another level (levels.js): its own floor heights, rooms and water instead of the bathhouse's
   function roomAt(x, z) {
+    if (CUR) return CUR.roomAt(x, z);
     if (x > 12.4 && z < -43.6 && z > -61) return 'laundry';
     if (x < -12.4 && z < -30.6 && z > -45.4) return 'toilet';
     if (z > -16) return 'bath'; if (z > -27) return 'shower'; if (z > -47) return 'lock';
@@ -103,19 +105,20 @@
     spit: { name: 'SPIT', desc: 'Spit them out at someone.' },
   };
   function floorY(x, z) {
+    if (CUR) return CUR.floorY(x, z);
     if (x < -12.4 && z > -66) return 0;   // the back alley (outside the kitchen) is ground level all the way to its end
     if (z < -61) return x > -12 && x < -4 && z > -70 && z < -62 ? UP + 0.15 : UP;   // the tatami platform, a step up
     if (z < -53 && x > 6.4 && x < 11.6) return UP * clamp((-53 - z) / 8, 0, 1);
     return 0;
   }
-  const inPool = (x, z) => x > POOL.x0 && x < POOL.x1 && z > POOL.z0 && z < POOL.z1;
+  const inPool = (x, z) => CUR ? CUR.inPool(x, z) : x > POOL.x0 && x < POOL.x1 && z > POOL.z0 && z < POOL.z1;
 
   class Stealth {
     constructor(game) { this.g = game; }
 
     // ============================================================== setup / teardown
     start(intro) {
-      const g = this.g;
+      const g = this.g; CUR = null;
       this.R = g.R; this.t = 0; this.acc = 0; this.paused = false; this.over = null; this.spotted = 0;
       this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xd9e6e9);
       this.cam = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 2.0, 120);   // (a tight near/far: no flicker where surfaces meet)
@@ -567,7 +570,7 @@
     }
     // ---------------------------------------------------------------- walking: a grid over the floor, A*, then the corners cut
     buildNav() {
-      const cs = 0.4, x0 = -15.6, z0 = -93.2, nx = Math.ceil(39.2 / cs), nz = Math.ceil((5.2 - z0) / cs), free = new Uint8Array(nx * nz), R = 0.5;
+      const cs = 0.4, B = CUR && CUR.bounds, x0 = B ? B.x0 : -15.6, z0 = B ? B.z0 : -93.2, nx = Math.ceil((B ? B.x1 - B.x0 : 39.2) / cs), nz = Math.ceil(((B ? B.z1 : 5.2) - z0) / cs), free = new Uint8Array(nx * nz), R = 0.5;
       for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
         const x = x0 + (i + 0.5) * cs, z = z0 + (j + 0.5) * cs; let ok = true;
         for (const w of this.walls) if (x > w.x0 - R && x < w.x1 + R && z > w.z0 - R && z < w.z1 + R) { ok = false; break; }
@@ -3174,7 +3177,7 @@
   const fmtT = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
 
   S.Stealth = Stealth;
-  S.StealthLib = { floorY, roomAt, inPool, ang, lerpA, LY, POOL, CENSOR, UP };   // (for the party modes: party.js)
+  S.StealthLib = { floorY, roomAt, inPool, ang, lerpA, LY, POOL, CENSOR, UP, setLevel: (rt) => { CUR = rt || null; }, segBoxT, segCircleT };   // (for the party modes: party.js)
   // the bathhouse kit, fetched once (in the background soon after start-up, so the test level opens at once)
   let bathP = null;
   let gachaP = null;

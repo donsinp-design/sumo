@@ -34,6 +34,8 @@
   };
 
   // ---------------------------------------------------------------- enemies (the roster from the design brief)
+  const civKind = (pick) => { const r = () => Math.random(), sh = [0x3c68a4, 0xc13f38, 0xe2dac6, 0x4c8458, 0xd8743a, 0x34333d, 0xcf7896, 0xc8953e, 0x5e4680, 0x3a6e6c], pa = [0x2a2a3a, 0x3c4450, 0x7a5236, 0x1a2a5a, 0xa89a78, 0x18171c];
+    return { civ: true, shirt: sh[((pick || 0) * 3 + (r() * 10 | 0)) % sh.length], apron: 0x2a2a30, band: 0x2a2a30, pants: pa[r() * pa.length | 0], jacket: r() < 0.45 ? [0x34333d, 0x2c3550, 0x7c7f82, 0xa87a4e, 0x4e3426][r() * 5 | 0] : 0, glasses: r() < 0.2, cap: r() < 0.15 }; };
   const KINDS = {
     fighter:   { hp: 45,  spd: 3.1, r: 0.42, mass: 1,   name: 'FIGHTER',   shirt: 0x2f6fd0, apron: 0xf6f6f0, band: 0xf6f6f0 },
     ninja:     { hp: 40,  spd: 3.4, r: 0.42, mass: 1,   name: 'NINJA',     shirt: 0x2d3150, apron: 0x2d3150, band: 0xd8262e },
@@ -1283,8 +1285,8 @@
   class WorkerView {
     constructor(scene, kind, fat, pick) {
       // rounded, chunky shapes with ink outlines, the same family as the sumo wrestlers (no boxes)
-      const K = KINDS[kind], M = (c, s, o) => S.toon(c, Object.assign({ shade: s, rimAmt: 0.6 }, o || {}));
-      const skin = M(0xe9b894, 0xa06a5a, { rim: 0xfff0d8 }), shirt = M(K.shirt, mul(K.shirt, 0.45)), apron = M(K.apron, mul(K.apron, 0.55)), pants = M(0x2a2a3a, 0x0c0c16),
+      const K = kind === 'civ' ? civKind(pick) : KINDS[kind], M = (c, s, o) => S.toon(c, Object.assign({ shade: s, rimAmt: 0.6 }, o || {}));   // ('civ': a passer-by in their own clothes: the levels' crowds)
+      const skin = M(0xe9b894, 0xa06a5a, { rim: 0xfff0d8 }), shirt = M(K.shirt, mul(K.shirt, 0.45)), apron = M(K.apron, mul(K.apron, 0.55)), pants = M(K.pants || 0x2a2a3a, mul(K.pants || 0x2a2a3a, 0.4)),
         boot = M(0x22242c, 0x08080c, { spec: 0.35 }), band = M(K.band, mul(K.band, 0.5)), hair = M(0x2a1e2c, 0x0e0a14, { spec: 0.2, rim: 0x8fa6e8 }), ink = S.toon(0x1a1014, { shade: 0x0b0608, rimAmt: 0 }), white = M(0xfff8ec, 0xb8b0a0);
       const mesh = S.R3.mesh, SG = S.R3.GEO.sphere, fw = fat ? 1.45 : 1, th = 0.026;
       this.kind = kind; this.fat = fat; this.scene = scene;
@@ -1297,8 +1299,9 @@
       add(this.torso, SG, shirt, 0, 0.56, 0, 0.34 * fw, 0.34, 0.25 * (fat ? 1.25 : 1));
       add(this.torso, SG, shirt, 0, 0.24, fat ? 0.06 : 0, 0.31 * fw, 0.3 * (fat ? 1.15 : 1), (fat ? 0.36 : 0.23));
       if (K.coat) add(this.torso, SG, M(0xc8231d, 0x6e1018), 0, 0.5, -0.01, 0.37 * fw, 0.38, 0.28 * (fat ? 1.25 : 1)); // happi coat
-      if (!K.coat) add(this.torso, SG, apron, 0, 0.28, (fat ? 0.27 : 0.17), 0.27 * fw, 0.36, 0.08, 0.016);
-      add(this.torso, new THREE.TorusGeometry(0.3 * fw, 0.022, 6, 24), apron, 0, 0.36, 0.0, 1, 1, fat ? 1.2 : 0.8, 0.01).rotation.x = Math.PI / 2;
+      if (K.jacket) add(this.torso, SG, M(K.jacket, mul(K.jacket, 0.45)), 0, 0.5, -0.01, 0.37 * fw, 0.38, 0.28 * (fat ? 1.25 : 1));   // (a jacket over the shirt)
+      if (!K.coat && !K.civ) add(this.torso, SG, apron, 0, 0.28, (fat ? 0.27 : 0.17), 0.27 * fw, 0.36, 0.08, 0.016);
+      if (!K.civ) add(this.torso, new THREE.TorusGeometry(0.3 * fw, 0.022, 6, 24), apron, 0, 0.36, 0.0, 1, 1, fat ? 1.2 : 0.8, 0.01).rotation.x = Math.PI / 2;
       for (const sd of [-1, 1]) add(this.torso, SG, shirt, sd * 0.33 * fw, 0.74, 0, 0.13 * (fat ? 1.25 : 1), 0.12, 0.13);
       // head: big and readable, anime hair tufts, headband with a knot and tails
       this.head = new THREE.Group(); this.head.position.set(0, 1.02, 0.02); this.torso.add(this.head);
@@ -1306,9 +1309,9 @@
       add(this.head, SG, skin, 0, -0.1, 0.05, 0.16, 0.1, 0.15, 0.0);                     // jaw
       add(this.head, SG, hair, 0, 0.1, -0.035, 0.235, 0.19, 0.235, 0.02);
       for (let i = 0; i < 5; i++) { const t = add(this.head, new THREE.ConeGeometry(0.07, 0.2, 5), hair, -0.14 + i * 0.07, 0.24, -0.03 + Math.abs(i - 2) * -0.02, 1, 1, 1, 0.012); t.rotation.set(-0.5, 0, (i - 2) * 0.35); }
-      add(this.head, new THREE.TorusGeometry(0.228, 0.035, 6, 22), band, 0, 0.1, 0, 1, 1, 1, 0.012).rotation.x = Math.PI / 2 - 0.12;
-      add(this.head, SG, band, 0, 0.1, -0.24, 0.06, 0.05, 0.05, 0.01);
-      for (const sd of [-1, 1]) { const tl = add(this.head, cap(0.025, 0.12), band, sd * 0.05, 0.02, -0.27, 1, 1, 1, 0.008); tl.rotation.set(0.6, 0, sd * 0.4); }
+      if (!K.civ) { add(this.head, new THREE.TorusGeometry(0.228, 0.035, 6, 22), band, 0, 0.1, 0, 1, 1, 1, 0.012).rotation.x = Math.PI / 2 - 0.12;
+        add(this.head, SG, band, 0, 0.1, -0.24, 0.06, 0.05, 0.05, 0.01);
+        for (const sd of [-1, 1]) { const tl = add(this.head, cap(0.025, 0.12), band, sd * 0.05, 0.02, -0.27, 1, 1, 1, 0.008); tl.rotation.set(0.6, 0, sd * 0.4); } }
       for (const sd of [-1, 1]) {
         add(this.head, SG, white, sd * 0.085, 0.0, 0.2, 0.05, 0.055, 0.03, 0.0);           // eye white
         add(this.head, SG, ink, sd * 0.08, -0.005, 0.222, 0.032, 0.042, 0.02, 0.0);       // pupil

@@ -6,7 +6,7 @@
 //   PANTS TAG: one pair of pants. Whoever has them on scores; the other steals them with a push, a slide into them, or a booty slam. First to 45
 (function () {
   const L = S.StealthLib; if (!L || !S.Stealth) return;
-  const { floorY, roomAt, inPool, ang, lerpA, LY, POOL, CENSOR } = L;
+  const { floorY, roomAt, inPool, ang, lerpA, LY, POOL, CENSOR } = L;   // (floorY / roomAt / inPool answer for whichever level is loaded: L.setLevel)
   const STEP = 1 / 60;
   const KEYS = [
     { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], run: ['ShiftLeft'], push: ['KeyF', 'KeyJ'], slide: ['Space', 'KeyL'], use: ['KeyE', 'KeyK'], hide: ['KeyQ', 'KeyI'] },   // (J K L I too: the story's keys)
@@ -14,42 +14,48 @@
   ];
   const HELP = ['WASD move · SHIFT run · L or SPACE belly slide · J or F push (hold: booty slam) · K or E use · I or Q hide', 'ARROWS move · R-SHIFT run · / belly slide · . push (hold: booty slam) · , use · M hide'];
   const COL = [0x2f4b7c, 0xb9493c], CSS = ['#5a8fd0', '#dd5a42'];
-  const D = { walk: 3.4, run: 5.4, runStam: 4.5, wade: 2.0, slideV: 8.0, slideRun: 1.22, slideDry: 9.5, slideWet: 4.0, getUp: 0.6, holdJ: 0.25, slam: 0.9, slamLand: 0.55,
+  const D = { walk: 3.4, run: 5.4, runStam: 4.5, wade: 2.0, slideV: 8.0, slideRun: 1.22, slideDry: 9.5, slideWet: 4.0, slideHill: 14, slideMax: 15, getUp: 0.6, holdJ: 0.25, slam: 0.9, slamLand: 0.55,
     staffN: 5, see: 7, seeHalf: 0.65, chase: 3.7, patrol: 1.4, holdT: 3.0, downT: 3.0, hideT: 15, seekT: 75, toWin: 3, tagWin: 45, breath: 10 };
   const START = [[-0.6, 1.0], [2.6, 1.0]];
   const MAW_SPOTS = [[20.6, -58.8], [12.9, -49.5], [2.2, -54.6], [-14.4, -43.2], [-3.6, -45.4], [1.4, -38.6], [0.0, -21.6], [-8.5, -25.5]];   // (all reachable: checked against the nav)
 
   class Party extends S.Stealth {
     start(mode) {
-      const g = this.g; this.mode = mode; this.cpu = !!g.partyCpu; this.fpv = !!g.partyFpv;   // (THIRD PERSON: a camera behind each one, Hitman / GTA style)   // (P2 played by the computer: one person can test every mode)
+      const g = this.g; this.mode = mode; this.cpu = !!g.partyCpu; this.fpv = !!g.partyFpv;
+      const id = this.lvId = g.partyLevel && g.partyLevel !== 'bath' && S.Levels[g.partyLevel] ? g.partyLevel : 'bath';   // (which map: the bathhouse, or one of levels.js's)
+      this.lv = id === 'bath' ? null : S.Levels[id]; this.rt = this.lv ? S.LevelRT(this.lv) : null; L.setLevel(this.rt); this.M = this.mapInfo();   // (THIRD PERSON: a camera behind each one, Hitman / GTA style)   // (P2 played by the computer: one person can test every mode)
       this.R = g.R; this.t = 0; this.acc = 0; this.paused = false;
       this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xd9e6e9);
       this.cams = [0, 1].map(() => new THREE.PerspectiveCamera(this.fpv ? 60 : 38, 1, this.fpv ? 0.1 : 2.0, 120)); this.cam = this.cams[0];
       this.fx = new S.FX(this.scene); this.fx.scene = this.scene; this.fx.noMarks = true;
       this.flat = { lights: S.Flat.lights(this.scene, { r: 22 }) };
-      { const Lg = this.flat.lights, sun = Lg.sun, R = 60; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -R, right: R, top: R, bottom: -R, near: 1, far: 140 }); sun.shadow.camera.updateProjectionMatrix();
-        const cx = 1, cz = -30; sun.position.set(cx - 15, 37, cz + 20); sun.target.position.set(cx, 0, cz); sun.target.updateMatrixWorld(); Lg.aim = () => {}; }
+      { const Lg = this.flat.lights, sun = Lg.sun, R = this.M.shadowR; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -R, right: R, top: R, bottom: -R, near: 1, far: 140 }); sun.shadow.camera.updateProjectionMatrix();
+        const [cx, cz] = this.M.sun; sun.position.set(cx - 15, 37, cz + 20); sun.target.position.set(cx, 0, cz); sun.target.updateMatrixWorld(); Lg.aim = () => {}; }
       const r = this.R.r; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
       const vg = document.getElementById('vignette'); if (vg) vg.style.display = 'none';
       this.walls = []; this.blockers = []; this.puddles = []; this.buckets = []; this.flying = []; this.npcs = [];
       this.P = { x: 0, z: 0, y: 0, r: 0.7, st: 'free', boxHide: false };   // (the stealth level's single player: some of its helpers look at him; here he's no one)
-      this.build();
-      for (const m of this.marks || []) m.visible = false;   // (the story's "go here" rings: not in a party)
-      this.walls.push({ x0: LY.stairs.x0, x1: LY.stairs.x1, z0: LY.stairs.z1 - 0.9, z1: LY.stairs.z1 - 0.3, tall: true });   // (the ground floor only: the stairs are shut)
+      if (this.lv) { S.levelStyle(this.lv.style, this.scene); this.buildLevel(); }
+      else {
+        this.build();
+        for (const m of this.marks || []) m.visible = false;   // (the story's "go here" rings: not in a party)
+        this.walls.push({ x0: LY.stairs.x0, x1: LY.stairs.x1, z0: LY.stairs.z1 - 0.9, z1: LY.stairs.z1 - 0.3, tall: true });   // (the ground floor only: the stairs are shut)
+      }
       this.buildNav();
-      if (this.fpv) { this.raiseWalls(); this.camWalls = LY.solids.filter((q) => !q.f && (q.k === 'wall' || q.h > 1.6)); }   // (what the camera behind him can't pass through)
-      this.keys = {}; this.kd = (e) => { this.keys[e.code] = true; if (e.code === 'Escape') this.quit(); if (/Arrow|Space|Slash|Period|Comma/.test(e.code)) e.preventDefault(); }; this.ku = (e) => { this.keys[e.code] = false; };
+      if (this.fpv) { if (!this.lv) this.raiseWalls(); this.camWalls = (this.lv ? this.lv.solids : LY.solids).filter((q) => !q.f && (q.k === 'wall' || q.h > 1.6)); }   // (what the camera behind him can't pass through)
+      this.keys = {}; this.kd = (e) => { if (this.g.camp !== this) return; this.keys[e.code] = true; if (e.code === 'Escape') this.quit(); if (/Arrow|Space|Slash|Period|Comma/.test(e.code)) e.preventDefault(); }; this.ku = (e) => { this.keys[e.code] = false; };
       addEventListener('keydown', this.kd); addEventListener('keyup', this.ku);
       if (this.fpv) {   // P1 looks with the mouse (click the game to capture it)
         this.mm = (e) => { const p = this.ps && this.ps[0]; if (!p || (!document.pointerLockElement && !e.movementX && !e.movementY)) return; p.yaw = (p.yaw === undefined ? p.f : p.yaw) + e.movementX * 0.0026; p.pitch = Math.max(-0.9, Math.min(0.7, (p.pitch || 0) - e.movementY * 0.0022)); };   // (captured or not: moving the mouse turns him)
-        this.mc = () => { if (document.pointerLockElement !== this.R.r.domElement && this.R.r.domElement.requestPointerLock) this.R.r.domElement.requestPointerLock(); };
+        this.mc = () => { if (this.g.camp !== this) return; if (document.pointerLockElement !== this.R.r.domElement && this.R.r.domElement.requestPointerLock) this.R.r.domElement.requestPointerLock(); };
         addEventListener('mousemove', this.mm); addEventListener('mousedown', this.mc); }   // (a click anywhere captures the mouse: the canvas has layers over it)
       const arch = S.ARCH[0];
       this.ps = [0, 1].map((i) => this.makePlayer(i, arch));
       this.buildHud();
       this.resize = () => {}; addEventListener('resize', this.resize);
       this.points = this.walkPoints();
-      if (mode === 'coop') this.setupCoop(); else if (mode === 'hide') this.setupHide(); else this.setupTag();
+      this.setupFeatures();
+      if (mode === 'coop') this.setupCoop(); else if (mode === 'hide') this.setupHide(); else if (mode === 'story') this.setupStory(); else this.setupTag();
     }
     stop() {
       removeEventListener('resize', this.resize); removeEventListener('keydown', this.kd); removeEventListener('keyup', this.ku);
@@ -57,6 +63,7 @@
       if (this.hud) this.hud.remove();
       const r = this.R.r; r.setScissorTest(false); r.setViewport(0, 0, innerWidth, innerHeight); r.shadowMap.enabled = !!this.R.flat;
       const vg = document.getElementById('vignette'); if (vg) vg.style.display = this.R.flat ? 'none' : '';
+      L.setLevel(null); S.levelStyleReset();
       this.scene = null;
     }
     raiseWalls() {   // first person: the level's walls are cut away at waist height (made for a camera above). Raised to the ceiling here, in their own colours, so rooms hide what's in them
@@ -78,7 +85,7 @@
         hand: 0, windPow: 0, charges: 0, uprightT: 0, throatT: 0, lifted: false, down: false, fallX: 0, fallZ: 1, clinch: null, slideT: 0, spd: 0, crouchT: 0, lean: 0, gulpI: -1, contact: false, fwdIn: 0, ddx: 0, ddz: 0, boomT: 0, relaxed: true });
       const cv = document.createElement('canvas'); cv.width = 8; cv.height = 5; const tex = new THREE.CanvasTexture(cv); tex.magFilter = tex.minFilter = THREE.NearestFilter;
       const mz = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); mz.visible = false; this.scene.add(mz);
-      const [x, z] = START[i];
+      const [x, z] = this.M.start[i];
       return { i, x, z, y: 0, f: -Math.PI / 2, vx: 0, vz: 0, r: 0.7, st: 'free', t: 0, dur: 0, sv: 0, cdir: 0, stam: 1, tired: false, v, w, kind: 'sumo', mosaic: { s: mz, cv, t: 0 },
         hidden: null, sub: false, breath: D.breath, maw: false, pants: false, score: 0, camT: new THREE.Vector3(x, 0, z - 2.6), inp: {}, prev: {}, pushHeld: 0, grabbedBy: null, lock: 0, flash: 0 };
     }
@@ -88,10 +95,10 @@
     }
     makeSumo(p) { p.kind = 'sumo'; if (p.staffV) p.staffV.root.visible = false; p.v.root.visible = true; }
     place(p, x, z, f) { p.x = x; p.z = z; p.y = floorY(x, z); p.f = f === undefined ? -Math.PI / 2 : f; p.yaw = p.f; p.cpos = null; p.vx = p.vz = 0; p.st = 'free'; p.t = 0; p.hidden = null; p.sub = false; p.grabbedBy = null; p.camT.set(x, 0, z - 2.6); }
-    walkPoints() {   // floor spots on the ground floor the staff can wander between (a grid, anything in a wall or the bath left out)
-      const out = [];
-      for (let x = -19; x <= 21; x += 2) for (let z = -60; z <= 3; z += 2) {
-        const rm = roomAt(x, z); if (rm === 'stair' || rm === 'up' || rm === 'store' || inPool(x, z)) continue;
+    walkPoints() {   // floor spots the staff can wander between (a grid, anything in a wall or the water left out)
+      const out = [], W = this.M.walk;
+      for (let x = W.x0; x <= W.x1; x += 2) for (let z = W.z0; z <= W.z1; z += 2) {
+        const rm = roomAt(x, z); if ((!this.lv && (rm === 'stair' || rm === 'up' || rm === 'store')) || inPool(x, z) || (this.nav && !this.walkable(x, z))) continue;
         const q = { x, z }; this.collide(q, 0.5); if (Math.hypot(q.x - x, q.z - z) > 0.05) continue; out.push([x, z]); }
       return out;
     }
@@ -114,6 +121,93 @@
       I.pushR = !I.push && p.prev.push; p.prev = { push: I.push, slide: I.slide, use: I.use, hide: I.hide }; p.inp = I;
     }
     other(p) { return this.ps[1 - p.i]; }
+    // ---- the map: where things are (the bathhouse's own spots, or a level's from its layout)
+    mapInfo() {
+      if (!this.lv) { const sx = (POOL.steps[0] + POOL.steps[1]) / 2;
+        return { start: START, maw: MAW_SPOTS, exit: [LY.backdoor.x - 2.2, (LY.backdoor.z0 + LY.backdoor.z1) / 2], exitName: 'the kitchen back door', pants: [1.0, -20.0], hider: [1.0, 1.0], seeker: [-6.0, 1.2],
+          hides: LY.stalls.map((q, k) => ({ k: 'stall', x: q.x + 0.2, z: q.z, out: [q.x + 1.7, q.z], ap: [q.x + 2.3, q.z], door: k, by: null })),
+          poolSpots: [[sx, -5.5], [sx + 2.5, -7.5]].map(([x, z]) => ({ x, z, via: [sx, POOL.z1 + 0.9] })), waterY: POOL.water, poolFloor: -0.62,
+          walk: { x0: -19, x1: 21, z0: -60, z1: 3 }, staffOk: (x, z) => z < -16, staffN: D.staffN, staffKinds: null, sun: [1, -30], shadowR: 60, seekerName: 'owner', hideList: 'a laundry cart, a toilet stall, under the bath water', ceil: true }; }
+      const V = this.lv, B = V.bounds, P = V.pool, Z = V.staffZone;
+      return { start: V.start, maw: V.maw, exit: V.exit ? [V.exit.x, V.exit.z] : V.start[0], exitName: (V.exit && V.exit.name) || 'the exit', pants: V.pants, hider: V.hider, seeker: V.seeker,
+        hides: V.hides || [], poolSpots: ((P && P.spots) || []).map((q) => ({ x: q[0], z: q[1], via: P.via })), waterY: P ? P.water : 0, poolFloor: P ? P.floor : -0.62,
+        walk: { x0: B.x0 + 1, x1: B.x1 - 1, z0: B.z0 + 1, z1: B.z1 - 1 }, staffOk: Z ? (x, z) => x > Z.x0 && x < Z.x1 && z > Z.z0 && z < Z.z1 : () => true, staffN: V.staffN || D.staffN, staffKinds: V.staffKinds,
+        sun: [(B.x0 + B.x1) / 2, (B.z0 + B.z1) / 2], shadowR: Math.max(30, Math.max(B.x1 - B.x0, B.z1 - B.z0) / 2 + 12), seekerName: V.seekerName || 'manager', hideList: V.hideList || 'anywhere you fit', ceil: !!V.ceil };
+    }
+    // ---- a level from levels.js: colliders from its floor plan, its kit loaded on top
+    buildLevel() {
+      const V = this.lv, G = new THREE.Group(); this.scene.add(G); this.G = G;
+      const add = (x0, x1, z0, z1, tall) => { const w = { x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), tall: !!tall }; this.walls.push(w); return w; };
+      this.solidW = V.solids.map((q) => add(q.x0, q.x1, q.z0, q.z1, q.tall));
+      for (const b of V.blockers || []) this.blockers.push({ x: b.x, z: b.z, r: b.r });
+      const B = V.bounds; add(B.x0 - 2, B.x0, B.z0 - 2, B.z1 + 2, true); add(B.x1, B.x1 + 2, B.z0 - 2, B.z1 + 2, true); add(B.x0, B.x1, B.z0 - 2, B.z0, true); add(B.x0, B.x1, B.z1, B.z1 + 2, true);   // (the edge of the world: never out into the void)
+      const holder = (x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); G.add(g); return g; };
+      this.holder = holder; this.marks = []; this.stallDoors = []; this.buckets = [];
+      this.carts = (V.carts || []).map((q) => { const c = { x: q.x, z: q.z, f: q.r || 0, hx: q.x, hz: q.z, hf: q.r || 0, vx: 0, vz: 0, m: holder(q.x, 0, q.z), w: add(0, 0, 0, 0, false) }; this.cartBox(c); return c; });
+      if (V.lights && V.lights.length) {   // pools of lamp light on the floor (a soft warm disc, added on top)
+        if (!S._poolTex) { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128); S._poolTex = new THREE.CanvasTexture(c); }
+        for (const q of V.lights) { const m = new THREE.Mesh(new THREE.PlaneGeometry(q.r * 2, q.r * 2).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: S._poolTex, color: new THREE.Color(q.col || '#ffc070'), transparent: true, opacity: q.a === undefined ? 0.35 : q.a, blending: THREE.AdditiveBlending, depthWrite: false }));
+          m.position.set(q.x, floorY(q.x, q.z) + 0.06, q.z); m.renderOrder = 2; G.add(m); } }
+      S.loadLevelKit(this.lvId).then((root) => { if (this.scene && root) this.dressLevel(root.clone(true)); });
+    }
+    dressLevel(k) {
+      this.kit = k; this.scene.add(k);
+      const up = k.getObjectByName('UPPER'); if (up) up.visible = !!this.fpv;   // (the upper walls, ceilings, storeys: in the way of the camera above, there behind him)
+      const pr = k.getObjectByName('PROTO'); if (pr) pr.visible = false;
+      const clone = (n) => { const o = k.getObjectByName(n); if (!o) return null; const c = o.clone(); c.visible = true; c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.traverse((q) => { if (q.isMesh) q.castShadow = true; }); return c; };
+      for (const c of this.carts) { const o = clone('ITEM_CART'); if (o) { c.m.add(o); c.mesh = o; } }
+      for (const m of this.movers || []) { const o = clone('MOVER_' + (m.def.k || 'cart').toUpperCase()); if (o) { m.g.add(o); m.box && (m.box.visible = false); } }
+      if (this.ball) { const o = clone('ITEM_BALL'); if (o) { this.ball.g.add(o); this.ball.def.visible = false; } }
+    }
+    // ---- a level's moving parts: movers (a forklift on its round: it runs you over), trapdoors (in at one, out at the other), a crowd (stand among them: hidden), a ball
+    setupFeatures() {
+      const V = this.lv; this.movers = []; this.traps = []; this.crowd = []; this.ball = null; if (!V) return;
+      const G = this.G, fm = (col) => S.Flat.mat(col);
+      for (const d of V.movers || []) { const g = new THREE.Group(); G.add(g); const box = new THREE.Mesh(new THREE.BoxGeometry(d.w || 2.2, 1.4, d.d || 1.2), fm(0xd4b04a)); box.position.y = 0.7; box.castShadow = true; box.userData.flatDone = true; g.add(box);
+        const m = { def: d, g, box, i: 0, u: 0, x: d.path[0][0], z: d.path[0][1], f: 0, bl: { x: d.path[0][0], z: d.path[0][1], r: d.r || 1.2 }, wait: 0 }; this.blockers.push(m.bl); this.movers.push(m); }
+      this.traps = (V.traps || []).map((t) => ({ a: t.a, b: t.b, label: t.label || 'drop through', cd: 0 }));
+      for (const c of V.crowd || []) { const n = c.n || 6, P = c.path, segL = P.map((q, i) => Math.hypot(P[(i + 1) % P.length][0] - q[0], P[(i + 1) % P.length][1] - q[1])), tot = segL.reduce((a, b) => a + b, 0);
+        for (let k = 0; k < n; k++) { const v = new S.WorkerView(this.scene, c.kind || 'civ', k % 4 === 1, k + 3); v.walls = this.walls; if (v.pole && v.pole.parent) v.pole.parent.remove(v.pole);
+          const w = { path: P, v, sp: (c.v || 1.15) * (0.85 + 0.3 * Math.random()), d: tot * k / n + Math.random() * 1.5, tot, segL, side: (Math.random() - 0.5) * (c.w || 2.2), down: 0, a: { kind: 'staff', x: P[0][0], z: P[0][1], y: 0, f: 0, vx: 0, vz: 0, st: 'free', t: 0, hp: 1, maxHp: 1, dead: false, engage: false } };
+          this.crowd.push(w); } }
+      if (V.ball) { const g = new THREE.Group(); G.add(g); const def = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 12), fm(0xeceff2)); def.castShadow = true; def.userData.flatDone = true; def.position.y = 0.34; g.add(def);
+        this.ball = { x: V.ball[0], z: V.ball[1], hx: V.ball[0], hz: V.ball[1], vx: 0, vz: 0, g, def, spin: 0, cd: 0 }; g.position.set(this.ball.x, 0, this.ball.z); }
+    }
+    featureStep(dt) {
+      for (const m of this.movers) {   // along its path at its own speed, a pause at each end
+        const P = m.def.path, sp = m.def.v || 2.2; if (m.wait > 0) { m.wait -= dt; continue; }
+        const nx = P[(m.i + 1) % P.length], dx = nx[0] - m.x, dz = nx[1] - m.z, d = Math.hypot(dx, dz);
+        if (d < sp * dt + 0.01) { m.x = nx[0]; m.z = nx[1]; m.i = (m.i + 1) % P.length; if (m.def.stops && m.def.stops.includes(m.i)) m.wait = m.def.stopT || 2; }
+        else { m.x += dx / d * sp * dt; m.z += dz / d * sp * dt; m.f = lerpA(m.f, Math.atan2(dz, dx), dt * 4); }
+        m.bl.x = m.x; m.bl.z = m.z; m.g.position.set(m.x, floorY(m.x, m.z), m.z); m.g.rotation.y = -m.f;
+        const R = (m.def.r || 1.2) + 0.55;
+        for (const p of this.ps) if (!p.hidden && !p.sub && p.st !== 'getup' && p.st !== 'grabbed' && Math.hypot(p.x - m.x, p.z - m.z) < R) { const a = Math.atan2(p.z - m.z, p.x - m.x); p.vx = Math.cos(a) * 7; p.vz = Math.sin(a) * 7; p.st = 'getup'; p.t = -0.6; this.banner(p, m.def.hit || 'RUN OVER!', '#dd5a42'); this.sfx('thump', 4); this.puff(p.x, 0.4, p.z, 5, 0.3); if (p.pants) this.steal(p, { lock: 0 }); }
+        for (const s2 of this.staff || []) if (s2.mode !== 'down' && Math.hypot(s2.a.x - m.x, s2.a.z - m.z) < R - 0.2) this.knock(s2, s2.a.x - m.x, s2.a.z - m.z);
+      }
+      for (const t of this.traps) t.cd = Math.max(0, t.cd - dt);
+      for (const w of this.crowd) {   // walking their loop (a little apart), knocked over for a moment by a push
+        const a = w.a; a.t += dt; if (w.down > 0) { w.down -= dt; if (w.down <= 0) { a.st = 'free'; a.t = 0; } a.vx = a.vz = 0; continue; }
+        w.d = (w.d + w.sp * dt) % w.tot; let d = w.d, i = 0; while (d > w.segL[i]) { d -= w.segL[i]; i = (i + 1) % w.path.length; }
+        const A = w.path[i], Bq = w.path[(i + 1) % w.path.length], u = d / (w.segL[i] || 1), dx = Bq[0] - A[0], dz = Bq[1] - A[1], L2 = Math.hypot(dx, dz) || 1, nx = -dz / L2, nz = dx / L2;
+        const x = A[0] + dx * u + nx * w.side, z = A[1] + dz * u + nz * w.side; a.vx = (x - a.x) / dt; a.vz = (z - a.z) / dt; if (Math.hypot(a.vx, a.vz) > 6) { a.vx = a.vz = 0; } a.x = x; a.z = z; a.y = floorY(x, z); a.f = Math.atan2(dz, dx); a.st = 'free';
+      }
+      const b = this.ball; if (b) {   // rolls, slows, bounces off walls; knocks staff flat; into a goal: GOAL! and back to the spot
+        b.cd = Math.max(0, b.cd - dt); b.x += b.vx * dt; b.z += b.vz * dt; const k = Math.exp(-dt * 0.9); b.vx *= k; b.vz *= k;
+        const q = { x: b.x, z: b.z }; if (this.collide(q, 0.34)) { const nx = q.x - b.x, nz = q.z - b.z, nl = Math.hypot(nx, nz) || 1, dn = (b.vx * nx + b.vz * nz) / nl; if (dn < 0) { b.vx -= 1.7 * dn * nx / nl; b.vz -= 1.7 * dn * nz / nl; } } b.x = q.x; b.z = q.z;
+        const sp = Math.hypot(b.vx, b.vz); b.spin += sp * dt / 0.34;
+        for (const p of this.ps) { if (p.hidden || p.sub) continue; const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz); if (d < 1.0 && d > 1e-4) { const pv = p.st === 'slide' ? 1.4 : 1.0, ps = Math.hypot(p.vx, p.vz) * pv; b.x = p.x + dx / d * 1.0; b.z = p.z + dz / d * 1.0; const ns = Math.max(ps * 1.25, sp * 0.5); b.vx = dx / d * ns; b.vz = dz / d * ns; b.last = p; } }
+        if (sp > 4) for (const s2 of this.staff || []) if (s2.mode !== 'down' && Math.hypot(s2.a.x - b.x, s2.a.z - b.z) < 0.9) { this.knock(s2, b.vx, b.vz); b.vx *= -0.4; b.vz *= -0.4; }
+        if (sp > 4) for (const w of this.crowd) if (w.down <= 0 && Math.hypot(w.a.x - b.x, w.a.z - b.z) < 0.8) this.crowdDown(w, b.vx, b.vz);
+        for (const gl of this.lv.goals || []) if (b.x > gl.x0 && b.x < gl.x1 && b.z > gl.z0 && b.z < gl.z1 && b.cd <= 0) { b.cd = 3; this.bigText('GOAL!!', b.last ? (b.last.i ? 'P2' : 'P1') + ' scores' : ''); this.sfx('thump', 8); this.puff(b.x, 0.5, b.z, 10, 0.5); setTimeout(() => { if (this.ball === b) { b.x = b.hx; b.z = b.hz; b.vx = b.vz = 0; } }, 1500); }
+        b.g.position.set(b.x, floorY(b.x, b.z), b.z); b.def.rotation.set(b.spin, Math.atan2(b.vx, b.vz), 0, 'YXZ'); for (const c of b.g.children) if (c !== b.def) c.rotation.copy(b.def.rotation);
+      }
+    }
+    crowdDown(w, dx, dz) { const l = Math.hypot(dx, dz) || 1; w.down = 2.4; w.a.st = 'down'; w.a.t = 0; w.a.dur = 2.4; w.a.fallX = dx / l; w.a.fallZ = dz / l; }
+    inCrowd(p) { let n = 0; for (const w of this.crowd) if (w.down <= 0 && Math.hypot(w.a.x - p.x, w.a.z - p.z) < 1.8) n++; return n >= 2; }   // (two or more people round him: lost in the crowd)
+    trapNear(p) { for (const t of this.traps) for (const [e, o] of [[t.a, t.b], [t.b, t.a]]) if (Math.hypot(p.x - e[0], p.z - e[1]) < 1.2) return { t, to: o, label: t.label }; return null; }
+    useTrap(p) { const n = this.trapNear(p); if (!n || n.t.cd > 0) return false; n.t.cd = 1.2; this.puff(p.x, 0.3, p.z, 6, 0.3); this.place(p, n.to[0], n.to[1], p.f); this.puff(p.x, 0.3, p.z, 6, 0.3); this.sfx('whoosh', 0.5);
+      for (const s2 of this.staff || []) if (s2.target === p && s2.mode === 'chase') { s2.mode = 'search'; s2.t = 0; s2.path = null; } return true; }
+
     // ---- the computer as P2: walks the nav paths to a goal, presses what a player would press
     botInput(p, dt) {
       const B = p.bot || (p.bot = { path: null, pi: 0, repath: 0, gx: null, gz: null, prev: {}, spot: null, list: null, li: 0, flee: null, fleeT: 0 }), o = this.other(p);
@@ -143,7 +237,7 @@
           if (!B.list || B.round !== this.round) { B.round = this.round; B.list = this.hideSpots().sort((a, b) => dist(a.x, a.z) - dist(b.x, b.z)); B.li = 0; }
           if (!o.hidden && !o.sub && this.clear(p.x, p.z, o.x, o.z) && dist(o.x, o.z) < 9) { gx = o.x; gz = o.z; raw.run = true; }
           else { const t = B.list[B.li % B.list.length]; B.stuck = (B.stuck || 0) + (Math.hypot(p.vx, p.vz) < 0.3 ? dt : -B.stuck); if (B.stuck > 2.5) { B.stuck = 0; B.li++; }   // (stuck: on to the next)
-            else if (goSpot(t, t.k === 'stall' ? 0.6 : 1.4)) { face(t.x - (t.k === 'stall' ? 2 : 0), t.z); tap('use'); B.li++; B.stuck = 0; } }
+            else if (goSpot(t, t.k === 'stall' ? 0.6 : 1.4)) { if (t.k === 'stall') face(t.q.x, t.q.z); else face(t.x, t.z); tap('use'); B.li++; B.stuck = 0; } }
         }
       } else {   // pants tag
         const P = this.pantsM;
@@ -173,19 +267,19 @@
       return I;
     }
     hideSpots() {   // where a sumo can hide: the carts, the toilet stalls, a few places in the bath
-      const out = this.carts.map((c) => ({ k: 'cart', x: c.x + 0.9, z: c.z })).concat(LY.stalls.map((q) => ({ k: 'stall', x: q.x + 2.3, z: q.z })));   // (stalls: from the walkway in front, clear of the doors)
-      const sx = (POOL.steps[0] + POOL.steps[1]) / 2; for (const [x, z] of [[sx, -5.5], [sx + 2.5, -7.5]]) out.push({ k: 'pool', x, z, via: [sx, POOL.z1 + 0.9] });   // (into the bath by its steps: the paths don't go through water)
+      const out = this.carts.map((c) => ({ k: 'cart', x: c.x + 0.9, z: c.z })).concat(this.M.hides.map((q, i) => ({ k: 'stall', i, x: (q.ap || q.out)[0], z: (q.ap || q.out)[1], q })));   // (fixed hiding places: from where you step out, clear of any door)
+      for (const sp of this.M.poolSpots) out.push({ k: 'pool', x: sp.x, z: sp.z, via: sp.via });   // (into the water by its steps: the paths don't go through water)
       return out;
     }
-    wetAt(x, z) { return !!{ bath: 1, shower: 1 }[roomAt(x, z)] || this.puddles.some((q) => ((x - q.x) / q.rx) ** 2 + ((z - q.z) / q.rz) ** 2 < 1); }
+    wetAt(x, z) { if (this.rt) return this.rt.wetAt(x, z) || this.rt.iceAt(x, z); return !!{ bath: 1, shower: 1 }[roomAt(x, z)] || this.puddles.some((q) => ((x - q.x) / q.rx) ** 2 + ((z - q.z) / q.rz) ** 2 < 1); }
     stepPlayer(p, dt) {
       const I = p.inp; p.t += dt; p.lock = Math.max(0, p.lock - dt); p.flash = Math.max(0, p.flash - dt);
       if (this.frozen(p)) { p.vx = p.vz = 0; return; }
       const wet = inPool(p.x, p.z);
-      if (p.st === 'grabbed') { p.vx = p.vz = 0; return; }
+      if (p.st === 'grabbed') { p.vx = p.vz = 0; if (this.mode === 'story' && (I.pushP || I.slideP) && p.grabbedBy) { p.wrig = (p.wrig || 0) + 1; this.miniPuff(p.x, p.y + 0.6, p.z, 0.4, 5); if (p.wrig >= 4) { p.wrig = 0; const s2 = p.grabbedBy; this.knock(s2, s2.a.x - p.x, s2.a.z - p.z); } } return; }   // (alone in a story: mash J to wriggle free)
       // hiding: a cart, a toilet stall, under the bath water
       if (p.hidden || p.sub) {
-        if (p.sub) { p.breath -= dt; if (p.breath <= 0 || I.hideP || (I.mag > 0.5 && p.t > 0.4)) { p.sub = false; p.breath = D.breath; this.fx.water && this.fx.water(p.x, p.z, 2, POOL.water); } else { if (Math.random() < dt * 0.6 && this.fx.water) this.fx.water(p.x, p.z, 0.4, POOL.water); } return; }
+        if (p.sub) { p.breath -= dt; if (p.breath <= 0 || I.hideP || (I.mag > 0.5 && p.t > 0.4)) { p.sub = false; p.breath = D.breath; this.fx.water && this.fx.water(p.x, p.z, 2, this.M.waterY); } else { if (Math.random() < dt * 0.6 && this.fx.water) this.fx.water(p.x, p.z, 0.4, this.M.waterY); } return; }
         if (I.hideP || (I.mag > 0.5 && p.t > 0.4)) this.unhide(p); else return;
       }
       if (I.hideP && p.kind === 'sumo' && !p.pants && (p.st === 'free' || p.st === 'slide' || p.st === 'getup')) { if (this.tryHide(p, p.st !== 'free')) return; }
@@ -207,7 +301,8 @@
       if (p.st === 'free') spd = wet ? D.wade : p.sneak ? 1.7 : p.running ? D.run : D.walk;
       if (p.st === 'slide') { if (I.mag > 0.3) p.cdir = lerpA(p.cdir, Math.atan2(I.mz, I.mx), dt * 1.4); p.f = p.cdir; const wf = this.wetAt(p.x, p.z); p.sv = Math.max(0, p.sv - (wf ? D.slideWet : D.slideDry) * dt);
         if (wf && this.fx.water && Math.random() < dt * 10) this.fx.water(p.x, p.z, 0.4, p.y); mx = Math.cos(p.cdir); mz = Math.sin(p.cdir); spd = p.sv;
-        if (p.sv < 0.6) { p.st = 'getup'; p.t = 0; } if (inPool(p.x, p.z)) { p.st = 'free'; p.sv = 0; this.fx.water && this.fx.water(p.x, p.z, 4, POOL.water); this.sfx('thump', 4); } }
+        if (this.rt) { const [gx, gz] = this.rt.slope(p.x, p.z), dn = -(gx * Math.cos(p.cdir) + gz * Math.sin(p.cdir)); p.sv = Math.min(D.slideMax, p.sv + dn * D.slideHill * dt); if (this.rt.iceAt(p.x, p.z)) p.sv += (wf ? D.slideWet : D.slideDry) * dt * 0.85; }   // (downhill it picks up speed, uphill it dies; on ice or snow it barely slows)
+        if (p.sv < 0.6) { p.st = 'getup'; p.t = 0; } if (inPool(p.x, p.z)) { p.st = 'free'; p.sv = 0; this.fx.water && this.fx.water(p.x, p.z, 4, this.M.waterY); this.sfx('thump', 4); } }
       if (p.st === 'getup' && p.t > D.getUp) { p.st = 'free'; p.t = 0; }
       if (p.st === 'busy' && p.t > 0.3) { p.st = 'free'; p.t = 0; }   // (a push, a look: over in a moment)
       if (p.st === 'slam') { if (!p.slamDone && p.t > D.slamLand) { p.slamDone = true; this.slamLand(p); } if (p.t > D.slam) { p.st = 'free'; p.t = 0; } }
@@ -215,8 +310,9 @@
       p.vx += ((go ? mx : 0) * spd - p.vx) * Math.min(1, dt * rk); p.vz += ((go ? mz : 0) * spd - p.vz) * Math.min(1, dt * rk);
       if (p.st === 'free' && I.mag > 0.3) p.f = lerpA(p.f, Math.atan2(I.mz, I.mx), dt * 12);
       p.x += p.vx * dt; p.z += p.vz * dt;
+      { const cv = this.rt && this.rt.conveyorAt(p.x, p.z); if (cv && p.st !== 'slide') { p.x += cv.vx * dt; p.z += cv.vz * dt; } }   // (the travelator carries him along)
       const hit = this.collide(p, p.kind === 'staff' ? 0.4 : p.r); if (hit && p.st === 'slide') { p.st = 'getup'; p.t = 0; p.vx *= -0.3; p.vz *= -0.3; }
-      const ty = inPool(p.x, p.z) ? (p.kind === 'staff' ? -0.55 : -0.62) : floorY(p.x, p.z); p.y += (ty - p.y) * Math.min(1, dt * 10);
+      const ty = inPool(p.x, p.z) ? this.M.poolFloor + (p.kind === 'staff' ? 0.07 : 0) : floorY(p.x, p.z); p.y += (ty - p.y) * Math.min(1, dt * 10);
       // two sumos don't pass through each other
       const o = this.other(p); if (!o.hidden && !o.sub && o.st !== 'grabbed' && !(this.mode === 'hide' && this.ph === 'hide')) { const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), R = 1.1; if (d < R && d > 1e-4) { p.x = o.x + dx / d * R; p.z = o.z + dz / d * R; }
         if (p.st === 'slide' && d < 1.4) this.slideHit(p, o); }
@@ -225,20 +321,22 @@
     tryHide(p, fromSlide) {
       const near = (x, z, r) => Math.hypot(p.x - x, p.z - z) < r;
       for (const c of this.carts) if (near(c.x, c.z, fromSlide ? 2.1 : 1.8) && !this.ps.some((q) => q.hidden === c)) { p.hidden = c; p.st = 'free'; p.t = 0; p.vx = p.vz = 0; p.x = c.x; p.z = c.z; c.off = true; this.cartBox(c); this.sfx('whoosh', 0.3); return true; }
-      for (let k = 0; k < LY.stalls.length; k++) { const q = LY.stalls[k]; if (near(q.x + 0.4, q.z, 1.6) && !this.ps.some((o) => o.hidden === 'stall' + k)) { p.hidden = 'stall' + k; p.st = 'free'; p.t = 0; p.vx = p.vz = 0; p.x = q.x + 0.2; p.z = q.z; const Dd = this.stallDoors && this.stallDoors[k]; if (Dd) Dd.rotation.y = 0; return true; } }
-      if (inPool(p.x, p.z)) { p.sub = true; p.breath = D.breath; p.t = 0; p.vx = p.vz = 0; this.fx.water && this.fx.water(p.x, p.z, 2.5, POOL.water); return true; }
+      const H = this.M.hides; for (let k = 0; k < H.length; k++) { const q = H[k]; if ((near(q.x, q.z, 1.6) || near(q.out[0], q.out[1], fromSlide ? 1.6 : 1.2)) && !this.ps.some((o) => o.hidden === 'stall' + k)) { p.hidden = 'stall' + k; p.st = 'free'; p.t = 0; p.vx = p.vz = 0; p.x = q.x; p.z = q.z; p.f = Math.atan2(q.out[1] - q.z, q.out[0] - q.x); if (q.door !== undefined) { const Dd = this.stallDoors && this.stallDoors[q.door]; if (Dd) Dd.rotation.y = 0; } this.sfx('whoosh', 0.3); return true; } }
+      if (inPool(p.x, p.z)) { p.sub = true; p.breath = D.breath; p.t = 0; p.vx = p.vz = 0; this.fx.water && this.fx.water(p.x, p.z, 2.5, this.M.waterY); return true; }
       return false;
     }
     unhide(p) {
       const h = p.hidden; p.hidden = null; p.t = 0;
       if (h && h.w) { h.off = false; this.cartBox(h); const a = p.f; p.x = h.x + Math.cos(a) * 1.5; p.z = h.z + Math.sin(a) * 1.5; this.collide(p, p.r); }
-      else if (typeof h === 'string') { const k = +h.slice(5), q = LY.stalls[k], Dd = this.stallDoors && this.stallDoors[k]; if (Dd) Dd.rotation.y = -1.4; p.x = q.x + 1.7; p.z = q.z; p.f = 0; this.collide(p, p.r); }
+      else if (typeof h === 'string') { const k = +h.slice(5), q = this.M.hides[k]; if (q.door !== undefined) { const Dd = this.stallDoors && this.stallDoors[q.door]; if (Dd) Dd.rotation.y = -1.4; } p.x = q.out[0]; p.z = q.out[1]; p.f = Math.atan2(q.out[1] - q.z, q.out[0] - q.x); this.collide(p, p.r); }
     }
     push(p) {   // two hands, in front: staff go down; in pants tag, the pants come off
       p.st = 'busy'; p.t = 0; p.w.hand = 1;
       const fx = Math.cos(p.f), fz = Math.sin(p.f), inFront = (x, z, r) => { const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz); return d < r && (dx * fx + dz * fz) / (d || 1) > 0.2; };
       this.miniPuff(p.x + fx * 1.5, p.y + 0.5, p.z + fz * 1.5, 0.45, 8);   // (a puff off his palms: you see every push)
       for (const s of this.staff || []) if (s.mode !== 'down' && inFront(s.a.x, s.a.z, 2.0)) this.knock(s, fx, fz);
+      for (const w of this.crowd) if (w.down <= 0 && inFront(w.a.x, w.a.z, 2.0)) this.crowdDown(w, fx, fz);
+      if (this.ball && inFront(this.ball.x, this.ball.z, 2.0)) { this.ball.vx = fx * 11; this.ball.vz = fz * 11; this.ball.last = p; }
       { const o2 = this.other(p); if (this.mode !== 'tag' && !o2.hidden && !o2.sub && o2.st !== 'grabbed' && inFront(o2.x, o2.z, 1.9)) { o2.vx += fx * 6; o2.vz += fz * 6; } }   // (and the other sumo gets shoved along)
       const fr = this.other(p).grabbedBy; if (fr && fr.mode === 'hold' && Math.hypot(fr.a.x - p.x, fr.a.z - p.z) < 2.2) this.knock(fr, fr.a.x - p.x, fr.a.z - p.z);   // (a friend held: any push near his grabber knocks it off)
       const o = this.other(p); if (this.mode === 'tag' && o.pants && !o.hidden && inFront(o.x, o.z, 1.8)) this.steal(o, p);
@@ -252,26 +350,31 @@
     }
     knock(s, dx, dz) { const l = Math.hypot(dx, dz) || 1; if (s.target && s.target.grabbedBy === s) { s.target.grabbedBy = null; s.target.st = 'free'; s.target.t = 0; this.banner(s.target, 'FREE!', '#3a9a5e'); }
       s.mode = 'down'; s.t = 0; s.a.st = 'down'; s.a.t = 0; s.a.dur = D.downT; s.a.fallX = dx / l; s.a.fallZ = dz / l; s.path = null; this.puff(s.a.x, 0.4, s.a.z, 5, 0.3); }
-    use2(p) {   // E: pick up your mawashi (co-op), the pants (tag)
+    use2(p) {   // E: pick up your mawashi (co-op), the pants (tag); a trapdoor
+      if (this.useTrap(p)) return;
       if (this.mode === 'coop') { const m = this.maw[p.i]; if (!p.maw && m && !m.taken && Math.hypot(p.x - m.x, p.z - m.z) < 1.5) { m.taken = true; m.g.visible = false; p.maw = true; this.banner(p, 'MAWASHI ON!', CSS[p.i]); this.sfx('whoosh', 0.4); } }
     }
     // ---- CO-OP HEIST
     setupCoop() {
-      const spots = MAW_SPOTS.slice().sort(() => Math.random() - 0.5);
+      const spots = this.M.maw.slice().sort(() => Math.random() - 0.5);
       this.maw = [0, 1].map((i) => { const [x, z] = spots[i], g = new THREE.Group(); g.position.set(x, floorY(x, z), z); this.G.add(g);
         const belt = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.1, 8, 18), S.Flat.mat(COL[i])); belt.rotation.x = Math.PI / 2; belt.position.y = 0.12; belt.castShadow = true; belt.userData.flatDone = true; g.add(belt);
         const ring = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.78, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: COL[i], transparent: true, opacity: 0.8, depthWrite: false })); ring.position.y = 0.03; g.add(ring);
         return { x, z, hx: x, hz: z, g, taken: false }; });
-      this.exit = { x: LY.backdoor.x - 2.2, z: (LY.backdoor.z0 + LY.backdoor.z1) / 2 };
+      this.exit = { x: this.M.exit[0], z: this.M.exit[1] };
       { const g = new THREE.Group(); g.position.set(this.exit.x, 0, this.exit.z); this.G.add(g); const ring = new THREE.Mesh(new THREE.RingGeometry(1.3, 1.6, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x3a9a5e, transparent: true, opacity: 0.8, depthWrite: false })); ring.position.y = 0.04; g.add(ring); this.exitM = g; }
-      this.staff = []; const kinds = ['fighter', 'grappler', 'rusher', 'thrower', 'staff'];
-      for (let k = 0; k < D.staffN; k++) { let pt; do { pt = this.points[(Math.random() * this.points.length) | 0]; } while (pt[1] > -16);
-        const a = { kind: kinds[k], x: pt[0], z: pt[1], y: 0, f: 0, vx: 0, vz: 0, st: 'free', t: 0, hp: 1, maxHp: 1, dead: false, engage: false };
-        const v = new S.WorkerView(this.scene, kinds[k], k === 1, k % 4); v.walls = this.walls; if (v.pole && v.pole.parent) v.pole.parent.remove(v.pole);
+      this.spawnStaff();
+      this.ph = 'play'; this.caughtN = 0; this.tStart = this.t;
+      this.title('CO-OP HEIST', 'Find your mawashi (your colour), put it on (use), and both get out ' + this.M.exitName);
+    }
+    spawnStaff() {   // the level's staff, spread round it away from the start, patrolling
+      this.staff = []; const kinds = this.M.staffKinds || ['fighter', 'grappler', 'rusher', 'thrower', 'staff'];
+      const okPts = this.points.filter((q) => this.M.staffOk(q[0], q[1]) && Math.hypot(q[0] - this.M.start[0][0], q[1] - this.M.start[0][1]) > 10), pool = okPts.length ? okPts : this.points;
+      for (let k = 0; k < this.M.staffN; k++) { const pt = pool[(Math.random() * pool.length) | 0];
+        const a = { kind: kinds[k % kinds.length], x: pt[0], z: pt[1], y: 0, f: 0, vx: 0, vz: 0, st: 'free', t: 0, hp: 1, maxHp: 1, dead: false, engage: false };
+        const v = new S.WorkerView(this.scene, kinds[k % kinds.length], k === 1, k % 4); v.walls = this.walls; if (v.pole && v.pole.parent) v.pole.parent.remove(v.pole);
         const ex = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.bangTex(), transparent: true, depthTest: false })); ex.scale.set(0.6, 0.6, 1); ex.visible = false; ex.renderOrder = 8; this.scene.add(ex);
         this.staff.push({ a, v, mode: 'patrol', t: 0, path: null, pi: 0, target: null, last: null, ex, repath: 0 }); }
-      this.ph = 'play'; this.caughtN = 0; this.tStart = this.t;
-      this.title('CO-OP HEIST', 'Find your mawashi (your colour), put it on (use), and both get out the kitchen back door');
     }
     bangTex() { if (this._bang) return this._bang; const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); x.fillStyle = '#dd5a42'; x.font = '900 56px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('!', 32, 34); this._bang = new THREE.CanvasTexture(c); return this._bang; }
     staffStep(s, dt) {
@@ -282,7 +385,7 @@
       // who can he see?
       let seen = null, sd = 1e9;
       for (const p of this.ps) { if (p.hidden || p.sub || p.st === 'grabbed') continue; const dx = p.x - a.x, dz = p.z - a.z, d = Math.hypot(dx, dz);
-        if (d > D.see * (p.st === 'slide' ? 0.6 : p.sneak ? 0.7 : 1) || Math.abs(p.y - a.y) > 1.2) continue; if (d > 0.8 && Math.abs(ang(Math.atan2(dz, dx) - a.f)) > D.seeHalf) continue; if (!this.clear(a.x, a.z, p.x, p.z)) continue;
+        if (d > D.see * (p.st === 'slide' ? 0.6 : p.sneak ? 0.7 : 1) || Math.abs(p.y - a.y) > 1.2) continue; if (d > 2.5 && this.crowd.length && this.inCrowd(p)) continue;   // (lost in the crowd) if (d > 0.8 && Math.abs(ang(Math.atan2(dz, dx) - a.f)) > D.seeHalf) continue; if (!this.clear(a.x, a.z, p.x, p.z)) continue;
         if (d < sd) { sd = d; seen = p; } }
       if (!seen) for (const p of this.ps) if (p.running && !p.hidden && Math.hypot(p.x - a.x, p.z - a.z) < 5 && s.mode === 'patrol') { s.mode = 'search'; s.t = 0; s.last = [p.x, p.z]; s.path = null; }   // (heard running)
       if (seen) { if (s.mode !== 'chase') { s.ex.visible = true; this.sfx('whoosh', 0.2); } s.mode = 'chase'; s.target = seen; s.last = [seen.x, seen.z]; s.lost = 0; }
@@ -302,29 +405,29 @@
     caught(p, s) {
       s.mode = 'down'; s.t = D.downT - 1; s.a.st = 'free'; p.grabbedBy = null; p.holdT = 0; this.caughtN++;
       if (p.maw) { p.maw = false; const m = this.maw[p.i]; m.taken = false; m.g.visible = true; }
-      this.place(p, START[p.i][0], START[p.i][1]); this.banner(p, 'CAUGHT! Back to the bath', '#dd5a42');
+      this.place(p, this.M.start[p.i][0], this.M.start[p.i][1]); this.banner(p, 'CAUGHT! Back to the start', '#dd5a42');
     }
     stepCoop(dt) {
       for (const s of this.staff) this.staffStep(s, dt);
       for (const m of this.maw) if (!m.taken) m.g.rotation.y += dt * 1.5;
       const out = this.ps.every((p) => p.maw && Math.hypot(p.x - this.exit.x, p.z - this.exit.z) < 2.0);
       if (out && this.ph === 'play') { this.ph = 'end'; const secs = Math.round(this.t - this.tStart); this.bigText('ESCAPED!', 'Both out in ' + secs + ' s · caught ' + this.caughtN + ' time' + (this.caughtN === 1 ? '' : 's') + ' · ' + this.again()); for (const p of this.ps) { p.st = 'win'; p.t = 0; } }
-      for (const p of this.ps) this.hudSide(p, (p.maw ? 'MAWASHI ✓ · get to the back door (kitchen)' : 'Find your ' + (p.i ? 'RED' : 'BLUE') + ' mawashi') + (p.st === 'grabbed' ? ' · GRABBED ' + Math.max(0, D.holdT - (p.holdT || 0)).toFixed(1) : ''));
+      for (const p of this.ps) this.hudSide(p, (p.maw ? 'MAWASHI ✓ · get to ' + this.M.exitName : 'Find your ' + (p.i ? 'RED' : 'BLUE') + ' mawashi') + (p.st === 'grabbed' ? ' · GRABBED ' + Math.max(0, D.holdT - (p.holdT || 0)).toFixed(1) : ''));
     }
     // ---- HIDE & SEEK
-    setupHide() { this.round = 0; this.seeker = 0; for (const p of this.ps) p.score = 0; this.title('HIDE & SEEK', 'The owner counts to 15. Sumo: hide (a laundry cart, a toilet stall, under the bath water). Owner: find him (use / push to search)'); this.newRound(); }
+    setupHide() { this.round = 0; this.seeker = 0; for (const p of this.ps) p.score = 0; this.title('HIDE & SEEK', 'The ' + this.M.seekerName + ' counts to 15. Sumo: hide (' + this.M.hideList + '). ' + this.M.seekerName.replace(/^./, (c) => c.toUpperCase()) + ': find him (use / push to search)'); this.newRound(); }
     newRound() {
       this.round++; const sk = this.ps[this.seeker], hd = this.other(sk);
       this.makeSeeker(sk); this.makeSumo(hd);
       for (const p of this.ps) { if (p.hidden) this.unhide(p); }
-      this.place(hd, 1.0, 1.0); this.place(sk, -6.0, 1.2, Math.PI / 2);   // (the owner counts off to one side, out of the way)
+      this.place(hd, this.M.hider[0], this.M.hider[1]); this.place(sk, this.M.seeker[0], this.M.seeker[1], Math.PI / 2);   // (the owner counts off to one side, out of the way)
       this.ph = 'hide'; this.phT = D.hideT; this.found = false;
     }
     search(p) {   // the owner looks in the cart / stall / water right in front of him
       const hd = this.other(p); if (this.mode !== 'hide' || this.ph !== 'seek') return;
       const near = (x, z, r) => Math.hypot(p.x - x, p.z - z) < r;
       let f = false; if (hd.hidden && hd.hidden.w && near(hd.hidden.x, hd.hidden.z, 1.9)) f = true;
-      if (typeof hd.hidden === 'string') { const q = LY.stalls[+hd.hidden.slice(5)]; if (near(q.x + 0.6, q.z, 2.6) && Math.abs(p.z - q.z) < 1.0) f = true; }   // (the stall right in front of him)
+      if (typeof hd.hidden === 'string') { const q = this.M.hides[+hd.hidden.slice(5)]; if (near(q.out[0], q.out[1], 1.3) || near(q.x, q.z, 1.7)) f = true; }   // (the hiding place right in front of him)
       if (hd.sub && near(hd.x, hd.z, 2.6)) f = true;
       p.st = 'busy'; p.t = 0;
       if (f) this.foundHim(p, hd);
@@ -348,7 +451,7 @@
     setupTag() {
       for (const p of this.ps) p.score = 0;
       const g = new THREE.Group(); this.G.add(g); const belt = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.1, 8, 18), S.Flat.mat(0xf2cf4a)); belt.rotation.x = Math.PI / 2; belt.position.y = 0.12; belt.castShadow = true; belt.userData.flatDone = true; g.add(belt);
-      this.pantsM = { g, x: 1.0, z: -20.0, free: true }; g.position.set(1.0, floorY(1, -20), -20);
+      const [px, pz] = this.M.pants; this.pantsM = { g, x: px, z: pz, free: true }; g.position.set(px, floorY(px, pz), pz);
       this.ph = 'play'; this.title('PANTS TAG', 'Wear the golden pants to score. Steal them with a push, a belly slide into them, or a booty slam. First to ' + D.tagWin);
     }
     steal(from, by) { if (by.lock > 0) return; from.pants = false; from.lock = 1.2; const a = Math.random() * 6.28, x = from.x + Math.cos(a) * 2.2, z = from.z + Math.sin(a) * 2.2, q = { x, z }; this.collide(q, 0.5);
@@ -366,27 +469,29 @@
       if (!this.scene) return;
       this.acc += Math.min(dt, 0.1); let k = 0;
       while (this.acc >= STEP && k < 8) { this.step2(STEP); this.acc -= STEP; k++; }
-      if ((this.ph === 'over' || (this.mode === 'coop' && this.ph === 'end')) && this.keys.Enter) { this.keys.Enter = false; const m = this.mode; this.stop(); this.g.camp = null; this.g.startParty(m); return; }
+      if ((this.ph === 'over' || (this.mode === 'coop' && this.ph === 'end')) && this.keys.Enter) { this.keys.Enter = false; const m = this.mode, id = this.lvId; this.stop(); this.g.camp = null; if (m === 'story') this.g.startLevelStory(id); else this.g.startParty(m); return; }
       this.draw2(dt);
     }
     step2(dt) {
       this.t += dt; this.puffStep(dt);
-      for (const p of this.ps) { this.readInput(p, dt); this.stepPlayer(p, dt); }
-      if (this.mode === 'coop') this.stepCoop(dt); else if (this.mode === 'hide') this.stepHide(dt); else this.stepTag(dt);
+      for (const p of this.ps) { if (p.gone) continue; this.readInput(p, dt); this.stepPlayer(p, dt); }
+      this.featureStep(dt);
+      if (this.mode === 'coop') this.stepCoop(dt); else if (this.mode === 'hide') this.stepHide(dt); else if (this.mode === 'story') this.stepStory(dt); else this.stepTag(dt);
       for (const c of this.carts) if (!this.ps.some((p) => p.hidden === c)) { if (c.off) { c.off = false; this.cartBox(c); } }
     }
     // ---- drawing: two cameras, side by side
     draw2(dt) {
       const T = this.t;
-      for (const p of this.ps) this.drawPlayer(p, dt, T);
+      for (const p of this.ps) if (!p.gone) this.drawPlayer(p, dt, T); else { p.v.root.visible = false; p.mosaic.s.visible = false; p.mosaicOn = false; }
       for (const s of this.staff || []) { s.v.update(s.a, Math.max(dt, 1e-4), T); }
+      for (const w of this.crowd) w.v.update(w.a, Math.max(dt, 1e-4), T);
       this.fx.update && this.fx.update(dt);
       const r = this.R.r, W = innerWidth, H = innerHeight, hw = this.cpu ? W : Math.floor(W / 2);
       r.setScissorTest(true);
       for (const p of this.cpu ? [this.ps[0]] : this.ps) {
         const cam = this.cams[p.i]; cam.aspect = hw / H; cam.updateProjectionMatrix();
         if (this.fpv) this.behindCam(p, cam, dt);
-        else { const tgt = new THREE.Vector3(p.x, Math.max(0, p.y), p.z - 2.6); p.camT.lerp(tgt, 1 - Math.exp(-dt * 4));
+        else { const cf = this.camFocus, tgt = cf ? new THREE.Vector3(cf.x, 0, cf.z - 2.6) : new THREE.Vector3(p.x, Math.max(0, p.y), p.z - 2.6);   // (a cutscene re-centres it: same height, never lower) p.camT.lerp(tgt, 1 - Math.exp(-dt * 4));
           const dist = 15, ch = 0.64, cz = Math.sqrt(1 - ch * ch); cam.position.set(p.camT.x, p.camT.y + dist * ch, p.camT.z + dist * cz); cam.lookAt(p.camT.x, p.camT.y + 0.6, p.camT.z); }
         cam.updateMatrixWorld();
         for (const q of this.ps) this.placeMosaic(q, cam);
@@ -428,6 +533,7 @@
       if (v.soft) { const want = lay ? 0.3 : p.st === 'slam' && p.t > D.slamLand ? 0.14 : 0; p.jig = (p.jig || 0) + (want - (p.jig || 0)) * Math.min(1, dt * 10); if (p.jig > 0.002 || p.jigOn) { const ph = T * 22, bo = (x) => Math.max(0, Math.sin(x)) * 1.3; S.SoftSumo.jiggle(v, p.jig * bo(ph), p.jig * bo(ph + Math.PI)); p.jigOn = p.jig > 0.002; } }
       // a booty out of the cart he's hiding in
       if (p.hidden && p.hidden.w) { if (!p.cb) { p.cb = this.bootyProp(); p.cb.scale.setScalar(0.9); } const c = p.hidden; if (p.cb.parent !== c.m) c.m.add(p.cb); p.cb.visible = true; p.cb.position.set(0.05, 1.0, 0); p.cb.rotation.set(-Math.PI / 2 + 0.25, 0, Math.sin(T * 2.2) * 0.06); p.cb.userData.strip.visible = p.cb.userData.band.visible = dressed; }
+      else if (typeof p.hidden === 'string' && this.lv) { const q = this.M.hides[+p.hidden.slice(5)]; if (q.by !== null && q.by !== undefined) { if (!p.cb) { p.cb = this.bootyProp(); p.cb.scale.setScalar(0.9); } if (p.cb.parent !== this.G) this.G.add(p.cb); p.cb.visible = true; p.cb.position.set(q.x, q.by, q.z); p.cb.rotation.set(-Math.PI / 2 + 0.25, 0, Math.sin(T * 2.2) * 0.06); p.cb.userData.strip.visible = p.cb.userData.band.visible = dressed; } else if (p.cb) p.cb.visible = false; }   // (his booty poking up out of the crate, the booth, the rack)
       else if (p.cb) p.cb.visible = false;
       p.mosaic.s.visible = p.mosaicOn = !dressed && v.root.visible && p.y > -0.3 && !lay;
     }
@@ -456,12 +562,13 @@
       c.style.opacity = 1; clearTimeout(this.cardT); this.cardT = setTimeout(() => { if (this.hud) c.style.opacity = 0; }, 9000); }
     hint(p) {   // under each panel: what the buttons do right here
       const near = (x, z, r) => Math.hypot(p.x - x, p.z - z) < r, K = p.i === 0 ? { use: 'K', hide: 'I', push: 'J' } : { use: ',', hide: 'M', push: '.' };
-      if (p.kind === 'staff') return this.ph === 'seek' ? K.use + ': search the cart / stall / water in front of you' : '';
+      if (p.kind === 'staff') return this.ph === 'seek' ? K.use + ': search the hiding place in front of you' : '';
       if (p.hidden || p.sub) return K.hide + ': come out' + (p.sub ? ' (breath ' + p.breath.toFixed(0) + ')' : '');
       if (p.st === 'grabbed') return 'GRABBED: your friend has to push it off!';
       const o = this.other(p); if (o.grabbedBy && near(o.x, o.z, 3)) return K.push + ': push them off your friend!';
       if (this.mode === 'coop' && !p.maw && this.maw && near(this.maw[p.i].x, this.maw[p.i].z, 1.6)) return K.use + ': put on your mawashi';
-      if (!p.pants && (this.carts.some((c) => near(c.x, c.z, 1.8)) || LY.stalls.some((q) => near(q.x + 0.4, q.z, 1.6)) || inPool(p.x, p.z))) return K.hide + ': hide here';
+      if (!p.pants && (this.carts.some((c) => near(c.x, c.z, 1.8)) || this.M.hides.some((q) => near(q.x, q.z, 1.6) || near(q.out[0], q.out[1], 1.2)) || inPool(p.x, p.z))) return K.hide + ': hide here';
+      const tr = this.trapNear && this.trapNear(p); if (tr) return K.use + ': ' + (tr.label || 'drop through');
       return '';
     }
     hudSide(p, txt) { const h = this.hint(p); if (h) txt += '  ·  ' + h; const e = this.hud.querySelector('.s' + p.i); if (e.textContent !== txt) e.textContent = txt; e.style.borderLeft = '6px solid ' + CSS[p.i]; }
